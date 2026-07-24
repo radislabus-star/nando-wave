@@ -1539,14 +1539,24 @@ fn long_teacher_prose_preserves_canonical_multi_scalar_law() {
             > 512
     );
 
-    let program =
+    let programs =
         enumerate_source_neutral_response_programs_with_coverage(&example, Some(coverage))
             .expect("bounded version space")
-            .programs
-            .into_iter()
-            .find(|program| response_program_authority_matches_example(program, &example))
-            .expect("canonical multi-scalar law");
+            .programs;
+    let frame = programs
+        .iter()
+        .find(|program| response_program_exactly_matches_example(program, &example))
+        .expect("transfer-bound frame");
+    assert!(response_program_requires_static_frame_transfer(frame));
+    assert!(!is_source_neutral_response_program(frame));
 
+    let program = programs
+        .into_iter()
+        .find(|program| {
+            is_source_neutral_response_program(program)
+                && response_program_authority_matches_example(program, &example)
+        })
+        .expect("canonical multi-scalar law");
     assert!(!response_program_exactly_matches_example(
         &program, &example
     ));

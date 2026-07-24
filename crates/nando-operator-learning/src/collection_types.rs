@@ -26,6 +26,7 @@ pub struct CollectionVersionSpace {
     pub candidates_enumerated: usize,
     pub policy_rejected_exact_matches: usize,
     pub policy_rejection_reasons: BTreeMap<String, usize>,
+    pub static_text_rejection_reasons: BTreeMap<String, usize>,
     pub canonical_rejection_reasons: BTreeMap<String, usize>,
 }
 

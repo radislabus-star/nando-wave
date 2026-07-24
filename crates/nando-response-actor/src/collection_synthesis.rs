@@ -9,11 +9,11 @@ pub use nando_operator_learning::{
 
 use crate::{
     AtomValueType, CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
-    CollectionScalarType, OutputGraphSegment, OutputValueCandidate, OutputValueSource,
-    ProjectStatusMapping, RequestTemplateMarker, ResponseExecution, ResponseExecutionStatus,
-    ResponseOperation, ResponseProgram, ResponseRenderSegment, ResponseScalarLiteral,
-    ResponseValueSelector, ValueProjectionFormat, VerifierProgram, build_output_graph,
-    execute_response,
+    CollectionScalarType, MAX_RESPONSE_STATIC_TEXT_BYTES, OutputGraphSegment, OutputValueCandidate,
+    OutputValueSource, ProjectStatusMapping, RequestTemplateMarker, ResponseExecution,
+    ResponseExecutionStatus, ResponseOperation, ResponseProgram, ResponseRenderSegment,
+    ResponseScalarLiteral, ResponseValueSelector, ValueProjectionFormat, VerifierProgram,
+    build_output_graph, collection_static_text_rejection_reason, execute_response,
 };
 
 const MAX_SEARCH_ROWS: usize = 1_024;
@@ -158,6 +158,7 @@ pub fn enumerate_source_neutral_collection_programs(
         candidates_enumerated,
         policy_rejected_exact_matches: 0,
         policy_rejection_reasons: BTreeMap::new(),
+        static_text_rejection_reasons: BTreeMap::new(),
         canonical_rejection_reasons: BTreeMap::new(),
     })
 }
@@ -195,6 +196,7 @@ pub(crate) fn enumerate_source_neutral_response_programs_with_coverage(
     }
     let mut policy_rejected_exact_matches = 0_usize;
     let mut policy_rejection_reasons = BTreeMap::<String, usize>::new();
+    let mut static_text_rejection_reasons = BTreeMap::<String, usize>::new();
     let mut canonical_rejection_reasons = BTreeMap::<String, usize>::new();
     let mut structurally_aligned_canonical = BTreeSet::<Vec<u8>>::new();
     for selector in &selectors {
@@ -224,7 +226,8 @@ pub(crate) fn enumerate_source_neutral_response_programs_with_coverage(
         });
         if renderer_context.allow_canonical_direct
             || !renderer_context.request_markers.is_empty()
-            || example.expected_response.len() <= canonical_max_bytes.saturating_add(512)
+            || example.expected_response.len()
+                <= canonical_max_bytes.saturating_add(MAX_RESPONSE_STATIC_TEXT_BYTES)
         {
             let canonical_program = ResponseProgram::project_selected_value(
                 selector.clone(),
@@ -254,7 +257,7 @@ pub(crate) fn enumerate_source_neutral_response_programs_with_coverage(
         }
         let status_may_match = renderer_context.allow_canonical_direct
             || !renderer_context.request_markers.is_empty()
-            || example.expected_response.len() <= 512 + 32;
+            || example.expected_response.len() <= MAX_RESPONSE_STATIC_TEXT_BYTES + 32;
         if value_type == AtomValueType::Integer && status_may_match {
             for mapping in [
                 ProjectStatusMapping::ZeroIsSuccess,
@@ -278,7 +281,7 @@ pub(crate) fn enumerate_source_neutral_response_programs_with_coverage(
         coverage
             .response_bytes
             .saturating_sub(coverage.dynamic_bytes)
-            <= 512
+            <= MAX_RESPONSE_STATIC_TEXT_BYTES
     });
     for program in
         compose_render_sequence_candidates(example, &selectors, selector_sequence_possible)
@@ -291,18 +294,22 @@ pub(crate) fn enumerate_source_neutral_response_programs_with_coverage(
                 *policy_rejection_reasons
                     .entry(reason.to_owned())
                     .or_default() += 1;
-                if reason == "unsafe_render_sequence_static_text"
-                    && let Ok(canonical) = canonical_direct_response_program(&program)
-                {
-                    structurally_aligned_canonical
-                        .insert(serde_json::to_vec(&canonical).unwrap_or_default());
-                    if response_program_match_quality_with_alignment(&canonical, example, true) == 0
-                    {
-                        *canonical_rejection_reasons
-                            .entry(response_program_match_rejection_reason(&canonical, example))
-                            .or_default() += 1;
+                if reason == "unsafe_render_sequence_static_text" {
+                    if let Some(detail) = response_program_static_text_rejection_reason(&program) {
+                        *static_text_rejection_reasons.entry(detail).or_default() += 1;
                     }
-                    candidates.push(canonical);
+                    if let Ok(canonical) = canonical_direct_response_program(&program) {
+                        structurally_aligned_canonical
+                            .insert(serde_json::to_vec(&canonical).unwrap_or_default());
+                        if response_program_match_quality_with_alignment(&canonical, example, true)
+                            == 0
+                        {
+                            *canonical_rejection_reasons
+                                .entry(response_program_match_rejection_reason(&canonical, example))
+                                .or_default() += 1;
+                        }
+                        candidates.push(canonical);
+                    }
                 }
             }
         }
@@ -363,6 +370,7 @@ pub(crate) fn enumerate_source_neutral_response_programs_with_coverage(
         candidates_enumerated,
         policy_rejected_exact_matches,
         policy_rejection_reasons,
+        static_text_rejection_reasons,
         canonical_rejection_reasons,
     })
 }
@@ -375,7 +383,7 @@ pub(crate) fn enumerate_source_neutral_structural_response_programs(
     let include_surface_renderer = coverage
         .response_bytes
         .saturating_sub(coverage.dynamic_bytes)
-        <= 512;
+        <= MAX_RESPONSE_STATIC_TEXT_BYTES;
     let mut candidates =
         compose_render_sequence_candidates(example, &selectors, include_surface_renderer);
     candidates.sort_by_key(|program| serde_json::to_vec(program).unwrap_or_default());
@@ -609,7 +617,7 @@ fn response_program_has_structural_output_alignment(
     let include_surface_renderer = coverage
         .response_bytes
         .saturating_sub(coverage.dynamic_bytes)
-        <= 512;
+        <= MAX_RESPONSE_STATIC_TEXT_BYTES;
     compose_render_sequence_candidates(example, &selectors, include_surface_renderer)
         .into_iter()
         .filter(|surface| {
@@ -1255,6 +1263,42 @@ fn response_program_static_renderer_captures_dynamic_value(
             |segment| matches!(segment, ResponseRenderSegment::Static { text } if captures(text)),
         ),
     }
+}
+
+fn response_program_static_text_rejection_reason(program: &ResponseProgram) -> Option<String> {
+    let renderer = match &program.operation {
+        ResponseOperation::ProjectSelectedValue { renderer, .. }
+        | ResponseOperation::ProjectStatus { renderer, .. }
+        | ResponseOperation::ComposeCollection { renderer, .. } => renderer,
+        _ => return None,
+    };
+    let static_text = match renderer {
+        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RequestTemplate { .. } => None,
+        CollectionOutputRenderer::RenderTemplate { prefix, suffix } => {
+            Some(format!("{prefix}{suffix}"))
+        }
+        CollectionOutputRenderer::RenderSequence { segments } => Some(
+            segments
+                .iter()
+                .filter_map(|segment| match segment {
+                    ResponseRenderSegment::Static { text } => Some(text.as_str()),
+                    ResponseRenderSegment::Primary | ResponseRenderSegment::Selected { .. } => None,
+                })
+                .collect::<String>(),
+        ),
+    }?;
+    let reason = collection_static_text_rejection_reason(&static_text, "")?;
+    if reason != "byte_budget" {
+        return Some(reason.to_owned());
+    }
+    let bucket = match static_text.len() {
+        0..=1_024 => "byte_budget_0513_1024",
+        1_025..=2_048 => "byte_budget_1025_2048",
+        2_049..=3_072 => "byte_budget_2049_3072",
+        3_073..=4_096 => "byte_budget_3073_4096",
+        _ => "byte_budget_over_4096",
+    };
+    Some(bucket.to_owned())
 }
 
 #[must_use]
@@ -2069,7 +2113,7 @@ fn expand_output_renderer_with_computed(
         let suffix_offset = offset.saturating_add(computed.len());
         let prefix = &example.expected_response[..offset];
         let suffix = &example.expected_response[suffix_offset..];
-        if prefix.len().saturating_add(suffix.len()) <= 512 {
+        if prefix.len().saturating_add(suffix.len()) <= MAX_RESPONSE_STATIC_TEXT_BYTES {
             let renderer = CollectionOutputRenderer::RenderTemplate {
                 prefix: prefix.to_owned(),
                 suffix: suffix.to_owned(),

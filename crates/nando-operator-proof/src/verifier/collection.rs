@@ -548,7 +548,10 @@ pub(super) fn independently_safe_collection_renderer(renderer: &CollectionOutput
                 .filter(|segment| matches!(segment, ResponseRenderSegment::Selected { .. }))
                 .count();
             let dynamic_count = primary_count.saturating_add(selected_count);
-            if !(1..=64).contains(&segments.len()) || dynamic_count == 0 || dynamic_count > 16 {
+            if !(1..=MAX_RESPONSE_RENDER_SEGMENTS).contains(&segments.len())
+                || dynamic_count == 0
+                || dynamic_count > MAX_RESPONSE_RENDER_DYNAMIC_SEGMENTS
+            {
                 return false;
             }
             let static_text = segments
@@ -562,7 +565,7 @@ pub(super) fn independently_safe_collection_renderer(renderer: &CollectionOutput
         }
         CollectionOutputRenderer::RequestTemplate { .. } => return true,
     };
-    if prefix.len().saturating_add(suffix.len()) > 512 {
+    if prefix.len().saturating_add(suffix.len()) > MAX_RESPONSE_STATIC_TEXT_BYTES {
         return false;
     }
     let combined = format!("{prefix}{suffix}");

@@ -1234,6 +1234,16 @@ of dynamic values remain rejected. Receipts store only per-program SHA-256
 roots of ordered dynamic role values. The transfer root is reconstructed by
 external admission from frozen support and future manifests.
 
+The renderer uses a single 64-segment contract shared by the immutable program
+schema and independently re-executed verifier. Dynamic segments no longer have
+an unrelated 16-item ceiling; they remain bounded by the total segment budget,
+and every admitted program still requires adaptive transfer proof.
+
+Static frames are bounded at 3072 bytes. The bound is derived from the hot
+memory contract: a 4032-byte operator page plus frame and metadata must remain
+below the 8 KiB per-operator payload target, so 2048 resident operators stay
+within 16 MiB. Frames above this budget remain non-authoritative.
+
 Controlled proof:
 
 ```text

@@ -5,6 +5,9 @@ use crate::contracts::{AtomValueType, ResponseValueSelector, SemanticRole};
 pub const MAX_PROJECT_STATUS_CODE: u64 = 1_000_000;
 pub const MAX_UNIQUE_CONSENSUS_VARIANTS: usize = 64;
 pub const MAX_CONSENSUS_LAYOUTS: usize = 16;
+pub const MAX_RESPONSE_RENDER_SEGMENTS: usize = 64;
+pub const MAX_RESPONSE_RENDER_DYNAMIC_SEGMENTS: usize = MAX_RESPONSE_RENDER_SEGMENTS;
+pub const MAX_RESPONSE_STATIC_TEXT_BYTES: usize = 3_072;
 pub const MAX_ADAPTER_WAVE_CELLS: usize = 32;
 pub const MAX_ADAPTER_WAVE_SUBCENTERS: usize = 16;
 pub const MAX_ADAPTER_WAVE_EXACT_BUDGET: usize = 16;
@@ -928,7 +931,7 @@ fn consensus_variant_kind(program: &ResponseProgram) -> Option<u8> {
 }
 
 fn validate_render_sequence(segments: &[ResponseRenderSegment]) -> Result<(), &'static str> {
-    if !(1..=64).contains(&segments.len()) {
+    if !(1..=MAX_RESPONSE_RENDER_SEGMENTS).contains(&segments.len()) {
         return Err("invalid_render_sequence_length");
     }
     let primary_count = segments
@@ -940,7 +943,7 @@ fn validate_render_sequence(segments: &[ResponseRenderSegment]) -> Result<(), &'
         .filter(|segment| matches!(segment, ResponseRenderSegment::Selected { .. }))
         .count();
     let dynamic_count = primary_count.saturating_add(selected_count);
-    if dynamic_count == 0 || dynamic_count > 16 {
+    if dynamic_count == 0 || dynamic_count > MAX_RESPONSE_RENDER_DYNAMIC_SEGMENTS {
         return Err("invalid_render_sequence_dynamic_segments");
     }
     let mut static_text = String::new();
@@ -974,15 +977,24 @@ fn validate_render_sequence(segments: &[ResponseRenderSegment]) -> Result<(), &'
 }
 
 fn safe_collection_renderer(prefix: &str, suffix: &str) -> bool {
-    if prefix.len().saturating_add(suffix.len()) > 512 {
-        return false;
+    collection_static_text_rejection_reason(prefix, suffix).is_none()
+}
+
+/// Classifies why static renderer text cannot enter an operator package.
+///
+/// This function inspects only the bounded static frame. Dynamic role values
+/// are checked separately by the learner before any transfer proof is sealed.
+#[must_use]
+pub fn collection_static_text_rejection_reason(prefix: &str, suffix: &str) -> Option<&'static str> {
+    if prefix.len().saturating_add(suffix.len()) > MAX_RESPONSE_STATIC_TEXT_BYTES {
+        return Some("byte_budget");
     }
     let combined = format!("{prefix}{suffix}");
     if combined
         .chars()
         .any(|character| character.is_control() && character != '\n')
     {
-        return false;
+        return Some("control_character");
     }
     let lower = combined.to_lowercase();
     if [
@@ -1012,20 +1024,34 @@ fn safe_collection_renderer(prefix: &str, suffix: &str) -> bool {
     ]
     .iter()
     .any(|term| lower.contains(term))
-        || ["http://", "https://", "www."]
-            .iter()
-            .any(|term| lower.contains(term))
-        || ["/home/", "/etc/", "/var/", "/opt/", "/root/", "/tmp/"]
-            .iter()
-            .any(|term| lower.contains(term))
-        || contains_email_like(&combined)
-        || contains_windows_path(&combined)
-        || contains_high_entropy_run(&combined)
-        || contains_phone_like(&combined)
     {
-        return false;
+        return Some("sensitive_keyword");
     }
-    true
+    if ["http://", "https://", "www."]
+        .iter()
+        .any(|term| lower.contains(term))
+    {
+        return Some("url");
+    }
+    if ["/home/", "/etc/", "/var/", "/opt/", "/root/", "/tmp/"]
+        .iter()
+        .any(|term| lower.contains(term))
+    {
+        return Some("unix_path");
+    }
+    if contains_email_like(&combined) {
+        return Some("email");
+    }
+    if contains_windows_path(&combined) {
+        return Some("windows_path");
+    }
+    if contains_high_entropy_run(&combined) {
+        return Some("high_entropy");
+    }
+    if contains_phone_like(&combined) {
+        return Some("phone");
+    }
+    None
 }
 
 fn contains_phone_like(value: &str) -> bool {
@@ -1394,9 +1420,47 @@ mod tests {
             );
         }
         assert_eq!(
-            rendered_collection(&"x".repeat(513), "").validate(),
+            rendered_collection(&"x".repeat(MAX_RESPONSE_STATIC_TEXT_BYTES), "").validate(),
+            Ok(())
+        );
+        assert_eq!(
+            rendered_collection(&"x".repeat(MAX_RESPONSE_STATIC_TEXT_BYTES + 1), "").validate(),
             Err("invalid_collection_renderer")
         );
+        assert_eq!(
+            collection_static_text_rejection_reason("Authorization: Bearer AbC123", ""),
+            Some("sensitive_keyword")
+        );
+        assert_eq!(
+            collection_static_text_rejection_reason("source=/home/ubu/private.json ", ""),
+            Some("unix_path")
+        );
+        assert_eq!(
+            collection_static_text_rejection_reason("Selected values: ", "."),
+            None
+        );
+    }
+
+    #[test]
+    fn render_sequence_uses_the_single_bounded_segment_budget() {
+        let base = ResponseProgram::project_selected_value(
+            ResponseValueSelector::UniqueScalar {
+                value_type: AtomValueType::Integer,
+            },
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let bounded = base
+            .clone()
+            .with_value_renderer(CollectionOutputRenderer::RenderSequence {
+                segments: vec![ResponseRenderSegment::Primary; MAX_RESPONSE_RENDER_SEGMENTS],
+            });
+        assert_eq!(bounded.validate(), Ok(()));
+
+        let oversized = base.with_value_renderer(CollectionOutputRenderer::RenderSequence {
+            segments: vec![ResponseRenderSegment::Primary; MAX_RESPONSE_RENDER_SEGMENTS + 1],
+        });
+        assert_eq!(oversized.validate(), Err("invalid_render_sequence_length"));
     }
 
     #[test]

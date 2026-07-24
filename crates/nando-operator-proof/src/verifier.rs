@@ -6,7 +6,8 @@ use std::{
 use nando_core::wave::{phase_margin_to_micro, phase_vector_from_atom_ids};
 use nando_operator_kernel::{
     AtomValueType, CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
-    CollectionScalarType, CustomToolResultProjection, MAX_UNIQUE_CONSENSUS_VARIANTS,
+    CollectionScalarType, CustomToolResultProjection, MAX_RESPONSE_RENDER_DYNAMIC_SEGMENTS,
+    MAX_RESPONSE_RENDER_SEGMENTS, MAX_RESPONSE_STATIC_TEXT_BYTES, MAX_UNIQUE_CONSENSUS_VARIANTS,
     ProjectStatusMapping, RequestTemplateMarker, ResponseAdapterWaveRoute, ResponseArgument,
     ResponseOperation, ResponseProgram, ResponseRenderSegment, ResponseValueSelector, SemanticRole,
     ValueProjectionFormat, VerifierProgram, canonical_json_sha256,

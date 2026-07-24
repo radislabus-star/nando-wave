@@ -1196,6 +1196,18 @@ private material, exceeds the output budget, or lacks an independent future
 remains non-authoritative. Legacy packages may prove the same class only through
 their separate fixed-row control contract.
 
+Render programs use one explicit bounded surface budget: at most 64 total
+segments. A second 16-dynamic-segment ceiling is forbidden because it rejects
+otherwise bounded VM programs without adding a separate authority proof.
+Identification, transfer proof, independent verification, and the 64-segment
+runtime bound remain mandatory.
+
+Transfer-bound static text is capped at 3072 bytes. Together with the
+4032-byte `OperatorPage32`, this leaves bounded metadata headroom inside an
+8 KiB hot-operator payload target, keeping 2048 resident operators within the
+16 MiB payload budget. Larger prose remains learner-visible but cannot enter
+the hot VM format.
+
 Circuit ranking uses one contribution per lineage for each edge, then edge
 coherence, plane coherence, and whole-circuit closure. Raw sample frequency must
 not let one common relation drown a weak mandatory edge. Crystallization requires

@@ -344,10 +344,12 @@ pub use package::{
 pub use program::{
     CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
     CollectionScalarType, CustomToolResultProjection, MAX_PROJECT_STATUS_CODE,
-    ProjectStatusMapping, ProjectStatusValue, RequestTemplateMarker, ResponseAdapterWaveConsensus,
-    ResponseAdapterWaveRoute, ResponseAdapterWaveSubcenter, ResponseArgument,
-    ResponseConsensusVariant, ResponseOperation, ResponseProgram, ResponseRenderSegment,
-    ResponseScalarLiteral, ValueProjectionFormat,
+    MAX_RESPONSE_RENDER_DYNAMIC_SEGMENTS, MAX_RESPONSE_RENDER_SEGMENTS,
+    MAX_RESPONSE_STATIC_TEXT_BYTES, ProjectStatusMapping, ProjectStatusValue,
+    RequestTemplateMarker, ResponseAdapterWaveConsensus, ResponseAdapterWaveRoute,
+    ResponseAdapterWaveSubcenter, ResponseArgument, ResponseConsensusVariant, ResponseOperation,
+    ResponseProgram, ResponseRenderSegment, ResponseScalarLiteral, ValueProjectionFormat,
+    collection_static_text_rejection_reason,
 };
 pub use protocol_mode::{
     BindingProtocolCompileVerdictV2, BindingProtocolCompilerErrorV2, PROTOCOL_MODE_SET_SCHEMA_V2,

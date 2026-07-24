@@ -63,6 +63,8 @@ pub struct OpportunityScanStatus {
     pub policy_rejection_reasons: BTreeMap<String, u64>,
     pub policy_rejected_examples_by_reason: BTreeMap<String, OpportunityClassStatus>,
     pub policy_rejected_examples_by_reason_and_dynamic: BTreeMap<String, OpportunityClassStatus>,
+    pub static_text_rejection_reasons: BTreeMap<String, u64>,
+    pub static_text_rejected_examples_by_reason: BTreeMap<String, OpportunityClassStatus>,
     pub synthesis_errors: BTreeMap<String, u64>,
     pub scalar_overlap_examples: u64,
     pub unsupported_examples: u64,
@@ -423,6 +425,18 @@ fn finish_turn(turn: &mut TurnSample, status: &mut OpportunityScanStatus) -> Res
             observe_class_status(
                 &mut status.policy_rejected_examples_by_reason_and_dynamic,
                 format!("{reason}.{dynamic_coverage_class}"),
+                turn.input_tokens,
+            );
+        }
+        for (reason, count) in space.static_text_rejection_reasons {
+            let entry = status
+                .static_text_rejection_reasons
+                .entry(reason.clone())
+                .or_default();
+            *entry = entry.saturating_add(count as u64);
+            observe_class_status(
+                &mut status.static_text_rejected_examples_by_reason,
+                reason,
                 turn.input_tokens,
             );
         }

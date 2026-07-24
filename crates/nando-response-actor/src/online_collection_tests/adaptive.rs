@@ -24,6 +24,10 @@ fn adaptive_count_program() -> ResponseProgram {
     )
 }
 
+fn adaptive_static_frame_prefix() -> String {
+    format!("Result:\n{}\n", "stable frame ".repeat(48))
+}
+
 fn adaptive_static_frame_program() -> ResponseProgram {
     ResponseProgram::project_selected_value(
         crate::ResponseValueSelector::UniqueTurnScalar {
@@ -35,7 +39,7 @@ fn adaptive_static_frame_program() -> ResponseProgram {
     .with_value_renderer(crate::CollectionOutputRenderer::RenderSequence {
         segments: vec![
             crate::ResponseRenderSegment::Static {
-                text: "Result:\n".to_owned(),
+                text: adaptive_static_frame_prefix(),
             },
             crate::ResponseRenderSegment::Primary,
         ],
@@ -60,7 +64,7 @@ fn adaptive_static_frame_observation(index: usize, value: i64) -> OnlineCollecti
                     }).to_string()}
                 ]
             }),
-            expected_response: format!("Result:\n{value}"),
+            expected_response: format!("{}{value}", adaptive_static_frame_prefix()),
         },
     }
 }
@@ -382,6 +386,7 @@ fn adaptive_static_frame_requires_transfer_to_a_new_dynamic_value() {
     let path = root.join("checkpoint.cbor");
     let support = adaptive_static_frame_observation(101, 7);
     let program = adaptive_static_frame_program();
+    assert!(adaptive_static_frame_prefix().len() > 512);
     program.validate().expect("intrinsically safe static frame");
     assert!(response_program_requires_static_frame_transfer(&program));
     let digest = canonical_json_sha256(&program).expect("program digest");
