@@ -221,15 +221,15 @@ fn completed_effect(joined: &BlindThenRevealJoinedTransitionV1) -> CompletedEffe
     {
         CompletedEffectFormV1::CollectionTransform
     } else {
-        let role_inputs = atoms
+        let legacy_role_input = atoms.contains(&CompletedEffectAtomV1::RoleInput);
+        let role_input_slots = atoms
             .iter()
-            .filter(|atom| {
-                matches!(
-                    atom,
-                    CompletedEffectAtomV1::RoleInput | CompletedEffectAtomV1::RoleInputSlot { .. }
-                )
+            .filter_map(|atom| match atom {
+                CompletedEffectAtomV1::RoleInputSlot { slot_id, .. } => Some(*slot_id),
+                _ => None,
             })
-            .count();
+            .collect::<BTreeSet<_>>();
+        let role_inputs = role_input_slots.len().max(usize::from(legacy_role_input));
         match role_inputs {
             0 => CompletedEffectFormV1::Unexplained,
             1 => CompletedEffectFormV1::SingleRoleProjection,

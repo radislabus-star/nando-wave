@@ -703,6 +703,36 @@ fn factorizer_preserves_two_independent_action_role_inputs() {
 }
 
 #[test]
+fn factorizer_does_not_split_one_role_on_compatible_type_tags() {
+    let ledger = MultiSourceJoinLedgerV1::build(
+        &[topology_row("turn", "request-a", "session", 1, 1_000)],
+        &[completed_frame("turn", "action-a", "session", 1_500)],
+    );
+    let mut joined = ledger.rows()[0].clone();
+    let slot_id = joined
+        .effect_atoms
+        .iter()
+        .find_map(|atom| match atom {
+            CompletedEffectAtomV1::RoleInputSlot { slot_id, .. } => Some(*slot_id),
+            _ => None,
+        })
+        .expect("role input slot");
+    joined
+        .effect_atoms
+        .push(CompletedEffectAtomV1::RoleInputSlot {
+            slot_id,
+            value_type: Some(AtomValueType::Identifier),
+        });
+    joined.effect_atoms.sort_unstable();
+    joined.effect_atoms.dedup();
+
+    assert_eq!(
+        factor_multi_source_row_v1(&joined).completed_effect,
+        CompletedEffectFormV1::SingleRoleProjection
+    );
+}
+
+#[test]
 fn marginal_ledger_buys_each_intent_once_and_subtracts_active() {
     let ledger = MultiSourceJoinLedgerV1::build(
         &[
