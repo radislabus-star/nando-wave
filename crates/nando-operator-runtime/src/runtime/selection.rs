@@ -197,7 +197,10 @@ fn observed_scalar_type(value: &Value) -> Option<AtomValueType> {
     }
 }
 
-fn request_identifier_positions(request_tokens: &[String], identifier: &str) -> Vec<usize> {
+pub(super) fn request_identifier_positions(
+    request_tokens: &[String],
+    identifier: &str,
+) -> Vec<usize> {
     let identifier_tokens = identifier_tokens(identifier);
     if identifier_tokens.is_empty() {
         return Vec::new();
@@ -209,7 +212,7 @@ fn request_identifier_positions(request_tokens: &[String], identifier: &str) -> 
         .collect()
 }
 
-fn observed_json_path_digest(path: &[String]) -> [u8; 32] {
+pub(super) fn observed_json_path_digest(path: &[String]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b"nando.observed-json-path.v1");
     for segment in path {

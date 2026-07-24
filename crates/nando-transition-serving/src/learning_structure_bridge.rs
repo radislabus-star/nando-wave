@@ -899,6 +899,7 @@ mod tests {
                 grounded_output_count: 0,
                 output_part_count: 0,
                 roles: Vec::new(),
+                role_witnesses: Vec::new(),
                 relations: Vec::new(),
             },
         };

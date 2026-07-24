@@ -6,6 +6,7 @@ mod identification;
 mod join;
 mod live_snapshot;
 mod marginal;
+mod source_neutral_t1;
 
 pub use audit::{
     AuditMassV1, MULTI_SOURCE_EVIDENCE_AUDIT_SCHEMA_V1, MissingEvidenceFieldV1,

@@ -131,8 +131,7 @@ pub fn identify_multi_source_t1_operator_v1(
             PreActionShapeClassV1::SingleRoleProjection
                 | PreActionShapeClassV1::OneOutputManyScalarRoles
                 | PreActionShapeClassV1::ManyOutputsLatestRelevantRole
-        )
-            || factorized.completed_effect != CompletedEffectFormV1::SingleRoleProjection
+        ) || factorized.completed_effect != CompletedEffectFormV1::SingleRoleProjection
             || !matches!(
                 joined.topology.extraction_status,
                 MultiSourceExtractionStatusV1::Complete
@@ -193,15 +192,7 @@ pub fn identify_multi_source_t1_operator_v1(
     };
 
     let candidate_programs =
-        crate::synthesis::enumerate_response_program_candidates(std::slice::from_ref(&seed.frame))
-            .into_iter()
-            .filter(|program| program.validate().is_ok())
-            .filter_map(|program| {
-                response_program_version_root_sha256(&program)
-                    .ok()
-                    .map(|root| (root, program))
-            })
-            .collect::<BTreeMap<_, _>>();
+        super::source_neutral_t1::enumerate_source_neutral_t1_candidates(&seed.joined, &seed.frame);
     if candidate_programs.is_empty() {
         return selected_terminal_report(
             evidence_epoch_sha256,
@@ -443,7 +434,11 @@ pub fn identify_multi_source_t1_operator_v1(
         .iter()
         .filter(|row| {
             !row.joined.accepted
-                && crate::synthesis::program_is_consistent(&selected_program, &row.frame)
+                && super::source_neutral_t1::t1_program_is_consistent(
+                    &selected_program,
+                    &row.joined,
+                    &row.frame,
+                )
         })
         .count();
     let exact_transfer_parity = accounting.future_rows > 0
@@ -610,7 +605,11 @@ fn observation_for_row(
     let evaluations = programs
         .iter()
         .map(|(root, program)| {
-            let accepted = crate::synthesis::program_is_consistent(program, &row.frame);
+            let accepted = super::source_neutral_t1::t1_program_is_consistent(
+                program,
+                &row.joined,
+                &row.frame,
+            );
             ExactProgramEvaluation {
                 program_digest_sha256: root.clone(),
                 accepted,

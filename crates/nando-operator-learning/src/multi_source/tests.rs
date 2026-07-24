@@ -8,8 +8,9 @@ use nando_operator_kernel::{
     AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, MultiSourceCardinalityClassV1,
     MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1,
     MultiSourceRelationEdgeV1, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
-    MultiSourceTemporalClassV1, MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1,
-    PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA, RelationAtom, RelationFrame, sha256_bytes,
+    MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
+    PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA, RelationAtom,
+    RelationFrame, ResponseOperation, ResponseProgram, ResponseValueSelector, sha256_bytes,
 };
 
 use super::*;
@@ -25,6 +26,7 @@ fn topology_row(
     capture_sequence: u64,
     captured_at_unix_ms: u64,
 ) -> PreActionTopologyAuditRowV1 {
+    let action_event = request_event.replacen("request", "action", 1);
     let topology = PreActionMultiSourceTopologyV1 {
         extraction_status: MultiSourceExtractionStatusV1::Complete,
         grounded_output_count: 1,
@@ -51,6 +53,18 @@ fn topology_row(
                 temporal_class: MultiSourceTemporalClassV1::Latest,
                 depth_bucket: 1,
                 structural_flags: 0,
+            },
+        ],
+        role_witnesses: vec![
+            MultiSourceRoleWitnessV1 {
+                local_role_id: 0,
+                value_sha256: root(&format!("value:{action_event}")),
+                request_reference_ordinal: Some(0),
+            },
+            MultiSourceRoleWitnessV1 {
+                local_role_id: 1,
+                value_sha256: root(&format!("other:{action_event}")),
+                request_reference_ordinal: None,
             },
         ],
         relations: vec![
@@ -174,6 +188,7 @@ fn t1_topology_row(
         captured_at_unix_ms,
     );
     row.structure.topology.roles.truncate(1);
+    row.structure.topology.role_witnesses.truncate(1);
     row.structure
         .topology
         .relations
@@ -186,6 +201,32 @@ fn t1_topology_row(
         capture_sequence,
     )
     .expect("T1 commit");
+    row
+}
+
+fn t1_value_topology_row(
+    intent: &str,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    captured_at_unix_ms: u64,
+) -> PreActionTopologyAuditRowV1 {
+    let mut row = t1_topology_row(
+        intent,
+        request_event,
+        session,
+        capture_sequence,
+        captured_at_unix_ms,
+    );
+    row.structure.topology.roles[0].type_class = MultiSourceTypeClassV1::String;
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("T1 value commit");
     row
 }
 
@@ -578,8 +619,8 @@ fn t1_projection_can_select_one_role_from_a_multi_scalar_state() {
 #[test]
 fn t1_value_projection_derives_role_input_from_slot_transfer() {
     let topologies = vec![
-        t1_topology_row("turn-a", "request-a", "session-a", 1, 1_000),
-        t1_topology_row("turn-b", "request-b", "session-b", 2, 2_000),
+        t1_value_topology_row("turn-a", "request-a", "session-a", 1, 1_000),
+        t1_value_topology_row("turn-b", "request-b", "session-b", 2, 2_000),
     ];
     let frames = vec![
         t1_completed_value_projection_frame("turn-a", "action-a", "session-a", 1_500),
@@ -609,14 +650,123 @@ fn t1_value_projection_derives_role_input_from_slot_transfer() {
 }
 
 #[test]
+fn t1_value_projection_selects_a_source_neutral_program_across_renamed_fields() {
+    let topologies = vec![
+        t1_value_topology_row("turn-a", "request-a", "session-a", 1, 1_000),
+        t1_value_topology_row("turn-b", "request-b", "session-b", 2, 2_000),
+    ];
+    let mut support = t1_completed_value_projection_frame("turn-a", "action-a", "session-a", 1_500);
+    let mut future = t1_completed_value_projection_frame("turn-b", "action-b", "session-b", 2_500);
+    set_observed_json_field(&mut support, "alpha");
+    set_observed_json_field(&mut future, "renamed_beta");
+    let frames = vec![support, future];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("renamed field T1 epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    let Some(ResponseProgram {
+        operation:
+            ResponseOperation::ProjectSelectedValue {
+                selector:
+                    ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal: 0, .. },
+                ..
+            },
+        ..
+    }) = report.canonical_program.as_ref()
+    else {
+        panic!("source-neutral program missing: {report:#?}");
+    };
+    let encoded = serde_json::to_string(&report).expect("report");
+    assert!(!encoded.contains("alpha"));
+    assert!(!encoded.contains("renamed_beta"));
+}
+
+#[test]
+fn t1_value_projection_refuses_physical_program_without_pre_action_witness() {
+    let mut topology = t1_topology_row("turn-a", "request-a", "session-a", 1, 1_000);
+    topology.structure.topology.role_witnesses.clear();
+    topology.commit = PreActionTopologyCommitV1::seal(
+        &topology.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        1,
+    )
+    .expect("legacy commit");
+    let frame = t1_completed_value_projection_frame("turn-a", "action-a", "session-a", 1_500);
+    let ledger = MultiSourceJoinLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+    );
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        std::slice::from_ref(&frame),
+        &BTreeSet::new(),
+        root("witnessless T1 epoch"),
+    );
+
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty
+    );
+    assert!(report.canonical_program.is_none());
+}
+
+fn set_observed_json_field(frame: &mut RelationFrame, field: &str) {
+    for atom in &mut frame.atoms {
+        if let RelationAtom::ObservationSelector { selector, .. } = atom {
+            let value_type = match selector {
+                ResponseValueSelector::JsonField { value_type, .. } => *value_type,
+                _ => continue,
+            };
+            *selector = ResponseValueSelector::JsonField {
+                field: field.to_owned(),
+                value_type,
+            };
+        }
+    }
+}
+
+#[test]
 fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
     let make_topology = |intent, request, session, sequence, captured_at| {
         let mut row = topology_row(intent, request, session, sequence, captured_at);
         row.structure.topology.roles[0].source_ordinal = 0;
         row.structure.topology.roles[0].temporal_class = MultiSourceTemporalClassV1::Historical;
+        row.structure.topology.roles[0].structural_flags = 0;
         row.structure.topology.roles[1].source_ordinal = 1;
         row.structure.topology.roles[1].temporal_class = MultiSourceTemporalClassV1::Latest;
+        row.structure.topology.roles[1].type_class = MultiSourceTypeClassV1::Number;
         row.structure.topology.roles[1].structural_flags = 1;
+        row.structure.topology.role_witnesses.swap(0, 1);
+        for (index, witness) in row.structure.topology.role_witnesses.iter_mut().enumerate() {
+            witness.local_role_id = u16::try_from(index).expect("role id");
+            witness.request_reference_ordinal = (index == 1).then_some(0);
+        }
+        row.structure
+            .topology
+            .relations
+            .retain(|edge| edge.relation != MultiSourceRelationKindV1::RequestReferencesRole);
+        row.structure
+            .topology
+            .relations
+            .push(MultiSourceRelationEdgeV1 {
+                relation: MultiSourceRelationKindV1::RequestReferencesRole,
+                source_role_id: 1,
+                target_role_id: 1,
+            });
+        row.structure.topology.relations.sort();
         row.commit = PreActionTopologyCommitV1::seal(
             &row.structure,
             MultiSourceEvidenceOriginV1::FreshLive,
