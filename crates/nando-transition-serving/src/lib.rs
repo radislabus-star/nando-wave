@@ -522,6 +522,9 @@ struct AppState {
     learning_evidence_bridge: LearningEvidenceBridgeRuntimeV1,
     learning_structure_bridge: LearningStructureBridgeRuntimeV2,
     opportunity_bridge: OpportunityBridgeRuntime,
+    multi_source_snapshot: Arc<
+        RwLock<Option<nando_operator_learning::multi_source::LiveMultiSourceDiscoverySnapshotV1>>,
+    >,
 }
 
 #[derive(Default)]
@@ -689,6 +692,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         learning_evidence_bridge,
         learning_structure_bridge,
         opportunity_bridge,
+        multi_source_snapshot: Arc::new(RwLock::new(None)),
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -736,6 +740,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         state.config.learning_structure_bridge_consumer_enabled,
     )?;
     spawn_miner_warmup(state.clone())?;
+    spawn_multi_source_snapshot_runtime(state.clone())?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
@@ -1423,48 +1428,65 @@ async fn miner_report(State(state): State<AppState>) -> Response {
 }
 
 async fn multi_source_report(State(state): State<AppState>) -> Response {
-    let requests = match state.request_learning.audit_snapshot_v1() {
-        Ok(snapshot) => snapshot,
-        Err(error) => {
-            return json_response(
+    let snapshot = state
+        .multi_source_snapshot
+        .read()
+        .ok()
+        .and_then(|snapshot| snapshot.clone());
+    snapshot.map_or_else(
+        || {
+            json_response(
                 StatusCode::SERVICE_UNAVAILABLE,
-                json!({"schema": "nando.live-multi-source-error.v1", "error": error}),
-            );
-        }
-    };
-    let evidence = current_miner_worker(&state)
-        .and_then(|worker| worker.multi_source_evidence())
-        .or_else(|| {
-            current_response_miner(&state).and_then(|miner| {
-                miner.try_lock().ok().map(|miner| {
-                    miner_worker::MultiSourceMinerEvidenceSnapshotV1 {
-                        opportunities: miner.opportunity_audit_rows_v1(),
-                        frames: miner.retained_relation_frames_v1(),
-                    }
-                })
-            })
-        });
-    let Some(evidence) = evidence else {
-        return json_response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            json!({"schema": "nando.live-multi-source-error.v1", "error": "miner_evidence_unavailable"}),
-        );
-    };
-    match multi_source_live::build_snapshot(evidence.opportunities, requests, evidence.frames) {
-        Ok(snapshot) => json_response(
-            StatusCode::OK,
-            serde_json::to_value(snapshot).unwrap_or_else(|_| {
                 json!({
                     "schema": "nando.live-multi-source-error.v1",
-                    "error": "snapshot_encode"
-                })
-            }),
-        ),
-        Err(error) => json_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json!({"schema": "nando.live-multi-source-error.v1", "error": error}),
-        ),
-    }
+                    "error": "snapshot_initializing"
+                }),
+            )
+        },
+        |snapshot| {
+            json_response(
+                StatusCode::OK,
+                serde_json::to_value(snapshot).unwrap_or_else(|_| {
+                    json!({
+                        "schema": "nando.live-multi-source-error.v1",
+                        "error": "snapshot_encode"
+                    })
+                }),
+            )
+        },
+    )
+}
+
+fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
+    std::thread::Builder::new()
+        .name("nando-multi-source-snapshot".to_owned())
+        .spawn(move || {
+            let mut published = false;
+            loop {
+                let evidence =
+                    current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
+                let requests = state.request_learning.audit_snapshot_v1();
+                if let (Some(evidence), Ok(requests)) = (evidence, requests)
+                    && let Ok(snapshot) = multi_source_live::build_snapshot(
+                        evidence.opportunities,
+                        requests,
+                        evidence.frames,
+                    )
+                {
+                    if let Ok(mut target) = state.multi_source_snapshot.write() {
+                        *target = Some(snapshot);
+                    }
+                    published = true;
+                }
+                std::thread::sleep(if published {
+                    Duration::from_secs(60)
+                } else {
+                    Duration::from_secs(1)
+                });
+            }
+        })
+        .map(|_| ())
+        .map_err(|error| format!("multi_source_snapshot_thread:{error}"))
 }
 
 fn streaming_miner_signal_tree(
@@ -5411,6 +5433,7 @@ mod tests {
             learning_evidence_bridge,
             learning_structure_bridge,
             opportunity_bridge,
+            multi_source_snapshot: Arc::new(RwLock::new(None)),
         };
         refresh_response_executor(&state);
         state
