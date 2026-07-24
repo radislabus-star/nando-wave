@@ -1,6 +1,6 @@
 use nando_operator_learning::multi_source::{
-    LiveMultiSourceDiscoverySnapshotV1, RequestStructureAuditSnapshotV1,
-    build_live_multi_source_discovery_snapshot_v1,
+    LiveMultiSourceDiscoverySnapshotV2, RequestStructureAuditSnapshotV1,
+    build_live_multi_source_discovery_snapshot_v2,
 };
 use nando_operator_learning::opportunity::OpportunityIntentAuditRowV1;
 use nando_response_actor::RelationFrame;
@@ -11,8 +11,8 @@ pub(crate) fn build_snapshot(
     opportunities: Vec<OpportunityIntentAuditRowV1>,
     requests: RequestStructureAuditSnapshotV1,
     frames: Vec<RelationFrame>,
-) -> Result<LiveMultiSourceDiscoverySnapshotV1, String> {
-    let snapshot = build_live_multi_source_discovery_snapshot_v1(opportunities, requests, frames);
+) -> Result<LiveMultiSourceDiscoverySnapshotV2, String> {
+    let snapshot = build_live_multi_source_discovery_snapshot_v2(opportunities, requests, frames);
     if !snapshot.validate() {
         return Err("live_multi_source_snapshot_invalid".to_owned());
     }

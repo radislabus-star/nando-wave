@@ -134,6 +134,109 @@ fn one_support_identifies_and_freezes_without_row_threshold() {
 }
 
 #[test]
+fn one_independent_future_transfers_after_freeze_without_row_threshold() {
+    let mut machine =
+        OperatorIdentificationMachineV1::new(manifest("transfer"), VersionSpaceConfig::default());
+    let digest = machine
+        .register_candidate(program("status"), descriptor("status"))
+        .expect("candidate");
+    machine.complete_candidate_generation();
+    machine
+        .apply_support(observation(
+            1,
+            "support",
+            GenerationLearningOutcomeV3::VerifiedPass,
+            vec![accepted(&digest)],
+        ))
+        .expect("support");
+    machine
+        .freeze_candidate(2, root("narrow-scope"))
+        .expect("freeze");
+
+    let accounting = machine
+        .apply_future(observation(
+            2,
+            "future",
+            GenerationLearningOutcomeV3::VerifiedPass,
+            vec![accepted(&digest)],
+        ))
+        .expect("future");
+    assert_eq!(accounting.support_rows, 1);
+    assert_eq!(accounting.future_rows, 1);
+    assert_eq!(accounting.support_lineages, 1);
+    assert_eq!(accounting.future_lineages, 1);
+
+    let checkpoint = machine.checkpoint_bytes().expect("checkpoint");
+    let restored =
+        OperatorIdentificationMachineV1::from_checkpoint_bytes(&checkpoint).expect("restored");
+    assert_eq!(
+        restored
+            .evidence_ledger()
+            .expect("restored ledger")
+            .accounting(),
+        accounting
+    );
+}
+
+#[test]
+fn future_rejects_support_lineage_and_foreign_semantic_class() {
+    let mut machine = OperatorIdentificationMachineV1::new(
+        manifest("future-guards"),
+        VersionSpaceConfig::default(),
+    );
+    let selected = machine
+        .register_candidate(program("selected"), descriptor("selected"))
+        .expect("selected");
+    let competing = machine
+        .register_candidate(program("competing"), descriptor("competing"))
+        .expect("competing");
+    machine.complete_candidate_generation();
+    machine
+        .apply_support(observation(
+            1,
+            "support",
+            GenerationLearningOutcomeV3::VerifiedPass,
+            vec![
+                accepted(&selected),
+                rejected(&competing, "support mismatch"),
+            ],
+        ))
+        .expect("support");
+    machine
+        .freeze_candidate(2, root("narrow-scope"))
+        .expect("freeze");
+
+    let foreign = machine.apply_future(observation(
+        2,
+        "future",
+        GenerationLearningOutcomeV3::VerifiedPass,
+        vec![accepted(&selected), accepted(&competing)],
+    ));
+    assert_eq!(
+        foreign.err(),
+        Some(OperatorIdentificationErrorV1::FutureSemanticContradiction)
+    );
+
+    let same_lineage = seal_operator_observation_v1(OperatorObservationInputV1 {
+        capture_sequence: 2,
+        lineage_root_sha256: root("support:lineage"),
+        event_root_sha256: root("same-lineage:event"),
+        request_root_sha256: root("same-lineage:request"),
+        pre_action_relation_root_sha256: root("same-lineage:before"),
+        observed_action_root_sha256: root("same-lineage:action"),
+        observed_delta_root_sha256: root("same-lineage:delta"),
+        verifier_receipt_root_sha256: root("same-lineage:receipt"),
+        outcome: GenerationLearningOutcomeV3::VerifiedPass,
+        evaluations: vec![accepted(&selected), rejected(&competing, "future mismatch")],
+    })
+    .expect("same-lineage observation");
+    assert_eq!(
+        machine.apply_future(same_lineage).err(),
+        Some(OperatorIdentificationErrorV1::EvidenceLedger)
+    );
+}
+
+#[test]
 fn ambiguity_requests_a_distinguishing_probe_then_collapses() {
     let mut machine =
         OperatorIdentificationMachineV1::new(manifest("ambiguous"), VersionSpaceConfig::default());

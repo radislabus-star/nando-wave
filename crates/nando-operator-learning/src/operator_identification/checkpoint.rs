@@ -120,7 +120,7 @@ impl OperatorIdentificationMachineV1 {
             if freeze.generation_id_sha256() != manifest.generation_id_sha256()
                 || freeze.support_evidence_root_sha256()
                     != ledger
-                        .evidence_root_sha256()
+                        .support_evidence_root_sha256()
                         .map_err(|_| OperatorIdentificationErrorV1::EvidenceLedger)?
             {
                 return Err(OperatorIdentificationErrorV1::Freeze);

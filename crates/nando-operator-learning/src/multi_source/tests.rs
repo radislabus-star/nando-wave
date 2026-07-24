@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
-use crate::opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass};
+use crate::{
+    SOURCE_NEUTRAL_EXTRACTOR_VERSION,
+    opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass},
+};
 use nando_operator_kernel::{
     AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, MultiSourceCardinalityClassV1,
     MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1,
@@ -119,7 +122,7 @@ fn completed_frame(
         verifier_label: Some(true),
         atoms: vec![
             RelationAtom::ActionFunction {
-                value: "transport-a".to_owned(),
+                value: "transport_a".to_owned(),
             },
             RelationAtom::TypedSlot {
                 slot_id: 1,
@@ -130,6 +133,94 @@ fn completed_frame(
             RelationAtom::ActionRoleArgument {
                 name: "value".to_owned(),
                 slot_id: 1,
+                value_type: Some(AtomValueType::Integer),
+            },
+        ],
+        evidence_ref_sha256: root(&format!("evidence:{event}")),
+    }
+}
+
+fn t1_topology_row(
+    intent: &str,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    captured_at_unix_ms: u64,
+) -> PreActionTopologyAuditRowV1 {
+    let mut row = topology_row(
+        intent,
+        request_event,
+        session,
+        capture_sequence,
+        captured_at_unix_ms,
+    );
+    row.structure.topology.roles.truncate(1);
+    row.structure
+        .topology
+        .relations
+        .retain(|edge| edge.source_role_id == 0 && edge.target_role_id == 0);
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("T1 commit");
+    row
+}
+
+fn t1_completed_frame(
+    intent: &str,
+    event: &str,
+    session: &str,
+    observed_at_unix_ms: u64,
+) -> RelationFrame {
+    let value_root = root(&format!("value:{event}"));
+    RelationFrame {
+        schema: RELATION_FRAME_SCHEMA.to_owned(),
+        frame_id_sha256: root(&format!("frame:{event}")),
+        event_id_sha256: root(event),
+        client_intent_id_sha256: root(intent),
+        session_id_sha256: root(session),
+        observed_at_unix_nanos: observed_at_unix_ms.saturating_mul(1_000_000),
+        estimated_input_tokens: 100,
+        extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+        verifier_label: Some(true),
+        atoms: vec![
+            RelationAtom::CompletionState {
+                value: "completed".to_owned(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 7,
+                value_type: AtomValueType::Integer,
+                source: AtomSource::Observation,
+                value_sha256: value_root.clone(),
+            },
+            RelationAtom::UniqueSlot { slot_id: 7 },
+            RelationAtom::ObservationSelector {
+                slot_id: 7,
+                selector: nando_operator_kernel::ResponseValueSelector::JsonField {
+                    field: "opaque".to_owned(),
+                    value_type: AtomValueType::Integer,
+                },
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 11,
+                value_type: AtomValueType::Integer,
+                source: AtomSource::Action,
+                value_sha256: value_root,
+            },
+            RelationAtom::SlotEquality {
+                left_slot: 7,
+                right_slot: 11,
+            },
+            RelationAtom::ActionFunction {
+                value: "transport_a".to_owned(),
+            },
+            RelationAtom::ActionRoleArgument {
+                name: "value".to_owned(),
+                slot_id: 11,
                 value_type: Some(AtomValueType::Integer),
             },
         ],
@@ -247,12 +338,12 @@ fn live_snapshot_is_order_independent_and_subtracts_active_overlap() {
     let opportunity_a = opportunity("turn-a", ReducibilityClass::CpuVerified);
     let opportunity_b = opportunity("turn-b", ReducibilityClass::UnexploredMultiSource);
 
-    let forward = build_live_multi_source_discovery_snapshot_v1(
+    let forward = build_live_multi_source_discovery_snapshot_v2(
         vec![opportunity_a.clone(), opportunity_b.clone()],
         request_snapshot(vec![topology_a.clone(), topology_b.clone()]),
         vec![frame_a.clone(), frame_b.clone()],
     );
-    let reversed = build_live_multi_source_discovery_snapshot_v1(
+    let reversed = build_live_multi_source_discovery_snapshot_v2(
         vec![opportunity_b, opportunity_a],
         request_snapshot(vec![topology_b, topology_a]),
         vec![frame_b, frame_a],
@@ -261,7 +352,7 @@ fn live_snapshot_is_order_independent_and_subtracts_active_overlap() {
     assert!(forward.validate());
     assert_eq!(
         forward.blocker,
-        LiveMultiSourceDiscoveryBlockerV1::ReadyForT1Identification
+        LiveMultiSourceDiscoveryBlockerV1::NoEligibleT1Cohort
     );
     assert_eq!(forward.join.joined_rows, 2);
     assert_eq!(forward.opportunity.already_active.intents, 1);
@@ -274,7 +365,7 @@ fn live_snapshot_is_order_independent_and_subtracts_active_overlap() {
 
 #[test]
 fn live_snapshot_reports_the_first_missing_signal_boundary() {
-    let no_topology = build_live_multi_source_discovery_snapshot_v1(
+    let no_topology = build_live_multi_source_discovery_snapshot_v2(
         Vec::new(),
         request_snapshot(Vec::new()),
         Vec::new(),
@@ -285,7 +376,7 @@ fn live_snapshot_reports_the_first_missing_signal_boundary() {
         LiveMultiSourceDiscoveryBlockerV1::NoPreActionTopology
     );
 
-    let no_frame = build_live_multi_source_discovery_snapshot_v1(
+    let no_frame = build_live_multi_source_discovery_snapshot_v2(
         vec![opportunity(
             "turn",
             ReducibilityClass::UnexploredMultiSource,
@@ -300,4 +391,108 @@ fn live_snapshot_reports_the_first_missing_signal_boundary() {
     );
     assert!(!no_frame.identification_ready);
     assert!(!no_frame.authority_ready);
+}
+
+#[test]
+fn t1_identification_uses_one_support_and_one_independent_future() {
+    let topologies = vec![
+        t1_topology_row("turn-a", "request-a", "session-a", 1, 1_000),
+        t1_topology_row("turn-b", "request-b", "session-b", 2, 2_000),
+    ];
+    let frames = vec![
+        t1_completed_frame("turn-a", "action-a", "session-a", 1_500),
+        t1_completed_frame("turn-b", "action-b", "session-b", 2_500),
+    ];
+    assert_eq!(crate::ground_roles(&frames[0]).len(), 1);
+    let candidates =
+        crate::synthesis::enumerate_response_program_candidates(std::slice::from_ref(&frames[0]));
+    assert!(!candidates.is_empty());
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| candidate.validate().is_ok()),
+        "{candidates:#?}"
+    );
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("T1 epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
+    assert_eq!(report.independent_future_lineages, 1);
+    assert_eq!(report.wrong_role_bindings, 0);
+    assert_eq!(report.negative_accepts, 0);
+    assert!(report.exact_transfer_parity);
+    assert!(!report.runtime_actor_verifier_parity);
+    assert!(!report.execution_authority);
+
+    let snapshot = build_live_multi_source_discovery_snapshot_v2(
+        vec![
+            opportunity("turn-a", ReducibilityClass::UnexploredMultiSource),
+            opportunity("turn-b", ReducibilityClass::UnexploredMultiSource),
+        ],
+        request_snapshot(topologies),
+        frames.clone(),
+    );
+    assert!(snapshot.validate(), "{snapshot:#?}");
+    assert_eq!(
+        snapshot.blocker,
+        LiveMultiSourceDiscoveryBlockerV1::T1TransferReady
+    );
+    assert!(snapshot.identification_ready);
+    assert!(snapshot.transfer_ready);
+    assert!(!snapshot.authority_ready);
+
+    let mut reversed_rows = ledger.rows();
+    reversed_rows.reverse();
+    let mut reversed_frames = frames;
+    reversed_frames.reverse();
+    let reversed = identify_multi_source_t1_operator_v1(
+        &reversed_rows,
+        &reversed_frames,
+        &BTreeSet::new(),
+        root("T1 epoch"),
+    );
+    assert_eq!(
+        serde_json::to_vec(&report).expect("report"),
+        serde_json::to_vec(&reversed).expect("reversed report")
+    );
+}
+
+#[test]
+fn t1_identification_never_counts_support_lineage_reuse_as_future() {
+    let topologies = vec![
+        t1_topology_row("turn-a", "request-a", "session", 1, 1_000),
+        t1_topology_row("turn-b", "request-b", "session", 2, 2_000),
+    ];
+    let frames = vec![
+        t1_completed_frame("turn-a", "action-a", "session", 1_500),
+        t1_completed_frame("turn-b", "action-b", "session", 2_500),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("support reuse epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::FrozenAwaitingIndependentFuture
+    );
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.support_reuse_rows, 1);
+    assert_eq!(report.independent_future_rows, 0);
+    assert!(!report.exact_transfer_parity);
 }

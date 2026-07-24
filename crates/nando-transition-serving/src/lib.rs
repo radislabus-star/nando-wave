@@ -523,7 +523,7 @@ struct AppState {
     learning_structure_bridge: LearningStructureBridgeRuntimeV2,
     opportunity_bridge: OpportunityBridgeRuntime,
     multi_source_snapshot: Arc<
-        RwLock<Option<nando_operator_learning::multi_source::LiveMultiSourceDiscoverySnapshotV1>>,
+        RwLock<Option<nando_operator_learning::multi_source::LiveMultiSourceDiscoverySnapshotV2>>,
     >,
 }
 

@@ -32,6 +32,22 @@ impl GenerationEvidenceLedgerV3 {
         self.partition_sha256(GenerationEvidencePartitionV3::Future, &self.future)
     }
 
+    pub fn support_evidence_root_sha256(&self) -> Result<String, GenerationEvidenceErrorV3> {
+        let empty_future_partition =
+            self.partition_sha256(GenerationEvidencePartitionV3::Future, &[])?;
+        canonical_json_sha256(&(
+            GENERATION_EVIDENCE_LEDGER_SCHEMA_V3,
+            "ledger-root",
+            self.generation_id_sha256.as_str(),
+            self.support_partition_sha256()?,
+            self.freeze
+                .as_ref()
+                .map(GenerationSupportFreezeV3::freeze_sha256),
+            empty_future_partition,
+        ))
+        .map_err(|_| GenerationEvidenceErrorV3::Serialization)
+    }
+
     fn partition_sha256(
         &self,
         partition: GenerationEvidencePartitionV3,

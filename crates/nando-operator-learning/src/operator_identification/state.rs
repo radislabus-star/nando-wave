@@ -8,9 +8,10 @@ use nando_operator_kernel::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    CandidateSearchCompletion, EvidenceUpdateReport, GenerationEvidenceLedgerV3,
-    GenerationEvidenceObservationInputV3, GenerationLearningOutcomeV3, VersionSpaceArena,
-    VersionSpaceConfig, VersionSpaceEvidenceError, seal_generation_evidence_observation_v3,
+    CandidateSearchCompletion, EvidenceUpdateReport, GenerationEvidenceAccountingV3,
+    GenerationEvidenceLedgerV3, GenerationEvidenceObservationInputV3, GenerationLearningOutcomeV3,
+    VersionSpaceArena, VersionSpaceConfig, VersionSpaceEvidenceError,
+    seal_generation_evidence_observation_v3,
 };
 
 use super::{
@@ -66,6 +67,8 @@ pub enum OperatorIdentificationErrorV1 {
     SearchIncomplete,
     NotIdentified,
     SupportClosed,
+    FutureBeforeFreeze,
+    FutureSemanticContradiction,
     InvalidScope,
     ObservationEvidence,
     SemanticQuotient,
@@ -87,6 +90,10 @@ impl fmt::Display for OperatorIdentificationErrorV1 {
             Self::SearchIncomplete => "candidate generation is not complete",
             Self::NotIdentified => "version space has not identified one semantic class",
             Self::SupportClosed => "operator support is already frozen",
+            Self::FutureBeforeFreeze => "operator future arrived before candidate freeze",
+            Self::FutureSemanticContradiction => {
+                "operator future contradicts the frozen semantic class"
+            }
             Self::InvalidScope => "applicability scope root is invalid",
             Self::ObservationEvidence => "exact observation evidence is incomplete or invalid",
             Self::SemanticQuotient => "semantic program quotient is invalid",
@@ -350,7 +357,7 @@ impl OperatorIdentificationMachineV1 {
             .freeze_support(support_watermark_next_sequence, watermark_root_sha256)
             .map_err(|_| OperatorIdentificationErrorV1::EvidenceLedger)?;
         let support_evidence_root_sha256 = ledger
-            .evidence_root_sha256()
+            .support_evidence_root_sha256()
             .map_err(|_| OperatorIdentificationErrorV1::EvidenceLedger)?;
         let search_completion_root_sha256 = canonical_json_sha256(&(
             "nando.operator-identification-search.v1",
@@ -380,6 +387,72 @@ impl OperatorIdentificationMachineV1 {
         self.freeze
             .as_ref()
             .ok_or(OperatorIdentificationErrorV1::Freeze)
+    }
+
+    pub fn apply_future(
+        &mut self,
+        observation: OperatorObservationV1,
+    ) -> Result<GenerationEvidenceAccountingV3, OperatorIdentificationErrorV1> {
+        observation
+            .validate()
+            .map_err(|_| OperatorIdentificationErrorV1::InvalidObservation)?;
+        let freeze = self
+            .freeze
+            .as_ref()
+            .ok_or(OperatorIdentificationErrorV1::FutureBeforeFreeze)?;
+        let expected_programs = self.descriptors.keys().cloned().collect::<BTreeSet<_>>();
+        let evaluated_programs = observation
+            .evaluations()
+            .iter()
+            .map(|evaluation| evaluation.program_digest_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        if evaluated_programs != expected_programs
+            || evaluated_programs.len() != observation.evaluations().len()
+        {
+            return Err(OperatorIdentificationErrorV1::ObservationEvidence);
+        }
+        let canonical_accepted = observation.evaluations().iter().any(|evaluation| {
+            evaluation.program_digest_sha256 == freeze.canonical_program_root_sha256()
+                && evaluation.accepted
+        });
+        let foreign_class_accepted = observation.evaluations().iter().any(|evaluation| {
+            evaluation.accepted
+                && self
+                    .descriptors
+                    .get(&evaluation.program_digest_sha256)
+                    .is_none_or(|descriptor| descriptor.class_id() != freeze.semantic_class_id())
+        });
+        if observation.outcome() != GenerationLearningOutcomeV3::VerifiedPass
+            || !canonical_accepted
+            || foreign_class_accepted
+        {
+            return Err(OperatorIdentificationErrorV1::FutureSemanticContradiction);
+        }
+        let ledger = self
+            .evidence_ledger
+            .as_mut()
+            .ok_or(OperatorIdentificationErrorV1::FutureBeforeFreeze)?;
+        let support_freeze_sha256 = ledger
+            .freeze()
+            .map(|support_freeze| support_freeze.freeze_sha256().to_owned())
+            .ok_or(OperatorIdentificationErrorV1::FutureBeforeFreeze)?;
+        let evidence =
+            seal_generation_evidence_observation_v3(GenerationEvidenceObservationInputV3 {
+                generation_id_sha256: self.manifest.generation_id_sha256().to_owned(),
+                capture_sequence: observation.capture_sequence(),
+                support_watermark_next_sequence: freeze.support_watermark_next_sequence(),
+                support_freeze_sha256: Some(support_freeze_sha256),
+                lineage_root_sha256: observation.lineage_root_sha256().to_owned(),
+                event_root_sha256: observation.event_root_sha256().to_owned(),
+                request_root_sha256: observation.request_root_sha256().to_owned(),
+                verifier_receipt_root_sha256: observation.verifier_receipt_root_sha256().to_owned(),
+                outcome: observation.outcome(),
+            })
+            .map_err(|_| OperatorIdentificationErrorV1::EvidenceLedger)?;
+        ledger
+            .append_future(evidence)
+            .map_err(|_| OperatorIdentificationErrorV1::EvidenceLedger)?;
+        Ok(ledger.accounting())
     }
 
     #[must_use]

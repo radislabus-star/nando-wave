@@ -7,12 +7,13 @@ use crate::opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass};
 
 use super::{
     CoverageOpportunitySnapshotV1, MultiSourceJoinLedgerV1, MultiSourceJoinReportV1,
+    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV1,
     RequestStructureAuditSnapshotV1, build_coverage_opportunity_snapshot_v1,
-    factor_multi_source_row_v1,
+    factor_multi_source_row_v1, identify_multi_source_t1_operator_v1,
 };
 
-pub const LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V1: &str =
-    "nando.live-multi-source-discovery-snapshot.v1";
+pub const LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2: &str =
+    "nando.live-multi-source-discovery-snapshot.v2";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -22,11 +23,16 @@ pub enum LiveMultiSourceDiscoveryBlockerV1 {
     BlindThenRevealJoinEmpty,
     NoAcceptedJoinedTransition,
     NoUnresolvedMarginalOpportunity,
-    ReadyForT1Identification,
+    NoEligibleT1Cohort,
+    T1CandidateGenerationBlocked,
+    T1Ambiguous,
+    T1AwaitingIndependentFuture,
+    T1FutureContradiction,
+    T1TransferReady,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct LiveMultiSourceDiscoverySnapshotV1 {
+pub struct LiveMultiSourceDiscoverySnapshotV2 {
     pub schema: String,
     pub snapshot_root_sha256: String,
     pub evidence_epoch_sha256: String,
@@ -35,17 +41,19 @@ pub struct LiveMultiSourceDiscoverySnapshotV1 {
     pub join: MultiSourceJoinReportV1,
     pub factorized_rows: u64,
     pub opportunity: CoverageOpportunitySnapshotV1,
+    pub t1_identification: MultiSourceT1IdentificationV1,
     pub blocker: LiveMultiSourceDiscoveryBlockerV1,
     pub identification_ready: bool,
+    pub transfer_ready: bool,
     pub authority_ready: bool,
 }
 
 #[must_use]
-pub fn build_live_multi_source_discovery_snapshot_v1(
+pub fn build_live_multi_source_discovery_snapshot_v2(
     mut opportunities: Vec<OpportunityIntentAuditRowV1>,
     mut requests: RequestStructureAuditSnapshotV1,
     mut frames: Vec<RelationFrame>,
-) -> LiveMultiSourceDiscoverySnapshotV1 {
+) -> LiveMultiSourceDiscoverySnapshotV2 {
     let relevant_intents = requests
         .topologies
         .iter()
@@ -66,7 +74,7 @@ pub fn build_live_multi_source_discovery_snapshot_v1(
     });
 
     let evidence_epoch_sha256 = canonical_json_sha256(&(
-        LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V1,
+        LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2,
         opportunities
             .iter()
             .map(|row| {
@@ -121,6 +129,12 @@ pub fn build_live_multi_source_discovery_snapshot_v1(
         evidence_epoch_sha256.clone(),
     );
     let join = ledger.report();
+    let t1_identification = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &active_intents,
+        evidence_epoch_sha256.clone(),
+    );
     let blocker = if requests.topologies.is_empty() {
         LiveMultiSourceDiscoveryBlockerV1::NoPreActionTopology
     } else if frames.is_empty() {
@@ -132,12 +146,36 @@ pub fn build_live_multi_source_discovery_snapshot_v1(
     } else if opportunity.unresolved.intents == 0 {
         LiveMultiSourceDiscoveryBlockerV1::NoUnresolvedMarginalOpportunity
     } else {
-        LiveMultiSourceDiscoveryBlockerV1::ReadyForT1Identification
+        match t1_identification.state {
+            MultiSourceT1IdentificationStateV1::NoEligibleCohort => {
+                LiveMultiSourceDiscoveryBlockerV1::NoEligibleT1Cohort
+            }
+            MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty
+            | MultiSourceT1IdentificationStateV1::SearchIncomplete
+            | MultiSourceT1IdentificationStateV1::SearchExhausted
+            | MultiSourceT1IdentificationStateV1::NoConsistentProgram
+            | MultiSourceT1IdentificationStateV1::InvalidEvidence => {
+                LiveMultiSourceDiscoveryBlockerV1::T1CandidateGenerationBlocked
+            }
+            MultiSourceT1IdentificationStateV1::Ambiguous => {
+                LiveMultiSourceDiscoveryBlockerV1::T1Ambiguous
+            }
+            MultiSourceT1IdentificationStateV1::FrozenAwaitingIndependentFuture => {
+                LiveMultiSourceDiscoveryBlockerV1::T1AwaitingIndependentFuture
+            }
+            MultiSourceT1IdentificationStateV1::FutureContradiction => {
+                LiveMultiSourceDiscoveryBlockerV1::T1FutureContradiction
+            }
+            MultiSourceT1IdentificationStateV1::TransferReady => {
+                LiveMultiSourceDiscoveryBlockerV1::T1TransferReady
+            }
+        }
     };
-    let identification_ready =
-        blocker == LiveMultiSourceDiscoveryBlockerV1::ReadyForT1Identification;
-    let mut snapshot = LiveMultiSourceDiscoverySnapshotV1 {
-        schema: LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V1.to_owned(),
+    let identification_ready = t1_identification.candidate_freeze.is_some();
+    let transfer_ready =
+        t1_identification.state == MultiSourceT1IdentificationStateV1::TransferReady;
+    let mut snapshot = LiveMultiSourceDiscoverySnapshotV2 {
+        schema: LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2.to_owned(),
         snapshot_root_sha256: String::new(),
         evidence_epoch_sha256,
         topology_rows: u64::try_from(requests.topologies.len()).unwrap_or(u64::MAX),
@@ -145,27 +183,31 @@ pub fn build_live_multi_source_discovery_snapshot_v1(
         join,
         factorized_rows: u64::try_from(factorized.len()).unwrap_or(u64::MAX),
         opportunity,
+        t1_identification,
         blocker,
         identification_ready,
+        transfer_ready,
         authority_ready: false,
     };
     snapshot.snapshot_root_sha256 = snapshot.expected_root();
     snapshot
 }
 
-impl LiveMultiSourceDiscoverySnapshotV1 {
+impl LiveMultiSourceDiscoverySnapshotV2 {
     #[must_use]
     pub fn expected_root(&self) -> String {
         canonical_json_sha256(&(
-            LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V1,
+            LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2,
             self.evidence_epoch_sha256.as_str(),
             self.topology_rows,
             self.relation_frames,
             &self.join,
             self.factorized_rows,
             &self.opportunity,
+            &self.t1_identification,
             self.blocker,
             self.identification_ready,
+            self.transfer_ready,
             false,
         ))
         .expect("live multi-source snapshot serializes")
@@ -173,10 +215,13 @@ impl LiveMultiSourceDiscoverySnapshotV1 {
 
     #[must_use]
     pub fn validate(&self) -> bool {
-        self.schema == LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V1
+        self.schema == LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2
             && !self.authority_ready
-            && self.identification_ready
-                == (self.blocker == LiveMultiSourceDiscoveryBlockerV1::ReadyForT1Identification)
+            && self.t1_identification.validate()
+            && self.identification_ready == self.t1_identification.candidate_freeze.is_some()
+            && self.transfer_ready
+                == (self.t1_identification.state
+                    == MultiSourceT1IdentificationStateV1::TransferReady)
             && self.opportunity.validate()
             && self.snapshot_root_sha256 == self.expected_root()
     }

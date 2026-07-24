@@ -1,6 +1,6 @@
 # Nando Multi-Source Discovery Execution Plan V2
 
-Status: `PREREGISTERED_AFTER_STOP_MS0 / MS0-R_AND_MS1_NEXT`
+Status: `MS2_COMPLETE / MS3_IMPLEMENTED_AWAITING_NATURAL_JOIN / MS4_BLOCKED`
 
 Date: 2026-07-24 Europe/Tallinn.
 
@@ -19,6 +19,33 @@ It supersedes the implementation-status parts of
 `MULTI_SOURCE_DISCOVERY_PLAN_V1.md`. V1 remains the architectural rationale.
 This document owns sequence, module boundaries, STOP packets, rollout and
 failure handling.
+
+Current implementation checkpoint:
+
+```text
+MS0-R / MS1 structural capture                 PASS
+MS2 blind join / factorizer / marginal API     PASS
+MS3 adaptive T1 identification code            PASS
+MS3 controlled 1 support + 1 future            PASS
+MS3 natural completed RelationFrame            NOT_EVALUATED
+MS3 runtime actor/verifier parity               NOT_EVALUATED
+MS4 natural package admission                   BLOCKED
+```
+
+The live route does not use a universal evidence-row threshold. Readiness is:
+
+```text
+complete bounded candidate generation
+-> one surviving action-equivalent semantic class
+-> immutable support freeze
+-> at least one independent post-freeze transfer
+```
+
+The value `32` may remain in explicitly legacy control paths, reservoirs,
+benchmarks and capacity limits. It is not a knowledge criterion for any new
+operator route. A legacy route may migrate only by carrying the same candidate
+freeze, semantic-class, applicability-scope and independent-transfer proof;
+replacing `32` with another constant is forbidden.
 
 ## 1. Frozen Starting Point
 
