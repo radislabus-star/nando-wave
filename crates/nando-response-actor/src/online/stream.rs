@@ -31,7 +31,7 @@ pub fn read_retained_relation_frames_from_checkpoint_bytes_v1(
         .ok_or_else(|| "online_checkpoint_schema_unsupported".to_owned())?;
     Ok(checkpoint
         .self_training_v2
-        .bounded_teacher_frames_for_wave_migration())
+        .bounded_relation_frames_for_multi_source_proof())
 }
 
 impl OnlineResponseStream {
@@ -66,7 +66,7 @@ impl OnlineResponseStream {
     pub fn retained_relation_frames_v1(&self) -> Vec<crate::RelationFrame> {
         self.miner
             .self_training_v2
-            .bounded_teacher_frames_for_wave_migration()
+            .bounded_relation_frames_for_multi_source_proof()
     }
 
     /// Restores only the bounded miner checkpoint. Live V2 evidence arrives

@@ -303,6 +303,96 @@ fn generation_evidence_never_trades_immutable_support_for_future() {
 }
 
 #[test]
+fn multi_source_proof_projection_includes_restored_and_generation_evidence() {
+    let mut state = StreamingSelfTrainingState::new(0);
+    let restored = frame(100);
+    state
+        .replay_support_parity_frames
+        .insert(restored.frame_id_sha256.clone(), restored.clone());
+    state
+        .replay_support_parity_cases
+        .insert(restored.frame_id_sha256.clone(), parity_case(100));
+    let mut frozen = generation();
+    frozen.support = vec![frame(200)];
+    frozen.future = vec![frame(201)];
+    state.generation_parity_receipts.insert(
+        frozen.generation_id_sha256.clone(),
+        GenerationParityReceipts {
+            support: BTreeMap::from([(
+                frozen.support[0].frame_id_sha256.clone(),
+                parity_case(200),
+            )]),
+            future: BTreeMap::from([(frozen.future[0].frame_id_sha256.clone(), parity_case(201))]),
+            negatives: BTreeMap::new(),
+        },
+    );
+    state
+        .generations
+        .insert(frozen.cohort_id_sha256.clone(), frozen);
+
+    let projected = state.bounded_relation_frames_for_multi_source_proof();
+    let projected_ids = projected
+        .iter()
+        .map(|frame| frame.frame_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+
+    assert!(projected_ids.contains(restored.frame_id_sha256.as_str()));
+    assert!(projected_ids.contains(frame(200).frame_id_sha256.as_str()));
+    assert!(projected_ids.contains(frame(201).frame_id_sha256.as_str()));
+    assert!(
+        projected
+            .windows(2)
+            .all(|rows| { rows[0].observed_at_unix_nanos <= rows[1].observed_at_unix_nanos })
+    );
+}
+
+#[test]
+fn multi_source_proof_projection_is_bounded_and_rejects_conflicting_duplicates() {
+    let mut state = StreamingSelfTrainingState::new(0);
+    for index in 0..(MAX_MULTI_SOURCE_PROOF_FRAMES + 10) {
+        let current = frame(index);
+        state
+            .replay_support_parity_frames
+            .insert(current.frame_id_sha256.clone(), current.clone());
+        state
+            .replay_support_parity_cases
+            .insert(current.frame_id_sha256.clone(), parity_case(index));
+    }
+    let conflicted_id = frame(MAX_MULTI_SOURCE_PROOF_FRAMES + 9).frame_id_sha256;
+    let mut conflicting = state.replay_support_parity_frames[&conflicted_id].clone();
+    conflicting.estimated_input_tokens = 2;
+    let mut frozen = generation();
+    frozen.support = vec![conflicting];
+    state.generation_parity_receipts.insert(
+        frozen.generation_id_sha256.clone(),
+        GenerationParityReceipts {
+            support: BTreeMap::from([(
+                frozen.support[0].frame_id_sha256.clone(),
+                parity_case(MAX_MULTI_SOURCE_PROOF_FRAMES + 9),
+            )]),
+            future: BTreeMap::new(),
+            negatives: BTreeMap::new(),
+        },
+    );
+    state
+        .generations
+        .insert(frozen.cohort_id_sha256.clone(), frozen);
+
+    let projected = state.bounded_relation_frames_for_multi_source_proof();
+
+    assert_eq!(projected.len(), MAX_MULTI_SOURCE_PROOF_FRAMES);
+    assert!(
+        projected
+            .iter()
+            .all(|frame| frame.frame_id_sha256 != conflicted_id)
+    );
+    assert_eq!(
+        projected.first().map(|frame| frame.observed_at_unix_nanos),
+        Some(9)
+    );
+}
+
+#[test]
 fn stale_frozen_partition_schedules_one_migration_slice() {
     let mut state = StreamingSelfTrainingState::new(0);
     let mut stale = generation();

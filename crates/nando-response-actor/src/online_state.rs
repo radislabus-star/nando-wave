@@ -36,6 +36,7 @@ const TRANSFER_DISCOVERY_VERSION: u8 = 2;
 const CROSS_POOL_NEGATIVE_REFRESH_INTERVAL: u64 = 64;
 const MAX_PARITY_SIGNATURES: usize = 64;
 const MAX_PARITY_CASES_PER_SIGNATURE: usize = 32;
+const MAX_MULTI_SOURCE_PROOF_FRAMES: usize = MAX_PARITY_SIGNATURES * MAX_PARITY_CASES_PER_SIGNATURE;
 
 fn parity_teacher_signature(frame: &crate::RelationFrame) -> String {
     crate::teacher_program_signature_from_action_atoms(&frame.atoms)
@@ -666,6 +667,16 @@ impl StreamingSelfTrainingState {
                             .or_else(|| receipts.negatives.get(frame_id))
                     })
                     .cloned()
+            })
+    }
+
+    fn has_runtime_parity_receipt(&self, frame_id: &str) -> bool {
+        self.runtime_parity_cases.contains_key(frame_id)
+            || self.replay_support_parity_cases.contains_key(frame_id)
+            || self.generation_parity_receipts.values().any(|receipts| {
+                receipts.support.contains_key(frame_id)
+                    || receipts.future.contains_key(frame_id)
+                    || receipts.negatives.contains_key(frame_id)
             })
     }
 
@@ -2137,6 +2148,57 @@ impl StreamingSelfTrainingState {
             }
         }
         let mut frames = unique.into_values().collect::<Vec<_>>();
+        frames.sort_by(|left, right| {
+            left.observed_at_unix_nanos
+                .cmp(&right.observed_at_unix_nanos)
+                .then_with(|| left.frame_id_sha256.cmp(&right.frame_id_sha256))
+        });
+        frames
+    }
+
+    pub(crate) fn bounded_relation_frames_for_multi_source_proof(
+        &self,
+    ) -> Vec<crate::RelationFrame> {
+        let mut unique = BTreeMap::<String, crate::RelationFrame>::new();
+        let mut conflicts = BTreeSet::new();
+        let frames = self
+            .discovery
+            .pool_snapshots()
+            .into_iter()
+            .flat_map(|pool| pool.positives.into_iter().chain(pool.negatives))
+            .chain(self.runtime_parity_frames.values().cloned())
+            .chain(self.replay_support_parity_frames.values().cloned())
+            .chain(
+                self.generations
+                    .values()
+                    .flat_map(|generation| generation.support.iter().chain(&generation.future))
+                    .cloned(),
+            )
+            .filter(|frame| self.has_runtime_parity_receipt(&frame.frame_id_sha256));
+        for frame in frames {
+            if conflicts.contains(&frame.frame_id_sha256) {
+                continue;
+            }
+            match unique.entry(frame.frame_id_sha256.clone()) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(frame);
+                }
+                std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &frame => {}
+                std::collections::btree_map::Entry::Occupied(entry) => {
+                    let frame_id = entry.key().clone();
+                    entry.remove();
+                    conflicts.insert(frame_id);
+                }
+            }
+        }
+        let mut frames = unique.into_values().collect::<Vec<_>>();
+        frames.sort_by(|left, right| {
+            right
+                .observed_at_unix_nanos
+                .cmp(&left.observed_at_unix_nanos)
+                .then_with(|| left.frame_id_sha256.cmp(&right.frame_id_sha256))
+        });
+        frames.truncate(MAX_MULTI_SOURCE_PROOF_FRAMES);
         frames.sort_by(|left, right| {
             left.observed_at_unix_nanos
                 .cmp(&right.observed_at_unix_nanos)
