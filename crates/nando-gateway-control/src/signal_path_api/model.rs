@@ -39,6 +39,8 @@ pub(crate) struct TrafficSnapshot {
     pub(crate) process_nando_input_tokens: u64,
     pub(crate) process_miner_input_tokens: u64,
     pub(crate) process_miner_share_ppm: Option<u64>,
+    pub(crate) process_cpu_input_tokens: u64,
+    pub(crate) process_cpu_share_ppm: Option<u64>,
     pub(crate) verified_local_accepts: u64,
     pub(crate) economics_age_seconds: Option<u64>,
 }
@@ -46,6 +48,8 @@ pub(crate) struct TrafficSnapshot {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(crate) struct SafetySnapshot {
     pub(crate) false_accepts: u64,
+    pub(crate) runtime_revocation_state_valid: bool,
+    pub(crate) unresolved_active_runtime_revocations: u64,
     pub(crate) runtime_parity_failures: u64,
     pub(crate) bridge_failures: u64,
 }
@@ -115,9 +119,12 @@ pub(crate) enum SignalPathStage {
         status: StageStatus,
         reason: String,
         enabled: bool,
+        live_process_accepts: u64,
         verified_local_accepts: u64,
         cpu_input_tokens: Option<u64>,
         false_accepts: u64,
+        runtime_revocation_state_valid: bool,
+        unresolved_active_runtime_revocations: u64,
         runtime_parity_failures: u64,
     },
 }
@@ -168,6 +175,7 @@ pub(crate) struct SignalPathInputs {
     pub(crate) serving_response_executor_ready: bool,
     pub(crate) serving_response_local_accept_enabled: bool,
     pub(crate) serving_response_active_packages: u64,
+    pub(crate) serving_response_local_accepts: u64,
     pub(crate) serving_response_admission_seconds_remaining: Option<u64>,
     pub(crate) admission_cpu_allowed: bool,
     pub(crate) admission_eligible: bool,
@@ -185,9 +193,12 @@ pub(crate) struct SignalPathInputs {
     pub(crate) accounting_epoch_cpu_input_tokens: Option<u64>,
     pub(crate) process_nando_input_tokens: u64,
     pub(crate) process_miner_input_tokens: u64,
+    pub(crate) process_cpu_input_tokens: u64,
     pub(crate) verified_local_accepts: u64,
     pub(crate) economics_age_seconds: Option<u64>,
     pub(crate) false_accepts: u64,
+    pub(crate) runtime_revocation_state_valid: bool,
+    pub(crate) unresolved_active_runtime_revocations: u64,
     pub(crate) runtime_parity_failures: u64,
     pub(crate) bridge_failures: u64,
 }

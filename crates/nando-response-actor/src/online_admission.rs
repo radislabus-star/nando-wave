@@ -5,6 +5,7 @@ use nando_core::wave::{
 };
 use serde::Serialize;
 
+use crate::authority::validate_response_authority_material;
 use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
     CollectionSynthesisExample, CompositeResponseAdmissionV2,
@@ -19,10 +20,10 @@ use crate::{
     frame_matches_program_action_contract, online_collection_adaptive_transfer_proof_digest,
     online_collection_candidate_freeze, online_collection_future_manifest_digest,
     online_collection_support_manifest_digest, relation_frame_routes_to_package,
-    relation_frame_structural_family_id, response_program_authority_matches_example,
-    response_program_required_routing_atom_ids, response_proof_receipts_digest,
-    response_registry_digest, sha256_bytes, source_neutral_verifier_for_program,
-    valid_nonzero_sha256, verify_response_independently,
+    relation_frame_structural_family_id, response_execution_payload_digest,
+    response_program_authority_matches_example, response_program_required_routing_atom_ids,
+    response_proof_receipts_digest, response_registry_digest, sha256_bytes,
+    source_neutral_verifier_for_program, valid_nonzero_sha256, verify_response_independently,
 };
 
 use crate::{LiveScalarAdmissionCandidate, LiveScalarShadowState};
@@ -383,6 +384,100 @@ pub fn merge_online_admission_snapshots(
     }))
 }
 
+pub fn remove_runtime_revoked_online_admission(
+    mut snapshot: OnlineAdmissionSnapshot,
+    revocations: &nando_operator_admission::RuntimePackageRevocationLedgerV1,
+) -> Result<Option<OnlineAdmissionSnapshot>, &'static str> {
+    revocations.validate()?;
+    let mut revoked_ids = BTreeSet::new();
+    for package in &snapshot.registry.packages {
+        let payload = response_execution_payload_digest(package)?;
+        if revocations.revokes(&package.package_id, &payload) {
+            revoked_ids.insert(package.package_id.clone());
+        }
+    }
+    if revoked_ids.is_empty() {
+        return Ok(Some(snapshot));
+    }
+    snapshot
+        .registry
+        .packages
+        .retain(|package| !revoked_ids.contains(&package.package_id));
+    snapshot
+        .admission
+        .response_authority
+        .packages
+        .retain(|binding| !revoked_ids.contains(&binding.package_id));
+    if snapshot.registry.packages.is_empty() {
+        return Ok(None);
+    }
+    merge_online_admission_snapshots(vec![snapshot])
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn reissue_unrevoked_active_online_admission(
+    mut registry: ResponseRegistry,
+    mut admission: CompositeResponseAdmissionV2,
+    revocations: &nando_operator_admission::RuntimePackageRevocationLedgerV1,
+    project_id: &str,
+    gate_build_sha256: &str,
+    runtime_build_sha256: &str,
+    now_unix: u64,
+    max_age_seconds: u64,
+) -> Result<Option<OnlineAdmissionSnapshot>, &'static str> {
+    validate_response_authority_material(&registry, &admission, project_id)?;
+    revocations.validate()?;
+    let mut retained_packages = Vec::new();
+    for package in &registry.packages {
+        let payload = response_execution_payload_digest(package)?;
+        if package.eligible_for_admission_candidate()
+            && !revocations.revokes(&package.package_id, &payload)
+        {
+            retained_packages.push(package.clone());
+        }
+    }
+    if retained_packages.is_empty() {
+        return Ok(None);
+    }
+    let retained_ids = retained_packages
+        .iter()
+        .map(|package| package.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let retained_bindings = admission
+        .response_authority
+        .packages
+        .iter()
+        .filter(|binding| retained_ids.contains(binding.package_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if retained_bindings.len() != retained_packages.len() {
+        return Err("active_generation_binding_count_mismatch");
+    }
+    registry.packages = retained_packages;
+    admission.generated_at_unix = now_unix;
+    admission.expires_at_unix = now_unix.saturating_add(max_age_seconds);
+    admission.verdict = "PASS".to_owned();
+    admission.eligible_for_local_accept = true;
+    admission.response_authority.gate_build_sha256 = gate_build_sha256.to_owned();
+    admission.response_authority.runtime_build_sha256 = runtime_build_sha256.to_owned();
+    admission.response_authority.packages = retained_bindings;
+    let snapshot = merge_online_admission_snapshots(vec![OnlineAdmissionSnapshot {
+        registry,
+        admission,
+    }])?
+    .ok_or("active_generation_reissue_empty")?;
+    ResponseExecutor::from_registry_with_admission(
+        snapshot.registry.clone(),
+        snapshot.admission.clone(),
+        project_id,
+        gate_build_sha256,
+        runtime_build_sha256,
+        now_unix,
+        max_age_seconds,
+    )?;
+    Ok(Some(snapshot))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn merge_with_active_online_admission(
     mut candidate: OnlineAdmissionSnapshot,
@@ -475,6 +570,128 @@ pub fn merge_with_active_online_admission(
         },
     ])?
     .ok_or("active_generation_merge_empty")
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn merge_with_proven_active_online_admission(
+    mut candidate: OnlineAdmissionSnapshot,
+    existing_registry: ResponseRegistry,
+    existing_controller_admission: CompositeResponseAdmissionV2,
+    project_id: &str,
+    gate_build_sha256: &str,
+    runtime_build_sha256: &str,
+    now_unix: u64,
+    max_age_seconds: u64,
+) -> Result<OnlineAdmissionSnapshot, &'static str> {
+    ResponseExecutor::from_registry_with_admission(
+        candidate.registry.clone(),
+        candidate.admission.clone(),
+        project_id,
+        gate_build_sha256,
+        runtime_build_sha256,
+        now_unix,
+        max_age_seconds,
+    )?;
+    validate_response_authority_material(
+        &existing_registry,
+        &existing_controller_admission,
+        project_id,
+    )?;
+
+    let candidate_by_id = candidate
+        .registry
+        .packages
+        .iter()
+        .map(|package| (package.package_id.as_str(), package))
+        .collect::<BTreeMap<_, _>>();
+    let mut equivalent_ids = BTreeSet::new();
+    for existing in &existing_registry.packages {
+        if let Some(replacement) = candidate_by_id.get(existing.package_id.as_str()) {
+            if packages_have_same_execution_identity(existing, replacement)? {
+                equivalent_ids.insert(existing.package_id.clone());
+            } else if !candidate_crystallizes_same_law(existing, replacement) {
+                return Err("active_generation_package_id_conflict");
+            }
+        }
+    }
+    drop(candidate_by_id);
+
+    // More receipts may prove the same executable law, but they belong to the
+    // next generation. The currently authorized payload remains immutable.
+    candidate
+        .registry
+        .packages
+        .retain(|package| !equivalent_ids.contains(&package.package_id));
+    candidate
+        .admission
+        .response_authority
+        .packages
+        .retain(|binding| !equivalent_ids.contains(&binding.package_id));
+    let replaced_ids = candidate
+        .registry
+        .packages
+        .iter()
+        .map(|package| package.package_id.clone())
+        .collect::<BTreeSet<_>>();
+    let retained_packages = existing_registry
+        .packages
+        .iter()
+        .filter(|package| {
+            !replaced_ids.contains(&package.package_id)
+                && package.eligible_for_admission_candidate()
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if retained_packages.is_empty() {
+        return Ok(candidate);
+    }
+    let retained_ids = retained_packages
+        .iter()
+        .map(|package| package.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let retained_bindings = existing_controller_admission
+        .response_authority
+        .packages
+        .iter()
+        .filter(|binding| retained_ids.contains(binding.package_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if retained_bindings.len() != retained_ids.len() {
+        return Err("active_generation_binding_count_mismatch");
+    }
+
+    let mut retained_registry = candidate.registry.clone();
+    retained_registry.packages = retained_packages;
+    let mut retained_admission = candidate.admission.clone();
+    retained_admission.response_authority.packages = retained_bindings;
+    let retained = OnlineAdmissionSnapshot {
+        registry: retained_registry,
+        admission: retained_admission,
+    };
+    let snapshots = if candidate.registry.packages.is_empty() {
+        vec![retained]
+    } else {
+        vec![candidate, retained]
+    };
+    merge_online_admission_snapshots(snapshots)?.ok_or("active_generation_merge_empty")
+}
+
+fn candidate_crystallizes_same_law(active: &ResponsePackage, candidate: &ResponsePackage) -> bool {
+    active.package_id == candidate.package_id
+        && active.schema == candidate.schema
+        && active.origin == candidate.origin
+        && active.state == candidate.state
+        && active.program == candidate.program
+        && active.verifier == candidate.verifier
+        && active.routing_predicates == candidate.routing_predicates
+        && active.required_routing_atom_ids == candidate.required_routing_atom_ids
+        && active.phase_centers == candidate.phase_centers
+        && active.anti_centers == candidate.anti_centers
+        && active.wave_margin_micro == candidate.wave_margin_micro
+        && active.learned_wave_route == candidate.learned_wave_route
+        && active.proof == candidate.proof
+        && active.crystallized_operator.is_none()
+        && candidate.crystallized_operator.is_some()
 }
 
 fn packages_have_same_execution_identity(

@@ -20,6 +20,36 @@ pub(super) struct CollectionIdentificationV1 {
     pub program_sha256: String,
 }
 
+pub(super) fn bind_frozen_program_routing_atoms(
+    bucket: &mut OnlineCollectionBucket,
+    program_sha256: &str,
+) -> Result<(CollectionIdentificationV1, bool), String> {
+    let program = bucket
+        .programs
+        .get(program_sha256)
+        .ok_or_else(|| "online_collection_frozen_program_missing".to_owned())?;
+    let required_atoms = response_program_required_routing_atom_ids(program);
+    if required_atoms.is_empty() {
+        return Err("online_collection_frozen_program_atoms_empty".to_owned());
+    }
+    let mut changed = false;
+    for receipt in bucket.support.iter_mut().chain(&mut bucket.future) {
+        let previous_len = receipt.request_atom_ids.len();
+        receipt
+            .request_atom_ids
+            .extend(required_atoms.iter().copied());
+        receipt.request_atom_ids.sort_unstable();
+        receipt.request_atom_ids.dedup();
+        changed |= receipt.request_atom_ids.len() != previous_len;
+    }
+    let identification = identify_collection_bucket(bucket)?
+        .ok_or_else(|| "online_collection_adaptive_identification_lost".to_owned())?;
+    if identification.program_sha256 != program_sha256 {
+        return Err("online_collection_adaptive_winner_changed".to_owned());
+    }
+    Ok((identification, changed))
+}
+
 pub(super) fn adaptive_transfer_proof_root(
     future_manifest_sha256: &str,
     program_sha256: &str,

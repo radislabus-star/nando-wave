@@ -47,6 +47,10 @@ fn writer_and_reader_reject_receipt_substitution() {
         CaptureTransitionBindingArchiveReader::open(&directory).expect("binding reader");
     assert_eq!(reader.verify(&"1".repeat(64), &first), Ok(()));
     assert_eq!(
+        reader.verify_binding(first.transition_binding.as_ref().expect("first binding")),
+        Ok(())
+    );
+    assert_eq!(
         reader.verify(&"1".repeat(64), &second),
         Err("capture_transition_binding_mismatch".to_owned())
     );

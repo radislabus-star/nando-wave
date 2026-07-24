@@ -98,6 +98,10 @@ trait SessionMinerSink: Send + Sync {
         runtime_parity_case: Option<RuntimeParityCase>,
     ) -> Result<(), String>;
     fn submit_collection(&self, observation: OnlineCollectionObservation) -> Result<(), String>;
+
+    fn binds_collection_capture(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Default)]
@@ -134,6 +138,10 @@ impl SessionMinerSink for MinerWorkerHandle {
 
     fn submit_collection(&self, observation: OnlineCollectionObservation) -> Result<(), String> {
         MinerWorkerHandle::submit_collection(self, observation)
+    }
+
+    fn binds_collection_capture(&self) -> bool {
+        true
     }
 }
 
@@ -227,6 +235,10 @@ impl SessionMinerSink for SessionMinerBridge {
 
     fn submit_collection(&self, observation: OnlineCollectionObservation) -> Result<(), String> {
         self.submit_or_buffer(PendingMinerInput::Collection(observation))
+    }
+
+    fn binds_collection_capture(&self) -> bool {
+        true
     }
 }
 
@@ -1174,6 +1186,7 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         metrics,
         request_learning,
     } = context;
+    let bind_collection_capture = miner.is_some_and(|miner| miner.binds_collection_capture());
     let file = File::open(path).map_err(|error| format!("session_open:{error}"))?;
     let length = file
         .metadata()
@@ -1218,8 +1231,14 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             }
         }
         if parsed.as_ref().is_some_and(is_turn_start)
-            && let Some(observation) =
-                take_collection_observation(state, evidence_graphs, metrics, 0)?
+            && let Some(observation) = take_collection_observation(
+                state,
+                evidence,
+                evidence_graphs,
+                metrics,
+                0,
+                bind_collection_capture,
+            )?
         {
             submit_collection_observation(observation, miner, direct_collection_miner)?;
         }
@@ -1318,9 +1337,11 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         if is_token_count(&row)
             && let Some(observation) = take_collection_observation(
                 state,
+                evidence,
                 evidence_graphs,
                 metrics,
                 token_count_from_row(&row),
+                bind_collection_capture,
             )?
         {
             submit_collection_observation(observation, miner, direct_collection_miner)?;
@@ -1411,11 +1432,13 @@ fn token_count_from_row(row: &Value) -> u64 {
         .unwrap_or(0)
 }
 
-fn take_collection_observation(
+fn take_collection_observation<L: SessionEvidenceLedger>(
     state: &mut SessionState,
+    evidence: &Arc<Mutex<L>>,
     evidence_graphs: Option<&Arc<Mutex<DeterministicEvidenceGraphStore>>>,
     metrics: &Arc<SessionStreamMetrics>,
     estimated_input_tokens: u64,
+    bind_collection_capture: bool,
 ) -> Result<Option<OnlineCollectionObservation>, String> {
     let Some(completion_reason) = state.collection_completion_reason.take() else {
         return Ok(None);
@@ -1444,6 +1467,20 @@ fn take_collection_observation(
             .append(graph)?;
     }
     metrics.finalized_graphs.fetch_add(1, Ordering::Relaxed);
+    let capture_binding = if bind_collection_capture {
+        let receipt = current_capture_receipt(state)
+            .ok_or_else(|| "collection_capture_receipt_missing".to_owned())?;
+        // Only the live capture owner may mint this compact binding. Offline
+        // replay emits observations without it and therefore remains shadow.
+        let binding = evidence
+            .lock()
+            .map_err(|_| "evidence_ledger_lock_poisoned".to_owned())?
+            .bind_transition(&evidence_graph_sha256, &receipt)?;
+        binding.validate(&receipt).map_err(str::to_owned)?;
+        Some(binding)
+    } else {
+        None
+    };
     let example = CompletedTurnExample::final_response_with_reason(
         provider_payload,
         expected_response,
@@ -1456,6 +1493,7 @@ fn take_collection_observation(
         session_id_sha256: state.turn_session_id_sha256.clone(),
         event_time_unix_nanos: state.turn_event_time_unix_nanos,
         estimated_input_tokens,
+        capture_binding,
         example: example.into_synthesis_example(),
     }))
 }
@@ -3071,6 +3109,36 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct CaptureOwnedCollectionSink {
+        observations: Mutex<Vec<OnlineCollectionObservation>>,
+    }
+
+    impl SessionMinerSink for CaptureOwnedCollectionSink {
+        fn submit_frame_with_parity(
+            &self,
+            _frame: RelationFrame,
+            _runtime_parity_case: Option<RuntimeParityCase>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn submit_collection(
+            &self,
+            observation: OnlineCollectionObservation,
+        ) -> Result<(), String> {
+            self.observations
+                .lock()
+                .map_err(|_| "capture_owned_collection_sink_poisoned".to_owned())?
+                .push(observation);
+            Ok(())
+        }
+
+        fn binds_collection_capture(&self) -> bool {
+            true
+        }
+    }
+
     fn identity_test_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
             "nando-session-identity-{name}-{}-{}",
@@ -3784,7 +3852,7 @@ mod tests {
         file.sync_all().expect("mixed session sync");
 
         let batch = verified_capture_bound_training_cases_from_sessions(
-            &[mixed.clone()],
+            std::slice::from_ref(&mixed),
             &root.join("durable-evidence"),
         )
         .expect("censored batch");
@@ -4558,6 +4626,75 @@ mod tests {
                 "checkpoint leaked {private}"
             );
         }
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn live_collection_binding_is_archived_but_offline_replay_cannot_mint_it() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-session-collection-binding-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("root");
+        let session_path = root.join("session.jsonl");
+        let rows = [
+            json!({"type":"session_meta","payload":{"id":"capture-owned-session"}}),
+            json!({"type":"turn_context","payload":{"turn_id":"capture-owned-turn"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"query","call_id":"call-1","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"{\"rows\":[1,2]}"}}),
+            json!({"type":"event_msg","payload":{"type":"agent_message","phase":"final_answer","message":"2"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":321}}}}),
+        ];
+        let mut session = File::create(&session_path).expect("session");
+        for row in rows {
+            writeln!(session, "{row}").expect("row");
+        }
+        session.sync_all().expect("sync");
+
+        let evidence_root = root.join("streaming-evidence");
+        let evidence = Arc::new(Mutex::new(
+            StreamingEvidenceLedger::open(&evidence_root, EvidencePolicyV1::streaming_bounded())
+                .expect("streaming evidence"),
+        ));
+        let sink = CaptureOwnedCollectionSink::default();
+        let metrics = Arc::new(SessionStreamMetrics::default());
+        let mut state = canonical_session_state(&session_path, 0).expect("session state");
+        read_appended_frames(
+            &session_path,
+            &mut state,
+            SessionReadContext {
+                evidence: &evidence,
+                evidence_graphs: None,
+                miner: Some(&sink),
+                direct_collection_miner: None,
+                metrics: &metrics,
+                request_learning: &Arc::new(RequestLearningIndex::default()),
+            },
+        )
+        .expect("live capture");
+        let observations = sink.observations.lock().expect("observations");
+        let binding = observations[0]
+            .capture_binding
+            .as_ref()
+            .expect("capture binding");
+        nando_response_actor::CaptureTransitionBindingArchiveReader::open(&evidence_root)
+            .expect("binding archive")
+            .verify_binding(binding)
+            .expect("archived binding");
+        nando_operator_learning::CaptureCommitmentArchiveReader::open(&evidence_root)
+            .expect("commitment archive")
+            .verify_record(&binding.source_record)
+            .expect("archived source record");
+        drop(observations);
+
+        let replay =
+            verified_collection_observations_from_session(&session_path).expect("offline replay");
+        assert_eq!(replay.len(), 1);
+        assert!(replay[0].capture_binding.is_none());
         fs::remove_dir_all(root).expect("cleanup");
     }
 }

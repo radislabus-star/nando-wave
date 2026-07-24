@@ -526,6 +526,7 @@ fn observe_collection_turn(
         session_id_sha256: sha256_bytes(source_id.as_bytes()),
         event_time_unix_nanos: rows.iter().rev().find_map(|row| event_time(&row.value)),
         estimated_input_tokens,
+        capture_binding: None,
         example,
     };
     if rehydrate_only {
@@ -963,6 +964,7 @@ fn process_canonical_rows(
             session_id_sha256: last.session_id_sha256.clone(),
             event_time_unix_nanos,
             estimated_input_tokens: tokens,
+            capture_binding: None,
             example,
         })
 }

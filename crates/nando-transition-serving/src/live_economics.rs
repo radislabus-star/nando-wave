@@ -198,6 +198,7 @@ impl LiveEconomicsLedger {
                 ledger.apply(event);
             }
         }
+        ledger.reconcile_false_accept_outcomes();
         for intent_sha256 in ledger.eligible.keys() {
             if !ledger.verified.contains_key(intent_sha256)
                 && !ledger.fallback_by_intent.contains_key(intent_sha256)
@@ -387,14 +388,49 @@ impl LiveEconomicsLedger {
                 self.pending_opened_at.remove(&event.intent_sha256);
             }
             "false_accept" => {
-                if self.false_accept_intents.insert(event.intent_sha256) {
-                    self.false_accepts = self.false_accepts.saturating_add(1);
-                }
+                self.transition_verified_accept_to_false_accept(&event.intent_sha256);
             }
             "parity_failure" if self.parity_failure_intents.insert(event.intent_sha256) => {
                 self.parity_failures = self.parity_failures.saturating_add(1);
             }
             _ => {}
+        }
+    }
+
+    fn transition_verified_accept_to_false_accept(&mut self, intent_sha256: &str) -> bool {
+        let existing_false_accept = self
+            .fallback_by_intent
+            .get(intent_sha256)
+            .is_some_and(|reason| reason == "runtime:false_accept");
+        let Some(input_tokens) = self.verified.remove(intent_sha256).or_else(|| {
+            existing_false_accept
+                .then(|| self.eligible.get(intent_sha256).copied())
+                .flatten()
+        }) else {
+            return false;
+        };
+        if self.false_accept_intents.insert(intent_sha256.to_owned()) {
+            self.false_accepts = self.false_accepts.saturating_add(1);
+        }
+        if !existing_false_accept {
+            let reason = "runtime:false_accept".to_owned();
+            self.fallback_by_intent
+                .insert(intent_sha256.to_owned(), reason.clone());
+            self.fallback_tokens_by_intent
+                .insert(intent_sha256.to_owned(), input_tokens);
+            let counter = self.fallback_reasons.entry(reason).or_default();
+            counter.intents = counter.intents.saturating_add(1);
+            counter.input_tokens = counter.input_tokens.saturating_add(input_tokens);
+        }
+        self.pending_opened_at.remove(intent_sha256);
+        true
+    }
+
+    fn reconcile_false_accept_outcomes(&mut self) {
+        let recorded = std::mem::take(&mut self.false_accept_intents);
+        self.false_accepts = 0;
+        for intent_sha256 in recorded {
+            self.transition_verified_accept_to_false_accept(&intent_sha256);
         }
     }
 
@@ -838,6 +874,56 @@ mod tests {
 
         assert_eq!(ledger.eligible.len(), 2);
         assert_eq!(ledger.dedupe_conflicts, 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn false_accept_removes_cpu_savings_and_replays_as_fallback() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-live-economics-false-accept-{}-{}",
+            std::process::id(),
+            unix_now()
+        ));
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
+        ledger
+            .observe_request("false-accepted-intent", 2_048, true)
+            .expect("request");
+        ledger
+            .observe_verified_accept("false-accepted-intent", 2_048)
+            .expect("verified");
+        ledger
+            .observe_false_accept("unknown-intent")
+            .expect("unknown report");
+        ledger
+            .observe_false_accept("false-accepted-intent")
+            .expect("false accept");
+        ledger.persist_snapshot().expect("snapshot");
+
+        let snapshot: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("economics-live.json")).expect("read snapshot"),
+        )
+        .expect("snapshot");
+        assert_eq!(snapshot["verified_local_accepts"], 0);
+        assert_eq!(snapshot["avoided_input_tokens"], 0);
+        assert_eq!(snapshot["global_input_tokens"], 2_048);
+        assert_eq!(snapshot["false_accepts"], 1);
+        assert_eq!(
+            snapshot["fallback_reasons"]["runtime:false_accept"]["intents"],
+            1
+        );
+
+        drop(ledger);
+        let replayed = LiveEconomicsLedger::open(&root).expect("replay");
+        assert!(replayed.verified.is_empty());
+        assert_eq!(replayed.false_accepts, 1);
+        assert_eq!(
+            replayed
+                .fallback_by_intent
+                .get("false-accepted-intent")
+                .map(String::as_str),
+            Some("runtime:false_accept")
+        );
+        assert!(!replayed.false_accept_intents.contains("unknown-intent"));
         let _ = fs::remove_dir_all(root);
     }
 

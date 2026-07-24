@@ -62,6 +62,11 @@ impl CaptureTransitionBindingArchiveReader {
             .transition_binding
             .as_ref()
             .ok_or_else(|| "capture_transition_binding_missing".to_owned())?;
+        self.verify_binding(binding)
+    }
+
+    pub fn verify_binding(&mut self, binding: &CaptureTransitionBinding) -> Result<(), String> {
+        binding.verify_digest().map_err(str::to_owned)?;
         if binding.sequence >= self.checkpoint.next_sequence {
             return Err("capture_transition_binding_mismatch".to_owned());
         }

@@ -69,9 +69,12 @@ pub(super) fn build(inputs: SignalPathInputs) -> SignalPathSnapshot {
             status: cpu_status.0,
             reason: cpu_status.1,
             enabled: inputs.admission_cpu_allowed && inputs.serving_response_local_accept_enabled,
+            live_process_accepts: inputs.serving_response_local_accepts,
             verified_local_accepts: inputs.verified_local_accepts,
             cpu_input_tokens: inputs.cpu_input_tokens,
             false_accepts: inputs.false_accepts,
+            runtime_revocation_state_valid: inputs.runtime_revocation_state_valid,
+            unresolved_active_runtime_revocations: inputs.unresolved_active_runtime_revocations,
             runtime_parity_failures: inputs.runtime_parity_failures,
         },
     ];
@@ -117,6 +120,11 @@ pub(super) fn build(inputs: SignalPathInputs) -> SignalPathSnapshot {
             Some(inputs.process_miner_input_tokens),
             Some(inputs.process_nando_input_tokens),
         ),
+        process_cpu_input_tokens: inputs.process_cpu_input_tokens,
+        process_cpu_share_ppm: ratio_ppm(
+            Some(inputs.process_cpu_input_tokens),
+            Some(inputs.process_nando_input_tokens),
+        ),
         verified_local_accepts: inputs.verified_local_accepts,
         economics_age_seconds: inputs.economics_age_seconds,
     };
@@ -131,6 +139,8 @@ pub(super) fn build(inputs: SignalPathInputs) -> SignalPathSnapshot {
         traffic,
         safety: SafetySnapshot {
             false_accepts: inputs.false_accepts,
+            runtime_revocation_state_valid: inputs.runtime_revocation_state_valid,
+            unresolved_active_runtime_revocations: inputs.unresolved_active_runtime_revocations,
             runtime_parity_failures: inputs.runtime_parity_failures,
             bridge_failures: inputs.bridge_failures,
         },
@@ -289,12 +299,18 @@ fn package_status(inputs: &SignalPathInputs) -> (StageStatus, String) {
 }
 
 fn cpu_status(inputs: &SignalPathInputs) -> (StageStatus, String) {
-    if inputs.false_accepts > 0 || inputs.runtime_parity_failures > 0 {
+    if !inputs.runtime_revocation_state_valid {
+        return (
+            StageStatus::Block,
+            "runtime revocation state is invalid".to_owned(),
+        );
+    }
+    if inputs.unresolved_active_runtime_revocations > 0 || inputs.runtime_parity_failures > 0 {
         return (
             StageStatus::Block,
             format!(
-                "safety counters are non-zero: false_accepts={} parity_failures={}",
-                inputs.false_accepts, inputs.runtime_parity_failures
+                "active safety blockers are non-zero: unresolved_revocations={} parity_failures={}",
+                inputs.unresolved_active_runtime_revocations, inputs.runtime_parity_failures
             ),
         );
     }
@@ -325,19 +341,25 @@ fn cpu_status(inputs: &SignalPathInputs) -> (StageStatus, String) {
             ),
         );
     }
-    if inputs.verified_local_accepts == 0 || inputs.cpu_input_tokens == Some(0) {
+    if inputs.serving_response_local_accepts == 0
+        && (inputs.verified_local_accepts == 0 || inputs.cpu_input_tokens == Some(0))
+    {
         return (
             StageStatus::Watch,
             "CPU route is enabled but no verified local accept is observed".to_owned(),
         );
     }
-    if inputs.total_input_tokens.is_none() || inputs.cpu_input_tokens.is_none() {
+    if inputs.serving_response_local_accepts == 0
+        && (inputs.total_input_tokens.is_none() || inputs.cpu_input_tokens.is_none())
+    {
         return (
             StageStatus::Watch,
             "CPU accepts exist but exact token accounting is unavailable".to_owned(),
         );
     }
-    if inputs.economics_age_seconds.is_none_or(|age| age > 120) {
+    if inputs.serving_response_local_accepts == 0
+        && inputs.economics_age_seconds.is_none_or(|age| age > 120)
+    {
         return (
             StageStatus::Watch,
             "CPU accepts exist but the economics receipt is stale".to_owned(),
@@ -346,8 +368,10 @@ fn cpu_status(inputs: &SignalPathInputs) -> (StageStatus, String) {
     (
         StageStatus::Pass,
         format!(
-            "{} verified local accept(s) reached CPU",
-            inputs.verified_local_accepts
+            "{} live process accept(s), {} verified cumulative accept(s) reached CPU; {} historical false accept(s) retained",
+            inputs.serving_response_local_accepts,
+            inputs.verified_local_accepts,
+            inputs.false_accepts
         ),
     )
 }

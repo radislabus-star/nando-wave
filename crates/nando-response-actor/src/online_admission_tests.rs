@@ -388,6 +388,157 @@ fn active_admission_merge_rejects_expired_authority() {
 }
 
 #[test]
+fn proven_active_merge_reissues_expired_static_material() {
+    let active = admission_snapshot_for_function(0, "wait", "cell_id", 100);
+    let candidate = admission_snapshot_for_function(100, "write_stdin", "session_id", 200);
+    let merged = merge_with_proven_active_online_admission(
+        candidate,
+        active.registry,
+        active.admission,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        200,
+        60,
+    )
+    .expect("static package proofs are reissued under the current lease");
+
+    assert_eq!(merged.registry.packages.len(), 2);
+    assert_eq!(merged.admission.generated_at_unix, 200);
+    assert_eq!(merged.admission.expires_at_unix, 260);
+}
+
+#[test]
+fn proven_active_merge_keeps_equivalent_authorized_payload_immutable() {
+    let active = admission_snapshot_for_function(0, "wait", "cell_id", 100);
+    let candidate = admission_snapshot_for_function(100, "wait", "cell_id", 200);
+    assert_eq!(
+        active.registry.packages[0].package_id,
+        candidate.registry.packages[0].package_id
+    );
+    let first_reissue = merge_with_proven_active_online_admission(
+        candidate,
+        active.registry,
+        active.admission,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        200,
+        60,
+    )
+    .expect("equivalent evidence reissues the existing payload");
+    let stable_revision = first_reissue.registry.revision;
+    let stable_package = first_reissue.registry.packages[0].clone();
+    let next_candidate = admission_snapshot_for_function(200, "wait", "cell_id", 300);
+
+    let second_reissue = merge_with_proven_active_online_admission(
+        next_candidate,
+        first_reissue.registry,
+        first_reissue.admission,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        300,
+        60,
+    )
+    .expect("later equivalent evidence preserves the active payload");
+
+    assert_eq!(second_reissue.registry.revision, stable_revision);
+    assert_eq!(second_reissue.registry.packages, vec![stable_package]);
+    assert_eq!(second_reissue.admission.generated_at_unix, 300);
+    assert_eq!(second_reissue.admission.expires_at_unix, 360);
+}
+
+#[test]
+fn runtime_revocation_removes_only_the_matching_execution_identity() {
+    let wait = admission_snapshot_for_function(0, "wait", "cell_id", 100);
+    let write_stdin = admission_snapshot_for_function(100, "write_stdin", "session_id", 100);
+    let active = merge_with_active_online_admission(
+        write_stdin,
+        wait.registry,
+        wait.admission,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        60,
+    )
+    .expect("active");
+    let revoked = active
+        .registry
+        .packages
+        .iter()
+        .find(|package| {
+            matches!(
+                package.program.operation,
+                crate::ResponseOperation::FunctionCallFromRoles {
+                    ref function_name,
+                    ..
+                } if function_name == "wait"
+            )
+        })
+        .expect("wait package");
+    let revoked_id = revoked.package_id.clone();
+    let mut revocations = nando_operator_admission::RuntimePackageRevocationLedgerV1::default();
+    revocations
+        .record(nando_operator_admission::RuntimePackageRevocationV1 {
+            package_id: revoked_id.clone(),
+            execution_payload_sha256: crate::response_execution_payload_digest(revoked)
+                .expect("payload"),
+            request_sha256: "55".repeat(32),
+            observed_at_unix: 150,
+            reason: "runtime_false_accept".to_owned(),
+        })
+        .expect("record revocation");
+
+    let reissued = reissue_unrevoked_active_online_admission(
+        active.registry,
+        active.admission,
+        &revocations,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        200,
+        60,
+    )
+    .expect("reissue")
+    .expect("remaining package");
+    assert_eq!(reissued.registry.packages.len(), 1);
+    assert!(
+        reissued
+            .registry
+            .packages
+            .iter()
+            .all(|package| package.package_id != revoked_id)
+    );
+    assert_eq!(reissued.admission.generated_at_unix, 200);
+    assert_eq!(reissued.admission.expires_at_unix, 260);
+}
+
+#[test]
+fn proven_active_merge_rejects_veto_material() {
+    let mut active = admission_snapshot_for_function(0, "wait", "cell_id", 100);
+    active.admission.verdict = "VETO".to_owned();
+    active.admission.eligible_for_local_accept = false;
+    let candidate = admission_snapshot_for_function(100, "write_stdin", "session_id", 200);
+
+    assert_eq!(
+        merge_with_proven_active_online_admission(
+            candidate,
+            active.registry,
+            active.admission,
+            "project",
+            &"a".repeat(64),
+            &"b".repeat(64),
+            200,
+            60,
+        )
+        .expect_err("VETO material must not be reissued"),
+        "response_admission_not_pass"
+    );
+}
+
+#[test]
 fn semantic_law_binding_preserves_consensus_actor_and_independent_verifier() {
     let first = (0..32).map(frame).collect::<Vec<_>>();
     let mut second = (100..132).map(frame).collect::<Vec<_>>();

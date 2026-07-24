@@ -12,6 +12,7 @@ mod causal;
 mod cegis;
 mod collection_synthesis;
 mod contracts;
+mod crystallized_collection_candidate;
 mod crystallized_operator;
 mod decidability;
 mod effect_graph;
@@ -148,6 +149,7 @@ pub use capture_provenance::{
     CaptureTransitionBindingArchiveReader, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS,
     MAX_CAPTURE_RECEIPT_RECORDS, verify_crystallized_capture_provenance,
     verify_crystallized_capture_provenance_durable,
+    verify_crystallized_collection_capture_provenance_durable,
 };
 pub use causal::{
     GroundedWaveCausalReport, evaluate_grounded_wave_causality,
@@ -175,6 +177,10 @@ pub use contracts::{
     RelationAtom, RelationFrame, ResponseProgramCandidate, ResponseValueSelector, RoleHypothesis,
     SemanticRole, TrafficClass, VERIFIER_RECEIPT_SCHEMA, VerifierConsensusVariant, VerifierProgram,
     VerifierReceipt, validate_frozen_future_split,
+};
+pub use crystallized_collection_candidate::{
+    CRYSTALLIZED_COLLECTION_ADMISSION_CANDIDATE_SCHEMA_V1,
+    CrystallizedCollectionAdmissionCandidateV1,
 };
 pub use crystallized_operator::{
     BoundCrystallizedOperator, BoundRoleEnvironment, CrystallizationParityReceipt,
@@ -286,7 +292,8 @@ pub use online_admission::{
     build_crystallized_admission_snapshot, build_durable_runtime_parity_receipt,
     build_online_admission_evaluation, build_online_admission_snapshot,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
-    merge_with_active_online_admission,
+    merge_with_active_online_admission, merge_with_proven_active_online_admission,
+    reissue_unrevoked_active_online_admission, remove_runtime_revoked_online_admission,
 };
 pub use online_checkpoint::{
     FramedCborLedger, FramedLedgerStatus, FramedRecordRef, read_framed_cbor, write_atomic_cbor,

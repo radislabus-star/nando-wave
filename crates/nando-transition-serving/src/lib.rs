@@ -37,7 +37,9 @@ use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use nando_expression_runtime::ExpressionRuntime;
-use nando_operator_admission::finalize_post_verifier_receipt;
+use nando_operator_admission::{
+    RuntimePackageRevocationLedgerV1, RuntimePackageRevocationV1, finalize_post_verifier_receipt,
+};
 use nando_operator_kernel::{RelationFrame, RuntimeProjectionV3, Sha256CommitmentV3};
 use nando_operator_learning::{
     EvidencePolicyV1, LearningRequestStructureInputV1, LearningRequestStructureV1,
@@ -50,9 +52,10 @@ use nando_operator_runtime::{
     response_pre_action_context_atom_ids,
 };
 use nando_response_actor::{
-    ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1, OnlineAdmissionCandidateBundle,
-    OnlineCollectionMiner, OnlineResponseMinerReport, OnlineResponseStream,
-    OnlineResponseTailConfig, ResponseExecutor, response_runtime_contract_sha256,
+    CrystallizedCollectionAdmissionCandidateV1, ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1,
+    OnlineAdmissionCandidateBundle, OnlineCollectionMiner, OnlineResponseMinerReport,
+    OnlineResponseStream, OnlineResponseTailConfig, ResponseExecutor, ResponsePackageState,
+    ResponseRegistry, response_execution_payload_digest, response_runtime_contract_sha256,
 };
 use nando_transition_inducer::{
     LIVE_GROUNDED_TRACE_SCHEMA, LIVE_TRANSITION_REQUEST_SCHEMA, LiveTransitionExecutor,
@@ -104,6 +107,7 @@ pub struct ServingConfig {
     pub bind: String,
     pub registry_path: PathBuf,
     pub response_registry_path: PathBuf,
+    pub runtime_package_revocations_path: PathBuf,
     pub admission_path: PathBuf,
     pub gate_build_path: PathBuf,
     pub runtime_build_path: PathBuf,
@@ -172,6 +176,11 @@ impl ServingConfig {
                 "NANDO_RESPONSE_REGISTRY",
                 &state_dir,
                 "response-registry.json",
+            ),
+            runtime_package_revocations_path: env_path_join(
+                "NANDO_RUNTIME_PACKAGE_REVOCATIONS",
+                &state_dir,
+                "runtime-package-revocations.json",
             ),
             admission_path: env_path_join(
                 "NANDO_TRANSITION_ADMISSION_JSON",
@@ -407,6 +416,8 @@ struct ServingCounters {
     fallbacks: AtomicU64,
     transition_requests: AtomicU64,
     local_accepts: AtomicU64,
+    ordinary_response_local_accepts: AtomicU64,
+    ordinary_response_local_accept_input_tokens: AtomicU64,
     observations: AtomicU64,
     errors: AtomicU64,
     expression_shadow_requests: AtomicU64,
@@ -602,6 +613,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         return Err("learning_structure_bridge_producer_requires_capture".to_owned());
     }
     ensure_parent(&config.trace_path)?;
+    ensure_parent(&config.runtime_package_revocations_path)?;
     if config.legacy_json_audit_enabled {
         ensure_parent(&config.event_path)?;
         ensure_parent(&config.economics_path)?;
@@ -951,6 +963,7 @@ async fn health(State(state): State<AppState>) -> Response {
     let (cache_ready, revision, active_profiles, cache_error) = cache_status(&state);
     let (response_ready, response_revision, response_profiles, response_error) =
         response_cache_status(&state);
+    let runtime_revocations = runtime_package_revocation_health(&state.config);
     let response_admission_expires_at_unix = state
         .response_cache
         .read()
@@ -1127,6 +1140,40 @@ async fn health(State(state): State<AppState>) -> Response {
     });
     if let Some(object) = health.as_object_mut() {
         object.insert(
+            "response_runtime_revocation_state_valid".to_owned(),
+            json!(runtime_revocations.valid),
+        );
+        object.insert(
+            "response_runtime_revocations_total".to_owned(),
+            json!(runtime_revocations.total),
+        );
+        object.insert(
+            "response_runtime_revocations_unresolved_active".to_owned(),
+            json!(runtime_revocations.unresolved_active),
+        );
+        object.insert(
+            "response_runtime_revocation_error".to_owned(),
+            json!(runtime_revocations.error),
+        );
+        object.insert(
+            "ordinary_response_local_accepts".to_owned(),
+            json!(
+                state
+                    .counters
+                    .ordinary_response_local_accepts
+                    .load(Ordering::Relaxed)
+            ),
+        );
+        object.insert(
+            "ordinary_response_local_accept_input_tokens".to_owned(),
+            json!(
+                state
+                    .counters
+                    .ordinary_response_local_accept_input_tokens
+                    .load(Ordering::Relaxed)
+            ),
+        );
+        object.insert(
             "response_admission_expires_at_unix".to_owned(),
             json!(response_admission_expires_at_unix),
         );
@@ -1185,6 +1232,68 @@ async fn health(State(state): State<AppState>) -> Response {
         );
     }
     json_response(StatusCode::OK, health)
+}
+
+#[derive(Default)]
+struct RuntimePackageRevocationHealth {
+    valid: bool,
+    total: u64,
+    unresolved_active: u64,
+    error: Option<String>,
+}
+
+fn runtime_package_revocation_health(config: &ServingConfig) -> RuntimePackageRevocationHealth {
+    if !config.runtime_package_revocations_path.is_file() {
+        return RuntimePackageRevocationHealth {
+            valid: true,
+            ..RuntimePackageRevocationHealth::default()
+        };
+    }
+    let result = (|| {
+        let ledger: RuntimePackageRevocationLedgerV1 = serde_json::from_slice(
+            &fs::read(&config.runtime_package_revocations_path)
+                .map_err(|error| format!("runtime_package_revocation_read:{error}"))?,
+        )
+        .map_err(|error| format!("runtime_package_revocation_decode:{error}"))?;
+        ledger
+            .validate()
+            .map_err(|error| format!("runtime_package_revocation_invalid:{error}"))?;
+        let registry: ResponseRegistry = serde_json::from_slice(
+            &fs::read(&config.response_registry_path)
+                .map_err(|error| format!("runtime_package_revocation_registry_read:{error}"))?,
+        )
+        .map_err(|error| format!("runtime_package_revocation_registry_decode:{error}"))?;
+        registry
+            .validate()
+            .map_err(|error| format!("runtime_package_revocation_registry_invalid:{error}"))?;
+        let mut unresolved_active = 0_u64;
+        for package in registry
+            .packages
+            .iter()
+            .filter(|package| package.state == ResponsePackageState::Active)
+        {
+            let payload = response_execution_payload_digest(package)
+                .map_err(|error| format!("runtime_package_revocation_payload:{error}"))?;
+            if ledger.revokes(&package.package_id, &payload) {
+                unresolved_active = unresolved_active.saturating_add(1);
+            }
+        }
+        Ok::<_, String>((ledger.revocations.len() as u64, unresolved_active))
+    })();
+    match result {
+        Ok((total, unresolved_active)) => RuntimePackageRevocationHealth {
+            valid: true,
+            total,
+            unresolved_active,
+            error: None,
+        },
+        Err(error) => RuntimePackageRevocationHealth {
+            valid: false,
+            total: 0,
+            unresolved_active: 0,
+            error: Some(error),
+        },
+    }
 }
 
 async fn bridge_health(State(state): State<AppState>) -> Response {
@@ -1774,6 +1883,12 @@ async fn report_false_accept(State(state): State<AppState>, body: Bytes) -> Resp
             );
         }
     };
+    if let Ok(mut cache) = state.response_cache.write() {
+        cache.executor = None;
+        cache.ready = false;
+        cache.admission_expires_at_unix = 0;
+        cache.last_error = "runtime_false_accept_reported".to_owned();
+    }
     let _ = state
         .live_economics
         .observe_false_accept(report.request_sha256.clone());
@@ -1782,12 +1897,9 @@ async fn report_false_accept(State(state): State<AppState>, body: Bytes) -> Resp
         OpportunityBridgeEventV1::false_accept(report.request_sha256.clone()),
         "false_accept",
     );
-    if let Ok(mut cache) = state.response_cache.write() {
-        cache.executor = None;
-        cache.ready = false;
-        cache.admission_expires_at_unix = 0;
-        cache.last_error = "runtime_false_accept_reported".to_owned();
-    }
+    let bounded_report_reason = bounded_reason(&report.reason);
+    let durable_revocation =
+        persist_runtime_package_revocation(&state, &report.package_id, &report.request_sha256);
     if let Ok(trigger) = state.authority_trigger.lock()
         && let Some(trigger) = trigger.as_ref()
     {
@@ -1800,14 +1912,90 @@ async fn report_false_accept(State(state): State<AppState>, body: Bytes) -> Resp
             "timestamp_unix": unix_now(),
             "request_sha256": report.request_sha256,
             "package_id": report.package_id,
-            "reason": bounded_reason(&report.reason),
+            "reason": bounded_report_reason,
             "authority_revoked": true,
+            "durable_revocation": durable_revocation.is_ok(),
+            "durable_revocation_error": durable_revocation.as_ref().err(),
         }),
     );
-    json_response(
-        StatusCode::ACCEPTED,
-        json!({"accepted":true,"authority_revoked":true}),
-    )
+    match durable_revocation {
+        Ok(recorded) => json_response(
+            StatusCode::ACCEPTED,
+            json!({
+                "accepted": true,
+                "authority_revoked": true,
+                "durable_revocation": true,
+                "new_execution_identity_revocation": recorded,
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({
+                "accepted": false,
+                "authority_revoked": true,
+                "durable_revocation": false,
+                "error": error,
+            }),
+        ),
+    }
+}
+
+fn persist_runtime_package_revocation(
+    state: &AppState,
+    package_id: &str,
+    request_sha256: &str,
+) -> Result<bool, String> {
+    let _guard = state
+        .event_lock
+        .lock()
+        .map_err(|_| "runtime_package_revocation_lock_poisoned".to_owned())?;
+    let registry_bytes = fs::read(&state.config.response_registry_path).map_err(|error| {
+        format!(
+            "runtime_package_revocation_registry_read:{}:{error}",
+            state.config.response_registry_path.display()
+        )
+    })?;
+    let registry: ResponseRegistry = serde_json::from_slice(&registry_bytes)
+        .map_err(|error| format!("runtime_package_revocation_registry_decode:{error}"))?;
+    registry
+        .validate()
+        .map_err(|error| format!("runtime_package_revocation_registry_invalid:{error}"))?;
+    let package = registry
+        .packages
+        .iter()
+        .find(|package| package.package_id == package_id)
+        .ok_or_else(|| "runtime_package_revocation_package_missing".to_owned())?;
+    let execution_payload_sha256 = response_execution_payload_digest(package)
+        .map_err(|error| format!("runtime_package_revocation_payload_digest:{error}"))?;
+    let path = state.config.runtime_package_revocations_path.clone();
+    let mut ledger = if path.is_file() {
+        let value: RuntimePackageRevocationLedgerV1 = serde_json::from_slice(
+            &fs::read(&path).map_err(|error| format!("runtime_package_revocation_read:{error}"))?,
+        )
+        .map_err(|error| format!("runtime_package_revocation_decode:{error}"))?;
+        value
+            .validate()
+            .map_err(|error| format!("runtime_package_revocation_invalid:{error}"))?;
+        value
+    } else {
+        RuntimePackageRevocationLedgerV1::default()
+    };
+    let recorded = ledger
+        .record(RuntimePackageRevocationV1 {
+            package_id: package_id.to_owned(),
+            execution_payload_sha256,
+            request_sha256: request_sha256.to_owned(),
+            observed_at_unix: unix_now(),
+            reason: "runtime_false_accept".to_owned(),
+        })
+        .map_err(str::to_owned)?;
+    write_bytes_atomic(
+        &path,
+        &serde_json::to_vec_pretty(&ledger)
+            .map_err(|error| format!("runtime_package_revocation_encode:{error}"))?,
+        "runtime-package-revocations",
+    )?;
+    Ok(recorded)
 }
 
 async fn openai_responses(
@@ -2324,6 +2512,16 @@ fn try_response_actor(
     };
     let receipt = &post_verifier.receipt_sha256;
     state.counters.local_accepts.fetch_add(1, Ordering::Relaxed);
+    if intent_dedupe_eligible {
+        state
+            .counters
+            .ordinary_response_local_accepts
+            .fetch_add(1, Ordering::Relaxed);
+        state
+            .counters
+            .ordinary_response_local_accept_input_tokens
+            .fetch_add(input_tokens, Ordering::Relaxed);
+    }
     write_event(
         state,
         json!({
@@ -2443,6 +2641,14 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         })
         .transpose()?
         .unwrap_or_default();
+    let crystallized_collection_candidates = collection_candidates
+        .iter()
+        .map(CrystallizedCollectionAdmissionCandidateV1::seal)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(str::to_owned)?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
     let (relation_candidates, crystallized_candidates) = response_miner
         .as_ref()
         .map(|miner| {
@@ -2480,6 +2686,12 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
             "winner_seal_sha256": candidate.winner_seal_sha256,
             "executable_parity_seal_sha256": candidate.executable_parity_seal_sha256,
         })).collect::<Vec<_>>(),
+        "crystallized_collection": crystallized_collection_candidates.iter().map(|candidate| {
+            serde_json::json!({
+                "package_id": candidate.candidate().package.package_id,
+                "seal_sha256": candidate.seal_sha256(),
+            })
+        }).collect::<Vec<_>>(),
     });
     let revision_digest = sha256_bytes(
         &serde_json::to_vec(&revision_material)
@@ -2503,6 +2715,7 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         relation_candidates,
         collection_candidates,
         crystallized_candidates,
+        crystallized_collection_candidates,
     };
     bundle.validate().map_err(str::to_owned)?;
     let bytes = serde_cbor::to_vec(&bundle)
@@ -4965,6 +5178,7 @@ mod tests {
             bind: "127.0.0.1:0".into(),
             registry_path: root.join("unused-transition-registry.json"),
             response_registry_path: response_registry_path.to_owned(),
+            runtime_package_revocations_path: root.join("runtime-package-revocations.json"),
             admission_path,
             gate_build_path,
             runtime_build_path,
@@ -5079,6 +5293,56 @@ mod tests {
         };
         refresh_response_executor(&state);
         state
+    }
+
+    #[test]
+    fn runtime_false_accept_persists_execution_identity_revocation() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-serving-runtime-revocation-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let state = project_status_test_state(&root, &registry_path);
+        assert_eq!(
+            persist_runtime_package_revocation(&state, "serving-project-status", &"66".repeat(32),),
+            Ok(true)
+        );
+        assert_eq!(
+            persist_runtime_package_revocation(&state, "serving-project-status", &"77".repeat(32),),
+            Ok(false)
+        );
+        let ledger: RuntimePackageRevocationLedgerV1 = serde_json::from_slice(
+            &fs::read(&state.config.runtime_package_revocations_path).expect("revocation ledger"),
+        )
+        .expect("decode ledger");
+        let package = &project_status_registry().packages[0];
+        assert!(ledger.revokes(
+            &package.package_id,
+            &response_execution_payload_digest(package).expect("payload"),
+        ));
+        assert_eq!(ledger.revocations.len(), 1);
+        let unresolved = runtime_package_revocation_health(&state.config);
+        assert!(unresolved.valid);
+        assert_eq!(unresolved.total, 1);
+        assert_eq!(unresolved.unresolved_active, 1);
+
+        let mut corrected_registry = project_status_registry();
+        corrected_registry.packages.clear();
+        write_json(
+            &registry_path,
+            &serde_json::to_value(corrected_registry).expect("corrected registry"),
+        );
+        let contained = runtime_package_revocation_health(&state.config);
+        assert!(contained.valid);
+        assert_eq!(contained.total, 1);
+        assert_eq!(contained.unresolved_active, 0);
+        fs::remove_dir_all(&root).expect("cleanup test root");
     }
 
     #[test]
@@ -5769,6 +6033,18 @@ mod tests {
             assert_eq!(fallback.get("fallback_required"), Some(&Value::Bool(true)));
         }
         assert_eq!(state.counters.local_accepts.load(Ordering::Relaxed), 5);
+        assert_eq!(
+            state
+                .counters
+                .ordinary_response_local_accepts
+                .load(Ordering::Relaxed),
+            5
+        );
+        let accepted_input_tokens = state
+            .counters
+            .ordinary_response_local_accept_input_tokens
+            .load(Ordering::Relaxed);
+        assert!(accepted_input_tokens > 0);
         assert_eq!(jsonl(&state.config.economics_path).len(), 5);
 
         let mut admission = read_json(&state.config.admission_path).expect("admission");
@@ -5786,6 +6062,13 @@ mod tests {
         let (status, _, _) = responses_call(&state, &success_payload).await;
         assert_eq!(status, StatusCode::IM_A_TEAPOT);
         assert_eq!(state.counters.local_accepts.load(Ordering::Relaxed), 5);
+        assert_eq!(
+            state
+                .counters
+                .ordinary_response_local_accept_input_tokens
+                .load(Ordering::Relaxed),
+            accepted_input_tokens
+        );
 
         fs::remove_dir_all(&root).expect("cleanup test root");
     }

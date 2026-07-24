@@ -125,7 +125,7 @@ pub struct MinerWorkerHandle {
 
 enum MinerCommand {
     Transition(Box<TeacherTransition>),
-    Collection(OnlineCollectionObservation),
+    Collection(Box<OnlineCollectionObservation>),
     Opportunity {
         event: MinerOpportunityEvent,
         durable_ack: Option<SyncSender<Result<(), String>>>,
@@ -229,7 +229,7 @@ impl MinerWorkerHandle {
         observation: OnlineCollectionObservation,
     ) -> Result<(), String> {
         self.sender
-            .send(MinerCommand::Collection(observation))
+            .send(MinerCommand::Collection(Box::new(observation)))
             .map_err(|_| "miner_worker_stopped".to_owned())?;
         self.counters.enqueued.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -590,7 +590,11 @@ fn spawn_miner_worker_with_report_heartbeat(
                     teacher_replay
                         .pop_front()
                         .map(|transition| MinerCommand::Transition(Box::new(transition)))
-                        .or_else(|| collection_replay.pop_front().map(MinerCommand::Collection))
+                        .or_else(|| {
+                            collection_replay
+                                .pop_front()
+                                .map(|observation| MinerCommand::Collection(Box::new(observation)))
+                        })
                         .or_else(|| {
                             opportunity_replay
                                 .pop_front()
@@ -687,7 +691,7 @@ fn spawn_miner_worker_with_report_heartbeat(
                             collection_miner
                                 .lock()
                                 .map_err(|_| "miner_worker_collection_lock_poisoned".to_owned())?
-                                .observe_buffered(observation)
+                                .observe_buffered(*observation)
                         });
                         record_timing(
                             &thread_counters.collection_last_micros,

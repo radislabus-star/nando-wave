@@ -416,6 +416,7 @@ fn maximal_decidable_subcenter_keeps_32_clean_rows_and_excludes_ambiguous_layout
             },
             estimated_input_tokens: 100,
             verifier_pass: true,
+            capture_binding: None,
             request_atom_ids: vec![7, 11],
             matched_program_sha256: vec![if index < 32 || index.is_multiple_of(2) {
                 alpha_digest.clone()
@@ -518,6 +519,7 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
                 layout_sha256: "a".repeat(64),
                 estimated_input_tokens: 100,
                 verifier_pass: true,
+                capture_binding: None,
                 request_atom_ids,
                 matched_program_sha256: vec![if index < 16 {
                     alpha_digest.clone()
@@ -580,7 +582,7 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
     let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v32");
     assert_eq!(
         migrated.checkpoint.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert_eq!(migrated.status().frozen_buckets_total, 1);
     fs::remove_dir_all(root).expect("cleanup");
@@ -615,6 +617,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
             layout_sha256: "a".repeat(64),
             estimated_input_tokens: 100,
             verifier_pass: true,
+            capture_binding: None,
             request_atom_ids: vec![crate::stable_atom_id("request:project")],
             matched_program_sha256: vec![if index < 40 {
                 plain_digest.clone()
@@ -680,7 +683,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
     let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v34");
     assert_eq!(
         migrated.checkpoint.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert_eq!(migrated.checkpoint.buckets.len(), 1);
     assert_eq!(migrated.checkpoint.buckets[0].bucket_id, "3".repeat(64));
@@ -715,6 +718,7 @@ fn clean_pre_action_atoms_recover_32_rows_from_one_ambiguous_layout() {
             session_id_sha256: format!("{:064x}", index % 8 + 30_000),
             event_time_unix_nanos: Some(index as u64 + 1),
             estimated_input_tokens: 100,
+            capture_binding: None,
             example: CollectionSynthesisExample {
                 provider_payload: json!({
                     "input": [
@@ -960,6 +964,7 @@ fn unguarded_consensus_unifies_equivalent_selectors_and_abstains_on_disagreement
         session_id_sha256: format!("{:064x}", index % 4 + 90_000),
         event_time_unix_nanos: Some(index as u64),
         estimated_input_tokens: 100,
+        capture_binding: None,
         example: CollectionSynthesisExample {
             provider_payload: json!({
                 "input": [
@@ -1304,6 +1309,7 @@ fn phase_ranked_adapter_selects_unique_physical_role_and_abstains_on_tie() {
             session_id_sha256: format!("{:064x}", index % 2 + 200),
             event_time_unix_nanos: Some(index as u64),
             estimated_input_tokens: 100,
+            capture_binding: None,
             example: CollectionSynthesisExample {
                 provider_payload: serde_json::json!({
                     "input": [
@@ -1466,6 +1472,7 @@ fn observation(index: usize, expected: &str) -> OnlineCollectionObservation {
         session_id_sha256: format!("{:064x}", index % 4 + 20_000),
         event_time_unix_nanos: Some(index as u64),
         estimated_input_tokens: 100,
+        capture_binding: None,
         example: CollectionSynthesisExample {
             provider_payload: json!({
                 "input":[
@@ -1551,6 +1558,7 @@ fn multi_output_observation(index: usize) -> OnlineCollectionObservation {
         session_id_sha256: format!("{:064x}", index % 4 + 50_000),
         event_time_unix_nanos: Some(index as u64),
         estimated_input_tokens: 1_000,
+        capture_binding: None,
         example: CollectionSynthesisExample {
             provider_payload: json!({
                 "input":[
@@ -1781,7 +1789,7 @@ fn v6_rebuilds_exact_renderer_candidates_without_claiming_evidence() {
     let status = migrated.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert_eq!(status.renderer_consensus_migrated_examples_total, 1);
     assert_eq!(status.support_receipts_unique_total, 0);
@@ -1881,7 +1889,7 @@ fn v21_restart_resynthesizes_retained_support_without_creating_future() {
     let status = restored.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert_eq!(status.future_receipts_unique_total, 0);
     assert_eq!(status.wrong_accepts_total, 0);
@@ -2102,7 +2110,7 @@ fn multi_output_semantic_program_reaches_external_admission() {
     let status = miner.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert!(
         status

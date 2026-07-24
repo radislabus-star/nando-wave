@@ -53,6 +53,7 @@ fn adaptive_static_frame_observation(index: usize, value: i64) -> OnlineCollecti
         session_id_sha256: format!("{:064x}", index + 40_000),
         event_time_unix_nanos: Some(index as u64),
         estimated_input_tokens: 100,
+        capture_binding: None,
         example: CollectionSynthesisExample {
             provider_payload: serde_json::json!({
                 "input": [
@@ -67,6 +68,27 @@ fn adaptive_static_frame_observation(index: usize, value: i64) -> OnlineCollecti
             expected_response: format!("{}{value}", adaptive_static_frame_prefix()),
         },
     }
+}
+
+fn capture_bound_observation(
+    mut observation: OnlineCollectionObservation,
+    binding_sequence: u64,
+    source_sequence: u64,
+) -> OnlineCollectionObservation {
+    let receipt = crate::CaptureEvidenceReceipt::new(vec![crate::CaptureRecordCommitment {
+        sequence: source_sequence,
+        record_sha256: format!("{:064x}", source_sequence + 100_000),
+    }])
+    .expect("capture receipt");
+    observation.capture_binding = Some(
+        crate::CaptureTransitionBinding::new(
+            binding_sequence,
+            &observation.evidence_graph_sha256,
+            &receipt,
+        )
+        .expect("capture binding"),
+    );
+    observation
 }
 
 fn adaptive_bucket(
@@ -98,6 +120,39 @@ fn adaptive_bucket(
         learned_anti_atom_ids: BTreeSet::new(),
         wrong_accepts: 0,
     }
+}
+
+#[test]
+fn frozen_phase_route_ignores_atoms_outside_the_operator_field() {
+    let phase_centers = vec![10, 20];
+    let anti_centers = vec![30];
+    let mut support = receipt(&observation(1, "3"), true).expect("support receipt");
+    support.request_atom_ids = vec![10, 20, 100, 101, 102];
+    let mut future = support.clone();
+    future.request_atom_ids = vec![10, 20, 200, 201, 202, 203, 204, 205, 206];
+    let support_observation = observation(1, "3");
+    let mut bucket = adaptive_bucket(
+        &"0".repeat(64),
+        &"1".repeat(64),
+        BTreeMap::from([(
+            canonical_json_sha256(&adaptive_count_program()).expect("program digest"),
+            adaptive_count_program(),
+        )]),
+        &support_observation,
+    );
+    bucket.support = vec![support];
+
+    assert_eq!(
+        projected_phase_query_atom_ids(&future.request_atom_ids, &phase_centers, &anti_centers),
+        vec![10, 20]
+    );
+    let threshold = learned_wave_margin_micro(&bucket, &phase_centers, &anti_centers);
+    assert!(receipt_routes_phase(
+        &future,
+        &phase_centers,
+        &anti_centers,
+        threshold
+    ));
 }
 
 #[test]
@@ -140,7 +195,7 @@ fn adaptive_singleton_freezes_after_one_support_without_fixed_rows() {
 }
 
 #[test]
-fn legacy_frozen_singleton_migrates_to_adaptive_without_creating_future() {
+fn legacy_frozen_singleton_rotates_to_capture_bound_adaptive_generation() {
     let root = adaptive_root("legacy-frozen-migration");
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
@@ -157,9 +212,6 @@ fn legacy_frozen_singleton_migrates_to_adaptive_without_creating_future() {
         &support,
     ));
     miner.maybe_freeze(0).expect("initial freeze");
-    let support_manifest = miner.checkpoint.buckets[0].support_manifest_sha256.clone();
-    let support_watermark = miner.checkpoint.buckets[0].support_watermark_event_time_unix_nanos;
-
     miner.checkpoint.buckets[0].adaptive_candidate_freeze = None;
     miner.checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V36;
     miner.persist().expect("persist legacy frozen checkpoint");
@@ -168,21 +220,93 @@ fn legacy_frozen_singleton_migrates_to_adaptive_without_creating_future() {
     let migrated =
         OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("migrate");
     let bucket = &migrated.checkpoint.buckets[0];
-    assert_eq!(
-        bucket.frozen_program_sha256.as_deref(),
-        Some(digest.as_str())
-    );
-    assert!(bucket.adaptive_candidate_freeze.is_some());
-    assert_eq!(bucket.support_manifest_sha256, support_manifest);
-    assert_eq!(
-        bucket.support_watermark_event_time_unix_nanos,
-        support_watermark
-    );
+    assert!(bucket.programs.contains_key(&digest));
+    assert!(bucket.frozen_program_sha256.is_none());
+    assert!(bucket.adaptive_candidate_freeze.is_none());
+    assert!(bucket.support.is_empty());
     assert!(bucket.future.is_empty());
+    assert!(bucket.runtime_examples.is_empty());
     assert!(bucket.durable_runtime_parity_receipts.is_empty());
+    assert!(
+        migrated
+            .admission_candidates()
+            .expect("candidates")
+            .is_empty()
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn rejected_only_legacy_bucket_is_removed_during_capture_bound_rotation() {
+    let root = adaptive_root("legacy-rejected-only-migration");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let support = observation(1, "3");
+    let program = adaptive_count_program();
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let bucket_id = "e".repeat(64);
+    let mut bucket = adaptive_bucket(
+        &bucket_id,
+        &archetype,
+        BTreeMap::from([(digest.clone(), program)]),
+        &support,
+    );
+    bucket.programs.clear();
+    bucket.rejected_program_sha256.insert(digest);
+
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.checkpoint.buckets.push(bucket);
+    miner
+        .checkpoint
+        .applicability_negative_sessions
+        .insert(bucket_id.clone(), BTreeMap::new());
+    miner.checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V37;
+    miner.persist().expect("persist rejected-only checkpoint");
+    drop(miner);
+
+    let migrated =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("migrate");
+    assert!(migrated.checkpoint.buckets.is_empty());
+    assert!(
+        !migrated
+            .checkpoint
+            .applicability_negative_sessions
+            .contains_key(&bucket_id)
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn empty_adaptive_phase_seed_is_recovered_from_sealed_support() {
+    let root = adaptive_root("empty-phase-seed-repair");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let support = capture_bound_observation(observation(1, "3"), 1, 10);
+    let program = adaptive_count_program();
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.checkpoint.buckets.push(adaptive_bucket(
+        &"f".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest, program)]),
+        &support,
+    ));
+    miner.maybe_freeze(0).expect("freeze");
+    let expected = observation_request_atom_ids(&support);
+    assert!(!expected.is_empty());
+    miner.checkpoint.buckets[0].common_request_atom_ids.clear();
+    miner.persist().expect("persist empty phase seed");
+    drop(miner);
+
+    let repaired =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("repair");
     assert_eq!(
-        migrated.status().buckets[0].admission_blocker.as_deref(),
-        Some("adaptive_future_missing")
+        repaired.checkpoint.buckets[0].common_request_atom_ids,
+        expected
     );
     fs::remove_dir_all(root).expect("cleanup");
 }
@@ -315,7 +439,7 @@ fn adaptive_package_reaches_external_admission_after_one_independent_future() {
     let root = adaptive_root("external-admission");
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
-    let support = observation(1, "3");
+    let support = capture_bound_observation(observation(1, "3"), 1, 10);
     let program = adaptive_count_program();
     let digest = canonical_json_sha256(&program).expect("program digest");
     let archetype = response_program_archetype_id(&program).expect("archetype");
@@ -334,6 +458,7 @@ fn adaptive_package_reaches_external_admission_after_one_independent_future() {
     future.client_intent_id_sha256 = "a".repeat(64);
     future.session_id_sha256 = "b".repeat(64);
     future.event_time_unix_nanos = Some(2);
+    let future = capture_bound_observation(future, 2, 20);
     assert!(
         miner
             .evaluate_frozen_candidates(&future)
@@ -348,7 +473,7 @@ fn adaptive_package_reaches_external_admission_after_one_independent_future() {
         &archetype,
         BTreeMap::from([(
             canonical_json_sha256(&program).expect("alternative digest"),
-            program,
+            program.clone(),
         )]),
         &support,
     );
@@ -362,9 +487,50 @@ fn adaptive_package_reaches_external_admission_after_one_independent_future() {
     assert_eq!(candidate.causal_report.verdict, "PASS");
     assert_eq!(candidate.package.proof.support_rows, 1);
     assert_eq!(candidate.package.proof.future_rows, 1);
+    let crystallized = crate::CrystallizedCollectionAdmissionCandidateV1::seal(candidate)
+        .expect("crystallization")
+        .expect("capture-bound candidate");
+    crystallized.validate().expect("sealed candidate");
+    assert_eq!(
+        crystallized.candidate().package.package_id,
+        candidate.package.package_id
+    );
+    let restart_bundle = crystallized
+        .candidate()
+        .package
+        .crystallized_operator
+        .as_ref()
+        .expect("compiled operator bundle");
+    assert_eq!(
+        restart_bundle.page_bytes().len(),
+        nando_core::wave::OPERATOR_PAGE32_BYTES
+    );
+    let restored = crate::VerifiedCrystallizedOperator::restore(
+        restart_bundle.page_bytes(),
+        restart_bundle.registry_cbor(),
+    )
+    .expect("restart operator");
+    assert_eq!(restored.routing_program().expect("actor"), program);
+    assert_eq!(
+        restored.routing_verifier().expect("verifier"),
+        crystallized
+            .candidate()
+            .package
+            .verifier
+            .clone()
+            .expect("package verifier")
+    );
+    let mut tampered = serde_json::to_value(&crystallized).expect("candidate json");
+    tampered["candidate"]["program_sha256"] = Value::String("f".repeat(64));
+    let tampered: crate::CrystallizedCollectionAdmissionCandidateV1 =
+        serde_json::from_value(tampered).expect("tampered candidate");
+    assert_eq!(
+        tampered.validate(),
+        Err("crystallized_collection_candidate_seal_mismatch")
+    );
 
     let snapshot = crate::build_online_collection_admission_snapshot(
-        &candidates,
+        std::slice::from_ref(crystallized.candidate()),
         "project",
         1,
         100,
@@ -376,6 +542,18 @@ fn adaptive_package_reaches_external_admission_after_one_independent_future() {
     .expect("active snapshot");
     assert_eq!(snapshot.registry.packages.len(), 1);
     assert!(snapshot.admission.eligible_for_local_accept);
+    miner.persist().expect("persist capture-bound candidate");
+    drop(miner);
+    let restarted =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("restart");
+    let restarted_candidates = restarted
+        .admission_candidates()
+        .expect("restart candidates");
+    let restarted_crystallized =
+        crate::CrystallizedCollectionAdmissionCandidateV1::seal(&restarted_candidates[0])
+            .expect("restart crystallization")
+            .expect("restart capture provenance");
+    assert_eq!(restarted_crystallized, crystallized);
     fs::remove_dir_all(root).expect("cleanup");
 }
 

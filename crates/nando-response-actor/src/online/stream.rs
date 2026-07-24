@@ -862,6 +862,7 @@ fn acquire_online_checkpoint_owner(checkpoint_path: &Path) -> Result<File, Strin
     let lock_path = checkpoint_path.with_extension("owner.lock");
     let file = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .mode(0o600)

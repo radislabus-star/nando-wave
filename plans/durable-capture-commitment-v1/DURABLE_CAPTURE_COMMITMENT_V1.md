@@ -130,14 +130,22 @@ receipt/binding wire contract, and response admission exports only a read-only
 archive verifier. A cross-crate compatibility test proves that the private
 writer produces the exact bytes accepted by the independent reader.
 
-Relation and collection candidate builders remain available for shadow
-diagnostics, but external admission no longer merges their snapshots into new
-authority. Only a crystallized candidate that passes the durable record archive
-and transition-binding archive may write a successor authority generation.
-The previous last-known-good package is preserved until that candidate exists.
-`live_scalar_generation_version=3` therefore starts with empty scalar
-support/future after deployment while preserving independent Wave and
-self-training state.
+Relation and unsealed collection candidate builders remain available for
+shadow diagnostics, but external admission never merges those snapshots into
+new authority. Adaptive collection evidence crosses the boundary only through
+a sealed `CrystallizedCollectionAdmissionCandidateV1`; every support/future
+binding is checked against the durable record archive and transition-binding
+archive before the existing collection admission builder is allowed to see the
+inner candidate. Its result and the crystallized circuit result enter one
+external merge. The previous last-known-good package is preserved until such a
+candidate exists. Old collection receipts without capture bindings are never
+upgraded in place; a fresh adaptive generation must collect new support and
+future evidence.
+
+Adaptive collection checkpoints rotate once at pooling strategy V38. Existing
+program candidates may remain as shadow hypotheses, but all unbound evidence
+and every authority-derived field are cleared before fresh capture-bound
+support/future are accepted. Legacy fixed-row controls are unchanged.
 
 ## Writer Ownership Deployment
 

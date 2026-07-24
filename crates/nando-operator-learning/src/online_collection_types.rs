@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::CollectionSynthesisExample;
+use crate::{CaptureTransitionBinding, CollectionSynthesisExample};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OnlineCollectionConfig {
@@ -41,6 +41,8 @@ pub struct OnlineCollectionObservation {
     pub session_id_sha256: String,
     pub event_time_unix_nanos: Option<u64>,
     pub estimated_input_tokens: u64,
+    #[serde(default)]
+    pub capture_binding: Option<CaptureTransitionBinding>,
     pub example: CollectionSynthesisExample,
 }
 
@@ -53,6 +55,8 @@ pub struct OnlineCollectionReceipt {
     pub layout_sha256: String,
     pub estimated_input_tokens: u64,
     pub verifier_pass: bool,
+    #[serde(default)]
+    pub capture_binding: Option<CaptureTransitionBinding>,
     #[serde(default)]
     pub request_atom_ids: Vec<u64>,
     #[serde(default)]
@@ -248,6 +252,8 @@ pub struct OnlineCollectionStatus {
     pub wrong_accepts_total: usize,
     pub runtime_parity_cases_total: usize,
     pub frozen_program_kinds: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub admission_causal_reports: Vec<OnlineCollectionWaveCausalReport>,
     pub buckets: Vec<OnlineCollectionBucketStatus>,
 }
 

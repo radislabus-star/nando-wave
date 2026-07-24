@@ -1,6 +1,8 @@
 use super::evaluation::build;
+use super::handler::active_operator_summaries;
 use super::model::{OperatorSummary, SignalPathInputs, StageStatus};
 use crate::client_connections::{ClientConnectionSnapshot, ClientRoute, CodexWindowConnection};
+use serde_json::json;
 
 fn connected_windows() -> ClientConnectionSnapshot {
     ClientConnectionSnapshot {
@@ -52,6 +54,7 @@ fn passing_inputs() -> SignalPathInputs {
         serving_response_executor_ready: true,
         serving_response_local_accept_enabled: true,
         serving_response_active_packages: 1,
+        serving_response_local_accepts: 2,
         serving_response_admission_seconds_remaining: Some(20),
         admission_cpu_allowed: true,
         admission_eligible: true,
@@ -69,9 +72,12 @@ fn passing_inputs() -> SignalPathInputs {
         accounting_epoch_cpu_input_tokens: Some(125),
         process_nando_input_tokens: 250,
         process_miner_input_tokens: 250,
+        process_cpu_input_tokens: 125,
         verified_local_accepts: 2,
         economics_age_seconds: Some(1),
         false_accepts: 0,
+        runtime_revocation_state_valid: true,
+        unresolved_active_runtime_revocations: 0,
         runtime_parity_failures: 0,
         bridge_failures: 0,
     }
@@ -91,6 +97,7 @@ fn complete_path_requires_an_observed_cpu_accept() {
         Some(250_000)
     );
     assert_eq!(snapshot.traffic.process_miner_share_ppm, Some(1_000_000));
+    assert_eq!(snapshot.traffic.process_cpu_share_ppm, Some(500_000));
 }
 
 #[test]
@@ -129,6 +136,7 @@ fn admission_open_without_active_package_does_not_enable_cpu() {
 #[test]
 fn enabled_route_without_observed_accept_is_watch() {
     let mut inputs = passing_inputs();
+    inputs.serving_response_local_accepts = 0;
     inputs.verified_local_accepts = 0;
     inputs.cpu_input_tokens = Some(0);
 
@@ -136,6 +144,17 @@ fn enabled_route_without_observed_accept_is_watch() {
 
     assert_eq!(snapshot.path[4].status(), StageStatus::Watch);
     assert_eq!(snapshot.verdict, StageStatus::Watch);
+}
+
+#[test]
+fn live_process_accept_proves_cpu_route_when_cumulative_receipt_is_idle() {
+    let mut inputs = passing_inputs();
+    inputs.economics_age_seconds = Some(600);
+
+    let snapshot = build(inputs);
+
+    assert_eq!(snapshot.path[4].status(), StageStatus::Pass);
+    assert_eq!(snapshot.verdict, StageStatus::Pass);
 }
 
 #[test]
@@ -150,6 +169,33 @@ fn safety_failure_blocks_cpu_even_when_authority_is_open() {
 }
 
 #[test]
+fn historical_false_accept_remains_visible_after_payload_containment() {
+    let mut inputs = passing_inputs();
+    inputs.false_accepts = 6;
+
+    let snapshot = build(inputs);
+
+    assert_eq!(snapshot.path[4].status(), StageStatus::Pass);
+    assert_eq!(snapshot.safety.false_accepts, 6);
+    assert_eq!(snapshot.safety.unresolved_active_runtime_revocations, 0);
+}
+
+#[test]
+fn unresolved_active_revocation_blocks_cpu() {
+    let mut inputs = passing_inputs();
+    inputs.unresolved_active_runtime_revocations = 1;
+
+    let snapshot = build(inputs);
+
+    assert_eq!(snapshot.path[4].status(), StageStatus::Block);
+    assert!(
+        snapshot.path[4]
+            .reason()
+            .contains("unresolved_revocations=1")
+    );
+}
+
+#[test]
 fn control_authority_cannot_mask_a_disabled_serving_route() {
     let mut inputs = passing_inputs();
     inputs.serving_response_local_accept_enabled = false;
@@ -159,4 +205,32 @@ fn control_authority_cannot_mask_a_disabled_serving_route() {
     assert_eq!(snapshot.path[3].status(), StageStatus::Pass);
     assert_eq!(snapshot.path[4].status(), StageStatus::Block);
     assert!(snapshot.path[4].reason().contains("serving"));
+}
+
+#[test]
+fn active_operator_inventory_includes_function_and_vm_programs() {
+    let registry = json!({
+        "packages": [
+            {
+                "package_id": "function",
+                "origin": "grounded_synthesis",
+                "state": "active",
+                "program": {"operation": {"op": "function_call", "function_name": "wait"}},
+                "proof": {"support_rows": 1, "future_rows": 2}
+            },
+            {
+                "package_id": "projection",
+                "origin": "grounded_synthesis",
+                "state": "active",
+                "program": {"operation": {"op": "project_selected_value"}},
+                "proof": {"support_rows": 1, "future_rows": 2}
+            }
+        ]
+    });
+
+    let operators = active_operator_summaries(&registry);
+
+    assert_eq!(operators.len(), 2);
+    assert_eq!(operators[0].function_name, "wait");
+    assert_eq!(operators[1].function_name, "project_selected_value");
 }

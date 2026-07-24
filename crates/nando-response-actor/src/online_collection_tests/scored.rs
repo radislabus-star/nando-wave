@@ -307,7 +307,7 @@ fn v4_checkpoint_restarts_as_non_authoritative_teacher_history() {
     let status = migrated.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert_eq!(status.frozen_buckets_total, 0);
     assert_eq!(status.future_receipts_unique_total, 0);
@@ -382,7 +382,7 @@ fn v7_repairs_historical_variant_digest_and_revokes_invalid_freeze() {
     let bucket = migrated.checkpoint.buckets.first().expect("bucket");
     assert_eq!(
         migrated.status().pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert!(bucket.rejected_program_sha256.contains(&historical_digest));
     assert!(bucket.learned_anti_atom_ids.is_empty());
@@ -480,6 +480,7 @@ fn latest_output_program_pool_reuses_across_different_output_ordinals() {
                 session_id_sha256: format!("{:064x}", index + 50_000),
                 event_time_unix_nanos: Some(index as u64),
                 estimated_input_tokens: 100,
+                capture_binding: None,
                 example: CollectionSynthesisExample {
                     provider_payload: json!({"input":input}),
                     expected_response: "selected-result".to_owned(),
@@ -655,7 +656,7 @@ fn v20_restart_preserves_support_without_bulk_revalidation() {
     let status = restored.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        ONLINE_COLLECTION_POOLING_STRATEGY_V38
     );
     assert_eq!(status.observations_total, observations);
     assert_eq!(status.support_receipts_unique_total, support);

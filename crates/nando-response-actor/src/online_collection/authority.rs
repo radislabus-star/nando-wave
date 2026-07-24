@@ -13,6 +13,12 @@ pub(super) fn validate_observation(
     {
         return Err("online_collection_observation_identity_invalid".to_owned());
     }
+    if let Some(binding) = &observation.capture_binding {
+        binding.verify_digest().map_err(str::to_owned)?;
+        if binding.frame_id_sha256 != observation.evidence_graph_sha256 {
+            return Err("online_collection_capture_binding_mismatch".to_owned());
+        }
+    }
     Ok(())
 }
 
@@ -28,6 +34,7 @@ pub(super) fn receipt(
         layout_sha256: structural_layout_sha256(&observation.example.provider_payload)?,
         estimated_input_tokens: observation.estimated_input_tokens,
         verifier_pass,
+        capture_binding: observation.capture_binding.clone(),
         request_atom_ids: observation_request_atom_ids(observation)
             .into_iter()
             .collect(),
@@ -140,6 +147,22 @@ pub(super) fn distinct_receipt_layouts(receipts: &[OnlineCollectionReceipt]) -> 
         .len()
 }
 
+pub(super) fn projected_phase_query_atom_ids(
+    receipt_atom_ids: &[u64],
+    phase_centers: &[u64],
+    anti_centers: &[u64],
+) -> Vec<u64> {
+    debug_assert!(phase_centers.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(anti_centers.windows(2).all(|pair| pair[0] < pair[1]));
+    receipt_atom_ids
+        .iter()
+        .copied()
+        .filter(|atom| {
+            phase_centers.binary_search(atom).is_ok() || anti_centers.binary_search(atom).is_ok()
+        })
+        .collect()
+}
+
 pub(super) fn learned_wave_margin_micro(
     bucket: &OnlineCollectionBucket,
     phase_centers: &[u64],
@@ -151,7 +174,15 @@ pub(super) fn learned_wave_margin_micro(
         .support
         .iter()
         .filter_map(|receipt| {
-            let query = phase_vector_from_atom_ids(receipt.request_atom_ids.iter().copied(), 16);
+            let query_atom_ids = projected_phase_query_atom_ids(
+                &receipt.request_atom_ids,
+                phase_centers,
+                anti_centers,
+            );
+            if query_atom_ids.is_empty() {
+                return None;
+            }
+            let query = phase_vector_from_atom_ids(query_atom_ids, 16);
             phase_margin_to_micro(
                 phase_coherence(&query, &positive) - phase_coherence(&query, &negative),
             )
@@ -168,7 +199,12 @@ pub(super) fn receipt_routes_phase(
     anti_centers: &[u64],
     threshold: i64,
 ) -> bool {
-    let query = phase_vector_from_atom_ids(receipt.request_atom_ids.iter().copied(), 16);
+    let query_atom_ids =
+        projected_phase_query_atom_ids(&receipt.request_atom_ids, phase_centers, anti_centers);
+    if query_atom_ids.is_empty() {
+        return false;
+    }
+    let query = phase_vector_from_atom_ids(query_atom_ids, 16);
     let positive = phase_vector_from_atom_ids(phase_centers.iter().copied(), 16);
     let negative = phase_vector_from_atom_ids(anti_centers.iter().copied(), 16);
     phase_margin_to_micro(phase_coherence(&query, &positive) - phase_coherence(&query, &negative))

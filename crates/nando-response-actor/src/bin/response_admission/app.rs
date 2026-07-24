@@ -5,13 +5,17 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use nando_operator_admission::RuntimePackageRevocationLedgerV1;
 use nando_response_actor::{
     CaptureCommitmentArchiveReader, CaptureCommitmentIndex, CaptureTransitionBindingArchiveReader,
     CompositeResponseAdmissionV2, OnlineAdmissionCandidateBundle,
     OnlineAdmissionCandidateRejection, OnlineAdmissionSnapshot, ResponseExecutor, ResponseRegistry,
     build_crystallized_admission_snapshot, build_online_admission_evaluation,
-    build_online_collection_admission_snapshot, merge_with_active_online_admission,
+    build_online_collection_admission_snapshot, merge_online_admission_snapshots,
+    merge_with_proven_active_online_admission, reissue_unrevoked_active_online_admission,
+    remove_runtime_revoked_online_admission, response_execution_payload_digest,
     response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance_durable,
+    verify_crystallized_collection_capture_provenance_durable,
 };
 use serde::Serialize;
 
@@ -27,6 +31,7 @@ struct AdmissionControllerReport {
     relation_candidates: usize,
     collection_candidates: usize,
     crystallized_candidates: usize,
+    crystallized_collection_candidates: usize,
     relation_max_future_rows: usize,
     relation_max_runtime_parity_cases: usize,
     collection_max_future_rows: usize,
@@ -235,8 +240,6 @@ fn run(started: Instant) -> Result<(), String> {
         &state_dir,
         "response-admission-controller.json",
     );
-    let active_admission_path =
-        env_path_join("NANDO_TRANSITION_ADMISSION", &state_dir, "admission.json");
     let authority_candidate_path = env_path_join(
         "NANDO_RESPONSE_AUTHORITY_CANDIDATE",
         &state_dir,
@@ -247,6 +250,12 @@ fn run(started: Instant) -> Result<(), String> {
         &state_dir,
         "response-admission-controller-report.json",
     );
+    let runtime_revocation_path = env_path_join(
+        "NANDO_RUNTIME_PACKAGE_REVOCATIONS",
+        &state_dir,
+        "runtime-package-revocations.json",
+    );
+    let runtime_revocations = load_runtime_package_revocations(&runtime_revocation_path)?;
     let marker_path = state_dir.join("response-admission-controller.marker.json");
     let gate_path = env_path(
         "NANDO_LIVE_TRANSITION_GATE_BUILD",
@@ -286,6 +295,11 @@ fn run(started: Instant) -> Result<(), String> {
         .map(|candidate| candidate.runtime_parity_cases.len())
         .max()
         .unwrap_or(0);
+    let crystallized_collection_candidates = bundle
+        .crystallized_collection_candidates
+        .iter()
+        .map(|candidate| candidate.candidate().clone())
+        .collect::<Vec<_>>();
     if let Err(blocker) = verify_capture_provenance(&bundle, &state_dir) {
         let preserved_active_packages = last_known_good_package_count(
             &registry_path,
@@ -306,6 +320,7 @@ fn run(started: Instant) -> Result<(), String> {
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
                 crystallized_candidates: bundle.crystallized_candidates.len(),
+                crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
                 collection_max_future_rows,
@@ -352,22 +367,58 @@ fn run(started: Instant) -> Result<(), String> {
         &runtime_sha256,
     )
     .map_err(str::to_owned)?;
+    let crystallized_collection = build_online_collection_admission_snapshot(
+        &crystallized_collection_candidates,
+        &bundle.project_id,
+        bundle.revision,
+        now_unix,
+        max_age_seconds,
+        &gate_sha256,
+        &runtime_sha256,
+    )
+    .map_err(str::to_owned)?;
     // Legacy relation and collection routes remain observable controls. New
-    // authority has one owner: a provenance-bound crystallized operator.
-    let snapshot = crystallized
-        .map(|candidate| {
-            merge_with_active_generation_files(
+    // authority has one owner: a provenance-bound crystallized operator. The
+    // collection builder receives only candidates sealed by capture provenance.
+    let candidate = merge_online_admission_snapshots(
+        [crystallized, crystallized_collection]
+            .into_iter()
+            .flatten()
+            .collect(),
+    )
+    .map_err(str::to_owned)?
+    .map(|candidate| remove_runtime_revoked_online_admission(candidate, &runtime_revocations))
+    .transpose()
+    .map_err(str::to_owned)?
+    .flatten();
+    let active = load_reissued_active_generation_files(
+        &registry_path,
+        &controller_admission_path,
+        &runtime_revocations,
+        &bundle.project_id,
+        &gate_sha256,
+        &runtime_sha256,
+        now_unix,
+        max_age_seconds,
+    )?;
+    let snapshot = match (candidate, active) {
+        (Some(candidate), Some(active)) => Some(
+            merge_with_proven_active_online_admission(
                 candidate,
-                &registry_path,
-                &active_admission_path,
+                active.registry,
+                active.admission,
                 &bundle.project_id,
                 &gate_sha256,
                 &runtime_sha256,
                 now_unix,
                 max_age_seconds,
             )
-        })
-        .transpose()?;
+            .map_err(str::to_owned)?,
+        ),
+        (Some(candidate), None) => Some(candidate),
+        (None, Some(active)) => Some(active),
+        (None, None) => None,
+    };
     let Some(snapshot) = snapshot else {
         let preserved_active_packages = last_known_good_package_count(
             &registry_path,
@@ -392,6 +443,7 @@ fn run(started: Instant) -> Result<(), String> {
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
                 crystallized_candidates: bundle.crystallized_candidates.len(),
+                crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
                 collection_max_future_rows,
@@ -423,6 +475,7 @@ fn run(started: Instant) -> Result<(), String> {
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
                 crystallized_candidates: bundle.crystallized_candidates.len(),
+                crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
                 collection_max_future_rows,
@@ -495,6 +548,7 @@ fn run(started: Instant) -> Result<(), String> {
             relation_candidates: bundle.relation_candidates.len(),
             collection_candidates: bundle.collection_candidates.len(),
             crystallized_candidates: bundle.crystallized_candidates.len(),
+            crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
             relation_max_future_rows,
             relation_max_runtime_parity_cases,
             collection_max_future_rows,
@@ -510,7 +564,9 @@ fn verify_capture_provenance(
     bundle: &OnlineAdmissionCandidateBundle,
     state_dir: &Path,
 ) -> Result<(), String> {
-    if bundle.crystallized_candidates.is_empty() {
+    if bundle.crystallized_candidates.is_empty()
+        && bundle.crystallized_collection_candidates.is_empty()
+    {
         return Ok(());
     }
     let capture_index_path = env_path_join(
@@ -539,6 +595,12 @@ fn verify_capture_provenance(
     )?;
     verify_crystallized_capture_provenance_durable(
         &bundle.crystallized_candidates,
+        &index,
+        &mut archive,
+        &mut binding_archive,
+    )?;
+    verify_crystallized_collection_capture_provenance_durable(
+        &bundle.crystallized_collection_candidates,
         &index,
         &mut archive,
         &mut binding_archive,
@@ -606,32 +668,32 @@ fn last_known_good_package_count(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn merge_with_active_generation_files(
-    candidate: nando_response_actor::OnlineAdmissionSnapshot,
+fn load_reissued_active_generation_files(
     registry_path: &Path,
-    active_admission_path: &Path,
+    controller_admission_path: &Path,
+    runtime_revocations: &RuntimePackageRevocationLedgerV1,
     project_id: &str,
     gate_sha256: &str,
     runtime_sha256: &str,
     now_unix: u64,
     max_age_seconds: u64,
-) -> Result<OnlineAdmissionSnapshot, String> {
-    if !registry_path.is_file() || !active_admission_path.is_file() {
-        return Ok(candidate);
+) -> Result<Option<OnlineAdmissionSnapshot>, String> {
+    if !registry_path.is_file() || !controller_admission_path.is_file() {
+        return Ok(None);
     }
     let existing: ResponseRegistry = serde_json::from_slice(
         &fs::read(registry_path).map_err(|error| format!("active_registry_read:{error}"))?,
     )
     .map_err(|error| format!("active_registry_decode:{error}"))?;
-    let active_admission: CompositeResponseAdmissionV2 = serde_json::from_slice(
-        &fs::read(active_admission_path)
-            .map_err(|error| format!("active_admission_read:{error}"))?,
+    let controller_admission: CompositeResponseAdmissionV2 = serde_json::from_slice(
+        &fs::read(controller_admission_path)
+            .map_err(|error| format!("controller_admission_read:{error}"))?,
     )
-    .map_err(|error| format!("active_admission_decode:{error}"))?;
-    merge_with_active_online_admission(
-        candidate,
+    .map_err(|error| format!("controller_admission_decode:{error}"))?;
+    reissue_unrevoked_active_online_admission(
         existing,
-        active_admission,
+        controller_admission,
+        runtime_revocations,
         project_id,
         gate_sha256,
         runtime_sha256,
@@ -639,6 +701,20 @@ fn merge_with_active_generation_files(
         max_age_seconds,
     )
     .map_err(str::to_owned)
+}
+
+fn load_runtime_package_revocations(
+    path: &Path,
+) -> Result<RuntimePackageRevocationLedgerV1, String> {
+    if !path.is_file() {
+        return Ok(RuntimePackageRevocationLedgerV1::default());
+    }
+    let ledger: RuntimePackageRevocationLedgerV1 = serde_json::from_slice(
+        &fs::read(path).map_err(|error| format!("runtime_package_revocations_read:{error}"))?,
+    )
+    .map_err(|error| format!("runtime_package_revocations_decode:{error}"))?;
+    ledger.validate().map_err(str::to_owned)?;
+    Ok(ledger)
 }
 
 fn active_generation_is_immutable(
@@ -670,7 +746,27 @@ fn active_generation_is_immutable(
         .iter()
         .map(|package| package.package_id.as_str())
         .collect::<BTreeSet<_>>();
-    !existing_ids.is_empty() && existing_ids == candidate_ids
+    if existing_ids.is_empty() || existing_ids != candidate_ids {
+        return false;
+    }
+    let candidate_by_id = candidate
+        .packages
+        .iter()
+        .map(|package| (package.package_id.as_str(), package))
+        .collect::<BTreeMap<_, _>>();
+    existing.packages.iter().all(|package| {
+        let Some(candidate) = candidate_by_id.get(package.package_id.as_str()) else {
+            return false;
+        };
+        package.state == candidate.state
+            && matches!(
+                (
+                    response_execution_payload_digest(package),
+                    response_execution_payload_digest(candidate),
+                ),
+                (Ok(active), Ok(candidate)) if active == candidate
+            )
+    })
 }
 
 fn sha256_file(path: &Path, label: &str) -> Result<String, String> {

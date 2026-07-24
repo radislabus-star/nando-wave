@@ -370,89 +370,38 @@ pub fn validate_response_authority_snapshot(
     now_unix: u64,
     max_age_seconds: u64,
 ) -> Result<ValidatedResponseAuthority, &'static str> {
-    validate_registry_snapshot(registry)?;
-    if admission.schema != COMPOSITE_ADMISSION_SCHEMA_V2 {
-        return Err("response_admission_schema_not_v2");
-    }
-    if admission.project_id != expected_project_id {
-        return Err("response_admission_foreign_project");
-    }
-    if admission.verdict != "PASS" || !admission.eligible_for_local_accept {
-        return Err("response_admission_not_pass");
-    }
+    validate_response_authority_material(registry, admission, expected_project_id)?;
     if admission.generated_at_unix > now_unix.saturating_add(MAX_ADMISSION_FUTURE_SKEW_SECONDS) {
         return Err("response_admission_from_future");
     }
     if now_unix.saturating_sub(admission.generated_at_unix) > max_age_seconds {
         return Err("response_admission_stale");
     }
-    if admission.expires_at_unix < admission.generated_at_unix
-        || admission.expires_at_unix > admission.generated_at_unix.saturating_add(max_age_seconds)
+    if admission.expires_at_unix > admission.generated_at_unix.saturating_add(max_age_seconds)
         || now_unix > admission.expires_at_unix
     {
         return Err("response_admission_expired");
     }
 
     let authority = &admission.response_authority;
-    if authority.schema != RESPONSE_AUTHORITY_SCHEMA_V2 {
-        return Err("response_authority_schema_not_v2");
-    }
-    if authority.registry_schema != registry.schema {
-        return Err("response_authority_registry_schema_mismatch");
-    }
-    if authority.registry_revision != registry.revision {
-        return Err("response_authority_registry_revision_mismatch");
-    }
-    if authority.registry_sha256 != registry.registry_sha256 {
-        return Err("response_authority_registry_digest_mismatch");
-    }
-    if !valid_nonzero_sha256(expected_gate_build_sha256)
-        || authority.gate_build_sha256 != expected_gate_build_sha256
-    {
+    if authority.gate_build_sha256 != expected_gate_build_sha256 {
         return Err("response_authority_gate_build_mismatch");
     }
-    if !valid_nonzero_sha256(expected_runtime_build_sha256)
-        || authority.runtime_build_sha256 != expected_runtime_build_sha256
-    {
+    if authority.runtime_build_sha256 != expected_runtime_build_sha256 {
         return Err("response_authority_runtime_build_mismatch");
     }
-    if authority.packages.is_empty()
-        || authority
-            .packages
-            .windows(2)
-            .any(|pair| pair[0].package_id >= pair[1].package_id)
-    {
-        return Err("response_authority_packages_not_strictly_sorted");
-    }
 
+    let admission_sha256 = canonical_json_sha256(admission)?;
     let package_by_id = registry
         .packages
         .iter()
         .map(|package| (package.package_id.as_str(), package))
         .collect::<BTreeMap<_, _>>();
-    let candidate_ids = registry
-        .packages
-        .iter()
-        .filter(|package| package.admission_candidate)
-        .map(|package| package.package_id.as_str())
-        .collect::<BTreeSet<_>>();
-    let admitted_ids = authority
-        .packages
-        .iter()
-        .map(|binding| binding.package_id.as_str())
-        .collect::<BTreeSet<_>>();
-    if candidate_ids != admitted_ids {
-        return Err("response_authority_candidate_set_mismatch");
-    }
-
-    let admission_sha256 = canonical_json_sha256(admission)?;
     let mut validated = BTreeMap::new();
     for binding in &authority.packages {
-        let package = package_by_id
-            .get(binding.package_id.as_str())
-            .copied()
-            .ok_or("response_authority_package_missing")?;
-        validate_binding(package, registry.revision, binding)?;
+        if !package_by_id.contains_key(binding.package_id.as_str()) {
+            return Err("response_authority_package_missing");
+        }
         validated.insert(
             binding.package_id.clone(),
             AuthorizedResponsePackage {
@@ -486,6 +435,86 @@ pub fn validate_response_authority_snapshot(
         registry_sha256: registry.registry_sha256.clone(),
         packages: validated,
     })
+}
+
+/// Validates immutable package and proof bindings without accepting the old
+/// lease. Controllers use this only to reissue retained packages under a new
+/// runtime and gate generation.
+#[doc(hidden)]
+pub fn validate_response_authority_material(
+    registry: &AdmissionRegistrySnapshot,
+    admission: &CompositeResponseAdmissionV2,
+    expected_project_id: &str,
+) -> Result<(), &'static str> {
+    validate_registry_snapshot(registry)?;
+    if admission.schema != COMPOSITE_ADMISSION_SCHEMA_V2 {
+        return Err("response_admission_schema_not_v2");
+    }
+    if admission.project_id != expected_project_id {
+        return Err("response_admission_foreign_project");
+    }
+    if admission.verdict != "PASS" || !admission.eligible_for_local_accept {
+        return Err("response_admission_not_pass");
+    }
+    if admission.expires_at_unix < admission.generated_at_unix {
+        return Err("response_admission_lease_invalid");
+    }
+
+    let authority = &admission.response_authority;
+    if authority.schema != RESPONSE_AUTHORITY_SCHEMA_V2 {
+        return Err("response_authority_schema_not_v2");
+    }
+    if authority.registry_schema != registry.schema {
+        return Err("response_authority_registry_schema_mismatch");
+    }
+    if authority.registry_revision != registry.revision {
+        return Err("response_authority_registry_revision_mismatch");
+    }
+    if authority.registry_sha256 != registry.registry_sha256 {
+        return Err("response_authority_registry_digest_mismatch");
+    }
+    if !valid_nonzero_sha256(&authority.gate_build_sha256)
+        || !valid_nonzero_sha256(&authority.runtime_build_sha256)
+    {
+        return Err("response_authority_build_binding_invalid");
+    }
+    if authority.packages.is_empty()
+        || authority
+            .packages
+            .windows(2)
+            .any(|pair| pair[0].package_id >= pair[1].package_id)
+    {
+        return Err("response_authority_packages_not_strictly_sorted");
+    }
+
+    let package_by_id = registry
+        .packages
+        .iter()
+        .map(|package| (package.package_id.as_str(), package))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_ids = registry
+        .packages
+        .iter()
+        .filter(|package| package.admission_candidate)
+        .map(|package| package.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let admitted_ids = authority
+        .packages
+        .iter()
+        .map(|binding| binding.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    if candidate_ids != admitted_ids {
+        return Err("response_authority_candidate_set_mismatch");
+    }
+
+    for binding in &authority.packages {
+        let package = package_by_id
+            .get(binding.package_id.as_str())
+            .copied()
+            .ok_or("response_authority_package_missing")?;
+        validate_binding(package, registry.revision, binding)?;
+    }
+    Ok(())
 }
 
 fn validate_registry_snapshot(registry: &AdmissionRegistrySnapshot) -> Result<(), &'static str> {

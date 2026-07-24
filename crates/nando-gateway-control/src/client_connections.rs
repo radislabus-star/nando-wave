@@ -17,10 +17,11 @@ pub(crate) enum ClientRoute {
     Idle,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum ProviderRouteContract {
     Nando,
     Direct,
+    #[default]
     Unknown,
 }
 
@@ -62,12 +63,6 @@ struct WindowAccumulator {
     configured_for_nando: bool,
     route_contract: ProviderRouteContract,
     endpoints: BTreeSet<SocketEndpoint>,
-}
-
-impl Default for ProviderRouteContract {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 pub(crate) fn snapshot() -> ClientConnectionSnapshot {
@@ -180,7 +175,7 @@ fn empty_snapshot() -> ClientConnectionSnapshot {
 
 fn codex_arguments(process_root: &Path) -> Option<Vec<String>> {
     let executable = fs::read_link(process_root.join("exe")).ok()?;
-    if executable.file_name()?.to_str()? != "codex" {
+    if !executable_is_codex(&executable) {
         return None;
     }
     let bytes = fs::read(process_root.join("cmdline")).ok()?;
@@ -196,6 +191,14 @@ fn codex_arguments(process_root: &Path) -> Option<Vec<String>> {
         return None;
     }
     Some(arguments)
+}
+
+fn executable_is_codex(executable: &Path) -> bool {
+    executable
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_suffix(" (deleted)").or(Some(name)))
+        == Some("codex")
 }
 
 fn provider_route_contract(arguments: &[String]) -> ProviderRouteContract {
@@ -504,5 +507,16 @@ mod tests {
         assert!(uuid_like("019dd9bc-b358-7d01-b32d-7e64d0b9509a"));
         assert!(!uuid_like("019dd9bc"));
         assert!(!uuid_like("not-a-session-id"));
+    }
+
+    #[test]
+    fn observes_windows_after_their_codex_binary_was_upgraded() {
+        assert!(executable_is_codex(Path::new("/opt/codex/bin/codex")));
+        assert!(executable_is_codex(Path::new(
+            "/opt/codex/bin/codex (deleted)"
+        )));
+        assert!(!executable_is_codex(Path::new(
+            "/opt/codex/bin/codex-code-mode-host"
+        )));
     }
 }

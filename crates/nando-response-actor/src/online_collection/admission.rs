@@ -299,7 +299,19 @@ impl OnlineCollectionMiner {
             {
                 return false;
             }
-            let query = phase_vector_from_atom_ids(receipt.request_atom_ids.iter().copied(), 16);
+            // Every ablation sees the same canonical local subspace. Projecting
+            // against each control's own atoms would let shuffled controls
+            // manufacture alignment; retaining scene noise would dilute the
+            // winner for reasons outside this operator's applicability field.
+            let query_atom_ids = projected_phase_query_atom_ids(
+                &receipt.request_atom_ids,
+                &package.phase_centers,
+                &package.anti_centers,
+            );
+            if query_atom_ids.is_empty() {
+                return false;
+            }
+            let query = phase_vector_from_atom_ids(query_atom_ids, 16);
             phase_margin_to_micro(
                 phase_coherence(&query, center) - phase_coherence(&query, anti_center),
             )
@@ -530,6 +542,7 @@ impl OnlineCollectionMiner {
             .buckets
             .get_mut(index)
             .expect("index checked above");
+        let first_support = bucket.support.is_empty();
         for (digest, program) in matching_programs {
             bucket
                 .programs
@@ -537,9 +550,13 @@ impl OnlineCollectionMiner {
                 .or_insert_with(|| program.clone());
         }
         let request_atoms = observation_request_atom_ids(observation);
-        bucket
-            .common_request_atom_ids
-            .retain(|atom| request_atoms.contains(atom));
+        if first_support {
+            bucket.common_request_atom_ids.clone_from(&request_atoms);
+        } else {
+            bucket
+                .common_request_atom_ids
+                .retain(|atom| request_atoms.contains(atom));
+        }
         if bucket.programs.is_empty() {
             return Err("online_collection_version_space_became_empty".to_owned());
         }
@@ -739,11 +756,14 @@ impl OnlineCollectionMiner {
                 &phase_centers,
                 &anti_centers,
             );
-            let routed_receipt = receipt_with_program_atoms(
-                observation,
-                true,
-                &self.checkpoint.buckets[index].programs,
-            )?;
+            let selected_program = self.checkpoint.buckets[index]
+                .programs
+                .get(&program_sha256)
+                .cloned()
+                .ok_or_else(|| "online_collection_frozen_program_missing".to_owned())?;
+            let selected_programs =
+                BTreeMap::from([(program_sha256.clone(), selected_program.clone())]);
+            let routed_receipt = receipt_with_program_atoms(observation, true, &selected_programs)?;
             if routed_receipt.request_atom_ids.iter().any(|atom| {
                 self.checkpoint.buckets[index]
                     .learned_anti_atom_ids
@@ -756,20 +776,17 @@ impl OnlineCollectionMiner {
                 route_phase_rejected = route_phase_rejected.saturating_add(1);
                 continue;
             }
-            let authority_result = {
-                let bucket = &self.checkpoint.buckets[index];
-                let Some(program) = bucket.programs.get(&program_sha256) else {
-                    return Err("online_collection_frozen_program_missing".to_owned());
-                };
-                independently_verified_authority_response_result(program, &observation.example)
-                    .and_then(|response| {
-                        // Actor/verifier agreement is necessary but not enough:
-                        // frozen future must reproduce the completed teacher.
-                        (response == observation.example.expected_response)
-                            .then_some(response)
-                            .ok_or("teacher_response_mismatch")
-                    })
-            };
+            let authority_result = independently_verified_authority_response_result(
+                &selected_program,
+                &observation.example,
+            )
+            .and_then(|response| {
+                // Actor/verifier agreement is necessary but not enough:
+                // frozen future must reproduce the completed teacher.
+                (response == observation.example.expected_response)
+                    .then_some(response)
+                    .ok_or("teacher_response_mismatch")
+            });
             let rejection_reason = authority_rejection_reason(&authority_result);
             let verifier_pass = rejection_reason.is_none();
             if !verifier_pass {
@@ -999,6 +1016,7 @@ impl OnlineCollectionMiner {
             {
                 return Err("online_collection_adaptive_support_authority_unproven".to_owned());
             }
+            let (identification, _) = bind_frozen_program_routing_atoms(bucket, &program_sha256)?;
             bucket.frozen_program_sha256 = Some(program_sha256);
             bucket.support_watermark_event_time_unix_nanos = bucket
                 .support

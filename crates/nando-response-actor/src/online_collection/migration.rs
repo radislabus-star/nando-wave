@@ -37,6 +37,114 @@ pub(super) fn migrate_collection_keyed_layouts(
     Ok(())
 }
 
+pub(super) fn rotate_unbound_adaptive_collection_generations(
+    checkpoint: &mut OnlineCollectionCheckpoint,
+) {
+    let mut empty_bucket_ids = BTreeSet::new();
+    for bucket in &mut checkpoint.buckets {
+        let has_unbound_authority_evidence = bucket
+            .support
+            .iter()
+            .chain(&bucket.future)
+            .any(|receipt| receipt.capture_binding.is_none());
+        if !has_unbound_authority_evidence {
+            continue;
+        }
+        checkpoint.unreplayable_support_discarded_total = checkpoint
+            .unreplayable_support_discarded_total
+            .saturating_add(
+                u64::try_from(bucket.support.len().saturating_add(bucket.future.len()))
+                    .unwrap_or(u64::MAX),
+            );
+        // Candidate programs remain a bounded hypothesis prior. Every field
+        // that can influence authority is rebuilt from fresh capture-bound rows.
+        bucket.common_request_atom_ids.clear();
+        bucket.support.clear();
+        bucket.future.clear();
+        bucket.runtime_examples.clear();
+        bucket.durable_adapter_phase_atoms.clear();
+        bucket.durable_runtime_parity_receipts.clear();
+        bucket.adaptive_candidate_freeze = None;
+        bucket.frozen_program_sha256 = None;
+        bucket.support_watermark_event_time_unix_nanos = None;
+        bucket.support_manifest_sha256 = None;
+        bucket.rejected_program_sha256.clear();
+        bucket.learned_anti_atom_ids.clear();
+        bucket.wrong_accepts = 0;
+        checkpoint
+            .structural_resynthesis_pending_bucket_ids
+            .remove(&bucket.bucket_id);
+        if bucket.programs.is_empty() {
+            empty_bucket_ids.insert(bucket.bucket_id.clone());
+        }
+    }
+    if !empty_bucket_ids.is_empty() {
+        // A rejected-only legacy bucket has no hypothesis left after its
+        // unbound evidence is retired, so it cannot seed a fresh generation.
+        checkpoint
+            .buckets
+            .retain(|bucket| !empty_bucket_ids.contains(&bucket.bucket_id));
+        checkpoint
+            .applicability_negative_sessions
+            .retain(|bucket_id, _| !empty_bucket_ids.contains(bucket_id));
+    }
+}
+
+pub(super) fn repair_empty_adaptive_phase_seeds(
+    checkpoint: &mut OnlineCollectionCheckpoint,
+) -> bool {
+    if checkpoint.config.proof_mode != OnlineCollectionProofMode::AdaptiveVersionSpace {
+        return false;
+    }
+    let mut repaired = false;
+    for bucket in &mut checkpoint.buckets {
+        if bucket.support.is_empty() || !bucket.common_request_atom_ids.is_empty() {
+            continue;
+        }
+        let Some(mut common) = bucket
+            .support
+            .first()
+            .map(|receipt| durable_pre_action_atom_ids(bucket, receipt))
+        else {
+            continue;
+        };
+        for receipt in bucket.support.iter().skip(1) {
+            let atoms = durable_pre_action_atom_ids(bucket, receipt);
+            common.retain(|atom| atoms.contains(atom));
+        }
+        if !common.is_empty() {
+            bucket.common_request_atom_ids = common;
+            repaired = true;
+        }
+    }
+    repaired
+}
+
+pub(super) fn repair_adaptive_frozen_routing_atoms(
+    checkpoint: &mut OnlineCollectionCheckpoint,
+) -> Result<bool, String> {
+    if checkpoint.config.proof_mode != OnlineCollectionProofMode::AdaptiveVersionSpace {
+        return Ok(false);
+    }
+    let mut repaired = false;
+    for bucket in &mut checkpoint.buckets {
+        let Some(program_sha256) = bucket.frozen_program_sha256.clone() else {
+            continue;
+        };
+        if bucket.adaptive_candidate_freeze.is_none() {
+            continue;
+        }
+        let (identification, changed) = bind_frozen_program_routing_atoms(bucket, &program_sha256)?;
+        if !changed {
+            continue;
+        }
+        bucket.adaptive_candidate_freeze = Some(identification.freeze);
+        bucket.support_manifest_sha256 = Some(collection_support_manifest_digest(bucket)?);
+        repaired = true;
+    }
+    Ok(repaired)
+}
+
 pub(super) fn response_program_surface_priority(program: &ResponseProgram) -> u8 {
     let renderer = match &program.operation {
         crate::ResponseOperation::ProjectSelectedValue { renderer, .. }

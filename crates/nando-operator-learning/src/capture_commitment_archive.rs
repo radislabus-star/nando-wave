@@ -161,26 +161,31 @@ impl CaptureCommitmentArchiveReader {
     pub fn verify_receipt(&mut self, receipt: &CaptureEvidenceReceipt) -> Result<(), String> {
         receipt.validate().map_err(str::to_owned)?;
         for record in &receipt.records {
-            if record.sequence < self.checkpoint.base_sequence
-                || record.sequence >= self.checkpoint.next_sequence
-            {
-                return Err("capture_archive_record_unavailable".to_owned());
-            }
-            let offset = record
-                .sequence
-                .saturating_sub(self.checkpoint.base_sequence)
-                .saturating_mul(RECORD_BYTES);
-            self.file
-                .seek(SeekFrom::Start(offset))
-                .map_err(|error| format!("capture_archive_verify_seek:{error}"))?;
-            let mut bytes = [0_u8; RECORD_BYTES as usize];
-            self.file
-                .read_exact(&mut bytes)
-                .map_err(|error| format!("capture_archive_verify_read:{error}"))?;
-            let sequence = u64::from_le_bytes(bytes[..8].try_into().unwrap_or_default());
-            if sequence != record.sequence || bytes[8..] != decode_sha256(&record.record_sha256)? {
-                return Err("capture_archive_record_mismatch".to_owned());
-            }
+            self.verify_record(record)?;
+        }
+        Ok(())
+    }
+
+    pub fn verify_record(&mut self, record: &CaptureRecordCommitment) -> Result<(), String> {
+        if record.sequence < self.checkpoint.base_sequence
+            || record.sequence >= self.checkpoint.next_sequence
+        {
+            return Err("capture_archive_record_unavailable".to_owned());
+        }
+        let offset = record
+            .sequence
+            .saturating_sub(self.checkpoint.base_sequence)
+            .saturating_mul(RECORD_BYTES);
+        self.file
+            .seek(SeekFrom::Start(offset))
+            .map_err(|error| format!("capture_archive_verify_seek:{error}"))?;
+        let mut bytes = [0_u8; RECORD_BYTES as usize];
+        self.file
+            .read_exact(&mut bytes)
+            .map_err(|error| format!("capture_archive_verify_read:{error}"))?;
+        let sequence = u64::from_le_bytes(bytes[..8].try_into().unwrap_or_default());
+        if sequence != record.sequence || bytes[8..] != decode_sha256(&record.record_sha256)? {
+            return Err("capture_archive_record_mismatch".to_owned());
         }
         Ok(())
     }

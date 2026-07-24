@@ -431,7 +431,9 @@ impl SessionEvidenceLedger for StreamingEvidenceLedger {
         let binding = self
             .transition_binding_archive
             .append(frame_id_sha256, receipt)?;
-        // A parity case must never outrun its capture-owned binding on crash.
+        // A binding must never become durable before the source record it
+        // names. Admission may observe both archives between checkpoints.
+        self.commitment_archive.seal()?;
         self.transition_binding_archive.seal()?;
         Ok(binding)
     }

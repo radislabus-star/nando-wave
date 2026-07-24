@@ -209,6 +209,64 @@ pub(crate) fn validate_response_authority(
     now_unix: u64,
     max_age_seconds: u64,
 ) -> Result<ValidatedResponseAuthority, &'static str> {
+    let snapshot = admission_registry_snapshot(registry)?;
+    nando_operator_admission::validate_response_authority_snapshot(
+        &snapshot,
+        admission,
+        expected_project_id,
+        expected_gate_build_sha256,
+        expected_runtime_build_sha256,
+        now_unix,
+        max_age_seconds,
+    )
+}
+
+pub(crate) fn validate_response_authority_material(
+    registry: &ResponseRegistry,
+    admission: &CompositeResponseAdmissionV2,
+    expected_project_id: &str,
+) -> Result<(), &'static str> {
+    let snapshot = authority_material_registry_snapshot(registry, admission)?;
+    nando_operator_admission::validate_response_authority_material(
+        &snapshot,
+        admission,
+        expected_project_id,
+    )
+}
+
+fn authority_material_registry_snapshot(
+    registry: &ResponseRegistry,
+    admission: &CompositeResponseAdmissionV2,
+) -> Result<nando_operator_admission::AdmissionRegistrySnapshot, &'static str> {
+    if registry.schema != RESPONSE_REGISTRY_SCHEMA_V6 {
+        return Err("response_execution_requires_registry_v6");
+    }
+    registry.validate()?;
+    let registry_sha256 = response_registry_digest(registry)?;
+    let bound_ids = admission
+        .response_authority
+        .packages
+        .iter()
+        .map(|binding| binding.package_id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut packages = registry
+        .packages
+        .iter()
+        .filter(|package| bound_ids.contains(package.package_id.as_str()))
+        .map(admission_package_record)
+        .collect::<Result<Vec<_>, &'static str>>()?;
+    packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
+    Ok(nando_operator_admission::AdmissionRegistrySnapshot {
+        schema: registry.schema.clone(),
+        revision: registry.revision,
+        registry_sha256,
+        packages,
+    })
+}
+
+fn admission_registry_snapshot(
+    registry: &ResponseRegistry,
+) -> Result<nando_operator_admission::AdmissionRegistrySnapshot, &'static str> {
     if registry.schema != RESPONSE_REGISTRY_SCHEMA_V6 {
         return Err("response_execution_requires_registry_v6");
     }
@@ -218,41 +276,37 @@ pub(crate) fn validate_response_authority(
         .packages
         .iter()
         .filter(|package| package.eligible_for_admission_candidate())
-        .map(|package| {
-            let verifier = package
-                .verifier
-                .as_ref()
-                .ok_or("response_authority_verifier_missing")?;
-            let verifier_schema = response_program_external_verifier_schema(&package.program)
-                .ok_or("response_authority_verifier_schema_missing")?;
-            Ok(nando_operator_admission::AdmissionPackageRecord {
-                package_id: package.package_id.clone(),
-                package_sha256: response_package_digest(package)?,
-                execution_payload_sha256: response_execution_payload_digest(package)?,
-                actor_program_sha256: response_actor_program_digest(&package.program)?,
-                independent_verifier_program_sha256: response_independent_verifier_program_digest(
-                    verifier,
-                )?,
-                verifier_schema: verifier_schema.to_owned(),
-                admission_candidate: true,
-            })
-        })
+        .map(admission_package_record)
         .collect::<Result<Vec<_>, &'static str>>()?;
     packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
-    nando_operator_admission::validate_response_authority_snapshot(
-        &nando_operator_admission::AdmissionRegistrySnapshot {
-            schema: registry.schema.clone(),
-            revision: registry.revision,
-            registry_sha256,
-            packages,
-        },
-        admission,
-        expected_project_id,
-        expected_gate_build_sha256,
-        expected_runtime_build_sha256,
-        now_unix,
-        max_age_seconds,
-    )
+    Ok(nando_operator_admission::AdmissionRegistrySnapshot {
+        schema: registry.schema.clone(),
+        revision: registry.revision,
+        registry_sha256,
+        packages,
+    })
+}
+
+fn admission_package_record(
+    package: &ResponsePackage,
+) -> Result<nando_operator_admission::AdmissionPackageRecord, &'static str> {
+    let verifier = package
+        .verifier
+        .as_ref()
+        .ok_or("response_authority_verifier_missing")?;
+    let verifier_schema = response_program_external_verifier_schema(&package.program)
+        .ok_or("response_authority_verifier_schema_missing")?;
+    Ok(nando_operator_admission::AdmissionPackageRecord {
+        package_id: package.package_id.clone(),
+        package_sha256: response_package_digest(package)?,
+        execution_payload_sha256: response_execution_payload_digest(package)?,
+        actor_program_sha256: response_actor_program_digest(&package.program)?,
+        independent_verifier_program_sha256: response_independent_verifier_program_digest(
+            verifier,
+        )?,
+        verifier_schema: verifier_schema.to_owned(),
+        admission_candidate: true,
+    })
 }
 
 #[cfg(test)]

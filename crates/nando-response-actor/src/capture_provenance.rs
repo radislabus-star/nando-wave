@@ -7,7 +7,7 @@ pub use nando_operator_learning::capture_provenance::*;
 
 pub use crate::capture_transition_binding_archive_reader::CaptureTransitionBindingArchiveReader;
 
-use crate::LiveScalarAdmissionCandidate;
+use crate::{CrystallizedCollectionAdmissionCandidateV1, LiveScalarAdmissionCandidate};
 
 /// The facade extracts candidate-owned receipts; the learning owner validates
 /// only immutable capture commitments and never imports admission candidates.
@@ -74,6 +74,45 @@ pub fn verify_crystallized_capture_provenance_durable(
                 .verify_capture_frame_id(&binding.frame_id_sha256)
                 .map_err(str::to_owned)?;
             binding_archive.verify_receipt(receipt)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn verify_crystallized_collection_capture_provenance_durable(
+    candidates: &[CrystallizedCollectionAdmissionCandidateV1],
+    index: &CaptureCommitmentIndex,
+    archive: &mut CaptureCommitmentArchiveReader,
+    binding_archive: &mut CaptureTransitionBindingArchiveReader,
+) -> Result<(), String> {
+    index.validate().map_err(str::to_owned)?;
+    let indexed = index
+        .records
+        .iter()
+        .map(|record| (record.sequence, record.record_sha256.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    for crystallized in candidates {
+        crystallized.validate().map_err(str::to_owned)?;
+        let candidate = crystallized.candidate();
+        for receipt in candidate
+            .support_receipts
+            .iter()
+            .chain(&candidate.future_receipts)
+        {
+            let binding = receipt
+                .capture_binding
+                .as_ref()
+                .ok_or_else(|| "crystallized_collection_capture_binding_missing".to_owned())?;
+            if binding.frame_id_sha256 != receipt.evidence_graph_sha256 {
+                return Err("crystallized_collection_capture_binding_mismatch".to_owned());
+            }
+            binding_archive.verify_binding(binding)?;
+            archive.verify_record(&binding.source_record)?;
+            if let Some(indexed_digest) = indexed.get(&binding.source_record.sequence)
+                && *indexed_digest != binding.source_record.record_sha256.as_str()
+            {
+                return Err("crystallized_collection_capture_index_mismatch".to_owned());
+            }
         }
     }
     Ok(())

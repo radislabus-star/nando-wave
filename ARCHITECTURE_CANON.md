@@ -1118,11 +1118,13 @@ or mismatched receipts remain hard failures.
 
 Archive membership alone is not transition provenance. The capture owner also
 seals a compact append-only binding
-`frame_id -> receipt_root -> exact source record`. A parity case cannot leave
-the capture owner before that binding is synced. External admission verifies
-both archives and rejects a different but otherwise valid archived receipt.
-The learner, crystallizer, actor, and admission controller cannot mint this
-binding.
+`evidence_id -> receipt_root -> exact source record`. For scalar transitions
+the evidence ID is the frame ID; for collection laws it is the canonical
+evidence-graph ID. A parity case or collection observation cannot leave the
+capture owner before the source commitment is sealed and then its binding is
+synced. External admission verifies both archives and rejects a different but
+otherwise valid archived receipt. The learner, crystallizer, actor, and
+admission controller cannot mint this binding.
 
 Process restart must not create a second receipt for an already bound frame.
 The session observer resumes at the last committed source offset, consumes that
@@ -1152,11 +1154,28 @@ response admission        read-only archive reader and verifier
 The mutable writer is not exported from a shared crate. Writer/reader format
 parity is checked across the serving and admission crate boundary.
 
-Legacy relation and collection candidates remain shadow diagnostics. They are
-not merged into new authority snapshots. The only new response-authority input
-is a crystallized operator whose support and future transitions pass both
-capture archives. A previously active last-known-good package may be preserved
-fail-closed, but no legacy candidate can mint its successor.
+Legacy relation and unsealed collection candidates remain shadow diagnostics.
+They are not merged into new authority snapshots. An adaptive collection law
+may cross the boundary only as a separate
+`CrystallizedCollectionAdmissionCandidateV1`: its complete candidate bytes,
+ordered support/future capture roots, adaptive identification proof, and
+crystallization seal are immutable. External admission independently verifies
+every compact binding against both capture archives, rebuilds collection
+admission from the sealed inner candidate, and merges that snapshot with
+crystallized circuit candidates exactly once. A previously active
+last-known-good package may be preserved fail-closed, but no shadow candidate
+can mint its successor.
+
+```text
+live capture-owned collection observation
+-> adaptive support freeze
+-> independent future + durable runtime parity
+-> capture-bound crystallized collection candidate
+-> external archive verification
+-> independent collection admission rebuild
+-> one authority snapshot merge
+-> ACTIVE VM package
+```
 
 An archive introduced after a generation was collected cannot retroactively
 authorize that generation. A dedicated persisted scalar-generation version,
@@ -1165,6 +1184,13 @@ generation with empty live scalar support/future while preserving the
 independent Wave and self-training state. All of its support and future receipts
 must be captured after the archive boundary. Missing archive coverage yields
 BLOCK, never backfill, relabeling, or local authority.
+
+Collection pooling strategy V38 applies the same rule to adaptive collection
+laws. It retains only the bounded candidate program pool as a non-authoritative
+hypothesis prior and clears every support, future, parity, route, anti-center,
+and freeze field derived from unbound rows. The first post-V38 support and
+future observations must both be minted by live capture; legacy fixed-row
+controls are not rewritten by this migration.
 
 Legacy fixed-reservoir controls must satisfy their independence contract before
 their future partition opens. Their historical 32-row reservoir behavior is

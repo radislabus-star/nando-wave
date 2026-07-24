@@ -6,6 +6,7 @@ mod mode_to_role_v3;
 mod operator_shadow_v3;
 mod operator_vm;
 mod phase_ranking_v3;
+mod program_compiler;
 mod routing;
 mod runtime;
 mod runtime_context_v3;
@@ -21,6 +22,7 @@ pub use nando_operator_kernel::{canonical_json_sha256, sha256_bytes, stable_atom
 pub use operator_shadow_v3::*;
 pub use operator_vm::*;
 pub use phase_ranking_v3::*;
+pub use program_compiler::*;
 pub use routing::*;
 pub use runtime::*;
 pub use runtime_context_v3::*;

@@ -29,6 +29,9 @@ fn sealed_archive_verifies_evicted_receipts_and_rejects_tampering() {
     reader
         .verify_receipt(&receipt)
         .expect("durable verification");
+    reader
+        .verify_record(&records[2])
+        .expect("single record verification");
 
     let mut tampered = receipt;
     tampered.records[0].record_sha256 = "f".repeat(64);

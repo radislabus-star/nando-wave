@@ -821,7 +821,7 @@ pub(super) fn validate_checkpoint(
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V37
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V38
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());
@@ -981,6 +981,7 @@ pub(super) fn migrate_collection_exact_receipts(
                 session_id_sha256: old_receipt.session_id_sha256.clone(),
                 event_time_unix_nanos: old_receipt.event_time_unix_nanos,
                 estimated_input_tokens: old_receipt.estimated_input_tokens,
+                capture_binding: old_receipt.capture_binding.clone(),
                 example: example.clone(),
             };
             let mut rebuilt = receipt_with_program_atoms(&observation, true, &bucket.programs)?;

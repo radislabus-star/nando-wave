@@ -127,6 +127,7 @@ pub enum CrystallizedOperatorError {
     RuntimeOperandTypeMismatch,
     AmbiguousRuntimeAction,
     OperatorVmRejected,
+    ProgramCompileFailed,
 }
 
 impl From<nando_operator_runtime::RuntimeBindingError> for CrystallizedOperatorError {
@@ -408,6 +409,105 @@ impl CrystallizedOperator {
 }
 
 impl VerifiedCrystallizedOperator {
+    pub(crate) fn crystallize_durable_program(
+        actor: ResponseProgram,
+        verifier: VerifierProgram,
+        proof: DurableProgramCrystallizationProof,
+    ) -> Result<Self, CrystallizedOperatorError> {
+        actor
+            .validate()
+            .map_err(|_| CrystallizedOperatorError::InvalidActor)?;
+        if !is_source_neutral_response_program(&actor)
+            && !is_privacy_safe_online_response_program(&actor)
+        {
+            return Err(CrystallizedOperatorError::NonSourceNeutralActor);
+        }
+        let rebuilt_verifier = source_neutral_verifier_for_program(&actor)
+            .map_err(|_| CrystallizedOperatorError::VerifierBuildFailed)?;
+        if rebuilt_verifier != verifier
+            || !crate::package::response_program_verifier_matches(&actor, Some(&verifier))
+        {
+            return Err(CrystallizedOperatorError::ActorVerifierMismatch);
+        }
+        if proof.support_lineages.is_empty()
+            || proof.future_lineages.is_empty()
+            || proof.binding_receipts.is_empty()
+            || proof.binding_receipts.len() != proof.execution_receipts.len()
+        {
+            return Err(CrystallizedOperatorError::MissingParityReceipt);
+        }
+        let support = proof
+            .support_lineages
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let future = proof
+            .future_lineages
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if support.len() != proof.support_lineages.len()
+            || future.len() != proof.future_lineages.len()
+            || !support.is_disjoint(&future)
+        {
+            return Err(CrystallizedOperatorError::DuplicateParityLineage);
+        }
+
+        let compiled = nando_operator_runtime::compile_runtime_program(&actor)
+            .map_err(|_| CrystallizedOperatorError::ProgramCompileFailed)?;
+        let actor_sha256 = response_actor_program_digest(&actor)
+            .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
+            .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        let uses_typed_actor_renderer = matches!(
+            actor.operation,
+            crate::ResponseOperation::FunctionCallFromRoles { .. }
+                | crate::ResponseOperation::CustomToolCallFromRoles { .. }
+        );
+        let page = build_operator_page_from_parts(
+            compiled.role_graph(),
+            compiled.relation_program(),
+            compiled.transform_program(),
+            proof.generation,
+            &proof.support_lineages,
+            &proof.future_lineages,
+            compiled.renderer(),
+            uses_typed_actor_renderer,
+            &verifier_sha256,
+        )?;
+        let parity_seal = build_executable_parity_seal_from_commitment(
+            &proof.winner_seal_sha256,
+            &actor_sha256,
+            &verifier_sha256,
+            &proof.binding_receipts,
+            &proof.execution_receipts,
+            proof.future_lineages.len(),
+        )?;
+        let runtime_artifact = nando_operator_runtime::RuntimeOperatorArtifact::new(
+            page,
+            compiled.relation_program().clone(),
+            compiled.role_graph().clone(),
+            compiled.transform_program().to_vec().into_boxed_slice(),
+            compiled.renderer().clone(),
+            actor,
+        );
+        Ok(Self {
+            operator: CrystallizedOperator {
+                runtime_artifact,
+                blueprint_sha256: proof.blueprint_sha256,
+                candidate_set_sha256: proof.candidate_set_sha256,
+                support_root_sha256: proof.support_root_sha256,
+                future_evidence_root_sha256: proof.future_evidence_root_sha256,
+                future_lineage_root_sha256: proof.future_lineage_root_sha256,
+                winner_seal_sha256: proof.winner_seal_sha256,
+                actor_sha256,
+                verifier_sha256,
+                verified_future_lineages: proof.future_lineages.into_boxed_slice(),
+            },
+            parity_seal,
+        })
+    }
+
     /// Grounds a restored operator directly against pre-action payload. Every
     /// structurally valid selector is evaluated independently; authority is
     /// withheld unless all successful bindings produce one response class.
@@ -1130,6 +1230,20 @@ struct FutureParityProof {
     execution_receipts: Vec<Commitment256>,
 }
 
+pub(crate) struct DurableProgramCrystallizationProof {
+    pub generation: u64,
+    pub blueprint_sha256: Commitment256,
+    pub candidate_set_sha256: Commitment256,
+    pub support_root_sha256: Commitment256,
+    pub future_evidence_root_sha256: Commitment256,
+    pub future_lineage_root_sha256: Commitment256,
+    pub winner_seal_sha256: Commitment256,
+    pub support_lineages: Vec<Commitment256>,
+    pub future_lineages: Vec<Commitment256>,
+    pub binding_receipts: Vec<Commitment256>,
+    pub execution_receipts: Vec<Commitment256>,
+}
+
 fn verify_future_receipts(
     future_window: &FrozenBlueprintFutureWindow,
     future_evidence: &[BlueprintFutureEvidence],
@@ -1261,6 +1375,24 @@ fn build_executable_parity_seal(
     execution_receipts: &[Commitment256],
     future_lineage_count: usize,
 ) -> Result<ExecutableParitySeal, CrystallizedOperatorError> {
+    build_executable_parity_seal_from_commitment(
+        winner_receipt.seal_sha256(),
+        actor_sha256,
+        verifier_sha256,
+        binding_receipts,
+        execution_receipts,
+        future_lineage_count,
+    )
+}
+
+fn build_executable_parity_seal_from_commitment(
+    winner_seal_sha256: &Commitment256,
+    actor_sha256: &str,
+    verifier_sha256: &str,
+    binding_receipts: &[Commitment256],
+    execution_receipts: &[Commitment256],
+    future_lineage_count: usize,
+) -> Result<ExecutableParitySeal, CrystallizedOperatorError> {
     if binding_receipts.is_empty() || binding_receipts.len() != execution_receipts.len() {
         return Err(CrystallizedOperatorError::MissingParityReceipt);
     }
@@ -1276,7 +1408,7 @@ fn build_executable_parity_seal(
         .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
     let wrong_accepts = 0_u32;
     let seal_sha256 = executable_parity_seal_digest(
-        winner_receipt.seal_sha256(),
+        winner_seal_sha256,
         &actor_sha256,
         &verifier_sha256,
         &binding_receipts_root,
@@ -1286,7 +1418,7 @@ fn build_executable_parity_seal(
         wrong_accepts,
     );
     Ok(ExecutableParitySeal {
-        winner_seal_sha256: *winner_receipt.seal_sha256(),
+        winner_seal_sha256: *winner_seal_sha256,
         actor_sha256,
         verifier_sha256,
         binding_receipts_root,
@@ -1376,17 +1508,42 @@ fn build_operator_page(
     future_lineages: &[Commitment256],
     output_renderer: &crate::CollectionOutputRenderer,
     uses_typed_actor_renderer: bool,
-    actor_sha256: &str,
+    _actor_sha256: &str,
+    verifier_sha256: &str,
+) -> Result<OperatorPage32, CrystallizedOperatorError> {
+    build_operator_page_from_parts(
+        blueprint.role_graph(),
+        blueprint.relation_program(),
+        blueprint.transform_program(),
+        generation,
+        support_lineages,
+        future_lineages,
+        output_renderer,
+        uses_typed_actor_renderer,
+        verifier_sha256,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_operator_page_from_parts(
+    role_graph: &RoleGraph,
+    relation_program: &OperatorCircuit,
+    transform_program: &[TransformOp8],
+    generation: u64,
+    support_lineages: &[Commitment256],
+    future_lineages: &[Commitment256],
+    output_renderer: &crate::CollectionOutputRenderer,
+    uses_typed_actor_renderer: bool,
     verifier_sha256: &str,
 ) -> Result<OperatorPage32, CrystallizedOperatorError> {
     // Compile every page section from one topological transform order. The
     // renderer stores transform indexes, so reordering only at VM decode time
     // would make an intermediate value look like the final sink after restart.
-    let ordered_transforms = ordered_role_transforms(blueprint.transform_program())?;
+    let ordered_transforms = ordered_role_transforms(transform_program)?;
     let mut cube = TernaryOperatorCube32::default();
     let mut phase_profile = [0_u8; OPERATOR_PAGE32_PHASE_BYTES];
     let mut plane_count = 0_u8;
-    for (index, relation) in blueprint.relation_program().relations().iter().enumerate() {
+    for (index, relation) in relation_program.relations().iter().enumerate() {
         cube.set(
             relation.cell.plane,
             relation.cell.source_role,
@@ -1402,8 +1559,7 @@ fn build_operator_page(
         phase_profile[offset + 2..offset + 4].copy_from_slice(&im);
     }
 
-    let roles = blueprint
-        .role_graph()
+    let roles = role_graph
         .canonical_roles()
         .iter()
         .map(|role| {
@@ -1449,7 +1605,6 @@ fn build_operator_page(
         }
     }
 
-    let _actor_digest = decode_sha256(actor_sha256)?;
     let verifier_digest = decode_sha256(verifier_sha256)?;
     let (renderer, renderer_instruction_count) = if uses_typed_actor_renderer {
         crate::operator_vm::encode_typed_actor_renderer_program(&ordered_transforms)?
@@ -1462,7 +1617,7 @@ fn build_operator_page(
     OperatorPage32::build(
         OperatorPage32Metadata {
             generation,
-            circuit_fingerprint64: blueprint.relation_program().fingerprint64(),
+            circuit_fingerprint64: relation_program.fingerprint64(),
             verifier_binding_fingerprint64: first_u64(&verifier_digest),
             proof_lineage_fingerprint64: first_u64(&proof_lineage),
             role_signature_fingerprint64: first_u64(&role_commitment),
@@ -1526,7 +1681,7 @@ fn digest_matches_commitment(digest: &str, expected: &Commitment256) -> bool {
     decode_sha256(digest).is_ok_and(|actual| &actual == expected)
 }
 
-fn decode_sha256(value: &str) -> Result<Commitment256, CrystallizedOperatorError> {
+pub(crate) fn decode_sha256(value: &str) -> Result<Commitment256, CrystallizedOperatorError> {
     if value.len() != 64 {
         return Err(CrystallizedOperatorError::InvalidDigest);
     }

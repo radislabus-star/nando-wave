@@ -505,11 +505,13 @@ run_response_runtime() {
   fi
 
   local baseline_safety_pass safety_pass active_packages m3_threshold lifetime_token_share
+  local historical_miner_false_accepts
   local m3_pass m3_window_pass m3_window_safety_veto registry_schema
   active_packages="$(jq '[.packages[] | select(.state == "active")] | length' "${registry}")"
   registry_schema="$(jq -r '.schema' "${registry}")"
   m3_threshold="$(jq '.response_runtime.minimum_m3_input_token_saving_share_milli' "${PROFILE}")"
   lifetime_token_share="$(jq '.input_token_saving_share_milli // 0' "${economics}")"
+  historical_miner_false_accepts="$(jq '.miner.false_accepts // 0' "${online_report}")"
   m3_window_pass="$(jq -r '.m3_verdict == "PASS"' "${m3_evaluation}")"
   m3_window_safety_veto="$(jq -r '.safety_veto' "${m3_evaluation}")"
   baseline_safety_pass=0
@@ -565,9 +567,10 @@ run_response_runtime() {
       and $online[0].execution_authority == false
       and ((now * 1000 - ($online[0].generated_at_unix_ms // 0)) <= 120000)
       and ($online[0].miner.admission_accounting_complete // false) == true
-      and ($online[0].miner.false_accepts // 0) == 0
       and ($health[0].transition_false_accepts // 0) == 0
       and ($health[0].response_online.false_accepts // 0) == 0
+      and ($health[0].response_runtime_revocation_state_valid // false) == true
+      and ($health[0].response_runtime_revocations_unresolved_active // 1) == 0
       and ($candidate[0].schema // "") == "nando.response-authority-candidate.v1"
       and ($candidate[0].authority_schema // "") == "nando.response-authority.v2"
       and ($candidate[0].registry_schema // "") == "nando.response-registry.v6"
@@ -581,7 +584,8 @@ run_response_runtime() {
   m3_pass=0
   if [[ "${safety_pass}" == "1" && "${registry_schema}" == "nando.response-registry.v6" \
     && "${active_packages}" -gt 0 \
-    && "${m3_window_pass}" == "true" ]]; then
+    && "${m3_window_pass}" == "true" \
+    && "${historical_miner_false_accepts}" == "0" ]]; then
     m3_pass=1
   fi
 
@@ -591,12 +595,14 @@ run_response_runtime() {
     --argjson baseline_safety_pass "${baseline_safety_pass}" \
     --argjson safety_pass "${safety_pass}" \
     --argjson active_packages "${active_packages}" \
+    --argjson historical_miner_false_accepts "${historical_miner_false_accepts}" \
     --argjson lifetime_token_share "${lifetime_token_share}" \
     --argjson m3_threshold "${m3_threshold}" \
     --arg registry_schema "${registry_schema}" \
     --slurpfile registry "${registry}" \
     --slurpfile online "${online_report}" \
     --slurpfile economics "${economics}" \
+    --slurpfile health "${health}" \
     --slurpfile m3 "${m3_evaluation}" \
     '{
       section:"response_runtime",
@@ -620,6 +626,10 @@ run_response_runtime() {
       input_token_saving_share_milli:$lifetime_token_share,
       minimum_m3_input_token_saving_share_milli:$m3_threshold,
       false_accepts:$economics[0].false_accepts,
+      historical_false_accepts:$economics[0].false_accepts,
+      historical_miner_false_accepts:$historical_miner_false_accepts,
+      runtime_revocation_state_valid:($health[0].response_runtime_revocation_state_valid // false),
+      unresolved_active_runtime_revocations:($health[0].response_runtime_revocations_unresolved_active // 0),
       false_accept_evidence_available:($economics[0].false_accept_evidence_available // false),
       false_accept_evidence_reason:($economics[0].false_accept_evidence_reason // null),
       source_reconciliation_complete:($economics[0].source_reconciliation.complete // false),
@@ -634,6 +644,7 @@ run_response_runtime() {
         + (if $active_packages > 0 then [] else ["no_active_response_package"] end)
         + ($m3[0].m3_blockers // [])
         + (if $baseline_safety_pass == 1 then [] else ["response_baseline_safety_veto"] end)
+        + (if $historical_miner_false_accepts == 0 then [] else ["historical_miner_false_accepts"] end)
         + (if $m3[0].source_authority_valid == true then [] else ["source_authority_invalid"] end)
         + (if $m3[0].evidence_authority_valid == true then [] else ["evidence_authority_invalid"] end)
         + (if $m3[0].false_accept_authority_valid == true then [] else ["false_accept_authority_invalid"] end)
@@ -666,6 +677,8 @@ run_deployment() {
     and .fallback_managed_by_nginx == true
     and .executor_cache_ready == true
     and .transition_false_accepts == 0
+    and .response_runtime_revocation_state_valid == true
+    and .response_runtime_revocations_unresolved_active == 0
   ' "${health}" >/dev/null; then
     health_pass=1
   fi
@@ -691,6 +704,8 @@ run_deployment() {
         transition_profile_state:$health[0].transition_profile_state,
         transition_active_profiles:$health[0].transition_active_profiles,
         transition_false_accepts:$health[0].transition_false_accepts,
+        response_runtime_revocation_state_valid:($health[0].response_runtime_revocation_state_valid // false),
+        response_runtime_revocations_unresolved_active:($health[0].response_runtime_revocations_unresolved_active // 0),
         upstream_configured:$health[0].upstream_configured
       }
     }' >"${TMP_DIR}/deployment.json"

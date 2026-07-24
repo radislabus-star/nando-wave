@@ -24,7 +24,7 @@ impl OnlineCollectionMiner {
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V37,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V38,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -376,6 +376,17 @@ impl OnlineCollectionMiner {
         if legacy_frozen_adaptive_migrated {
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V37;
         }
+        let capture_bound_adaptive_generation_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V38;
+        if capture_bound_adaptive_generation_migrated {
+            if checkpoint.config.proof_mode == OnlineCollectionProofMode::AdaptiveVersionSpace {
+                rotate_unbound_adaptive_collection_generations(&mut checkpoint);
+            }
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V38;
+        }
+        let adaptive_phase_seed_repaired = repair_empty_adaptive_phase_seeds(&mut checkpoint);
+        let adaptive_frozen_routing_repaired =
+            repair_adaptive_frozen_routing_atoms(&mut checkpoint)?;
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
         let mut miner = Self { path, checkpoint };
@@ -411,7 +422,10 @@ impl OnlineCollectionMiner {
             || exact_subcenter_dedup_migrated
             || durable_adapter_phase_evidence_migrated
             || adaptive_identification_migrated
-            || legacy_frozen_adaptive_migrated;
+            || legacy_frozen_adaptive_migrated
+            || capture_bound_adaptive_generation_migrated
+            || adaptive_phase_seed_repaired
+            || adaptive_frozen_routing_repaired;
         if checkpoint_migrated {
             if exact_subcenter_dedup_migrated {
                 miner.deduplicate_exact_unfrozen_buckets()?;
@@ -865,6 +879,7 @@ impl OnlineCollectionMiner {
                 session_id_sha256: receipt.session_id_sha256,
                 event_time_unix_nanos: receipt.event_time_unix_nanos,
                 estimated_input_tokens: receipt.estimated_input_tokens,
+                capture_binding: receipt.capture_binding,
                 example,
             };
             for (digest, program) in structural_programs_for_observation(&observation)? {
@@ -1292,6 +1307,16 @@ impl OnlineCollectionMiner {
             .checkpoint
             .unsupported_total
             .saturating_add(legacy_unclassified_observations_total);
+        let admission_causal_reports = self
+            .checkpoint
+            .buckets
+            .iter()
+            .enumerate()
+            .filter_map(|(index, bucket)| {
+                let package = self.package_for_bucket(index, bucket, false).ok()??;
+                self.collection_causal_report(bucket, &package).ok()
+            })
+            .collect();
         OnlineCollectionStatus {
             pooling_strategy_version: self.checkpoint.pooling_strategy_version,
             durable_adapter_phase_evidence_rows: durable_adapter_phase_evidence.len(),
@@ -1433,6 +1458,7 @@ impl OnlineCollectionMiner {
             wrong_accepts_total,
             runtime_parity_cases_total: runtime_parity_receipts.len(),
             frozen_program_kinds,
+            admission_causal_reports,
             buckets,
         }
     }

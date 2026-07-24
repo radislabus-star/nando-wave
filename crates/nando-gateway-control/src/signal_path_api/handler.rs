@@ -80,6 +80,10 @@ pub(crate) async fn control_signal_path(
             .and_then(Value::as_bool)
             == Some(true),
         serving_response_active_packages: metric_u64(&runtime_health, "response_active_profiles"),
+        serving_response_local_accepts: metric_u64(
+            &runtime_health,
+            "ordinary_response_local_accepts",
+        ),
         serving_response_admission_seconds_remaining: runtime_health
             .get("response_admission_seconds_remaining")
             .and_then(Value::as_u64),
@@ -99,10 +103,22 @@ pub(crate) async fn control_signal_path(
         accounting_epoch_cpu_input_tokens: accounting_epoch_token_totals.map(|(_, cpu)| cpu),
         process_nando_input_tokens: bridge.request_tokens,
         process_miner_input_tokens: bridge.miner_request_tokens,
+        process_cpu_input_tokens: metric_u64(
+            &runtime_health,
+            "ordinary_response_local_accept_input_tokens",
+        ),
         verified_local_accepts: metric_u64(economics, "actual_local_accepts")
             .max(metric_u64(economics, "verified_local_accepts")),
         economics_age_seconds,
         false_accepts,
+        runtime_revocation_state_valid: runtime_health
+            .get("response_runtime_revocation_state_valid")
+            .and_then(Value::as_bool)
+            == Some(true),
+        unresolved_active_runtime_revocations: metric_u64(
+            &runtime_health,
+            "response_runtime_revocations_unresolved_active",
+        ),
         runtime_parity_failures,
         bridge_failures: bridge.failures,
     });
@@ -110,7 +126,7 @@ pub(crate) async fn control_signal_path(
     ([(header::CACHE_CONTROL, "no-store")], Json(snapshot)).into_response()
 }
 
-fn active_operator_summaries(registry: &Value) -> Vec<OperatorSummary> {
+pub(super) fn active_operator_summaries(registry: &Value) -> Vec<OperatorSummary> {
     let mut operators = registry
         .get("packages")
         .and_then(Value::as_array)
@@ -119,9 +135,11 @@ fn active_operator_summaries(registry: &Value) -> Vec<OperatorSummary> {
         .filter(|package| package.get("state").and_then(Value::as_str) == Some("active"))
         .filter_map(|package| {
             let package_id = package.get("package_id")?.as_str()?.to_owned();
-            let function_name = package
-                .pointer("/program/operation/function_name")?
-                .as_str()?
+            let operation = package.pointer("/program/operation")?;
+            let function_name = operation
+                .get("function_name")
+                .or_else(|| operation.get("op"))
+                .and_then(Value::as_str)?
                 .to_owned();
             let proof = package.get("proof").unwrap_or(&Value::Null);
             Some(OperatorSummary {

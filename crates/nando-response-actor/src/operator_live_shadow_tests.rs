@@ -626,6 +626,84 @@ fn additive_merge_keeps_active_crystallized_generation_when_only_evidence_grows(
 }
 
 #[test]
+fn proven_active_merge_replaces_same_law_with_crystallized_runtime() {
+    let mut state = LiveScalarShadowState::default();
+    let mut support = transition("total", true);
+    support.before.frame_id_sha256 = format!("{:064x}", 1);
+    support.before.session_id_sha256 = format!("{:064x}", 101);
+    support.before.observed_at_unix_nanos = 1;
+    state.observe(&support);
+
+    let mut future = transition("renamed_total", true);
+    future.before.frame_id_sha256 = format!("{:064x}", 2);
+    future.before.session_id_sha256 = format!("{:064x}", 102);
+    future.before.observed_at_unix_nanos = 2;
+    state.observe(&future);
+
+    let candidate = crate::build_crystallized_admission_snapshot(
+        &state.admission_candidates(),
+        "test-project",
+        1,
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+    )
+    .expect("crystallized admission")
+    .expect("candidate");
+    let binding = &candidate.admission.response_authority.packages[0];
+    let package_id = candidate.registry.packages[0].package_id.clone();
+    let mut legacy_registry = candidate.registry.clone();
+    legacy_registry.packages[0].crystallized_operator = None;
+    let legacy_admission = crate::authority::build_composite_admission_for_registry(
+        &legacy_registry,
+        std::collections::BTreeMap::from([(
+            package_id,
+            (
+                binding.support_manifest_sha256.clone(),
+                binding.exact_causal_proof_sha256.clone(),
+                binding.runtime_parity_receipt_set_sha256.clone(),
+                binding.future_verifier_receipt_set_sha256.clone(),
+                binding.semantic_alias_proof_sha256.clone(),
+            ),
+        )]),
+        "test-project",
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+        "missing receipts",
+        "missing verifier",
+    )
+    .expect("legacy proof material");
+
+    let merged = crate::merge_with_proven_active_online_admission(
+        candidate,
+        legacy_registry,
+        legacy_admission,
+        "test-project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        30,
+    )
+    .expect("crystallized upgrade");
+
+    assert_eq!(merged.registry.packages.len(), 1);
+    assert!(merged.registry.packages[0].crystallized_operator.is_some());
+    crate::ResponseExecutor::from_registry_with_admission(
+        merged.registry,
+        merged.admission,
+        "test-project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        30,
+    )
+    .expect("reissued authority executes");
+}
+
+#[test]
 fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary() {
     let mut state = LiveScalarShadowState::default();
     for index in 1_u64..=8 {
