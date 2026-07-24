@@ -1050,6 +1050,20 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         metric_u64(&response_admission_controller, "collection_candidates");
     let controller_crystallized_candidates =
         metric_u64(&response_admission_controller, "crystallized_candidates");
+    let controller_crystallized_admissible_candidates = metric_u64(
+        &response_admission_controller,
+        "crystallized_admissible_candidates",
+    );
+    let controller_crystallized_held_candidates = metric_u64(
+        &response_admission_controller,
+        "crystallized_held_candidates",
+    );
+    let controller_crystallized_held_semantic_guard_candidates = metric_u64(
+        &response_admission_controller,
+        "crystallized_held_semantic_guard_candidates",
+    );
+    let controller_generation_delta_packages =
+        metric_u64(&response_admission_controller, "generation_delta_packages");
     let controller_blocker = metric_str(
         &response_admission_controller,
         "blocker",
@@ -1069,6 +1083,10 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "controller_relation_candidates": controller_relation_candidates,
             "controller_collection_candidates": controller_collection_candidates,
             "controller_crystallized_candidates": controller_crystallized_candidates,
+            "controller_crystallized_admissible_candidates": controller_crystallized_admissible_candidates,
+            "controller_crystallized_held_candidates": controller_crystallized_held_candidates,
+            "controller_crystallized_held_semantic_guard_candidates": controller_crystallized_held_semantic_guard_candidates,
+            "controller_generation_delta_packages": controller_generation_delta_packages,
             "controller_blocker": controller_blocker,
             "response_package_count": response_package_count,
             "cpu_allowed": admission.cpu_allowed,

@@ -31,7 +31,11 @@ struct AdmissionControllerReport {
     relation_candidates: usize,
     collection_candidates: usize,
     crystallized_candidates: usize,
+    crystallized_admissible_candidates: usize,
+    crystallized_held_candidates: usize,
+    crystallized_held_semantic_guard_candidates: usize,
     crystallized_collection_candidates: usize,
+    generation_delta_packages: Option<usize>,
     relation_max_future_rows: usize,
     relation_max_runtime_parity_cases: usize,
     collection_max_future_rows: usize,
@@ -320,7 +324,11 @@ fn run(started: Instant) -> Result<(), String> {
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
                 crystallized_candidates: bundle.crystallized_candidates.len(),
+                crystallized_admissible_candidates: 0,
+                crystallized_held_candidates: 0,
+                crystallized_held_semantic_guard_candidates: 0,
                 crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+                generation_delta_packages: None,
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
                 collection_max_future_rows,
@@ -367,6 +375,16 @@ fn run(started: Instant) -> Result<(), String> {
         &runtime_sha256,
     )
     .map_err(str::to_owned)?;
+    let crystallized_admissible_candidates = crystallized
+        .as_ref()
+        .map_or(0, |snapshot| snapshot.registry.packages.len());
+    let crystallized_held_candidates = bundle
+        .crystallized_candidates
+        .len()
+        .saturating_sub(crystallized_admissible_candidates);
+    // The crystallized builder has exactly one fail-soft path: an otherwise
+    // valid package that still lacks a pre-action semantic applicability guard.
+    let crystallized_held_semantic_guard_candidates = crystallized_held_candidates;
     let crystallized_collection = build_online_collection_admission_snapshot(
         &crystallized_collection_candidates,
         &bundle.project_id,
@@ -443,7 +461,11 @@ fn run(started: Instant) -> Result<(), String> {
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
                 crystallized_candidates: bundle.crystallized_candidates.len(),
+                crystallized_admissible_candidates,
+                crystallized_held_candidates,
+                crystallized_held_semantic_guard_candidates,
                 crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+                generation_delta_packages: None,
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
                 collection_max_future_rows,
@@ -454,6 +476,8 @@ fn run(started: Instant) -> Result<(), String> {
             },
         );
     };
+    let generation_delta_packages =
+        generation_delta_package_count(&registry_path, &snapshot.registry);
     if active_generation_is_immutable(
         &registry_path,
         &controller_admission_path,
@@ -475,7 +499,11 @@ fn run(started: Instant) -> Result<(), String> {
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
                 crystallized_candidates: bundle.crystallized_candidates.len(),
+                crystallized_admissible_candidates,
+                crystallized_held_candidates,
+                crystallized_held_semantic_guard_candidates,
                 crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+                generation_delta_packages,
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
                 collection_max_future_rows,
@@ -548,7 +576,11 @@ fn run(started: Instant) -> Result<(), String> {
             relation_candidates: bundle.relation_candidates.len(),
             collection_candidates: bundle.collection_candidates.len(),
             crystallized_candidates: bundle.crystallized_candidates.len(),
+            crystallized_admissible_candidates,
+            crystallized_held_candidates,
+            crystallized_held_semantic_guard_candidates,
             crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+            generation_delta_packages,
             relation_max_future_rows,
             relation_max_runtime_parity_cases,
             collection_max_future_rows,
@@ -715,6 +747,51 @@ fn load_runtime_package_revocations(
     .map_err(|error| format!("runtime_package_revocations_decode:{error}"))?;
     ledger.validate().map_err(str::to_owned)?;
     Ok(ledger)
+}
+
+fn generation_delta_package_count(
+    registry_path: &Path,
+    candidate: &ResponseRegistry,
+) -> Option<usize> {
+    if !registry_path.is_file() {
+        return Some(candidate.packages.len());
+    }
+    let existing =
+        serde_json::from_slice::<ResponseRegistry>(&fs::read(registry_path).ok()?).ok()?;
+    existing.validate().ok()?;
+    candidate.validate().ok()?;
+    let existing_by_id = existing
+        .packages
+        .iter()
+        .map(|package| (package.package_id.as_str(), package))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_by_id = candidate
+        .packages
+        .iter()
+        .map(|package| (package.package_id.as_str(), package))
+        .collect::<BTreeMap<_, _>>();
+    let package_ids = existing_by_id
+        .keys()
+        .chain(candidate_by_id.keys())
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut changed = 0_usize;
+    for package_id in package_ids {
+        let differs = match (
+            existing_by_id.get(package_id),
+            candidate_by_id.get(package_id),
+        ) {
+            (Some(existing), Some(candidate)) => {
+                existing.state != candidate.state
+                    || response_execution_payload_digest(existing).ok()?
+                        != response_execution_payload_digest(candidate).ok()?
+            }
+            (Some(_), None) | (None, Some(_)) => true,
+            (None, None) => false,
+        };
+        changed = changed.saturating_add(usize::from(differs));
+    }
+    Some(changed)
 }
 
 fn active_generation_is_immutable(
