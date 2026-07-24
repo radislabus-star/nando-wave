@@ -79,7 +79,7 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
     }
 }
 
-fn provider_outputs(payload: &Value) -> Vec<&Value> {
+fn provider_outputs(payload: &Value) -> Vec<Value> {
     payload
         .get("input")
         .and_then(Value::as_array)
@@ -92,6 +92,12 @@ fn provider_outputs(payload: &Value) -> Vec<&Value> {
             )
         })
         .filter_map(|item| item.get("output").or_else(|| item.get("content")))
+        .map(|value| {
+            value
+                .as_str()
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_else(|| value.clone())
+        })
         .collect()
 }
 

@@ -2050,7 +2050,9 @@ fn handle_openai(
     let body_token_estimate = u64::try_from(body.len().div_ceil(4)).unwrap_or(u64::MAX);
     let input_tokens = token_estimate(&request_text).max(body_token_estimate);
     let capability_atom_ids = provider_tool_capability_atom_ids(&payload);
-    let _multi_source_topology_shadow = natural_evidence_eligible.then(|| {
+    let request_phase_atoms = request_phase_atom_ids(&request_text);
+    let pre_action_context_atoms = response_pre_action_context_atom_ids(&payload);
+    let multi_source_topology = natural_evidence_eligible.then(|| {
         multi_source_capture::extract_pre_action_multi_source_topology_v1(&payload, &request_text)
     });
     let request_streaming = payload
@@ -2070,8 +2072,8 @@ fn handle_openai(
         let structure = LearningRequestStructureV1::new(LearningRequestStructureInputV1 {
             client_intent_id_sha256: request_identity.turn_intent_sha256().to_owned(),
             session_identity_sha256s: request_identity.session_identity_sha256s().to_vec(),
-            request_phase_atom_ids: request_phase_atom_ids(&request_text),
-            pre_action_context_atom_ids: response_pre_action_context_atom_ids(&payload),
+            request_phase_atom_ids: request_phase_atoms.clone(),
+            pre_action_context_atom_ids: pre_action_context_atoms.clone(),
             capability_atom_ids: capability_atom_ids.clone(),
             provider_bound_turn_identity: request_identity.provider_bound_turn_identity(),
             estimated_input_tokens: input_tokens,
@@ -2079,6 +2081,50 @@ fn handle_openai(
         });
         match structure {
             Ok(structure) => {
+                if let Some(topology) = multi_source_topology.clone() {
+                    let structure_v2 = nando_operator_kernel::LearningRequestStructureV2 {
+                        schema: nando_operator_kernel::LEARNING_REQUEST_STRUCTURE_SCHEMA_V2
+                            .to_owned(),
+                        turn_intent_id_sha256: request_identity.turn_intent_sha256().to_owned(),
+                        session_lineage_roots_sha256: request_identity
+                            .session_identity_sha256s()
+                            .to_vec(),
+                        request_phase_atom_ids: request_phase_atoms.clone(),
+                        pre_action_context_atom_ids: pre_action_context_atoms.clone(),
+                        capability_atom_ids: capability_atom_ids.clone(),
+                        estimated_input_tokens: input_tokens,
+                        provider_payload_bytes: u64::try_from(body.len()).unwrap_or(u64::MAX),
+                        provider_capture_request_root_sha256: request_hash.clone(),
+                        decidability_reason_code: "pre_action_pending".to_owned(),
+                        topology,
+                    };
+                    let commit = nando_operator_kernel::PreActionTopologyCommitV1::seal(
+                        &structure_v2,
+                        nando_operator_kernel::MultiSourceEvidenceOriginV1::FreshLive,
+                        sha256_bytes(b"nando.multi-source-extractor.v1"),
+                        sha256_bytes(b"nando.multi-source-extractor-config.v1"),
+                        capture_receipt.capture_sequence(),
+                    );
+                    match commit {
+                        Ok(commit) => write_event(
+                            &state,
+                            json!({
+                                "schema": "nando.pre-action-topology-shadow.v1",
+                                "event": "pre_action_topology_commit",
+                                "turn_intent_id_sha256": structure_v2.turn_intent_id_sha256,
+                                "provider_capture_request_root_sha256": structure_v2.provider_capture_request_root_sha256,
+                                "topology_root_sha256": commit.topology_root_sha256,
+                                "commitment_root_sha256": commit.commitment_root_sha256,
+                                "capture_sequence": commit.capture_sequence,
+                                "authority": false,
+                            }),
+                        ),
+                        Err(error) => {
+                            state.counters.errors.fetch_add(1, Ordering::Relaxed);
+                            eprintln!("nando-pre-action-topology commit: {error}");
+                        }
+                    }
+                }
                 if let Err(error) = state.request_learning.observe_structure(&structure) {
                     state.counters.errors.fetch_add(1, Ordering::Relaxed);
                     eprintln!("nando-request-learning index: {error}");

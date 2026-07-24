@@ -10,7 +10,8 @@ historical raw provider bytes             0 proven
 historical authority                      false
 MS1-A kernel contract                     PASS
 MS1-B pure pre-action extractor           PASS
-MS1-C dual live publication               NOT STARTED
+MS1-C pre-action shadow commitment        PASS
+MS1-C durable V2 bridge publication       NOT STARTED
 production authority change               0
 ```
 
@@ -52,6 +53,13 @@ field names or scalar values.
 The extractor receives only the pre-action provider payload and request text.
 It emits typed local roles and source-neutral relations. Exceeding a topology
 budget censors the whole topology instead of publishing a truncated graph.
+JSON-encoded tool outputs are parsed only in memory before source-neutral
+projection; their field names and values are not copied into the topology.
+
+The live request owner now computes the V1 structure and the V2 topology from
+the same provider-bound request identity. It seals and emits a shadow topology
+commit before the provider action is observed. The shadow event has no
+authority. Durable V2 bytes still require the MS1-D bridge/checkpoint.
 
 ## Fixed evidence gates
 
