@@ -14,24 +14,26 @@ use nando_operator_kernel::{
 };
 use nando_operator_learning::multi_source::{
     CompletedEffectFormV1, CoverageOpportunitySnapshotV1, MultiSourceEvidenceAuditV1,
-    MultiSourceJoinLedgerV1, MultiSourceJoinReportV1, PreActionShapeClassV1,
-    RelationEvidenceAuditV1, build_coverage_opportunity_snapshot_v1,
+    MultiSourceJoinLedgerV1, MultiSourceJoinReportV1, MultiSourceT1IdentificationV3,
+    PreActionShapeClassV1, RelationEvidenceAuditV1, build_coverage_opportunity_snapshot_v1,
     build_multi_source_evidence_audit_v1, factor_multi_source_row_v1,
+    identify_multi_source_t1_operator_v1,
 };
 use nando_operator_learning::opportunity::ReducibilityClass;
 use sha2::{Digest, Sha256};
 
 use crate::request_learning::RequestLearningIndex;
 
-pub const MULTI_SOURCE_DISCOVERY_AUDIT_SCHEMA_V2: &str = "nando.multi-source-discovery-audit.v2";
+pub const MULTI_SOURCE_DISCOVERY_AUDIT_SCHEMA_V3: &str = "nando.multi-source-discovery-audit.v3";
 
 #[derive(Clone, Debug, serde::Serialize)]
-pub struct MultiSourceDiscoveryAuditV2 {
+pub struct MultiSourceDiscoveryAuditV3 {
     pub schema: String,
     pub evidence: MultiSourceEvidenceAuditV1,
     pub join: MultiSourceJoinReportV1,
     pub factorized_rows: u64,
     pub t1_eligibility: T1EligibilityAuditV1,
+    pub t1_identification: MultiSourceT1IdentificationV3,
     pub opportunity: CoverageOpportunitySnapshotV1,
     pub restart_byte_parity: bool,
     pub authority_ready: bool,
@@ -59,11 +61,11 @@ type RelationDataV1 = (
     String,
 );
 
-pub fn run_multi_source_discovery_audit_v2(
+pub fn run_multi_source_discovery_audit_v3(
     opportunity_checkpoint: &Path,
     request_learning_checkpoint: &Path,
     relation_frames: &Path,
-) -> Result<MultiSourceDiscoveryAuditV2, String> {
+) -> Result<MultiSourceDiscoveryAuditV3, String> {
     let opportunity_bytes = fs::read(opportunity_checkpoint).map_err(|error| {
         format!(
             "multi_source_opportunity_checkpoint_read:{}:{error}",
@@ -227,14 +229,21 @@ pub fn run_multi_source_discovery_audit_v2(
     let opportunity = build_coverage_opportunity_snapshot_v1(
         &factorized,
         &BTreeSet::new(),
+        evidence_epoch_sha256.clone(),
+    );
+    let t1_identification = identify_multi_source_t1_operator_v1(
+        &join_ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
         evidence_epoch_sha256,
     );
-    let report = MultiSourceDiscoveryAuditV2 {
-        schema: MULTI_SOURCE_DISCOVERY_AUDIT_SCHEMA_V2.to_owned(),
+    let report = MultiSourceDiscoveryAuditV3 {
+        schema: MULTI_SOURCE_DISCOVERY_AUDIT_SCHEMA_V3.to_owned(),
         evidence,
         join: join_ledger.report(),
         factorized_rows: u64::try_from(factorized.len()).unwrap_or(u64::MAX),
         t1_eligibility,
+        t1_identification,
         opportunity,
         restart_byte_parity: true,
         authority_ready: false,

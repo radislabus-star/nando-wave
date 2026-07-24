@@ -10,7 +10,7 @@ fn main() {
         );
         std::process::exit(2);
     }
-    match nando_transition_serving::multi_source_audit::run_multi_source_discovery_audit_v2(
+    match nando_transition_serving::multi_source_audit::run_multi_source_discovery_audit_v3(
         Path::new(&args[1]),
         Path::new(&args[2]),
         Path::new(&args[3]),

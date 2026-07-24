@@ -8,7 +8,7 @@ use crate::opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass};
 use super::{
     CompletedEffectFormV1, CoverageOpportunitySnapshotV1, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
-    MultiSourceT1IdentificationV2, PreActionShapeClassV1, RequestStructureAuditSnapshotV1,
+    MultiSourceT1IdentificationV3, PreActionShapeClassV1, RequestStructureAuditSnapshotV1,
     build_coverage_opportunity_snapshot_v1, factor_multi_source_row_v1,
     identify_multi_source_t1_operator_v1,
 };
@@ -52,7 +52,7 @@ pub struct LiveMultiSourceDiscoverySnapshotV3 {
     pub factorized_classes: Vec<FactorizedClassCountV1>,
     pub active_intents: u64,
     pub opportunity: CoverageOpportunitySnapshotV1,
-    pub t1_identification: MultiSourceT1IdentificationV2,
+    pub t1_identification: MultiSourceT1IdentificationV3,
     pub blocker: LiveMultiSourceDiscoveryBlockerV1,
     pub identification_ready: bool,
     pub transfer_ready: bool,

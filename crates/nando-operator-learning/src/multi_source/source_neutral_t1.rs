@@ -18,10 +18,17 @@ pub(super) fn enumerate_source_neutral_t1_candidates(
     if physical.is_empty() {
         return Err("physical_t1_program_missing");
     }
-    let candidates = physical
+    let structurally_valid = physical
         .into_iter()
         .filter_map(|program| source_neutralize_t1_program(&program, joined, frame))
         .filter(|program| program.validate().is_ok())
+        .collect::<Vec<_>>();
+    if structurally_valid.is_empty() {
+        return Err(source_neutral_t1_blocker(joined, frame));
+    }
+    let candidates = structurally_valid
+        .into_iter()
+        .filter(|program| t1_program_is_consistent(program, joined, frame))
         .filter_map(|program| {
             response_program_version_root_sha256(&program)
                 .ok()
@@ -29,7 +36,7 @@ pub(super) fn enumerate_source_neutral_t1_candidates(
         })
         .collect::<BTreeMap<_, _>>();
     if candidates.is_empty() {
-        return Err(source_neutral_t1_blocker(joined, frame));
+        return Err("source_neutral_self_replay_failed");
     }
     Ok(candidates)
 }
@@ -212,7 +219,7 @@ fn witness_for_program<'a>(
             })
         }),
         ResponseValueSelector::ContinuationHandle { value_type } => {
-            unique_matching_witness(joined, |witness| {
+            unique_matching_witness_prefer_latest(joined, |witness| {
                 role_for_witness(joined, witness).is_some_and(|role| {
                     role_type_matches(role.type_class, *value_type)
                         && role_has_relation(
@@ -250,6 +257,32 @@ fn unique_matching_witness(
         .filter(|witness| predicate(witness));
     let witness = witnesses.next()?;
     witnesses.next().is_none().then_some(witness)
+}
+
+fn unique_matching_witness_prefer_latest(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    mut predicate: impl FnMut(&MultiSourceRoleWitnessV1) -> bool,
+) -> Option<&MultiSourceRoleWitnessV1> {
+    let matches = joined
+        .topology
+        .role_witnesses
+        .iter()
+        .filter(|witness| predicate(witness))
+        .collect::<Vec<_>>();
+    if let [witness] = matches.as_slice() {
+        return Some(*witness);
+    }
+    let latest = matches
+        .into_iter()
+        .filter(|witness| {
+            role_for_witness(joined, witness)
+                .is_some_and(|role| role.temporal_class == MultiSourceTemporalClassV1::Latest)
+        })
+        .collect::<Vec<_>>();
+    let [witness] = latest.as_slice() else {
+        return None;
+    };
+    Some(*witness)
 }
 
 fn role_for_witness<'a>(

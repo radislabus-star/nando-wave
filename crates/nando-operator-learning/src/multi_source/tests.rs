@@ -288,6 +288,28 @@ fn t1_completed_frame(
     }
 }
 
+fn t1_completed_custom_tool_frame(
+    intent: &str,
+    event: &str,
+    session: &str,
+    observed_at_unix_ms: u64,
+) -> RelationFrame {
+    let mut frame = t1_completed_frame(intent, event, session, observed_at_unix_ms);
+    frame
+        .atoms
+        .retain(|atom| !matches!(atom, RelationAtom::ActionFunction { .. }));
+    frame.atoms.extend([
+        RelationAtom::ActionCustomTool {
+            value: "custom_tool_router".to_owned(),
+        },
+        RelationAtom::ActionInnerTool {
+            value: "transport_b".to_owned(),
+        },
+        RelationAtom::ActionJsonResultProjection,
+    ]);
+    frame
+}
+
 fn t1_completed_value_projection_frame(
     intent: &str,
     event: &str,
@@ -944,16 +966,33 @@ fn t1_continuation_surface_compiles_to_semantic_handle_role() {
     let make_topology = |intent, request, session, sequence, captured_at| {
         let mut row = t1_topology_row(intent, request, session, sequence, captured_at);
         row.structure.topology.roles[0].type_class = MultiSourceTypeClassV1::String;
+        let mut historical_role = row.structure.topology.roles[0].clone();
+        historical_role.local_role_id = 1;
+        historical_role.temporal_class = MultiSourceTemporalClassV1::Historical;
+        historical_role.value_ordinal = 1;
+        row.structure.topology.roles.push(historical_role);
         row.structure.topology.role_witnesses[0].request_reference_ordinal = None;
-        row.structure.topology.relations.clear();
         row.structure
             .topology
-            .relations
-            .push(MultiSourceRelationEdgeV1 {
+            .role_witnesses
+            .push(MultiSourceRoleWitnessV1 {
+                local_role_id: 1,
+                value_sha256: root(&format!("historical:{request}")),
+                request_reference_ordinal: None,
+            });
+        row.structure.topology.relations.clear();
+        row.structure.topology.relations.extend([
+            MultiSourceRelationEdgeV1 {
                 relation: MultiSourceRelationKindV1::ContinuationHandle,
                 source_role_id: 0,
                 target_role_id: 0,
-            });
+            },
+            MultiSourceRelationEdgeV1 {
+                relation: MultiSourceRelationKindV1::ContinuationHandle,
+                source_role_id: 1,
+                target_role_id: 1,
+            },
+        ]);
         row.commit = PreActionTopologyCommitV1::seal(
             &row.structure,
             MultiSourceEvidenceOriginV1::FreshLive,
@@ -1021,6 +1060,94 @@ fn t1_continuation_surface_compiles_to_semantic_handle_role() {
     let encoded = serde_json::to_string(&report).expect("report");
     assert!(!encoded.contains("surface A"));
     assert!(!encoded.contains("surface B"));
+}
+
+#[test]
+fn t1_identifies_protocol_modes_without_splitting_the_common_effect_law() {
+    let topologies = vec![
+        t1_topology_row("wait-a", "request-wait-a", "session-wait-a", 1, 1_000),
+        t1_topology_row("wait-b", "request-wait-b", "session-wait-b", 2, 2_000),
+        t1_topology_row("custom-a", "request-custom-a", "session-custom-a", 3, 3_000),
+        t1_topology_row("custom-b", "request-custom-b", "session-custom-b", 4, 4_000),
+    ];
+    let frames = vec![
+        t1_completed_frame("wait-a", "action-wait-a", "session-wait-a", 1_500),
+        t1_completed_frame("wait-b", "action-wait-b", "session-wait-b", 2_500),
+        t1_completed_custom_tool_frame("custom-a", "action-custom-a", "session-custom-a", 3_500),
+        t1_completed_custom_tool_frame("custom-b", "action-custom-b", "session-custom-b", 4_500),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let factorized = ledger
+        .rows()
+        .iter()
+        .map(factor_multi_source_row_v1)
+        .collect::<Vec<_>>();
+    assert!(
+        factorized
+            .windows(2)
+            .all(|rows| rows[0].applicability_shape_root_sha256
+                == rows[1].applicability_shape_root_sha256)
+    );
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("mixed protocol T1 epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
+    assert_eq!(report.candidate_programs, 1);
+    assert!(report.selected_shape_root_sha256.is_some());
+    assert!(report.selected_protocol_mode_root_sha256.is_some());
+    assert_eq!(report.wrong_role_bindings, 0);
+    assert_eq!(report.negative_accepts, 0);
+}
+
+#[test]
+fn t1_never_merges_distinct_function_capabilities_into_one_protocol_mode() {
+    let topologies = vec![
+        t1_topology_row("a-1", "request-a-1", "session-a-1", 1, 1_000),
+        t1_topology_row("a-2", "request-a-2", "session-a-2", 2, 2_000),
+        t1_topology_row("b-1", "request-b-1", "session-b-1", 3, 3_000),
+        t1_topology_row("b-2", "request-b-2", "session-b-2", 4, 4_000),
+    ];
+    let mut frames = vec![
+        t1_completed_frame("a-1", "action-a-1", "session-a-1", 1_500),
+        t1_completed_frame("a-2", "action-a-2", "session-a-2", 2_500),
+        t1_completed_frame("b-1", "action-b-1", "session-b-1", 3_500),
+        t1_completed_frame("b-2", "action-b-2", "session-b-2", 4_500),
+    ];
+    for frame in &mut frames[2..] {
+        for atom in &mut frame.atoms {
+            if let RelationAtom::ActionFunction { value } = atom {
+                *value = "transport_b".to_owned();
+            }
+        }
+    }
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("distinct function modes T1 epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
+    assert_eq!(report.candidate_programs, 1);
+    assert_eq!(report.wrong_role_bindings, 0);
 }
 
 #[test]

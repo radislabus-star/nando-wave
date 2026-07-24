@@ -231,7 +231,7 @@ pub struct LiveScalarAdmissionCandidate {
     pub future: Vec<TeacherTransition>,
     #[serde(default)]
     pub multi_source_identification:
-        Option<nando_operator_learning::multi_source::MultiSourceT1IdentificationV2>,
+        Option<nando_operator_learning::multi_source::MultiSourceT1IdentificationV3>,
     #[serde(default)]
     pub freeze_watermark_unix_nanos: u64,
     #[serde(default)]

@@ -869,7 +869,7 @@ pub(super) fn source_neutral_actor_topology(
 }
 
 pub fn crystallize_multi_source_t1_candidate_v1(
-    identification: &nando_operator_learning::multi_source::MultiSourceT1IdentificationV2,
+    identification: &nando_operator_learning::multi_source::MultiSourceT1IdentificationV3,
     transitions: &[TeacherTransition],
 ) -> Result<LiveScalarAdmissionCandidate, String> {
     use nando_operator_learning::multi_source::MultiSourceT1IdentificationStateV1;

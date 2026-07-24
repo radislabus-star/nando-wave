@@ -21,8 +21,8 @@ use super::{
     PreActionShapeClassV1, factor_multi_source_row_v1,
 };
 
-pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2: &str =
-    "nando.multi-source-t1-identification.v2";
+pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3: &str =
+    "nando.multi-source-t1-identification.v3";
 pub const MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1: &str = "nando.multi-source-t1-proof-basis.v1";
 const MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS: usize = 64;
 const MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS: usize = 12;
@@ -60,11 +60,12 @@ pub struct MultiSourceT1ProofBasisV1 {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct MultiSourceT1IdentificationV2 {
+pub struct MultiSourceT1IdentificationV3 {
     pub schema: String,
     pub report_root_sha256: String,
     pub evidence_epoch_sha256: String,
     pub selected_shape_root_sha256: Option<String>,
+    pub selected_protocol_mode_root_sha256: Option<String>,
     pub selected_marginal_input_tokens: u64,
     pub candidate_programs: usize,
     pub semantic_classes_remaining: usize,
@@ -95,11 +96,18 @@ struct EligibleT1Row {
     seed_programs: BTreeMap<String, ResponseProgram>,
 }
 
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct T1CohortKey {
+    effect_shape_root_sha256: String,
+    protocol_mode_root_sha256: String,
+}
+
 #[derive(Serialize)]
 struct T1IdentificationDigest<'a> {
     schema: &'static str,
     evidence_epoch_sha256: &'a str,
     selected_shape_root_sha256: Option<&'a str>,
+    selected_protocol_mode_root_sha256: Option<&'a str>,
     selected_marginal_input_tokens: u64,
     candidate_programs: usize,
     semantic_classes_remaining: usize,
@@ -128,7 +136,7 @@ pub fn identify_multi_source_t1_operator_v1(
     frames: &[RelationFrame],
     active_intents: &BTreeSet<String>,
     evidence_epoch_sha256: String,
-) -> MultiSourceT1IdentificationV2 {
+) -> MultiSourceT1IdentificationV3 {
     let frame_by_root = frames
         .iter()
         .filter_map(|frame| {
@@ -137,7 +145,7 @@ pub fn identify_multi_source_t1_operator_v1(
                 .map(|root| (root, frame.clone()))
         })
         .collect::<BTreeMap<_, _>>();
-    let mut cohorts = BTreeMap::<String, Vec<EligibleT1Row>>::new();
+    let mut cohorts = BTreeMap::<T1CohortKey, Vec<EligibleT1Row>>::new();
     let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
     for joined in joined_rows {
         let factorized = factor_multi_source_row_v1(joined);
@@ -176,8 +184,23 @@ pub fn identify_multi_source_t1_operator_v1(
                     continue;
                 }
             };
+        let protocol_mode_root_sha256 = match t1_protocol_mode_root(&seed_programs) {
+            Ok(root) => root,
+            Err(blocker) => {
+                let blocked_tokens = candidate_generation_blocks
+                    .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                    .or_default();
+                if joined.accepted {
+                    *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                }
+                continue;
+            }
+        };
         cohorts
-            .entry(factorized.applicability_shape_root_sha256.clone())
+            .entry(T1CohortKey {
+                effect_shape_root_sha256: factorized.applicability_shape_root_sha256.clone(),
+                protocol_mode_root_sha256,
+            })
             .or_default()
             .push(EligibleT1Row {
                 joined: joined.clone(),
@@ -186,7 +209,7 @@ pub fn identify_multi_source_t1_operator_v1(
                 seed_programs,
             });
     }
-    let Some((shape_root, mut cohort)) = select_highest_marginal_cohort(cohorts) else {
+    let Some((cohort_key, mut cohort)) = select_highest_marginal_cohort(cohorts) else {
         if let Some(((shape_root, blocker), tokens)) =
             candidate_generation_blocks.into_iter().max_by(
                 |((left_root, _), left_tokens), ((right_root, _), right_tokens)| {
@@ -210,6 +233,8 @@ pub fn identify_multi_source_t1_operator_v1(
             "complete_single_role_projection_missing",
         );
     };
+    let shape_root = cohort_key.effect_shape_root_sha256;
+    let protocol_mode_root = cohort_key.protocol_mode_root_sha256;
     cohort.sort_by(|left, right| {
         left.joined
             .capture_sequence
@@ -239,7 +264,8 @@ pub fn identify_multi_source_t1_operator_v1(
     };
 
     let candidate_programs = seed.seed_programs.clone();
-    let manifest = match generation_manifest(&shape_root, &candidate_programs) {
+    let manifest = match generation_manifest(&shape_root, &protocol_mode_root, &candidate_programs)
+    {
         Ok(manifest) => manifest,
         Err(blocker) => {
             return selected_terminal_report(
@@ -261,18 +287,19 @@ pub fn identify_multi_source_t1_operator_v1(
     let mut registered = BTreeMap::<String, ResponseProgram>::new();
     let mut class_by_program = BTreeMap::<String, ProgramSemanticClassIdV1>::new();
     for (program_root, program) in &candidate_programs {
-        let descriptor = match semantic_descriptor(&shape_root, program_root, program) {
-            Ok(descriptor) => descriptor,
-            Err(blocker) => {
-                return selected_terminal_report(
-                    evidence_epoch_sha256,
-                    shape_root,
-                    selected_marginal_input_tokens,
-                    MultiSourceT1IdentificationStateV1::InvalidEvidence,
-                    blocker,
-                );
-            }
-        };
+        let descriptor =
+            match semantic_descriptor(&shape_root, &protocol_mode_root, program_root, program) {
+                Ok(descriptor) => descriptor,
+                Err(blocker) => {
+                    return selected_terminal_report(
+                        evidence_epoch_sha256,
+                        shape_root,
+                        selected_marginal_input_tokens,
+                        MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                        blocker,
+                    );
+                }
+            };
         let class_id = descriptor.class_id().clone();
         let registered_root = match machine.register_candidate(program.clone(), descriptor) {
             Ok(root) => root,
@@ -373,6 +400,7 @@ pub fn identify_multi_source_t1_operator_v1(
                 let scope = canonical_json_sha256(&(
                     "nando.multi-source-t1-applicability-scope.v1",
                     shape_root.as_str(),
+                    protocol_mode_root.as_str(),
                     class.semantic_class().class_id().as_str(),
                     class.canonical_program_root_sha256(),
                 ))
@@ -429,11 +457,12 @@ pub fn identify_multi_source_t1_operator_v1(
     let Some(candidate_freeze) = freeze else {
         let metrics = machine.metrics();
         let passive_probe = passive_probe(&shape_root, &machine, &registered, &class_by_program);
-        return finalize_report(MultiSourceT1IdentificationV2 {
-            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2.to_owned(),
+        return finalize_report(MultiSourceT1IdentificationV3 {
+            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3.to_owned(),
             report_root_sha256: String::new(),
             evidence_epoch_sha256,
             selected_shape_root_sha256: Some(shape_root),
+            selected_protocol_mode_root_sha256: Some(protocol_mode_root),
             selected_marginal_input_tokens,
             candidate_programs: registered.len(),
             semantic_classes_remaining: metrics.semantic_classes_remaining,
@@ -527,11 +556,12 @@ pub fn identify_multi_source_t1_operator_v1(
             "proof_basis_seal_failed",
         );
     };
-    finalize_report(MultiSourceT1IdentificationV2 {
-        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2.to_owned(),
+    finalize_report(MultiSourceT1IdentificationV3 {
+        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3.to_owned(),
         report_root_sha256: String::new(),
         evidence_epoch_sha256,
         selected_shape_root_sha256: Some(shape_root),
+        selected_protocol_mode_root_sha256: Some(protocol_mode_root),
         selected_marginal_input_tokens,
         candidate_programs: registered.len(),
         semantic_classes_remaining: metrics.semantic_classes_remaining,
@@ -556,12 +586,12 @@ pub fn identify_multi_source_t1_operator_v1(
 }
 
 fn select_highest_marginal_cohort(
-    cohorts: BTreeMap<String, Vec<EligibleT1Row>>,
-) -> Option<(String, Vec<EligibleT1Row>)> {
+    cohorts: BTreeMap<T1CohortKey, Vec<EligibleT1Row>>,
+) -> Option<(T1CohortKey, Vec<EligibleT1Row>)> {
     cohorts
         .into_iter()
         .filter(|(_, rows)| rows.iter().any(|row| row.joined.accepted))
-        .max_by(|(left_root, left), (right_root, right)| {
+        .max_by(|(left_key, left), (right_key, right)| {
             let left_tokens = left
                 .iter()
                 .filter(|row| row.joined.accepted)
@@ -574,12 +604,49 @@ fn select_highest_marginal_cohort(
                 .sum::<u64>();
             left_tokens
                 .cmp(&right_tokens)
-                .then_with(|| right_root.cmp(left_root))
+                .then_with(|| right_key.cmp(left_key))
         })
+}
+
+fn t1_protocol_mode_root(
+    programs: &BTreeMap<String, ResponseProgram>,
+) -> Result<String, &'static str> {
+    if programs.is_empty() {
+        return Err("protocol_mode_candidates_empty");
+    }
+    // Effect identity stays source-neutral. This separate commitment prevents
+    // incompatible physical protocol modes from erasing each other's programs.
+    let signatures = programs
+        .values()
+        .map(t1_protocol_signature)
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    canonical_json_sha256(&("nando.multi-source-t1-protocol-mode-set.v2", signatures))
+        .map_err(|_| "protocol_mode_commitment_failed")
+}
+
+fn t1_protocol_signature(program: &ResponseProgram) -> Result<String, &'static str> {
+    let mut normalized = program.clone();
+    match &mut normalized.operation {
+        nando_operator_kernel::ResponseOperation::FunctionCallFromRoles { arguments, .. }
+        | nando_operator_kernel::ResponseOperation::CustomToolCallFromRoles { arguments, .. } => {
+            arguments.retain(|argument| {
+                !matches!(
+                    argument,
+                    nando_operator_kernel::ResponseArgument::Integer { name, .. }
+                        if crate::teacher_join::is_execution_budget_argument(name)
+                )
+            });
+        }
+        nando_operator_kernel::ResponseOperation::ProjectSelectedValue { .. } => {}
+        _ => return Err("unsupported_t1_protocol_mode"),
+    }
+    nando_operator_kernel::response_program_version_root_sha256(&normalized)
+        .map_err(|_| "protocol_mode_commitment_failed")
 }
 
 fn generation_manifest(
     shape_root: &str,
+    protocol_mode_root: &str,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<nando_operator_kernel::OperatorGenerationManifestV3, String> {
     let candidate_roots = programs.keys().cloned().collect::<Vec<_>>();
@@ -606,6 +673,7 @@ fn generation_manifest(
             dispatch_index_sha256: canonical_json_sha256(&(
                 "nando.multi-source-t1-dispatch.v1",
                 shape_root,
+                protocol_mode_root,
             ))
             .map_err(|_| "dispatch_commitment_failed".to_owned())?,
             actor_program_sha256: canonical_json_sha256(&candidate_roots)
@@ -635,6 +703,7 @@ fn generation_manifest(
 
 fn semantic_descriptor(
     shape_root: &str,
+    protocol_mode_root: &str,
     program_root: &str,
     program: &ResponseProgram,
 ) -> Result<nando_operator_kernel::ProgramSemanticClassDescriptorV1, String> {
@@ -652,11 +721,7 @@ fn semantic_descriptor(
             response_program_required_routing_atom_ids(program),
         ))
         .map_err(|_| "role_schema_commitment_failed".to_owned())?,
-        protocol_mode_set_root_sha256: canonical_json_sha256(&(
-            "nando.multi-source-t1-protocol-mode.v1",
-            response_program_required_routing_atom_ids(program),
-        ))
-        .map_err(|_| "protocol_mode_commitment_failed".to_owned())?,
+        protocol_mode_set_root_sha256: protocol_mode_root.to_owned(),
         // A physical program remains a competing class until exact evidence
         // proves it action-equivalent to another member.
         executable_behavior_root_sha256: program_root.to_owned(),
@@ -767,12 +832,13 @@ fn terminal_report(
     evidence_epoch_sha256: String,
     state: MultiSourceT1IdentificationStateV1,
     blocker: impl Into<String>,
-) -> MultiSourceT1IdentificationV2 {
-    finalize_report(MultiSourceT1IdentificationV2 {
-        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2.to_owned(),
+) -> MultiSourceT1IdentificationV3 {
+    finalize_report(MultiSourceT1IdentificationV3 {
+        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3.to_owned(),
         report_root_sha256: String::new(),
         evidence_epoch_sha256,
         selected_shape_root_sha256: None,
+        selected_protocol_mode_root_sha256: None,
         selected_marginal_input_tokens: 0,
         candidate_programs: 0,
         semantic_classes_remaining: 0,
@@ -802,14 +868,14 @@ fn selected_terminal_report(
     selected_marginal_input_tokens: u64,
     state: MultiSourceT1IdentificationStateV1,
     blocker: impl Into<String>,
-) -> MultiSourceT1IdentificationV2 {
+) -> MultiSourceT1IdentificationV3 {
     let mut report = terminal_report(evidence_epoch_sha256, state, blocker);
     report.selected_shape_root_sha256 = Some(shape_root);
     report.selected_marginal_input_tokens = selected_marginal_input_tokens;
     finalize_report(report)
 }
 
-fn finalize_report(mut report: MultiSourceT1IdentificationV2) -> MultiSourceT1IdentificationV2 {
+fn finalize_report(mut report: MultiSourceT1IdentificationV3) -> MultiSourceT1IdentificationV3 {
     report.report_root_sha256 = report.expected_root();
     report
 }
@@ -875,13 +941,14 @@ impl MultiSourceT1ProofBasisV1 {
     }
 }
 
-impl MultiSourceT1IdentificationV2 {
+impl MultiSourceT1IdentificationV3 {
     #[must_use]
     pub fn expected_root(&self) -> String {
         canonical_json_sha256(&T1IdentificationDigest {
-            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2,
+            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3,
             evidence_epoch_sha256: self.evidence_epoch_sha256.as_str(),
             selected_shape_root_sha256: self.selected_shape_root_sha256.as_deref(),
+            selected_protocol_mode_root_sha256: self.selected_protocol_mode_root_sha256.as_deref(),
             selected_marginal_input_tokens: self.selected_marginal_input_tokens,
             candidate_programs: self.candidate_programs,
             semantic_classes_remaining: self.semantic_classes_remaining,
@@ -908,7 +975,7 @@ impl MultiSourceT1IdentificationV2 {
 
     #[must_use]
     pub fn validate(&self) -> bool {
-        if self.schema != MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2
+        if self.schema != MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3
             || self.execution_authority
             || self.report_root_sha256 != self.expected_root()
             || self

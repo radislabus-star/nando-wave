@@ -19,8 +19,8 @@ pub use factorizer::{
     MultiSourceReasonV1, PreActionShapeClassV1, factor_multi_source_row_v1,
 };
 pub use identification::{
-    MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
-    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV2, MultiSourceT1ProofBasisV1,
+    MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
+    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1,
     PassiveT1ProbeContractV1, identify_multi_source_t1_operator_v1,
 };
 pub use join::{
