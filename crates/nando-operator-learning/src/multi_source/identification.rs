@@ -205,17 +205,21 @@ pub fn identify_multi_source_t1_operator_v1(
         );
     };
 
-    let candidate_programs =
-        super::source_neutral_t1::enumerate_source_neutral_t1_candidates(&seed.joined, &seed.frame);
-    if candidate_programs.is_empty() {
-        return selected_terminal_report(
-            evidence_epoch_sha256,
-            shape_root,
-            selected_marginal_input_tokens,
-            MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty,
-            "bounded_t1_grammar_generated_no_program",
-        );
-    }
+    let candidate_programs = match super::source_neutral_t1::enumerate_source_neutral_t1_candidates(
+        &seed.joined,
+        &seed.frame,
+    ) {
+        Ok(programs) => programs,
+        Err(blocker) => {
+            return selected_terminal_report(
+                evidence_epoch_sha256,
+                shape_root,
+                selected_marginal_input_tokens,
+                MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty,
+                blocker,
+            );
+        }
+    };
     let manifest = match generation_manifest(&shape_root, &candidate_programs) {
         Ok(manifest) => manifest,
         Err(blocker) => {

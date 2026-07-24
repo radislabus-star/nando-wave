@@ -12,8 +12,13 @@ use super::BlindThenRevealJoinedTransitionV1;
 pub(super) fn enumerate_source_neutral_t1_candidates(
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
-) -> BTreeMap<String, ResponseProgram> {
-    crate::synthesis::enumerate_response_program_candidates(std::slice::from_ref(frame))
+) -> Result<BTreeMap<String, ResponseProgram>, &'static str> {
+    let physical =
+        crate::synthesis::enumerate_response_program_candidates(std::slice::from_ref(frame));
+    if physical.is_empty() {
+        return Err("physical_t1_program_missing");
+    }
+    let candidates = physical
         .into_iter()
         .filter_map(|program| source_neutralize_t1_program(&program, joined, frame))
         .filter(|program| program.validate().is_ok())
@@ -22,7 +27,11 @@ pub(super) fn enumerate_source_neutral_t1_candidates(
                 .ok()
                 .map(|root| (root, program))
         })
-        .collect()
+        .collect::<BTreeMap<_, _>>();
+    if candidates.is_empty() {
+        return Err(source_neutral_t1_blocker(joined, frame));
+    }
+    Ok(candidates)
 }
 
 pub(super) fn t1_program_is_consistent(
@@ -36,15 +45,7 @@ pub(super) fn t1_program_is_consistent(
     let Some(expected_witness) = witness_for_program(program, joined) else {
         return false;
     };
-    if expected_witness.value_sha256 != selected_value_root
-        || joined
-            .topology
-            .role_witnesses
-            .iter()
-            .filter(|witness| witness.value_sha256 == selected_value_root)
-            .count()
-            != 1
-    {
+    if expected_witness.value_sha256 != selected_value_root {
         return false;
     }
     let Some(structural_selector) = primary_t1_selector(program) else {
@@ -64,7 +65,7 @@ fn source_neutralize_t1_program(
 ) -> Option<ResponseProgram> {
     let (_, selected_value_root, selected_value_type, observed_selector) =
         selected_observation(frame)?;
-    let witness = unique_selected_witness(joined, selected_value_root)?;
+    let witness = selected_witness(joined, selected_value_root, selected_value_type)?;
     let role = joined
         .topology
         .roles
@@ -93,6 +94,45 @@ fn source_neutralize_t1_program(
     let mut candidate = program.clone();
     replace_t1_selector(&mut candidate, observed_selector, &selector)?;
     Some(candidate)
+}
+
+fn source_neutral_t1_blocker(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    frame: &RelationFrame,
+) -> &'static str {
+    let Some((_, selected_value_root, selected_value_type, _)) = selected_observation(frame) else {
+        return "selected_observation_missing_or_ambiguous";
+    };
+    let Some(witness) = selected_witness(joined, selected_value_root, selected_value_type) else {
+        let matching = joined
+            .topology
+            .role_witnesses
+            .iter()
+            .filter(|witness| {
+                witness.value_sha256 == selected_value_root
+                    && role_for_witness(joined, witness)
+                        .is_some_and(|role| role_type_matches(role.type_class, selected_value_type))
+            })
+            .count();
+        return if matching == 0 {
+            "selected_role_witness_missing"
+        } else {
+            "selected_role_witness_ambiguous"
+        };
+    };
+    let Some(role) = role_for_witness(joined, witness) else {
+        return "selected_structural_role_missing";
+    };
+    if !role_type_matches(role.type_class, selected_value_type) {
+        return "selected_structural_role_type_mismatch";
+    }
+    if witness.request_reference_ordinal.is_none()
+        && joined.topology.roles.len() != 1
+        && role.temporal_class != MultiSourceTemporalClassV1::Latest
+    {
+        return "selected_structural_selector_missing";
+    }
+    "physical_program_selector_rewrite_failed"
 }
 
 fn replace_t1_selector(
@@ -140,7 +180,7 @@ fn witness_for_program<'a>(
         ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
             ordinal,
             value_type,
-        } => joined.topology.role_witnesses.iter().find(|witness| {
+        } => unique_matching_witness(joined, |witness| {
             witness.request_reference_ordinal == Some(*ordinal)
                 && role_for_witness(joined, witness)
                     .is_some_and(|role| role_type_matches(role.type_class, *value_type))
@@ -156,7 +196,7 @@ fn witness_for_program<'a>(
         ResponseValueSelector::LatestTurnOutputScalarOrdinal {
             scalar_ordinal,
             value_type,
-        } => joined.topology.role_witnesses.iter().find(|witness| {
+        } => unique_matching_witness(joined, |witness| {
             role_for_witness(joined, witness).is_some_and(|role| {
                 role.temporal_class == MultiSourceTemporalClassV1::Latest
                     && role.value_ordinal == *scalar_ordinal
@@ -165,6 +205,19 @@ fn witness_for_program<'a>(
         }),
         _ => None,
     }
+}
+
+fn unique_matching_witness(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    mut predicate: impl FnMut(&MultiSourceRoleWitnessV1) -> bool,
+) -> Option<&MultiSourceRoleWitnessV1> {
+    let mut witnesses = joined
+        .topology
+        .role_witnesses
+        .iter()
+        .filter(|witness| predicate(witness));
+    let witness = witnesses.next()?;
+    witnesses.next().is_none().then_some(witness)
 }
 
 fn role_for_witness<'a>(
@@ -178,17 +231,37 @@ fn role_for_witness<'a>(
         .find(|role| role.local_role_id == witness.local_role_id)
 }
 
-fn unique_selected_witness<'a>(
+fn selected_witness<'a>(
     joined: &'a BlindThenRevealJoinedTransitionV1,
     value_root: &str,
+    value_type: AtomValueType,
 ) -> Option<&'a MultiSourceRoleWitnessV1> {
-    let mut witnesses = joined
+    let witnesses = joined
         .topology
         .role_witnesses
         .iter()
-        .filter(|witness| witness.value_sha256 == value_root);
-    let witness = witnesses.next()?;
-    witnesses.next().is_none().then_some(witness)
+        .filter(|witness| {
+            witness.value_sha256 == value_root
+                && role_for_witness(joined, witness)
+                    .is_some_and(|role| role_type_matches(role.type_class, value_type))
+        })
+        .collect::<Vec<_>>();
+    if let [witness] = witnesses.as_slice() {
+        return Some(*witness);
+    }
+    // The completed frame observes the current tool result. A repeated scalar
+    // in historical outputs must not erase an otherwise unique latest role.
+    let latest = witnesses
+        .into_iter()
+        .filter(|witness| {
+            role_for_witness(joined, witness)
+                .is_some_and(|role| role.temporal_class == MultiSourceTemporalClassV1::Latest)
+        })
+        .collect::<Vec<_>>();
+    let [witness] = latest.as_slice() else {
+        return None;
+    };
+    Some(*witness)
 }
 
 fn selected_observation(

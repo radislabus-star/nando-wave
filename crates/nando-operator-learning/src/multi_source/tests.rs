@@ -808,6 +808,10 @@ fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
             witness.local_role_id = u16::try_from(index).expect("role id");
             witness.request_reference_ordinal = None;
         }
+        row.structure.topology.role_witnesses[0].value_sha256 =
+            row.structure.topology.role_witnesses[1]
+                .value_sha256
+                .clone();
         row.structure
             .topology
             .relations
