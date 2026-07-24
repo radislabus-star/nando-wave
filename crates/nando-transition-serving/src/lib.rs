@@ -1432,25 +1432,25 @@ async fn multi_source_report(State(state): State<AppState>) -> Response {
             );
         }
     };
-    let Some(miner) = current_response_miner(&state) else {
+    let evidence = current_miner_worker(&state)
+        .and_then(|worker| worker.multi_source_evidence())
+        .or_else(|| {
+            current_response_miner(&state).and_then(|miner| {
+                miner.try_lock().ok().map(|miner| {
+                    miner_worker::MultiSourceMinerEvidenceSnapshotV1 {
+                        opportunities: miner.opportunity_audit_rows_v1(),
+                        frames: miner.retained_relation_frames_v1(),
+                    }
+                })
+            })
+        });
+    let Some(evidence) = evidence else {
         return json_response(
             StatusCode::SERVICE_UNAVAILABLE,
-            json!({"schema": "nando.live-multi-source-error.v1", "error": "miner_unavailable"}),
+            json!({"schema": "nando.live-multi-source-error.v1", "error": "miner_evidence_unavailable"}),
         );
     };
-    let (opportunities, frames) = match miner.try_lock() {
-        Ok(miner) => (
-            miner.opportunity_audit_rows_v1(),
-            miner.retained_relation_frames_v1(),
-        ),
-        Err(_) => {
-            return json_response(
-                StatusCode::SERVICE_UNAVAILABLE,
-                json!({"schema": "nando.live-multi-source-error.v1", "error": "miner_busy"}),
-            );
-        }
-    };
-    match multi_source_live::build_snapshot(opportunities, requests, frames) {
+    match multi_source_live::build_snapshot(evidence.opportunities, requests, evidence.frames) {
         Ok(snapshot) => json_response(
             StatusCode::OK,
             serde_json::to_value(snapshot).unwrap_or_else(|_| {

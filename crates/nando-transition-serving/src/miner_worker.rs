@@ -10,8 +10,9 @@ use std::time::{Duration, Instant};
 use nando_operator_kernel::RelationFrame;
 use nando_operator_learning::{
     ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, FramedCborLedger, OnlineCollectionObservation,
-    OpportunityBridgeEventKindV1, OpportunityBridgeEventV1, ReducibilityClass, RuntimeParityCase,
-    TeacherTransition, read_framed_cbor, teacher_transition_from_completed,
+    OpportunityBridgeEventKindV1, OpportunityBridgeEventV1, OpportunityIntentAuditRowV1,
+    ReducibilityClass, RuntimeParityCase, TeacherTransition, read_framed_cbor,
+    teacher_transition_from_completed,
 };
 use nando_response_actor::{
     OnlineCollectionMiner, OnlineResponseMinerReport, OnlineResponseStream,
@@ -120,7 +121,14 @@ pub struct MinerWorkerHandle {
     counters: Arc<MinerWorkerCounters>,
     response_report: Arc<std::sync::RwLock<Option<OnlineResponseMinerReport>>>,
     response_status: Arc<std::sync::RwLock<Option<OnlineResponseStreamStatus>>>,
+    multi_source_evidence: Arc<std::sync::RwLock<Option<MultiSourceMinerEvidenceSnapshotV1>>>,
     _report_heartbeat_lifetime: Arc<()>,
+}
+
+#[derive(Clone)]
+pub(crate) struct MultiSourceMinerEvidenceSnapshotV1 {
+    pub(crate) opportunities: Vec<OpportunityIntentAuditRowV1>,
+    pub(crate) frames: Vec<RelationFrame>,
 }
 
 enum MinerCommand {
@@ -399,6 +407,14 @@ impl MinerWorkerHandle {
     pub fn response_status(&self) -> Option<OnlineResponseStreamStatus> {
         self.response_status.read().ok().and_then(|status| *status)
     }
+
+    #[must_use]
+    pub(crate) fn multi_source_evidence(&self) -> Option<MultiSourceMinerEvidenceSnapshotV1> {
+        self.multi_source_evidence
+            .read()
+            .ok()
+            .and_then(|snapshot| snapshot.clone())
+    }
 }
 
 pub fn spawn_miner_worker(
@@ -471,20 +487,29 @@ fn spawn_miner_worker_with_report_heartbeat(
         .lock()
         .map_err(|_| "miner_worker_initial_collection_lock_poisoned".to_owned())?
         .has_structural_resynthesis_work();
-    let initial_status = {
+    let (initial_status, initial_multi_source_evidence) = {
         let stream = miner
             .lock()
             .map_err(|_| "miner_worker_initial_report_lock_poisoned".to_owned())?;
-        stream.status()
+        (
+            stream.status(),
+            MultiSourceMinerEvidenceSnapshotV1 {
+                opportunities: stream.opportunity_audit_rows_v1(),
+                frames: stream.retained_relation_frames_v1(),
+            },
+        )
     };
     // Building the full report re-synthesizes every bucket. It is diagnostic
     // output, not checkpoint restoration, so defer it until an event-driven
     // checkpoint instead of blocking serving startup.
     let response_report = Arc::new(std::sync::RwLock::new(None));
     let response_status = Arc::new(std::sync::RwLock::new(Some(initial_status)));
+    let multi_source_evidence =
+        Arc::new(std::sync::RwLock::new(Some(initial_multi_source_evidence)));
     let thread_counters = Arc::clone(&counters);
     let thread_response_report = Arc::clone(&response_report);
     let thread_response_status = Arc::clone(&response_status);
+    let thread_multi_source_evidence = Arc::clone(&multi_source_evidence);
     let report_heartbeat_lifetime = Arc::new(());
     let weak_report_heartbeat_lifetime = Arc::downgrade(&report_heartbeat_lifetime);
     let heartbeat_counters = Arc::clone(&counters);
@@ -549,6 +574,7 @@ fn spawn_miner_worker_with_report_heartbeat(
                         thread_counters
                             .startup_replay_support_after_opportunity
                             .store(support, Ordering::Relaxed);
+                        publish_multi_source_evidence(&stream, &thread_multi_source_evidence);
                     }
                     thread_counters
                         .replay_rejected_records
@@ -920,6 +946,10 @@ fn spawn_miner_worker_with_report_heartbeat(
                             if let Ok(stream) = miner.lock() {
                                 let report = stream.report();
                                 let status = stream.status();
+                                publish_multi_source_evidence(
+                                    &stream,
+                                    &thread_multi_source_evidence,
+                                );
                                 if let Ok(mut published) = thread_response_report.write() {
                                     *published = Some(report);
                                 }
@@ -960,8 +990,21 @@ fn spawn_miner_worker_with_report_heartbeat(
         counters,
         response_report,
         response_status,
+        multi_source_evidence,
         _report_heartbeat_lifetime: report_heartbeat_lifetime,
     })
+}
+
+fn publish_multi_source_evidence(
+    stream: &OnlineResponseStream,
+    target: &std::sync::RwLock<Option<MultiSourceMinerEvidenceSnapshotV1>>,
+) {
+    if let Ok(mut published) = target.write() {
+        *published = Some(MultiSourceMinerEvidenceSnapshotV1 {
+            opportunities: stream.opportunity_audit_rows_v1(),
+            frames: stream.retained_relation_frames_v1(),
+        });
+    }
 }
 
 fn apply_opportunity_event(stream: &mut OnlineResponseStream, event: MinerOpportunityEvent) {
