@@ -610,7 +610,10 @@ fn additive_merge_keeps_active_crystallized_generation_when_only_evidence_grows(
     let active_package = active.registry.packages[0].clone();
     let candidate_package = &candidate.registry.packages[0];
     assert_eq!(active_package.package_id, candidate_package.package_id);
-    assert_ne!(active_package, *candidate_package);
+    assert_eq!(
+        active_package, *candidate_package,
+        "monitoring evidence must not rewrite a sealed minimal proof basis"
+    );
     let merged = crate::merge_with_active_online_admission(
         candidate,
         active.registry,
@@ -920,6 +923,71 @@ fn templated_live_rows_reach_verified_scalar_shadow_operator() {
         ),
         Err("crystallized_admission_resynthesis_mismatch")
     ));
+}
+
+#[test]
+fn minimal_transfer_basis_is_stable_under_future_reservoir_order() {
+    let mut state = LiveScalarShadowState::default();
+    let mut support = transition("total", true);
+    support.before.frame_id_sha256 = format!("{:064x}", 1);
+    support.before.session_id_sha256 = format!("{:064x}", 101);
+    support.before.observed_at_unix_nanos = 1;
+    state.observe(&support);
+    for index in 2_u64..=5 {
+        let mut future = transition(&format!("renamed_{index}"), true);
+        future.before.frame_id_sha256 = format!("{index:064x}");
+        future.before.session_id_sha256 = format!("{:064x}", 100 + index);
+        future.before.observed_at_unix_nanos = index;
+        state.observe(&future);
+    }
+
+    let forward = state.admission_candidates();
+    let mut reversed = state.clone();
+    reversed
+        .laws
+        .values_mut()
+        .for_each(|law| law.future.reverse());
+    assert_eq!(reversed.admission_candidates(), forward);
+    assert_eq!(forward[0].future.len(), 1);
+}
+
+#[test]
+fn out_of_scope_future_is_monitored_as_applicability_negative() {
+    let mut state = LiveScalarShadowState::default();
+    let mut support = transition("total", true);
+    support.before.frame_id_sha256 = format!("{:064x}", 1);
+    support.before.session_id_sha256 = format!("{:064x}", 101);
+    support.before.observed_at_unix_nanos = 1;
+    state.observe(&support);
+
+    let mut future = transition("renamed_total", true);
+    future.before.frame_id_sha256 = format!("{:064x}", 2);
+    future.before.session_id_sha256 = format!("{:064x}", 102);
+    future.before.observed_at_unix_nanos = 2;
+    state.observe(&future);
+
+    let mut outside_scope = transition("another_total", true);
+    outside_scope.before.frame_id_sha256 = format!("{:064x}", 3);
+    outside_scope.before.session_id_sha256 = format!("{:064x}", 103);
+    outside_scope.before.observed_at_unix_nanos = 3;
+    state.observe(&outside_scope);
+    let law = state.laws.values_mut().next().expect("one law");
+    law.future[1]
+        .runtime_parity_case
+        .as_mut()
+        .expect("parity")
+        .provider_payload = json!({
+        "input": [{
+            "type": "function_call_output",
+            "output": "{\"left\":7,\"right\":8}"
+        }]
+    });
+
+    let report = state.report();
+    assert_eq!(report.admission_candidates, 1, "{report:#?}");
+    assert_eq!(report.transfer_basis_rows, 1, "{report:#?}");
+    assert_eq!(report.future_applicability_negatives, 1, "{report:#?}");
+    assert_eq!(report.monitored_future_rows, 0, "{report:#?}");
 }
 
 #[test]

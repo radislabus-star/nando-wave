@@ -9,6 +9,7 @@ use super::induction::{
     program_transform_flags, program_transform_opcode, reextract_live_scalar_circuit_sample,
     rich_scalar_program_roles, scalar_program_role_slot_types, source_neutral_scalar_program_shape,
 };
+use super::transfer_basis::crystallize_minimal_transfer_basis_v1;
 use super::*;
 
 impl LiveScalarShadowState {
@@ -490,192 +491,38 @@ fn evaluate_live_law(
         );
         return;
     }
-    let Ok(future) = transfer_future
-        .iter()
-        .map(|transition| {
-            reextract_live_scalar_circuit_sample(transition, &law.support_actor_hypotheses)
-        })
-        .collect::<Result<Vec<_>, _>>()
-    else {
-        increment_report_blocker(report, "future_reextract_failed");
-        return;
-    };
-    let future_evidence = future
-        .iter()
-        .map(|sample| {
-            // The first seal selects a circuit from structural future only.
-            // Binding actor/verifier commitments here would reveal the winner
-            // when competing role topologies own different executable laws.
-            BlueprintFutureEvidence::new(
-                sample.raw_input_sha256,
-                sample.extractor_version.max(1),
-                sample.bundle.clone(),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>();
-    let Ok(future_evidence) = future_evidence else {
-        increment_report_blocker(report, "future_evidence_invalid");
-        return;
-    };
-    let full = BlueprintFutureEvaluator::evaluate_and_seal(
-        &frozen,
-        &future_evidence,
-        Default::default(),
-        BlueprintPhaseControl::Full,
-    );
-    let Some(winner) = full.winner_receipt() else {
-        let evaluation = full.report();
-        let transform_clean = evaluation
-            .scores
-            .iter()
-            .filter(|score| score.transform_mismatches == 0)
-            .count();
-        let transform_mismatches = evaluation
-            .scores
-            .iter()
-            .map(|score| score.transform_mismatches)
-            .sum::<usize>();
-        let ambiguous_bindings = evaluation
-            .scores
-            .iter()
-            .map(|score| score.ambiguous_bindings)
-            .sum::<usize>();
-        let executable_contract_mismatches = evaluation
-            .scores
-            .iter()
-            .map(|score| score.executable_contract_mismatches)
-            .sum::<usize>();
-        let max_coherence = evaluation
-            .scores
-            .iter()
-            .map(|score| score.whole_circuit_coherence_fixed)
-            .max()
-            .unwrap_or_default();
-        increment_report_blocker(
-            report,
-            &format!(
-                "full_phase_no_winner:{:?}:scores={}:transform_clean={transform_clean}:transform_mismatches={transform_mismatches}:contract_mismatches={executable_contract_mismatches}:ambiguous={ambiguous_bindings}:max_coherence={max_coherence}",
-                evaluation.blocker,
-                evaluation.scores.len(),
-            )
-            .to_lowercase(),
-        );
-        return;
-    };
-    let Some(actor_template) = competing
-        .actors_by_blueprint
-        .get(winner.winner_sha256())
-        .cloned()
-    else {
-        increment_report_blocker(report, "winner_actor_contract_missing");
-        return;
-    };
-    // A multi-role template is intentionally unbound. Executing it directly
-    // would test support selectors against future surfaces and reject every
-    // transferable operator. Crystallization below re-extracts and binds each
-    // raw future surface, then independently repeats the binding in verifier.
-    let direct_actor_mismatches = if rich_scalar_program_roles(&actor_template)
-        .is_some_and(|roles| roles.len() > 1)
-        || matches!(
-            &actor_template.operation,
-            ResponseOperation::FunctionCallFromRoles { .. }
-                | ResponseOperation::CustomToolCallFromRoles { .. }
-        ) {
-        0
-    } else {
-        future
-            .iter()
-            .filter(|sample| {
-                let Ok(provider_view) = crate::runtime::provider_payload_view(
-                    &sample.request_text,
-                    &sample.provider_payload,
-                ) else {
-                    return true;
-                };
-                execute_response(
-                    &actor_template,
-                    &sample.request_text,
-                    provider_view.as_ref(),
-                )
-                .response
-                .as_deref()
-                    != Some(sample.expected_response.as_str())
-            })
-            .count()
-    };
-    if direct_actor_mismatches != 0 {
-        increment_report_blocker(
-            report,
-            &format!("winner_actor_future_mismatches={direct_actor_mismatches}"),
-        );
-        return;
-    }
-    report.full_phase_winners = report.full_phase_winners.saturating_add(1);
-    let controls_pass = [
-        BlueprintPhaseControl::NoPhase,
-        BlueprintPhaseControl::ShuffledPhase,
-        BlueprintPhaseControl::MagnitudeOnly,
-        BlueprintPhaseControl::MatchedRandomCenter,
-    ]
-    .into_iter()
-    .all(|control| {
-        BlueprintFutureEvaluator::evaluate_and_seal(
-            &frozen,
-            &future_evidence,
-            Default::default(),
-            control,
-        )
-        .winner_receipt()
-        .is_none()
-    });
-    if !controls_pass {
-        increment_report_blocker(report, "phase_control_selected_winner");
-        return;
-    }
-    report.causal_control_passes = report.causal_control_passes.saturating_add(1);
-    let mut future_window = frozen.future_window();
-    for sample in &future {
-        if future_window.admit_evidence(&sample.bundle).is_err() {
-            increment_report_blocker(report, "future_lineage_rejected");
+    let basis = match crystallize_minimal_transfer_basis_v1(&frozen, &competing, &transfer_future) {
+        Ok(basis) => basis,
+        Err(blocker) => {
+            increment_report_blocker(report, &blocker);
             return;
         }
-    }
-    let receipts = future
-        .iter()
-        .zip(&future_evidence)
-        .map(|(sample, evidence)| CrystallizationParityReceipt {
-            future_lineage_sha256: *sample.bundle.lineage_sha256(),
-            future_surface_sha256: *sample.bundle.surface_sha256(),
-            future_bundle_sha256: *evidence.bundle_sha256(),
-            raw_input_sha256: sample.raw_input_sha256,
-            extractor_version: sample.extractor_version.max(1),
-            anchors: sample.anchors.clone(),
-            request_text: sample.request_text.clone(),
-            provider_payload: sample.provider_payload.clone(),
-            expected_response: sample.expected_response.clone(),
-        })
-        .collect::<Vec<_>>();
-    match CrystallizedOperator::crystallize_with_actor_template(
-        &future_window,
-        winner,
-        &future_evidence,
-        &receipts,
-        actor_template,
-    ) {
-        Ok(operator) => {
-            report.verified_shadow_operators = report.verified_shadow_operators.saturating_add(1);
-            report.shadow_executions = report.shadow_executions.saturating_add(receipts.len());
-            match live_admission_candidate(law, &transfer_future, &operator, &identification) {
-                Ok(candidate) => {
-                    report.transfer_proofs = report.transfer_proofs.saturating_add(1);
-                    candidates.push(candidate);
-                }
-                Err(blocker) => increment_report_blocker(report, &blocker),
-            }
+    };
+    report.full_phase_winners = report.full_phase_winners.saturating_add(1);
+    report.causal_control_passes = report.causal_control_passes.saturating_add(1);
+    report.verified_shadow_operators = report.verified_shadow_operators.saturating_add(1);
+    report.transfer_basis_rows = report
+        .transfer_basis_rows
+        .saturating_add(basis.transitions.len());
+    report.monitored_future_rows = report
+        .monitored_future_rows
+        .saturating_add(basis.monitored_exact_rows);
+    report.future_applicability_negatives = report
+        .future_applicability_negatives
+        .saturating_add(basis.applicability_negative_rows);
+    report.future_censored_rows = report
+        .future_censored_rows
+        .saturating_add(basis.censored_rows);
+    report.shadow_executions = report
+        .shadow_executions
+        .saturating_add(basis.transitions.len())
+        .saturating_add(basis.monitored_exact_rows);
+    match live_admission_candidate(law, &basis.transitions, &basis.operator, &identification) {
+        Ok(candidate) => {
+            report.transfer_proofs = report.transfer_proofs.saturating_add(1);
+            candidates.push(candidate);
         }
-        Err(error) => {
-            increment_report_blocker(report, &format!("crystallization_{error:?}").to_lowercase())
-        }
+        Err(blocker) => increment_report_blocker(report, &blocker),
     }
 }
 

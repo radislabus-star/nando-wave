@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 mod identification;
 mod induction;
 mod state;
+mod transfer_basis;
 
 pub use induction::extract_live_scalar_circuit_sample;
 #[cfg(test)]
@@ -173,11 +174,11 @@ struct LiveScalarLawState {
     support_hypotheses_initialized: bool,
 }
 
-struct CompetingBlueprintSet {
-    support_bundles: Vec<SurfaceFragmentBundle>,
-    synthesis: BlueprintSynthesisReport,
-    actors_by_blueprint: BTreeMap<[u8; 32], ResponseProgram>,
-    actor_hypothesis_count: usize,
+pub(super) struct CompetingBlueprintSet {
+    pub(super) support_bundles: Vec<SurfaceFragmentBundle>,
+    pub(super) synthesis: BlueprintSynthesisReport,
+    pub(super) actors_by_blueprint: BTreeMap<[u8; 32], ResponseProgram>,
+    pub(super) actor_hypothesis_count: usize,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -197,6 +198,10 @@ pub struct LiveScalarShadowReport {
     pub full_phase_winners: usize,
     pub causal_control_passes: usize,
     pub verified_shadow_operators: usize,
+    pub transfer_basis_rows: usize,
+    pub monitored_future_rows: usize,
+    pub future_applicability_negatives: usize,
+    pub future_censored_rows: usize,
     pub shadow_executions: usize,
     pub admission_candidates: usize,
     pub ingest_accounting_complete: bool,

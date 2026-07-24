@@ -187,12 +187,29 @@ fn inspect_candidate_routes() -> Result<(), String> {
             })
         })
         .collect::<Vec<_>>();
+    let crystallized_candidates = bundle
+        .crystallized_candidates
+        .iter()
+        .map(|candidate| {
+            serde_json::json!({
+                "package_id": candidate.package.package_id,
+                "operation": candidate.package.program.operation,
+                "admission_blocker": candidate.package.admission_candidate_blocker(),
+                "support_rows": candidate.support.len(),
+                "future_rows": candidate.future.len(),
+                "adaptive_identification": candidate.package.proof.adaptive_identification.is_some(),
+                "anti_centers": candidate.package.anti_centers.len(),
+                "crystallized_operator": candidate.package.crystallized_operator.is_some(),
+            })
+        })
+        .collect::<Vec<_>>();
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
             "schema": "nando.response-candidate-route-inspection.v1",
             "revision": bundle.revision,
             "candidates": candidates,
+            "crystallized_candidates": crystallized_candidates,
         }))
         .map_err(|error| format!("candidate_inspection_encode:{error}"))?
     );
