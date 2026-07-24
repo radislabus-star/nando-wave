@@ -2,9 +2,16 @@ use nando_operator_kernel::AtomValueType;
 use serde_json::Value;
 
 use super::selection::{
-    continuation_handle_scalar, identifier_tokens, observed_json_path_digest,
+    continuation_handle_scalar_from_output, identifier_tokens, observed_json_path_digest,
     request_identifier_positions,
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[doc(hidden)]
+pub enum ObservedScalarRoleClass {
+    JsonValue,
+    ContinuationHandle,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[doc(hidden)]
@@ -14,6 +21,7 @@ pub struct ObservedJsonScalarRole {
     pub value_sha256: String,
     pub value_type: AtomValueType,
     pub depth_bucket: u8,
+    pub role_class: ObservedScalarRoleClass,
 }
 
 /// Captures bounded scalar role witnesses with runtime-equivalent request
@@ -37,15 +45,16 @@ pub fn observed_json_scalar_roles(
 /// protocol parser remains runtime-owned; learning sees only type and hashes.
 #[doc(hidden)]
 pub fn observed_continuation_handle_role(
-    payload: &Value,
+    output: &Value,
 ) -> Result<ObservedJsonScalarRole, &'static str> {
-    let scalar = continuation_handle_scalar(payload, AtomValueType::Identifier)?;
+    let scalar = continuation_handle_scalar_from_output(output, AtomValueType::Identifier)?;
     Ok(ObservedJsonScalarRole {
         request_position: None,
         json_path_sha256: observed_json_path_digest(&["semantic:continuation_handle".to_owned()]),
         value_sha256: nando_operator_kernel::canonical_json_sha256(&scalar.value)?,
         value_type: AtomValueType::Identifier,
         depth_bucket: 1,
+        role_class: ObservedScalarRoleClass::ContinuationHandle,
     })
 }
 
@@ -106,6 +115,7 @@ fn collect_json_scalar_roles(
                 value_sha256: nando_operator_kernel::canonical_json_sha256(scalar)?,
                 value_type,
                 depth_bucket: u8::try_from(depth.min(7)).map_err(|_| "observed_json_role_depth")?,
+                role_class: ObservedScalarRoleClass::JsonValue,
             });
         }
     }

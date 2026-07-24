@@ -8,7 +8,10 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use nando_operator_kernel::{AtomSource, RelationAtom, RelationFrame};
+use nando_operator_kernel::{
+    AtomSource, MultiSourceRelationKindV1, MultiSourceTemporalClassV1, RelationAtom, RelationFrame,
+    canonical_json_sha256,
+};
 use nando_operator_learning::multi_source::{
     CompletedEffectFormV1, CoverageOpportunitySnapshotV1, MultiSourceEvidenceAuditV1,
     MultiSourceJoinLedgerV1, MultiSourceJoinReportV1, PreActionShapeClassV1,
@@ -40,6 +43,11 @@ pub struct T1EligibilityAuditV1 {
     pub extraction_complete_rows: u64,
     pub witness_complete_rows: u64,
     pub eligible_rows: u64,
+    pub selected_observation_rows: u64,
+    pub selected_witness_match_rows: u64,
+    pub selected_latest_witness_match_rows: u64,
+    pub continuation_relation_rows: u64,
+    pub selected_continuation_match_rows: u64,
 }
 
 type RelationDataV1 = (
@@ -103,6 +111,10 @@ pub fn run_multi_source_discovery_audit_v2(
         parse_errors,
     );
     let join_ledger = MultiSourceJoinLedgerV1::build(&request_snapshot.topologies, &frames);
+    let frame_by_root = frames
+        .iter()
+        .filter_map(|frame| canonical_json_sha256(frame).ok().map(|root| (root, frame)))
+        .collect::<BTreeMap<_, _>>();
     let factorized = join_ledger
         .rows()
         .iter()
@@ -134,6 +146,57 @@ pub fn run_multi_source_discovery_audit_v2(
             if witness_complete {
                 audit.witness_complete_rows = audit.witness_complete_rows.saturating_add(1);
                 audit.eligible_rows = audit.eligible_rows.saturating_add(1);
+            }
+            let continuation_roles = joined
+                .topology
+                .relations
+                .iter()
+                .filter_map(|edge| {
+                    (edge.relation == MultiSourceRelationKindV1::ContinuationHandle)
+                        .then_some(edge.source_role_id)
+                })
+                .collect::<BTreeSet<_>>();
+            if !continuation_roles.is_empty() {
+                audit.continuation_relation_rows =
+                    audit.continuation_relation_rows.saturating_add(1);
+            }
+            let selected_root = frame_by_root
+                .get(&joined.completed_frame_root_sha256)
+                .and_then(|frame| selected_observation_root(frame));
+            let Some(selected_root) = selected_root else {
+                return audit;
+            };
+            audit.selected_observation_rows = audit.selected_observation_rows.saturating_add(1);
+            let matching_roles = joined
+                .topology
+                .role_witnesses
+                .iter()
+                .filter(|witness| witness.value_sha256 == selected_root)
+                .filter_map(|witness| {
+                    joined
+                        .topology
+                        .roles
+                        .iter()
+                        .find(|role| role.local_role_id == witness.local_role_id)
+                })
+                .collect::<Vec<_>>();
+            if !matching_roles.is_empty() {
+                audit.selected_witness_match_rows =
+                    audit.selected_witness_match_rows.saturating_add(1);
+            }
+            if matching_roles
+                .iter()
+                .any(|role| role.temporal_class == MultiSourceTemporalClassV1::Latest)
+            {
+                audit.selected_latest_witness_match_rows =
+                    audit.selected_latest_witness_match_rows.saturating_add(1);
+            }
+            if matching_roles
+                .iter()
+                .any(|role| continuation_roles.contains(&role.local_role_id))
+            {
+                audit.selected_continuation_match_rows =
+                    audit.selected_continuation_match_rows.saturating_add(1);
             }
             audit
         },
@@ -169,6 +232,28 @@ pub fn run_multi_source_discovery_audit_v2(
         return Err("multi_source_report_restart_parity".to_owned());
     }
     Ok(report)
+}
+
+fn selected_observation_root(frame: &RelationFrame) -> Option<&str> {
+    let mut selected_slots = frame.atoms.iter().filter_map(|atom| match atom {
+        RelationAtom::ObservationSelector { slot_id, .. } => Some(*slot_id),
+        _ => None,
+    });
+    let slot_id = selected_slots.next()?;
+    if selected_slots.next().is_some() {
+        return None;
+    }
+    let mut values = frame.atoms.iter().filter_map(|atom| match atom {
+        RelationAtom::TypedSlot {
+            slot_id: candidate,
+            source: AtomSource::Observation,
+            value_sha256,
+            ..
+        } if *candidate == slot_id => Some(value_sha256.as_str()),
+        _ => None,
+    });
+    let value = values.next()?;
+    values.next().is_none().then_some(value)
 }
 
 fn merge_relevant_frames(

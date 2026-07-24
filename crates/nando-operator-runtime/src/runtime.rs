@@ -27,7 +27,8 @@ use selection::{
     request_mentions_identifier, runtime_embedded_json_objects,
 };
 pub use structural_json_roles::{
-    ObservedJsonScalarRole, observed_continuation_handle_role, observed_json_scalar_roles,
+    ObservedJsonScalarRole, ObservedScalarRoleClass, observed_continuation_handle_role,
+    observed_json_scalar_roles,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -6,7 +6,8 @@ use nando_operator_kernel::{
     PreActionMultiSourceTopologyV1,
 };
 use nando_operator_runtime::{
-    ObservedJsonScalarRole, observed_continuation_handle_role, observed_json_scalar_roles,
+    ObservedJsonScalarRole, ObservedScalarRoleClass, observed_continuation_handle_role,
+    observed_json_scalar_roles,
 };
 use serde_json::Value;
 
@@ -27,18 +28,10 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
     request_text: &str,
 ) -> PreActionMultiSourceTopologyV1 {
     let outputs = select_relevant_outputs(provider_outputs(payload), request_text);
-    let mut outputs = match outputs {
+    let outputs = match outputs {
         Ok(outputs) => outputs,
         Err(reason) => return censored(reason),
     };
-    let continuation_role = observed_continuation_handle_role(payload).ok();
-    if let (Some((_, latest_roles)), Some(role)) = (outputs.last_mut(), continuation_role.as_ref())
-        && !latest_roles
-            .iter()
-            .any(|candidate| candidate.value_sha256 == role.value_sha256)
-    {
-        latest_roles.push(role.clone());
-    }
     let mut collected = Vec::new();
     for (source_ordinal, (_, output_roles)) in outputs.iter().enumerate() {
         for (value_ordinal, role) in output_roles.iter().enumerate() {
@@ -53,9 +46,7 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
                 request_position: role.request_position,
                 request_reference_ordinal: None,
                 json_path_sha256: role.json_path_sha256,
-                continuation_handle: continuation_role
-                    .as_ref()
-                    .is_some_and(|candidate| candidate.json_path_sha256 == role.json_path_sha256),
+                continuation_handle: role.role_class == ObservedScalarRoleClass::ContinuationHandle,
             });
         }
         if collected.len() > MULTI_SOURCE_MAX_ROLE_NODES_V1 {
@@ -181,7 +172,11 @@ fn select_relevant_outputs(
         .into_iter()
         .enumerate()
         .map(|(ordinal, output)| {
-            observed_json_scalar_roles(request_text, &output).map(|roles| (ordinal, output, roles))
+            let mut roles = observed_json_scalar_roles(request_text, &output)?;
+            if let Ok(continuation) = observed_continuation_handle_role(&output) {
+                roles.push(continuation);
+            }
+            Ok::<_, &'static str>((ordinal, output, roles))
         })
         .collect::<Result<Vec<_>, _>>()?;
     if metadata.is_empty() {

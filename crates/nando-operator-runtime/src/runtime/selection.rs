@@ -426,6 +426,19 @@ pub(super) fn continuation_handle_scalar(
     }
     let output =
         immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    continuation_handle_scalar_from_output(output, value_type)
+}
+
+pub(super) fn continuation_handle_scalar_from_output(
+    output: &Value,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    if !matches!(
+        value_type,
+        AtomValueType::Identifier | AtomValueType::String
+    ) {
+        return Err("continuation_handle_type");
+    }
     let mut matches = output_text_parts(output)?
         .into_iter()
         .flat_map(str::lines)
