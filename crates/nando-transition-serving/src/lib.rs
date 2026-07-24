@@ -2081,7 +2081,7 @@ fn handle_openai(
         });
         match structure {
             Ok(structure) => {
-                if let Some(topology) = multi_source_topology.clone() {
+                let topology_shadow = if let Some(topology) = multi_source_topology.clone() {
                     let structure_v2 = nando_operator_kernel::LearningRequestStructureV2 {
                         schema: nando_operator_kernel::LEARNING_REQUEST_STRUCTURE_SCHEMA_V2
                             .to_owned(),
@@ -2106,25 +2106,31 @@ fn handle_openai(
                         capture_receipt.capture_sequence(),
                     );
                     match commit {
-                        Ok(commit) => write_event(
-                            &state,
-                            json!({
-                                "schema": "nando.pre-action-topology-shadow.v1",
-                                "event": "pre_action_topology_commit",
-                                "turn_intent_id_sha256": structure_v2.turn_intent_id_sha256,
-                                "provider_capture_request_root_sha256": structure_v2.provider_capture_request_root_sha256,
-                                "topology_root_sha256": commit.topology_root_sha256,
-                                "commitment_root_sha256": commit.commitment_root_sha256,
-                                "capture_sequence": commit.capture_sequence,
-                                "authority": false,
-                            }),
-                        ),
+                        Ok(commit) => {
+                            write_event(
+                                &state,
+                                json!({
+                                    "schema": "nando.pre-action-topology-shadow.v1",
+                                    "event": "pre_action_topology_commit",
+                                    "turn_intent_id_sha256": &structure_v2.turn_intent_id_sha256,
+                                    "provider_capture_request_root_sha256": &structure_v2.provider_capture_request_root_sha256,
+                                    "topology_root_sha256": &commit.topology_root_sha256,
+                                    "commitment_root_sha256": &commit.commitment_root_sha256,
+                                    "capture_sequence": commit.capture_sequence,
+                                    "authority": false,
+                                }),
+                            );
+                            Some((structure_v2, commit))
+                        }
                         Err(error) => {
                             state.counters.errors.fetch_add(1, Ordering::Relaxed);
                             eprintln!("nando-pre-action-topology commit: {error}");
+                            None
                         }
                     }
-                }
+                } else {
+                    None
+                };
                 if let Err(error) = state.request_learning.observe_structure(&structure) {
                     state.counters.errors.fetch_add(1, Ordering::Relaxed);
                     eprintln!("nando-request-learning index: {error}");
@@ -2134,6 +2140,7 @@ fn handle_openai(
                     &body,
                     capture_receipt,
                     structure,
+                    topology_shadow,
                     &request_text,
                 );
             }
@@ -2273,15 +2280,28 @@ fn submit_operator_generation_shadow(
     body: &Bytes,
     capture_receipt: nando_operator_learning::ProviderRequestCaptureReceiptV3,
     structure: LearningRequestStructureV1,
+    topology_shadow: Option<(
+        nando_operator_kernel::LearningRequestStructureV2,
+        nando_operator_kernel::PreActionTopologyCommitV1,
+    )>,
     request_text: &str,
 ) {
-    if state.learning_structure_bridge.producer_enabled()
-        && let Err(error) = state
-            .learning_structure_bridge
-            .submit(capture_receipt.clone(), structure.clone())
-    {
-        state.counters.errors.fetch_add(1, Ordering::Relaxed);
-        eprintln!("nando-learning-structure bridge: {error}");
+    if state.learning_structure_bridge.producer_enabled() {
+        let result = match topology_shadow {
+            Some((structure_v2, topology_commit)) => state.learning_structure_bridge.submit_v3(
+                capture_receipt.clone(),
+                structure.clone(),
+                structure_v2,
+                topology_commit,
+            ),
+            None => state
+                .learning_structure_bridge
+                .submit(capture_receipt.clone(), structure.clone()),
+        };
+        if let Err(error) = result {
+            state.counters.errors.fetch_add(1, Ordering::Relaxed);
+            eprintln!("nando-learning-structure bridge: {error}");
+        }
     }
     if state.learning_evidence_bridge.producer_enabled() {
         if let Err(error) =

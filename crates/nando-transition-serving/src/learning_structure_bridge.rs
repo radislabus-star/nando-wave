@@ -9,10 +9,11 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use nando_operator_kernel::{LearningRequestStructureV2, PreActionTopologyCommitV1};
 use nando_operator_kernel::{sha256_bytes, valid_nonzero_sha256};
 use nando_operator_learning::{
-    LEARNING_STRUCTURE_RECORD_MAX_BYTES_V2, LearningRequestStructureV1, LearningStructureRecordV2,
-    ProviderRequestCaptureReceiptV3,
+    LEARNING_STRUCTURE_RECORD_MAX_BYTES_V3, LearningRequestStructureV1, LearningStructureRecordV2,
+    LearningStructureRecordV3, ProviderRequestCaptureReceiptV3,
 };
 use serde::{Deserialize, Serialize};
 
@@ -228,6 +229,70 @@ impl LearningStructureBridgeRuntimeV2 {
         Ok(())
     }
 
+    pub(crate) fn submit_v3(
+        &self,
+        capture_receipt: ProviderRequestCaptureReceiptV3,
+        structure_v1: LearningRequestStructureV1,
+        structure_v2: LearningRequestStructureV2,
+        topology_commit: PreActionTopologyCommitV1,
+    ) -> Result<(), String> {
+        if !self.inner.producer_enabled {
+            return Err("learning_structure_bridge_producer_disabled".to_owned());
+        }
+        let started = Instant::now();
+        let _guard = self
+            .inner
+            .producer_lock
+            .lock()
+            .map_err(|_| "learning_structure_bridge_producer_lock_poisoned".to_owned())?;
+        let (_, pending_bytes) = pending_stats(&self.inner.pending_dir);
+        if pending_bytes >= MAX_PENDING_BYTES_V2 {
+            return self.producer_failure("learning_structure_bridge_spool_budget");
+        }
+        let sequence = self.inner.next_sequence.load(Ordering::Acquire);
+        let record = LearningStructureRecordV3::new(
+            self.inner.epoch_sha256.clone(),
+            sequence,
+            capture_receipt,
+            structure_v1,
+            structure_v2,
+            topology_commit,
+        )
+        .map_err(|error| format!("learning_structure_bridge_record_v3:{error:?}"))?;
+        self.publish_record(
+            sequence,
+            record.record_sha256(),
+            &record
+                .canonical_cbor()
+                .map_err(|error| format!("learning_structure_bridge_encode_v3:{error:?}"))?,
+            started,
+        )
+    }
+
+    fn publish_record(
+        &self,
+        sequence: u64,
+        digest: &str,
+        bytes: &[u8],
+        started: Instant,
+    ) -> Result<(), String> {
+        let name = record_file_name(sequence, digest);
+        let final_path = self.inner.pending_dir.join(&name);
+        let temporary_path = self.inner.staging_dir.join(format!("{name}.tmp"));
+        write_private_file_buffered(&temporary_path, bytes)?;
+        fs::rename(&temporary_path, &final_path)
+            .map_err(|error| format!("learning_structure_bridge_publish:{error}"))?;
+        self.inner
+            .next_sequence
+            .store(sequence.saturating_add(1), Ordering::Release);
+        record_success(&self.inner.producer, sequence);
+        self.inner
+            .producer_sync_requested
+            .store(true, Ordering::Release);
+        record_timing(&self.inner.producer, started);
+        Ok(())
+    }
+
     pub(crate) fn start_consumer(
         &self,
         request_learning: Arc<RequestLearningIndex>,
@@ -364,9 +429,18 @@ fn drain_pending(inner: &BridgeInner, index: &RequestLearningIndex) -> Result<()
                 "learning_structure_bridge_sequence_gap:{expected_sequence}:{sequence}"
             ));
         }
-        index
-            .observe_structure(record.structure())
-            .map_err(str::to_owned)?;
+        match &record {
+            LearningStructureRecord::V2(_) => index
+                .observe_structure(record.structure_v1())
+                .map_err(str::to_owned)?,
+            LearningStructureRecord::V3(record) => index
+                .observe_structure_v3(
+                    record.structure_v1(),
+                    record.structure_v2(),
+                    record.topology_commit(),
+                )
+                .map_err(str::to_owned)?,
+        }
         let next_watermark = RequestLearningWatermarkV2 {
             bridge_epoch_sha256: inner.epoch_sha256.clone(),
             last_sequence: sequence,
@@ -448,10 +522,42 @@ fn decode_meta(bytes: &[u8]) -> Result<BridgeMetaV2, String> {
     Ok(meta)
 }
 
-fn read_record(path: &Path, expected_digest: &str) -> Result<LearningStructureRecordV2, String> {
-    let bytes = read_bounded(path, LEARNING_STRUCTURE_RECORD_MAX_BYTES_V2)?
+enum LearningStructureRecord {
+    V2(LearningStructureRecordV2),
+    V3(LearningStructureRecordV3),
+}
+
+impl LearningStructureRecord {
+    fn bridge_epoch_sha256(&self) -> &str {
+        match self {
+            Self::V2(record) => record.bridge_epoch_sha256(),
+            Self::V3(record) => record.bridge_epoch_sha256(),
+        }
+    }
+
+    fn record_sha256(&self) -> &str {
+        match self {
+            Self::V2(record) => record.record_sha256(),
+            Self::V3(record) => record.record_sha256(),
+        }
+    }
+
+    fn structure_v1(&self) -> &LearningRequestStructureV1 {
+        match self {
+            Self::V2(record) => record.structure(),
+            Self::V3(record) => record.structure_v1(),
+        }
+    }
+}
+
+fn read_record(path: &Path, expected_digest: &str) -> Result<LearningStructureRecord, String> {
+    let bytes = read_bounded(path, LEARNING_STRUCTURE_RECORD_MAX_BYTES_V3)?
         .ok_or_else(|| "learning_structure_bridge_record_missing".to_owned())?;
-    let record = LearningStructureRecordV2::from_canonical_cbor(&bytes)
+    let record = LearningStructureRecordV3::from_canonical_cbor(&bytes)
+        .map(LearningStructureRecord::V3)
+        .or_else(|_| {
+            LearningStructureRecordV2::from_canonical_cbor(&bytes).map(LearningStructureRecord::V2)
+        })
         .map_err(|error| format!("learning_structure_bridge_record_decode:{error:?}"))?;
     if record.record_sha256() != expected_digest {
         return Err("learning_structure_bridge_filename_digest_mismatch".to_owned());
@@ -725,7 +831,11 @@ fn unix_now_nanos() -> u128 {
 
 #[cfg(test)]
 mod tests {
-    use nando_operator_kernel::{RuntimeProjectionV3, Sha256CommitmentV3, sha256_bytes};
+    use nando_operator_kernel::{
+        LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, LearningRequestStructureV2,
+        MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1, PreActionMultiSourceTopologyV1,
+        PreActionTopologyCommitV1, RuntimeProjectionV3, Sha256CommitmentV3, sha256_bytes,
+    };
     use nando_operator_learning::{
         LearningRequestStructureInputV1, ProviderRequestCaptureInputV3,
         seal_provider_request_capture_v3,
@@ -766,6 +876,59 @@ mod tests {
         })
         .expect("structure");
         (receipt, structure)
+    }
+
+    #[test]
+    fn v3_record_restarts_through_the_existing_single_consumer() {
+        let root = test_root("v3-restart");
+        let (producer, _) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), true, false, Duration::ZERO)
+                .expect("producer");
+        let (receipt, v1) = evidence(1);
+        let v2 = LearningRequestStructureV2 {
+            schema: LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
+            turn_intent_id_sha256: v1.client_intent_id_sha256().to_owned(),
+            session_lineage_roots_sha256: v1.session_identity_sha256s().to_vec(),
+            request_phase_atom_ids: v1.request_phase_atom_ids().to_vec(),
+            pre_action_context_atom_ids: v1.pre_action_context_atom_ids().to_vec(),
+            capability_atom_ids: v1.capability_atom_ids().to_vec(),
+            estimated_input_tokens: v1.estimated_input_tokens(),
+            provider_payload_bytes: v1.provider_payload_bytes(),
+            provider_capture_request_root_sha256: receipt.request_root_sha256().to_hex(),
+            decidability_reason_code: "pre_action_pending".to_owned(),
+            topology: PreActionMultiSourceTopologyV1 {
+                extraction_status: MultiSourceExtractionStatusV1::Complete,
+                grounded_output_count: 0,
+                output_part_count: 0,
+                roles: Vec::new(),
+                relations: Vec::new(),
+            },
+        };
+        let commit = PreActionTopologyCommitV1::seal(
+            &v2,
+            MultiSourceEvidenceOriginV1::FreshLive,
+            sha256_bytes(b"extractor"),
+            sha256_bytes(b"config"),
+            receipt.capture_sequence(),
+        )
+        .expect("commit");
+        producer
+            .submit_v3(receipt, v1, v2, commit)
+            .expect("submit v3");
+        let (consumer, index) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), false, true, Duration::ZERO)
+                .expect("consumer");
+        drain_pending(&consumer.inner, &index).expect("drain");
+        assert_eq!(index.status().structures_applied, 1);
+        assert_eq!(consumer.status().consumer.last_sequence, 1);
+        drop(producer);
+        drop(consumer);
+        let (restarted, restored) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), false, true, Duration::ZERO)
+                .expect("restart");
+        assert!(restarted.status().checkpoint_restored);
+        assert_eq!(restored.status().structures_applied, 1);
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]

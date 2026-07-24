@@ -11,7 +11,9 @@ historical authority                      false
 MS1-A kernel contract                     PASS
 MS1-B pure pre-action extractor           PASS
 MS1-C pre-action shadow commitment        PASS
-MS1-C durable V2 bridge publication       NOT STARTED
+MS1-C durable V2 bridge publication       PASS
+MS1-D V3 checkpoint/restart               PASS
+MS1-E live deployment                     NOT STARTED
 production authority change               0
 ```
 
@@ -59,7 +61,14 @@ projection; their field names and values are not copied into the topology.
 The live request owner now computes the V1 structure and the V2 topology from
 the same provider-bound request identity. It seals and emits a shadow topology
 commit before the provider action is observed. The shadow event has no
-authority. Durable V2 bytes still require the MS1-D bridge/checkpoint.
+authority.
+
+`LearningStructureRecordV3` binds the existing V1 structure, V2 topology,
+provider capture receipt and pre-action commitment in one immutable record.
+The existing bridge sequence remains the single ordering owner. Its consumer
+decodes historical V2 records and new V3 records, while the checkpoint writes
+schema V3 and restores V2 checkpoints backward-compatibly. The V3 checkpoint
+retains topology and commitment after spool ACK.
 
 ## Fixed evidence gates
 
@@ -90,6 +99,8 @@ operator has been identified.
 renamed/reordered fields preserve topology       PASS
 oversized topology is wholly censored            PASS
 focused extractor tests                          2/2 PASS
+V3 record canonical roundtrip                    PASS
+V2/V3 single-consumer restart                    2/2 PASS
 nando-response-actor all-target compile          PASS
 online::stream public re-export regression       NOT PRESENT
 authority                                        false
@@ -97,6 +108,6 @@ authority                                        false
 
 ## Next
 
-MS1-C must publish V1 and V2 from the same request owner and TurnIntentId.
-MS1-D then persists V2 and topology commitments with restart parity. Only
-after those gates may MS0-R-B or MS2 consume topology.
+MS1-E must deploy V3 in shadow, prove privacy/accounting/latency on ordinary
+traffic, and freeze the fresh structural evidence epoch. Only after that gate
+may MS2 consume topology.

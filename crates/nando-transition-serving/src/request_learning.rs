@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use nando_operator_kernel::{LearningRequestStructureV2, PreActionTopologyCommitV1};
 use nando_operator_learning::LearningRequestStructureV1;
 use nando_operator_learning::multi_source::{
     RequestStructureAuditRowV1, RequestStructureAuditSnapshotV1,
@@ -9,6 +10,7 @@ use nando_operator_learning::multi_source::{
 use serde::{Deserialize, Serialize};
 
 const REQUEST_LEARNING_CHECKPOINT_SCHEMA_V2: &str = "nando.request-learning-checkpoint.v2";
+const REQUEST_LEARNING_CHECKPOINT_SCHEMA_V3: &str = "nando.request-learning-checkpoint.v3";
 const MAX_REQUEST_LEARNING_IDENTITIES: usize = 4_096;
 pub(crate) const REQUEST_LEARNING_CHECKPOINT_MAX_BYTES_V2: usize = 16 * 1024 * 1024;
 
@@ -31,6 +33,7 @@ pub(crate) struct RequestLearningStatusV2 {
     pub(crate) lookup_misses: u64,
     pub(crate) stored_sessions: u64,
     pub(crate) stored_turns: u64,
+    pub(crate) stored_topologies: u64,
 }
 
 #[derive(Default)]
@@ -52,6 +55,13 @@ struct RequestLearningState {
     session_order: VecDeque<String>,
     structure_by_turn: BTreeMap<String, RequestLearningAtoms>,
     turn_order: VecDeque<String>,
+    topology_by_turn: BTreeMap<String, RequestLearningTopologyV3>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct RequestLearningTopologyV3 {
+    structure: LearningRequestStructureV2,
+    commit: PreActionTopologyCommitV1,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -64,6 +74,20 @@ struct RequestLearningCheckpointWireV2 {
     session_order: Vec<String>,
     structure_by_turn: BTreeMap<String, RequestLearningAtoms>,
     turn_order: Vec<String>,
+    status: RequestLearningStatusV2,
+}
+
+#[derive(Deserialize, Serialize)]
+struct RequestLearningCheckpointWireV3 {
+    schema: String,
+    bridge_epoch_sha256: String,
+    last_sequence: u64,
+    last_record_sha256: String,
+    capability_by_session: BTreeMap<String, Vec<u64>>,
+    session_order: Vec<String>,
+    structure_by_turn: BTreeMap<String, RequestLearningAtoms>,
+    turn_order: Vec<String>,
+    topology_by_turn: BTreeMap<String, RequestLearningTopologyV3>,
     status: RequestLearningStatusV2,
 }
 
@@ -81,6 +105,40 @@ pub(crate) struct RequestLearningIndex {
 }
 
 impl RequestLearningIndex {
+    pub(crate) fn observe_structure_v3(
+        &self,
+        structure_v1: &LearningRequestStructureV1,
+        structure_v2: &LearningRequestStructureV2,
+        commit: &PreActionTopologyCommitV1,
+    ) -> Result<(), &'static str> {
+        structure_v2
+            .validate()
+            .map_err(|_| "request_learning_structure_v3_invalid")?;
+        commit
+            .validate()
+            .map_err(|_| "request_learning_structure_v3_invalid")?;
+        if structure_v1.client_intent_id_sha256() != structure_v2.turn_intent_id_sha256
+            || commit.turn_intent_id_sha256 != structure_v2.turn_intent_id_sha256
+            || commit.provider_capture_request_root_sha256
+                != structure_v2.provider_capture_request_root_sha256
+        {
+            return Err("request_learning_structure_v3_identity_mismatch");
+        }
+        self.observe_structure(structure_v1)?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| "request_learning_index_lock_poisoned")?;
+        state.topology_by_turn.insert(
+            structure_v2.turn_intent_id_sha256.clone(),
+            RequestLearningTopologyV3 {
+                structure: structure_v2.clone(),
+                commit: commit.clone(),
+            },
+        );
+        Ok(())
+    }
+
     pub(crate) fn audit_snapshot_v1(
         &self,
     ) -> Result<RequestStructureAuditSnapshotV1, &'static str> {
@@ -102,7 +160,7 @@ impl RequestLearningIndex {
             evictions: self.counters.evictions.load(Ordering::Relaxed),
             stored_turns: u64::try_from(state.structure_by_turn.len()).unwrap_or(u64::MAX),
             provider_bound_by_construction: true,
-            pre_action_context_persisted: false,
+            pre_action_context_persisted: !state.topology_by_turn.is_empty(),
         })
     }
 
@@ -170,6 +228,7 @@ impl RequestLearningIndex {
                 break;
             };
             if state.structure_by_turn.remove(&key).is_some() {
+                state.topology_by_turn.remove(&key);
                 self.counters.evictions.fetch_add(1, Ordering::Relaxed);
             }
         }
@@ -208,12 +267,14 @@ impl RequestLearningIndex {
     }
 
     pub(crate) fn status(&self) -> RequestLearningStatusV2 {
-        let (stored_sessions, stored_turns) = self.state.lock().map_or((0, 0), |state| {
-            (
-                u64::try_from(state.capability_by_session.len()).unwrap_or(u64::MAX),
-                u64::try_from(state.structure_by_turn.len()).unwrap_or(u64::MAX),
-            )
-        });
+        let (stored_sessions, stored_turns, stored_topologies) =
+            self.state.lock().map_or((0, 0, 0), |state| {
+                (
+                    u64::try_from(state.capability_by_session.len()).unwrap_or(u64::MAX),
+                    u64::try_from(state.structure_by_turn.len()).unwrap_or(u64::MAX),
+                    u64::try_from(state.topology_by_turn.len()).unwrap_or(u64::MAX),
+                )
+            });
         RequestLearningStatusV2 {
             structures_applied: self.counters.structures_applied.load(Ordering::Relaxed),
             session_inserts: self.counters.session_inserts.load(Ordering::Relaxed),
@@ -226,6 +287,7 @@ impl RequestLearningIndex {
             lookup_misses: self.counters.lookup_misses.load(Ordering::Relaxed),
             stored_sessions,
             stored_turns,
+            stored_topologies,
         }
     }
 
@@ -242,8 +304,8 @@ impl RequestLearningIndex {
             .state
             .lock()
             .map_err(|_| "request_learning_index_lock_poisoned".to_owned())?;
-        let wire = RequestLearningCheckpointWireV2 {
-            schema: REQUEST_LEARNING_CHECKPOINT_SCHEMA_V2.to_owned(),
+        let wire = RequestLearningCheckpointWireV3 {
+            schema: REQUEST_LEARNING_CHECKPOINT_SCHEMA_V3.to_owned(),
             bridge_epoch_sha256: watermark.bridge_epoch_sha256.clone(),
             last_sequence: watermark.last_sequence,
             last_record_sha256: watermark.last_record_sha256.clone(),
@@ -251,6 +313,7 @@ impl RequestLearningIndex {
             session_order: state.session_order.iter().cloned().collect(),
             structure_by_turn: state.structure_by_turn.clone(),
             turn_order: state.turn_order.iter().cloned().collect(),
+            topology_by_turn: state.topology_by_turn.clone(),
             status: self.status_without_state_lock(&state),
         };
         let bytes = serde_cbor::to_vec(&wire)
@@ -267,15 +330,19 @@ impl RequestLearningIndex {
         if bytes.is_empty() || bytes.len() > REQUEST_LEARNING_CHECKPOINT_MAX_BYTES_V2 {
             return Err("request_learning_checkpoint_budget".to_owned());
         }
+        if let Ok(wire) = serde_cbor::from_slice::<RequestLearningCheckpointWireV3>(bytes) {
+            return restore_v3(wire);
+        }
         let wire: RequestLearningCheckpointWireV2 = serde_cbor::from_slice(bytes)
             .map_err(|error| format!("request_learning_checkpoint_decode:{error}"))?;
-        validate_checkpoint(&wire)?;
+        validate_checkpoint_v2(&wire)?;
         let index = Self {
             state: Mutex::new(RequestLearningState {
                 capability_by_session: wire.capability_by_session,
                 session_order: wire.session_order.into(),
                 structure_by_turn: wire.structure_by_turn,
                 turn_order: wire.turn_order.into(),
+                topology_by_turn: BTreeMap::new(),
             }),
             counters: counters_from_status(&wire.status),
         };
@@ -292,6 +359,7 @@ impl RequestLearningIndex {
         status.stored_sessions =
             u64::try_from(state.capability_by_session.len()).unwrap_or(u64::MAX);
         status.stored_turns = u64::try_from(state.structure_by_turn.len()).unwrap_or(u64::MAX);
+        status.stored_topologies = u64::try_from(state.topology_by_turn.len()).unwrap_or(u64::MAX);
         status
     }
 
@@ -311,7 +379,7 @@ impl RequestLearningIndex {
     }
 }
 
-fn validate_checkpoint(wire: &RequestLearningCheckpointWireV2) -> Result<(), String> {
+fn validate_checkpoint_v2(wire: &RequestLearningCheckpointWireV2) -> Result<(), String> {
     let session_order_is_exact = wire
         .session_order
         .iter()
@@ -340,6 +408,58 @@ fn validate_checkpoint(wire: &RequestLearningCheckpointWireV2) -> Result<(), Str
         return Err("request_learning_checkpoint_invalid".to_owned());
     }
     Ok(())
+}
+
+fn restore_v3(
+    wire: RequestLearningCheckpointWireV3,
+) -> Result<(RequestLearningIndex, RequestLearningWatermarkV2), String> {
+    validate_checkpoint_v3(&wire)?;
+    let index = RequestLearningIndex {
+        state: Mutex::new(RequestLearningState {
+            capability_by_session: wire.capability_by_session,
+            session_order: wire.session_order.into(),
+            structure_by_turn: wire.structure_by_turn,
+            turn_order: wire.turn_order.into(),
+            topology_by_turn: wire.topology_by_turn,
+        }),
+        counters: counters_from_status(&wire.status),
+    };
+    Ok((
+        index,
+        RequestLearningWatermarkV2 {
+            bridge_epoch_sha256: wire.bridge_epoch_sha256,
+            last_sequence: wire.last_sequence,
+            last_record_sha256: wire.last_record_sha256,
+        },
+    ))
+}
+
+fn validate_checkpoint_v3(wire: &RequestLearningCheckpointWireV3) -> Result<(), String> {
+    if wire.schema != REQUEST_LEARNING_CHECKPOINT_SCHEMA_V3
+        || wire.topology_by_turn.len() > MAX_REQUEST_LEARNING_IDENTITIES
+        || wire.topology_by_turn.iter().any(|(turn, topology)| {
+            !valid_sha256(turn)
+                || topology.structure.validate().is_err()
+                || topology.commit.validate().is_err()
+                || topology.structure.turn_intent_id_sha256 != *turn
+                || topology.commit.turn_intent_id_sha256 != *turn
+                || !wire.structure_by_turn.contains_key(turn)
+        })
+    {
+        return Err("request_learning_checkpoint_v3_invalid".to_owned());
+    }
+    let legacy = RequestLearningCheckpointWireV2 {
+        schema: REQUEST_LEARNING_CHECKPOINT_SCHEMA_V2.to_owned(),
+        bridge_epoch_sha256: wire.bridge_epoch_sha256.clone(),
+        last_sequence: wire.last_sequence,
+        last_record_sha256: wire.last_record_sha256.clone(),
+        capability_by_session: wire.capability_by_session.clone(),
+        session_order: wire.session_order.clone(),
+        structure_by_turn: wire.structure_by_turn.clone(),
+        turn_order: wire.turn_order.clone(),
+        status: wire.status.clone(),
+    };
+    validate_checkpoint_v2(&legacy)
 }
 
 fn counters_from_status(status: &RequestLearningStatusV2) -> RequestLearningCounters {

@@ -203,6 +203,14 @@ mod tests {
             extract_pre_action_multi_source_topology_v1(&left, "combine"),
             extract_pre_action_multi_source_topology_v1(&right, "combine")
         );
+        let bytes = serde_json::to_vec(&extract_pre_action_multi_source_topology_v1(
+            &left, "combine",
+        ))
+        .expect("serialize");
+        let persisted = String::from_utf8(bytes).expect("utf8");
+        for forbidden in ["alpha", "beta", "gamma", "\"ok\"", "\"7\"", "\"9\""] {
+            assert!(!persisted.contains(forbidden));
+        }
     }
 
     #[test]
