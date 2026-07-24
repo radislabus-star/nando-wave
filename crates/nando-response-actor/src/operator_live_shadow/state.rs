@@ -187,29 +187,7 @@ impl LiveScalarShadowState {
         let mut laws = self
             .laws
             .iter()
-            .map(|(law_sha256, law)| LiveScalarLawReport {
-                law_sha256: law_sha256.clone(),
-                teacher_action_symbol: law
-                    .support
-                    .first()
-                    .map(|row| row.outcome.action.action_symbol.clone())
-                    .unwrap_or_default(),
-                operation_kind: law
-                    .support_actor_hypotheses
-                    .first()
-                    .map(response_operation_kind)
-                    .unwrap_or("unresolved")
-                    .to_owned(),
-                support_rows: law.support.len(),
-                future_rows: law.future.len(),
-                distinct_support_sessions: law
-                    .support
-                    .iter()
-                    .map(|row| row.before.session_id_sha256.as_str())
-                    .collect::<BTreeSet<_>>()
-                    .len(),
-                actor_hypotheses: law.support_actor_hypotheses.len(),
-            })
+            .map(|(law_sha256, law)| live_scalar_law_report(law_sha256, law))
             .collect::<Vec<_>>();
         laws.sort_by(|left, right| {
             right
@@ -253,10 +231,46 @@ impl LiveScalarShadowState {
         };
         let mut candidates = Vec::new();
         for (law_key, law) in &self.laws {
+            let blockers_before = report.blockers.clone();
             evaluate_live_law(law_key, law, &mut report, &mut candidates);
+            if let Some(law_report) = report
+                .laws
+                .iter_mut()
+                .find(|law_report| law_report.law_sha256 == *law_key)
+            {
+                law_report.evaluation_blockers = report
+                    .blockers
+                    .iter()
+                    .filter_map(|(blocker, count)| {
+                        let delta = count
+                            .saturating_sub(blockers_before.get(blocker).copied().unwrap_or(0));
+                        (delta != 0).then(|| (blocker.clone(), delta))
+                    })
+                    .collect();
+            }
         }
         report.admission_candidates = candidates.len();
         report
+    }
+
+    pub(crate) fn report_law(&self, law_sha256: &str) -> Result<LiveScalarShadowReport, String> {
+        let law = self
+            .laws
+            .get(law_sha256)
+            .ok_or_else(|| format!("live_scalar_law_not_found:{law_sha256}"))?;
+        let mut report = LiveScalarShadowReport {
+            identification_policy: "adaptive_version_space_v1".to_owned(),
+            law_count: 1,
+            support_rows: law.support.len(),
+            future_rows: law.future.len(),
+            laws: vec![live_scalar_law_report(law_sha256, law)],
+            ..LiveScalarShadowReport::default()
+        };
+        let mut candidates = Vec::new();
+        evaluate_live_law(law_sha256, law, &mut report, &mut candidates);
+        report.laws[0].evaluation_blockers = report.blockers.clone();
+        report.admission_candidates = candidates.len();
+        Ok(report)
     }
 
     #[must_use]
@@ -292,6 +306,33 @@ impl LiveScalarShadowState {
                 })
         });
         support
+    }
+}
+
+fn live_scalar_law_report(law_sha256: &str, law: &LiveScalarLawState) -> LiveScalarLawReport {
+    LiveScalarLawReport {
+        law_sha256: law_sha256.to_owned(),
+        teacher_action_symbol: law
+            .support
+            .first()
+            .map(|row| row.outcome.action.action_symbol.clone())
+            .unwrap_or_default(),
+        operation_kind: law
+            .support_actor_hypotheses
+            .first()
+            .map(response_operation_kind)
+            .unwrap_or("unresolved")
+            .to_owned(),
+        support_rows: law.support.len(),
+        future_rows: law.future.len(),
+        distinct_support_sessions: law
+            .support
+            .iter()
+            .map(|row| row.before.session_id_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        actor_hypotheses: law.support_actor_hypotheses.len(),
+        evaluation_blockers: BTreeMap::new(),
     }
 }
 

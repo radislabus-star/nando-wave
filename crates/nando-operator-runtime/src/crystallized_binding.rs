@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use nando_core::wave::{
     Commitment256, LocalRelationFragment, OperatorCircuit, OperatorPage32, RoleGraph,
     RuntimeRoleBinder, SearchCompletion, StructuralRoleSignature, SurfaceFragmentBundle,
-    TernaryRelationState, TransformOp8, phase_vector_from_atoms,
+    TernaryRelationState, TransformOp8, TypedProgramAtom, phase_vector_from_atoms,
 };
 use nando_operator_kernel::{
     AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionScalarType,
@@ -184,6 +184,17 @@ where
         )
         .map_err(ValidatedRuntimeBindingError::Runtime)?;
         for evidence in evidence {
+            let observed = observed_roles_from_anchors(&evidence.anchors);
+            let evidence = observed_operator_runtime_surface(
+                role_graph,
+                request_text,
+                provider_payload,
+                &observed,
+                &transforms,
+                lineage_sha256,
+                surface_sha256,
+            )
+            .map_err(ValidatedRuntimeBindingError::Runtime)?;
             let bound = match bind_operator_components(
                 role_graph,
                 relation_program,
@@ -235,6 +246,8 @@ where
         let expected_type = transform_value_type(transforms[0].parameter & 0x00ff)
             .map_err(ValidatedRuntimeBindingError::Runtime)?;
         let mut actions = BTreeMap::<String, BoundRuntimeOperator>::new();
+        let mut first_blocker = None;
+        let mut deepest_blocker = None;
         for selector in runtime_selector_candidates(
             provider_payload,
             expected_type,
@@ -245,36 +258,65 @@ where
             let Ok(evidence) = observed_scalar_runtime_surface(
                 request_text,
                 provider_payload,
-                selector,
+                selector.clone(),
                 lineage_sha256,
                 surface_sha256,
             ) else {
                 continue;
             };
-            let Ok(bound) = bind_operator_components(
+            let observed = observed_roles_from_anchors(&evidence.anchors);
+            let Ok(evidence) = observed_operator_runtime_surface(
+                role_graph,
+                request_text,
+                provider_payload,
+                &observed,
+                &transforms,
+                lineage_sha256,
+                surface_sha256,
+            ) else {
+                continue;
+            };
+            let bound = match bind_operator_components(
                 role_graph,
                 relation_program,
                 transform_program,
                 actor_template,
                 evidence,
-            ) else {
-                continue;
+            ) {
+                Ok(bound) => bound,
+                Err(error) => {
+                    let wrapped = ValidatedRuntimeBindingError::Runtime(error);
+                    first_blocker.get_or_insert(wrapped.clone());
+                    if error != RuntimeBindingError::RelationMismatch {
+                        deepest_blocker.get_or_insert(wrapped);
+                    }
+                    continue;
+                }
             };
             let bound = match page {
                 Some(page) => bound.with_vm_page(page.clone()),
                 None => bound,
             };
-            let Ok(response) = bound.execute_unverified() else {
-                continue;
+            let response = match bound.execute_unverified() {
+                Ok(response) => response,
+                Err(error) => {
+                    let wrapped = ValidatedRuntimeBindingError::Runtime(error);
+                    first_blocker.get_or_insert(wrapped.clone());
+                    deepest_blocker.get_or_insert(wrapped);
+                    continue;
+                }
             };
-            if validator(&bound, &response).is_err() {
+            if let Err(error) = validator(&bound, &response) {
+                let wrapped = ValidatedRuntimeBindingError::Validation(error);
+                first_blocker.get_or_insert(wrapped.clone());
+                deepest_blocker.get_or_insert(wrapped);
                 continue;
             }
             actions.entry(response).or_insert(bound);
         }
         return match actions.len() {
-            0 => Err(ValidatedRuntimeBindingError::Runtime(
-                RuntimeBindingError::MissingAnchor,
+            0 => Err(deepest_blocker.or(first_blocker).unwrap_or(
+                ValidatedRuntimeBindingError::Runtime(RuntimeBindingError::MissingAnchor),
             )),
             1 => Ok(actions.into_values().next().expect("one action class")),
             _ => Err(ValidatedRuntimeBindingError::Runtime(
@@ -289,10 +331,12 @@ where
             RuntimeBindingError::MissingAnchor,
         ));
     }
-    let evidence = observed_multi_role_runtime_surface(
+    let evidence = observed_operator_runtime_surface(
+        role_graph,
         request_text,
         provider_payload,
         &observed,
+        &transforms,
         lineage_sha256,
         surface_sha256,
     )
@@ -348,6 +392,16 @@ pub fn independently_rebound_actor_candidates(
         )?;
         let mut programs = BTreeMap::<String, ResponseProgram>::new();
         for surface in evidence {
+            let observed = observed_roles_from_anchors(&surface.anchors);
+            let surface = observed_operator_runtime_surface(
+                role_graph,
+                request_text,
+                provider_payload,
+                &observed,
+                &transforms,
+                *surface.bundle.lineage_sha256(),
+                *surface.bundle.surface_sha256(),
+            )?;
             let report = RuntimeRoleBinder::bind(
                 role_graph,
                 relation_program,
@@ -358,7 +412,9 @@ pub fn independently_rebound_actor_candidates(
                 return Err(RuntimeBindingError::BindingExhausted);
             }
             for mapping in report.mappings() {
-                let selectors = selectors_for_mapping(&transforms, mapping, &surface)?;
+                let Ok(selectors) = selectors_for_mapping(&transforms, mapping, &surface) else {
+                    continue;
+                };
                 let program = instantiate_bound_actor(actor_template, &transforms, &selectors)?;
                 if execute_response_unverified(&program, request_text, provider_payload)
                     .response
@@ -406,10 +462,12 @@ pub fn independently_rebound_actor_candidates(
         }
         let payload = serde_json::to_vec(provider_payload)
             .map_err(|_| RuntimeBindingError::RelationMismatch)?;
-        let evidence = observed_multi_role_runtime_surface(
+        let evidence = observed_operator_runtime_surface(
+            role_graph,
             request_text,
             provider_payload,
             &observed,
+            &transforms,
             digest_parts(
                 b"nando.independent-verifier-lineage.v1",
                 &[request_text.as_bytes(), &payload],
@@ -431,7 +489,9 @@ pub fn independently_rebound_actor_candidates(
             return Err(RuntimeBindingError::RelationMismatch);
         }
         for mapping in report.mappings() {
-            let selectors = selectors_for_mapping(&transforms, mapping, &evidence)?;
+            let Ok(selectors) = selectors_for_mapping(&transforms, mapping, &evidence) else {
+                continue;
+            };
             let program = instantiate_bound_actor(actor_template, &transforms, &selectors)?;
             let Some(response) =
                 execute_response_unverified(&program, request_text, provider_payload).response
@@ -687,6 +747,164 @@ pub fn observed_multi_role_runtime_surface(
     })
 }
 
+fn observed_roles_from_anchors(anchors: &[RuntimeRoleAnchor]) -> Vec<ObservedRoleCandidate> {
+    anchors
+        .iter()
+        .enumerate()
+        .filter_map(|(index, anchor)| {
+            Some(ObservedRoleCandidate {
+                value_type: selector_value_type(&anchor.selector)?,
+                selector: anchor.selector.clone(),
+                request_position: u16::try_from(index).unwrap_or(u16::MAX),
+                json_path_sha256: anchor.json_path_sha256.unwrap_or_else(|| {
+                    digest_parts(
+                        b"nando.runtime-observed-anchor.v1",
+                        &[&(index as u64).to_le_bytes()],
+                    )
+                }),
+                source_class: ObservedSourceClass::ImmediateToolJson,
+            })
+        })
+        .collect()
+}
+
+fn observed_operator_runtime_surface(
+    role_graph: &RoleGraph,
+    request_text: &str,
+    provider_payload: &Value,
+    observed_roles: &[ObservedRoleCandidate],
+    transforms: &[TransformOp8],
+    lineage_sha256: Commitment256,
+    surface_sha256: Commitment256,
+) -> Result<RuntimeSurfaceEvidence, RuntimeBindingError> {
+    let external_roles = ordered_transform_operand_roles(transforms);
+    if observed_roles.len() != external_roles.len() {
+        return Err(RuntimeBindingError::OperandArityMismatch);
+    }
+    let role_count = 1_usize
+        .saturating_add(external_roles.len())
+        .saturating_add(transforms.len());
+    if role_count != usize::from(role_graph.role_count()) || role_count > usize::from(u8::MAX) {
+        return Err(RuntimeBindingError::RelationMismatch);
+    }
+
+    let context = 0_u8;
+    let planes = (0..observed_roles.len())
+        .map(|index| u8::try_from(index).map_err(|_| RuntimeBindingError::RelationMismatch))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut roles = vec![StructuralRoleSignature::new(0, 0, 0, 0, Vec::new()); role_count];
+    roles[usize::from(context)] = StructuralRoleSignature::new(5, 1, 0, 1, planes.clone());
+    let mut canonical_to_local = BTreeMap::new();
+    let mut relations = Vec::with_capacity(observed_roles.len());
+    let mut anchors = Vec::with_capacity(observed_roles.len());
+
+    for (index, (canonical_role, observed)) in external_roles.iter().zip(observed_roles).enumerate()
+    {
+        let local_role = u8::try_from(index.saturating_add(1))
+            .map_err(|_| RuntimeBindingError::RelationMismatch)?;
+        if canonical_to_local
+            .insert(*canonical_role, local_role)
+            .is_some()
+        {
+            return Err(RuntimeBindingError::UnsupportedTransformProgram);
+        }
+        let plane = u8::try_from(index).map_err(|_| RuntimeBindingError::RelationMismatch)?;
+        roles[usize::from(local_role)] = if observed_roles.len() == 1 {
+            runtime_role_signature_for_selector(&observed.selector, plane)
+        } else {
+            runtime_multi_role_signature_for_selector(&observed.selector, plane)
+        };
+        let phase = if observed_roles.len() == 1 {
+            let atoms = [
+                format!(
+                    "scalar_type:{}",
+                    runtime_value_type_tag(observed.value_type)
+                ),
+                "cardinality:unique".to_owned(),
+            ];
+            phase_vector_from_atoms(atoms.iter().map(String::as_str), 1)[0]
+        } else {
+            let atom = format!(
+                "scalar_role:{index}:type:{}",
+                runtime_value_type_tag(observed.value_type)
+            );
+            phase_vector_from_atoms([atom.as_str()], 1)[0]
+        };
+        relations.push(LocalRelationFragment {
+            plane,
+            source_local_role: context,
+            target_local_role: local_role,
+            state: TernaryRelationState::Supported,
+            phase_anchor: phase,
+        });
+        anchors.push(RuntimeRoleAnchor {
+            local_role,
+            selector: observed.selector.clone(),
+            json_path_sha256: Some(observed.json_path_sha256),
+        });
+    }
+
+    // Produced roles are operator-owned VM slots, not observations recovered
+    // from teacher output. Runtime only supplies and anchors external operands.
+    for (index, transform) in transforms.iter().enumerate() {
+        let local_role = u8::try_from(
+            1_usize
+                .saturating_add(external_roles.len())
+                .saturating_add(index),
+        )
+        .map_err(|_| RuntimeBindingError::RelationMismatch)?;
+        if canonical_to_local
+            .insert(transform.output, local_role)
+            .is_some()
+        {
+            return Err(RuntimeBindingError::UnsupportedTransformProgram);
+        }
+        roles[usize::from(local_role)] = role_graph
+            .canonical_roles()
+            .get(usize::from(transform.output))
+            .cloned()
+            .ok_or(RuntimeBindingError::RelationMismatch)?;
+    }
+
+    let program_atoms = transforms
+        .iter()
+        .map(|transform| {
+            let map_role = |canonical_role: u8| {
+                if canonical_role == TRANSFORM_ROLE_NONE {
+                    Ok(TRANSFORM_ROLE_NONE)
+                } else {
+                    canonical_to_local
+                        .get(&canonical_role)
+                        .copied()
+                        .ok_or(RuntimeBindingError::RelationMismatch)
+                }
+            };
+            Ok(TypedProgramAtom {
+                opcode: transform.opcode,
+                output_local_role: map_role(transform.output)?,
+                source_a_local_role: map_role(transform.source_a)?,
+                source_b_local_role: map_role(transform.source_b)?,
+                parameter: transform.parameter,
+                flags: transform.flags,
+            })
+        })
+        .collect::<Result<Vec<_>, RuntimeBindingError>>()?;
+    let bundle = SurfaceFragmentBundle::new(
+        lineage_sha256,
+        surface_sha256,
+        roles,
+        relations,
+        program_atoms,
+    )
+    .map_err(|_| RuntimeBindingError::RelationMismatch)?;
+    Ok(RuntimeSurfaceEvidence {
+        bundle,
+        request_text: request_text.to_owned(),
+        provider_payload: provider_payload.clone(),
+        anchors: anchors.into_boxed_slice(),
+    })
+}
+
 #[doc(hidden)]
 pub fn filter_runtime_evidence_candidates(
     request_text: &str,
@@ -823,8 +1041,9 @@ pub fn bind_operator_components(
     }
     let ordered_transforms = ordered_role_transforms(transform_program)?;
     let mut actions = BTreeMap::<Commitment256, Vec<_>>::new();
+    let mut anchored_mappings = 0_usize;
     for mapping in report.mappings() {
-        let selectors = ordered_transform_operand_roles(&ordered_transforms)
+        let Ok(selectors) = ordered_transform_operand_roles(&ordered_transforms)
             .into_iter()
             .map(|source_role| {
                 let source_local_role = mapping
@@ -837,7 +1056,11 @@ pub fn bind_operator_components(
                     .map(|anchor| anchor.selector.clone())
                     .ok_or(RuntimeBindingError::MissingAnchor)
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+        else {
+            continue;
+        };
+        anchored_mappings = anchored_mappings.saturating_add(1);
         let actor = instantiate_bound_actor(actor_template, &ordered_transforms, &selectors)?;
         let execution =
             execute_response_unverified(&actor, &evidence.request_text, &evidence.provider_payload);
@@ -858,6 +1081,12 @@ pub fn bind_operator_components(
             .entry(action_sha256)
             .or_default()
             .push((mapping, actor, selectors));
+    }
+    if anchored_mappings == 0 {
+        return Err(RuntimeBindingError::MissingAnchor);
+    }
+    if actions.is_empty() {
+        return Err(RuntimeBindingError::ActorDidNotExecute);
     }
     if actions.len() != 1 {
         return Err(RuntimeBindingError::AmbiguousAction);
@@ -1150,13 +1379,20 @@ pub fn runtime_selector_candidates<'a>(
     preferred: Option<&'a ResponseValueSelector>,
 ) -> impl Iterator<Item = ResponseValueSelector> + 'a {
     let mut candidates = if let Some(preferred) = preferred {
-        let scope = runtime_selector_scope(preferred);
-        let mut candidates = crate::selector_candidates(provider_payload)
-            .into_iter()
-            .filter(|candidate| runtime_selector_scope(candidate) == scope)
-            .collect::<Vec<_>>();
-        candidates.push(preferred.clone());
-        candidates
+        if is_source_neutral_request_selector(preferred) {
+            // A learned request-relative selector is already the role program.
+            // Expanding it back to every payload selector destroys its ordinal
+            // constraint and manufactures an ambiguity that evidence resolved.
+            vec![preferred.clone()]
+        } else {
+            let scope = runtime_selector_scope(preferred);
+            let mut candidates = crate::selector_candidates(provider_payload)
+                .into_iter()
+                .filter(|candidate| runtime_selector_scope(candidate) == scope)
+                .collect::<Vec<_>>();
+            candidates.push(preferred.clone());
+            candidates
+        }
     } else if expected_type == AtomValueType::Collection {
         vec![ResponseValueSelector::UniqueScalar {
             value_type: AtomValueType::Collection,

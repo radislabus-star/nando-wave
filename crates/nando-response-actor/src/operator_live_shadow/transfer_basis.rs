@@ -210,15 +210,68 @@ fn attempt_basis(
         winner,
         &future_evidence,
         &receipts,
-        actor_template,
+        actor_template.clone(),
     ) {
         Ok(operator) => BasisAttemptV1::Ready(Box::new(operator)),
         Err(error) if applicability_error(error) => BasisAttemptV1::ApplicabilityNegative(
-            format!("crystallization_{error:?}").to_lowercase(),
+            crystallization_blocker(error, frozen, winner, basis, &actor_template),
         ),
-        Err(error) => {
-            BasisAttemptV1::Contradiction(format!("crystallization_{error:?}").to_lowercase())
-        }
+        Err(error) => BasisAttemptV1::Contradiction(crystallization_blocker(
+            error,
+            frozen,
+            winner,
+            basis,
+            &actor_template,
+        )),
+    }
+}
+
+fn crystallization_blocker(
+    error: crate::CrystallizedOperatorError,
+    frozen: &FrozenOperatorBlueprintSet,
+    winner: &nando_core::wave::SealedBlueprintWinnerReceipt,
+    basis: &[&(TeacherTransition, LiveScalarCircuitSample)],
+    actor_template: &ResponseProgram,
+) -> String {
+    let mut blocker = format!("crystallization_{error:?}").to_lowercase();
+    let Some(blueprint) = frozen
+        .blueprints()
+        .iter()
+        .find(|candidate| candidate.fingerprint_sha256() == winner.winner_sha256())
+    else {
+        return blocker;
+    };
+    let future_roles = basis
+        .first()
+        .map_or(0, |(_, sample)| sample.bundle.roles().len());
+    let future_anchors = basis.first().map_or(0, |(_, sample)| sample.anchors.len());
+    blocker.push_str(&format!(
+        ":selector={}:operator_roles={}:relations={}:transforms={}:future_roles={}:anchors={}",
+        actor_selector_kind(actor_template),
+        blueprint.role_graph().role_count(),
+        blueprint.relation_program().relations().len(),
+        blueprint.transform_program().len(),
+        future_roles,
+        future_anchors,
+    ));
+    blocker
+}
+
+fn actor_selector_kind(program: &ResponseProgram) -> &'static str {
+    let Some(selector) = nando_operator_runtime::actor_primary_selector(program) else {
+        return "none";
+    };
+    match selector {
+        ResponseValueSelector::RequestLastToken => "request_last_token",
+        ResponseValueSelector::RequestUniqueLiteral => "request_unique_literal",
+        ResponseValueSelector::RequestReferencedJsonField { .. } => "request_field",
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. } => "request_field_ordinal",
+        ResponseValueSelector::UniqueScalar { .. } => "unique_scalar",
+        ResponseValueSelector::UniqueTurnScalar { .. } => "unique_turn_scalar",
+        ResponseValueSelector::JsonField { .. } => "json_field",
+        ResponseValueSelector::JsonScalarOrdinal { .. } => "json_scalar_ordinal",
+        ResponseValueSelector::ContentLinePrefix { .. } => "content_line_prefix",
+        _ => "other",
     }
 }
 

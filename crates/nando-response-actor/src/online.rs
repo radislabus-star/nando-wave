@@ -43,6 +43,7 @@ use evidence::{
     update_exact_guard,
 };
 pub use stream::{
+    read_live_scalar_law_report_from_checkpoint_bytes_v1,
     read_opportunity_audit_rows_from_checkpoint_bytes_v1, read_opportunity_audit_rows_v1,
     read_retained_relation_frames_from_checkpoint_bytes_v1, run_online_response_tail,
 };

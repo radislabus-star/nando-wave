@@ -34,6 +34,17 @@ pub fn read_retained_relation_frames_from_checkpoint_bytes_v1(
         .bounded_relation_frames_for_multi_source_proof())
 }
 
+/// Evaluates one retained law without replaying or rewriting its checkpoint.
+/// The returned view is diagnostic only and cannot produce admission authority.
+pub fn read_live_scalar_law_report_from_checkpoint_bytes_v1(
+    bytes: &[u8],
+    law_sha256: &str,
+) -> Result<crate::LiveScalarShadowReport, String> {
+    let checkpoint = decode_online_checkpoint_bytes(bytes)?
+        .ok_or_else(|| "online_checkpoint_schema_unsupported".to_owned())?;
+    checkpoint.live_scalar_shadow.report_law(law_sha256)
+}
+
 impl OnlineResponseStream {
     #[must_use]
     pub const fn checkpoint_restored(&self) -> bool {

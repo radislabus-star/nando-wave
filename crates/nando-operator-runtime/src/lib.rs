@@ -30,4 +30,6 @@ pub use selector_candidates::*;
 pub use traffic_shadow_v3::*;
 
 #[cfg(test)]
+mod crystallized_binding_tests;
+#[cfg(test)]
 mod runtime_context_v3_tests;

@@ -219,6 +219,8 @@ pub struct LiveScalarLawReport {
     pub future_rows: usize,
     pub distinct_support_sessions: usize,
     pub actor_hypotheses: usize,
+    #[serde(default)]
+    pub evaluation_blockers: BTreeMap<String, usize>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
