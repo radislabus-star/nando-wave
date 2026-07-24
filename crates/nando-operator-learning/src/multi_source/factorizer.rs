@@ -223,7 +223,12 @@ fn completed_effect(joined: &BlindThenRevealJoinedTransitionV1) -> CompletedEffe
     } else {
         let role_inputs = atoms
             .iter()
-            .filter(|atom| **atom == CompletedEffectAtomV1::RoleInput)
+            .filter(|atom| {
+                matches!(
+                    atom,
+                    CompletedEffectAtomV1::RoleInput | CompletedEffectAtomV1::RoleInputSlot { .. }
+                )
+            })
             .count();
         match role_inputs {
             0 => CompletedEffectFormV1::Unexplained,

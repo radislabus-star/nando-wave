@@ -174,12 +174,21 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
     let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
     for joined in joined_rows {
         let factorized = factor_multi_source_row_v1(joined);
-        if !matches!(
+        let supported_shape = matches!(
             factorized.pre_action_shape,
             PreActionShapeClassV1::SingleRoleProjection
                 | PreActionShapeClassV1::OneOutputManyScalarRoles
                 | PreActionShapeClassV1::ManyOutputsLatestRelevantRole
-        ) || factorized.completed_effect != CompletedEffectFormV1::SingleRoleProjection
+                | PreActionShapeClassV1::CrossOutputDependency
+        );
+        let supported_effect = matches!(
+            factorized.completed_effect,
+            CompletedEffectFormV1::SingleRoleProjection
+                | CompletedEffectFormV1::MultiRoleRendering
+                | CompletedEffectFormV1::CrossOutputComposition
+        );
+        if !supported_shape
+            || !supported_effect
             || !matches!(
                 joined.topology.extraction_status,
                 MultiSourceExtractionStatusV1::Complete
@@ -272,7 +281,7 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
         return terminal_report(
             evidence_epoch_sha256,
             MultiSourceT1IdentificationStateV1::NoEligibleCohort,
-            "complete_single_role_projection_missing",
+            "complete_transferable_projection_missing",
         );
     };
     let shape_root = cohort_key.effect_shape_root_sha256;

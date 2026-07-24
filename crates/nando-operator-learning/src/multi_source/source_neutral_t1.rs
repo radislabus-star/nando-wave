@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
     AtomSource, AtomValueType, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
@@ -54,6 +54,9 @@ pub(super) fn t1_program_consistency_blocker(
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> Option<&'static str> {
+    if selected_observations(frame).is_some_and(|observations| observations.len() > 1) {
+        return multi_role_program_consistency_blocker(program, joined, frame);
+    }
     let Some((_, selected_value_root, _, observed_selector)) = selected_observation(frame) else {
         return Some("selected_observation_missing_or_ambiguous");
     };
@@ -74,11 +77,73 @@ pub(super) fn t1_program_consistency_blocker(
         .then_some("physical_transition_mismatch")
 }
 
+fn multi_role_program_consistency_blocker(
+    program: &ResponseProgram,
+    joined: &BlindThenRevealJoinedTransitionV1,
+    frame: &RelationFrame,
+) -> Option<&'static str> {
+    let Some(observations) = selected_observations(frame) else {
+        return Some("selected_observation_missing_or_ambiguous");
+    };
+    let Some(selectors) = program_role_selectors(program) else {
+        return Some("primary_selector_missing");
+    };
+    if selectors.len() != observations.len() {
+        return Some("structural_role_count_mismatch");
+    }
+    let mut bound = program.clone();
+    let mut used_observations = BTreeMap::<ResponseValueSelector, ()>::new();
+    for selector in selectors {
+        let Some(witness) = witness_for_selector(selector, joined) else {
+            return Some("structural_role_missing_or_ambiguous");
+        };
+        let Some(role) = role_for_witness(joined, witness) else {
+            return Some("selected_structural_role_missing");
+        };
+        let matches = observations
+            .iter()
+            .filter(|observation| {
+                observation.value_root == witness.value_sha256
+                    && role_type_matches(role.type_class, observation.value_type)
+            })
+            .collect::<Vec<_>>();
+        let [observation] = matches.as_slice() else {
+            return Some("structural_role_value_mismatch");
+        };
+        if used_observations
+            .insert(observation.selector.clone(), ())
+            .is_some()
+        {
+            return Some("structural_role_binding_ambiguous");
+        }
+        if replace_program_selector(&mut bound, selector, observation.selector).is_none() {
+            return Some("selector_rewrite_failed");
+        }
+    }
+    if used_observations.len() != observations.len() {
+        return Some("structural_role_coverage_incomplete");
+    }
+    (!crate::synthesis::program_is_consistent(&bound, frame))
+        .then_some("physical_transition_mismatch")
+}
+
 fn source_neutralize_t1_program(
     program: &ResponseProgram,
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> Option<ResponseProgram> {
+    let observations = selected_observations(frame)?;
+    if observations.len() > 1 {
+        let mut candidate = program.clone();
+        for observation in observations {
+            let witness = selected_witness(joined, observation.value_root, observation.value_type)?;
+            let role = role_for_witness(joined, witness)?;
+            let selector =
+                structural_selector_for_role(joined, role, witness, observation.value_type)?;
+            replace_program_selector(&mut candidate, observation.selector, &selector)?;
+        }
+        return Some(candidate);
+    }
     let (_, selected_value_root, selected_value_type, observed_selector) =
         selected_observation(frame)?;
     let witness = selected_witness(joined, selected_value_root, selected_value_type)?;
@@ -90,34 +155,39 @@ fn source_neutralize_t1_program(
     if !role_type_matches(role.type_class, selected_value_type) {
         return None;
     }
-    let selector = if role_has_relation(
+    let selector = structural_selector_for_role(joined, role, witness, selected_value_type)?;
+    let mut candidate = program.clone();
+    replace_t1_selector(&mut candidate, observed_selector, &selector)?;
+    Some(candidate)
+}
+
+fn structural_selector_for_role(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    role: &MultiSourceRoleNodeV1,
+    witness: &MultiSourceRoleWitnessV1,
+    value_type: AtomValueType,
+) -> Option<ResponseValueSelector> {
+    if role_has_relation(
         joined,
         role.local_role_id,
         MultiSourceRelationKindV1::ContinuationHandle,
     ) {
-        ResponseValueSelector::ContinuationHandle {
-            value_type: selected_value_type,
-        }
+        Some(ResponseValueSelector::ContinuationHandle { value_type })
     } else if let Some(ordinal) = witness.request_reference_ordinal {
-        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+        Some(ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
             ordinal,
-            value_type: selected_value_type,
-        }
+            value_type,
+        })
     } else if joined.topology.roles.len() == 1 {
-        ResponseValueSelector::UniqueScalar {
-            value_type: selected_value_type,
-        }
+        Some(ResponseValueSelector::UniqueScalar { value_type })
     } else if role.temporal_class == MultiSourceTemporalClassV1::Latest {
-        ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+        Some(ResponseValueSelector::LatestTurnOutputScalarOrdinal {
             scalar_ordinal: role.value_ordinal,
-            value_type: selected_value_type,
-        }
+            value_type,
+        })
     } else {
-        return None;
-    };
-    let mut candidate = program.clone();
-    replace_t1_selector(&mut candidate, observed_selector, &selector)?;
-    Some(candidate)
+        None
+    }
 }
 
 fn source_neutral_t1_blocker(
@@ -199,6 +269,51 @@ fn replace_t1_selector(
     Some(())
 }
 
+fn replace_program_selector(
+    program: &mut ResponseProgram,
+    observed: &ResponseValueSelector,
+    structural: &ResponseValueSelector,
+) -> Option<()> {
+    let mut replaced = false;
+    match &mut program.operation {
+        ResponseOperation::FunctionCallFromRoles { selector, .. }
+        | ResponseOperation::CustomToolCallFromRoles { selector, .. } => {
+            if selector == observed {
+                *selector = structural.clone();
+                replaced = true;
+            }
+        }
+        ResponseOperation::ProjectSelectedValue {
+            selector, renderer, ..
+        } => {
+            if selector == observed {
+                *selector = structural.clone();
+                replaced = true;
+            }
+            if let nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments } =
+                renderer
+            {
+                for segment in segments {
+                    if let ResponseRenderSegment::Selected { selector, .. } = segment
+                        && selector == observed
+                    {
+                        *selector = structural.clone();
+                        replaced = true;
+                    }
+                }
+            }
+        }
+        _ => return None,
+    }
+    if !replaced {
+        return None;
+    }
+    if matches!(structural, ResponseValueSelector::ContinuationHandle { .. }) {
+        normalize_continuation_argument_roles(program);
+    }
+    Some(())
+}
+
 fn normalize_continuation_argument_roles(program: &mut ResponseProgram) {
     let arguments = match &mut program.operation {
         ResponseOperation::FunctionCallFromRoles { arguments, .. }
@@ -218,7 +333,14 @@ fn witness_for_program<'a>(
     program: &ResponseProgram,
     joined: &'a BlindThenRevealJoinedTransitionV1,
 ) -> Option<&'a MultiSourceRoleWitnessV1> {
-    match primary_t1_selector(program)? {
+    witness_for_selector(primary_t1_selector(program)?, joined)
+}
+
+fn witness_for_selector<'a>(
+    selector: &ResponseValueSelector,
+    joined: &'a BlindThenRevealJoinedTransitionV1,
+) -> Option<&'a MultiSourceRoleWitnessV1> {
+    match selector {
         ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
             ordinal,
             value_type,
@@ -259,6 +381,25 @@ fn witness_for_program<'a>(
         }
         _ => None,
     }
+}
+
+fn program_role_selectors(program: &ResponseProgram) -> Option<Vec<&ResponseValueSelector>> {
+    let primary = primary_t1_selector(program)?;
+    let mut selectors = vec![primary];
+    if let ResponseOperation::ProjectSelectedValue {
+        renderer: nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments },
+        ..
+    } = &program.operation
+    {
+        for segment in segments {
+            if let ResponseRenderSegment::Selected { selector, .. } = segment
+                && !selectors.contains(&selector)
+            {
+                selectors.push(selector);
+            }
+        }
+    }
+    Some(selectors)
 }
 
 fn role_has_relation(
@@ -381,6 +522,55 @@ fn selected_observation(
         .next()
         .is_none()
         .then_some((slot_id, value_root, value_type, selector))
+}
+
+struct SelectedObservation<'a> {
+    value_root: &'a str,
+    value_type: AtomValueType,
+    selector: &'a ResponseValueSelector,
+}
+
+fn selected_observations(frame: &RelationFrame) -> Option<Vec<SelectedObservation<'_>>> {
+    let observations = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::ObservationSelector { slot_id, selector } => {
+                let slots = frame
+                    .atoms
+                    .iter()
+                    .filter_map(|candidate| match candidate {
+                        RelationAtom::TypedSlot {
+                            slot_id: candidate_slot,
+                            value_type,
+                            source: AtomSource::Observation,
+                            value_sha256,
+                        } if candidate_slot == slot_id => {
+                            Some((value_sha256.as_str(), *value_type))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let [(value_root, value_type)] = slots.as_slice() else {
+                    return None;
+                };
+                Some(SelectedObservation {
+                    value_root,
+                    value_type: *value_type,
+                    selector,
+                })
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if observations.is_empty() {
+        return None;
+    }
+    let unique_selectors = observations
+        .iter()
+        .map(|observation| observation.selector)
+        .collect::<BTreeSet<_>>();
+    (unique_selectors.len() == observations.len()).then_some(observations)
 }
 
 fn primary_t1_selector(program: &ResponseProgram) -> Option<&ResponseValueSelector> {

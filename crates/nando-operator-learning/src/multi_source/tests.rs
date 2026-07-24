@@ -10,8 +10,8 @@ use nando_operator_kernel::{
     MultiSourceRelationEdgeV1, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
     MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
     PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA, RelationAtom,
-    RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram, ResponseValueSelector,
-    SemanticRole, sha256_bytes,
+    RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram, ResponseRenderSegment,
+    ResponseValueSelector, SemanticRole, ValueProjectionFormat, sha256_bytes,
 };
 
 use super::*;
@@ -457,6 +457,143 @@ fn t1_completed_value_projection_frame(
     }
 }
 
+fn t1_multi_role_topology_row(
+    intent: &str,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    captured_at_unix_ms: u64,
+) -> PreActionTopologyAuditRowV1 {
+    let mut row = topology_row(
+        intent,
+        request_event,
+        session,
+        capture_sequence,
+        captured_at_unix_ms,
+    );
+    let action_event = request_event.replacen("request", "action", 1);
+    for (ordinal, role) in row.structure.topology.roles.iter_mut().enumerate() {
+        role.type_class = MultiSourceTypeClassV1::String;
+        role.value_ordinal = u16::try_from(ordinal).expect("bounded role ordinal");
+    }
+    row.structure.topology.role_witnesses[0].value_sha256 = root(&format!("first:{action_event}"));
+    row.structure.topology.role_witnesses[0].request_reference_ordinal = Some(0);
+    row.structure.topology.role_witnesses[1].value_sha256 = root(&format!("second:{action_event}"));
+    row.structure.topology.role_witnesses[1].request_reference_ordinal = Some(1);
+    row.structure
+        .topology
+        .relations
+        .push(MultiSourceRelationEdgeV1 {
+            relation: MultiSourceRelationKindV1::RequestReferencesRole,
+            source_role_id: 1,
+            target_role_id: 1,
+        });
+    row.structure.topology.relations.sort();
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("multi-role topology");
+    row
+}
+
+fn t1_multi_role_projection_frame(
+    intent: &str,
+    event: &str,
+    session: &str,
+    observed_at_unix_ms: u64,
+    first_field: &str,
+    second_field: &str,
+) -> RelationFrame {
+    let first_root = root(&format!("first:{event}"));
+    let second_root = root(&format!("second:{event}"));
+    let first_selector = ResponseValueSelector::JsonField {
+        field: first_field.to_owned(),
+        value_type: AtomValueType::String,
+    };
+    let second_selector = ResponseValueSelector::JsonField {
+        field: second_field.to_owned(),
+        value_type: AtomValueType::String,
+    };
+    RelationFrame {
+        schema: RELATION_FRAME_SCHEMA.to_owned(),
+        frame_id_sha256: root(&format!("frame:{event}")),
+        event_id_sha256: root(event),
+        client_intent_id_sha256: root(intent),
+        session_id_sha256: root(session),
+        observed_at_unix_nanos: observed_at_unix_ms.saturating_mul(1_000_000),
+        estimated_input_tokens: 100,
+        extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+        verifier_label: Some(true),
+        atoms: vec![
+            RelationAtom::CompletionState {
+                value: "completed".to_owned(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 7,
+                value_type: AtomValueType::String,
+                source: AtomSource::Observation,
+                value_sha256: first_root.clone(),
+            },
+            RelationAtom::UniqueSlot { slot_id: 7 },
+            RelationAtom::ObservationSelector {
+                slot_id: 7,
+                selector: first_selector.clone(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 8,
+                value_type: AtomValueType::String,
+                source: AtomSource::Observation,
+                value_sha256: second_root.clone(),
+            },
+            RelationAtom::UniqueSlot { slot_id: 8 },
+            RelationAtom::ObservationSelector {
+                slot_id: 8,
+                selector: second_selector.clone(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 11,
+                value_type: AtomValueType::String,
+                source: AtomSource::Action,
+                value_sha256: first_root,
+            },
+            RelationAtom::SlotEquality {
+                left_slot: 7,
+                right_slot: 11,
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 12,
+                value_type: AtomValueType::String,
+                source: AtomSource::Action,
+                value_sha256: second_root,
+            },
+            RelationAtom::SlotEquality {
+                left_slot: 8,
+                right_slot: 12,
+            },
+            RelationAtom::ActionValueProjection {
+                format: ValueProjectionFormat::PlainText,
+                renderer: nando_operator_kernel::CollectionOutputRenderer::RenderSequence {
+                    segments: vec![
+                        ResponseRenderSegment::Primary,
+                        ResponseRenderSegment::Static {
+                            text: ": ".to_owned(),
+                        },
+                        ResponseRenderSegment::Selected {
+                            selector: second_selector,
+                            format: ValueProjectionFormat::PlainText,
+                        },
+                    ],
+                },
+            },
+        ],
+        evidence_ref_sha256: root(&format!("evidence:{event}")),
+    }
+}
+
 fn opportunity(intent: &str, class: ReducibilityClass) -> OpportunityIntentAuditRowV1 {
     OpportunityIntentAuditRowV1 {
         intent_sha256: root(intent),
@@ -529,6 +666,39 @@ fn factorizer_keeps_applicability_pre_action_and_effect_separate() {
     assert_eq!(
         factorized.completed_effect,
         CompletedEffectFormV1::SingleRoleProjection
+    );
+}
+
+#[test]
+fn factorizer_preserves_two_independent_action_role_inputs() {
+    let mut frame = completed_frame("turn", "action-a", "session", 1_500);
+    frame.atoms.push(RelationAtom::TypedSlot {
+        slot_id: 2,
+        value_type: AtomValueType::String,
+        source: AtomSource::Action,
+        value_sha256: root("other:action-a"),
+    });
+    frame.atoms.push(RelationAtom::ActionRoleArgument {
+        name: "other".to_owned(),
+        slot_id: 2,
+        value_type: Some(AtomValueType::String),
+    });
+    let ledger = MultiSourceJoinLedgerV1::build(
+        &[topology_row("turn", "request-a", "session", 1, 1_000)],
+        &[frame],
+    );
+    let joined = &ledger.rows()[0];
+    assert_eq!(
+        joined
+            .effect_atoms
+            .iter()
+            .filter(|atom| matches!(atom, CompletedEffectAtomV1::RoleInputSlot { .. }))
+            .count(),
+        2
+    );
+    assert_eq!(
+        factor_multi_source_row_v1(joined).completed_effect,
+        CompletedEffectFormV1::MultiRoleRendering
     );
 }
 
@@ -705,6 +875,89 @@ fn t1_identification_uses_one_support_and_one_independent_future() {
         serde_json::to_vec(&report).expect("report"),
         serde_json::to_vec(&reversed).expect("reversed report")
     );
+}
+
+#[test]
+fn multi_role_projection_identifies_one_law_across_renamed_surfaces() {
+    let topologies = vec![
+        t1_multi_role_topology_row("turn-a", "request-a", "session-a", 1, 1_000),
+        t1_multi_role_topology_row("turn-b", "request-b", "session-b", 2, 2_000),
+    ];
+    let frames = vec![
+        t1_multi_role_projection_frame(
+            "turn-a",
+            "action-a",
+            "session-a",
+            1_500,
+            "city",
+            "temperature",
+        ),
+        t1_multi_role_projection_frame(
+            "turn-b",
+            "action-b",
+            "session-b",
+            2_500,
+            "place",
+            "degrees",
+        ),
+    ];
+    let physical =
+        crate::synthesis::enumerate_response_program_candidates(std::slice::from_ref(&frames[0]));
+    assert_eq!(physical.len(), 1, "{physical:#?}");
+    assert!(crate::synthesis::program_is_consistent(
+        &physical[0],
+        &frames[0]
+    ));
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    assert!(ledger.rows().iter().all(|row| {
+        factor_multi_source_row_v1(row).completed_effect
+            == CompletedEffectFormV1::MultiRoleRendering
+    }));
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("multi-role projection epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
+    assert_eq!(report.wrong_role_bindings, 0);
+    assert!(report.exact_transfer_parity);
+    let program = report
+        .canonical_program
+        .as_ref()
+        .expect("canonical program");
+    let ResponseOperation::ProjectSelectedValue {
+        selector, renderer, ..
+    } = &program.operation
+    else {
+        panic!("multi-role projection expected");
+    };
+    assert!(matches!(
+        selector,
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal: 0, .. }
+    ));
+    assert!(matches!(
+        renderer,
+        nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments }
+            if segments.iter().any(|segment| matches!(
+                segment,
+                ResponseRenderSegment::Selected {
+                    selector: ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                        ordinal: 1,
+                        ..
+                    },
+                    ..
+                }
+            ))
+    ));
 }
 
 #[test]
@@ -1214,12 +1467,20 @@ fn t1_continuation_transfers_across_pre_action_topologies() {
     ];
     let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
     let rows = ledger.rows();
+    let multi_role = rows
+        .iter()
+        .find(|row| row.topology.roles.len() == 2)
+        .expect("multi-role topology");
+    let single_role = rows
+        .iter()
+        .find(|row| row.topology.roles.len() == 1)
+        .expect("single-role topology");
     assert_eq!(
-        factor_multi_source_row_v1(&rows[0]).pre_action_shape,
+        factor_multi_source_row_v1(multi_role).pre_action_shape,
         PreActionShapeClassV1::OneOutputManyScalarRoles
     );
     assert_eq!(
-        factor_multi_source_row_v1(&rows[2]).pre_action_shape,
+        factor_multi_source_row_v1(single_role).pre_action_shape,
         PreActionShapeClassV1::SingleRoleProjection
     );
 

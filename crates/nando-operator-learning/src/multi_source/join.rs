@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
-    MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1, PreActionMultiSourceTopologyV1,
-    RelationAtom, RelationFrame, canonical_json_sha256, valid_nonzero_sha256,
+    AtomValueType, MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1,
+    PreActionMultiSourceTopologyV1, RelationAtom, RelationFrame, canonical_json_sha256,
+    valid_nonzero_sha256,
 };
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +47,10 @@ pub struct ObservedTeacherActionRefV1 {
 #[serde(rename_all = "snake_case")]
 pub enum CompletedEffectAtomV1 {
     RoleInput,
+    RoleInputSlot {
+        slot_id: u16,
+        value_type: Option<AtomValueType>,
+    },
     IntegerConstant,
     StringConstant,
     BooleanConstant,
@@ -524,11 +529,12 @@ fn completed_effect_atoms(
             RelationAtom::TypedSlot {
                 slot_id,
                 source: nando_operator_kernel::AtomSource::Action,
+                value_type,
                 ..
-            } => Some(*slot_id),
+            } => Some((*slot_id, *value_type)),
             _ => None,
         })
-        .collect::<BTreeSet<_>>();
+        .collect::<BTreeMap<_, _>>();
     let observation_slots = frame_atoms
         .iter()
         .filter_map(|atom| match atom {
@@ -540,20 +546,38 @@ fn completed_effect_atoms(
             _ => None,
         })
         .collect::<BTreeSet<_>>();
-    let slot_transfer = action_atoms.iter().any(|atom| {
-        matches!(
-            atom,
+    let action_to_observation = action_atoms
+        .iter()
+        .filter_map(|atom| match atom {
             RelationAtom::SlotEquality {
                 left_slot,
                 right_slot,
-            } if (action_slots.contains(left_slot) && observation_slots.contains(right_slot))
-                || (action_slots.contains(right_slot) && observation_slots.contains(left_slot))
-        )
-    });
+            } if action_slots.contains_key(left_slot) && observation_slots.contains(right_slot) => {
+                Some((*left_slot, *right_slot))
+            }
+            RelationAtom::SlotEquality {
+                left_slot,
+                right_slot,
+            } if action_slots.contains_key(right_slot) && observation_slots.contains(left_slot) => {
+                Some((*right_slot, *left_slot))
+            }
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut result = action_atoms
         .iter()
         .filter_map(|atom| match atom {
-            RelationAtom::ActionRoleArgument { .. } => Some(CompletedEffectAtomV1::RoleInput),
+            RelationAtom::ActionRoleArgument {
+                slot_id,
+                value_type,
+                ..
+            } => Some(CompletedEffectAtomV1::RoleInputSlot {
+                slot_id: action_to_observation
+                    .get(slot_id)
+                    .copied()
+                    .unwrap_or(*slot_id),
+                value_type: *value_type,
+            }),
             RelationAtom::ActionIntegerArgument { .. } => {
                 Some(CompletedEffectAtomV1::IntegerConstant)
             }
@@ -582,8 +606,11 @@ fn completed_effect_atoms(
             _ => None,
         })
         .collect::<Vec<_>>();
-    if slot_transfer {
-        result.push(CompletedEffectAtomV1::RoleInput);
+    for (action_slot_id, observation_slot_id) in action_to_observation {
+        result.push(CompletedEffectAtomV1::RoleInputSlot {
+            slot_id: observation_slot_id,
+            value_type: action_slots.get(&action_slot_id).copied(),
+        });
     }
     result.sort_unstable();
     result.dedup();

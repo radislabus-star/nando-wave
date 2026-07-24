@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nando_core::wave::{phase_coherence, phase_vector_from_atom_ids};
+use nando_operator_kernel::ResponseRenderSegment;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -1000,12 +1001,12 @@ fn enumerate_status_projection_candidates(support: &[RelationFrame]) -> Vec<Resp
 fn enumerate_value_projection_candidates(support: &[RelationFrame]) -> Vec<ResponseProgram> {
     if support.is_empty()
         || support.iter().any(|frame| {
-            frame
+            let observation_count = frame
                 .atoms
                 .iter()
                 .filter(|atom| matches!(atom, RelationAtom::ObservationSelector { .. }))
-                .count()
-                != 1
+                .count();
+            !(1..=32).contains(&observation_count)
                 || frame
                     .atoms
                     .iter()
@@ -1022,7 +1023,22 @@ fn enumerate_value_projection_candidates(support: &[RelationFrame]) -> Vec<Respo
     {
         return Vec::new();
     }
-    let selectors = candidate_observation_selectors(support);
+    let multi_role = support.iter().any(|frame| {
+        frame
+            .atoms
+            .iter()
+            .filter(|atom| matches!(atom, RelationAtom::ObservationSelector { .. }))
+            .count()
+            > 1
+    });
+    let selectors = if multi_role {
+        support
+            .iter()
+            .filter_map(first_observation_selector)
+            .collect::<BTreeSet<_>>()
+    } else {
+        candidate_observation_selectors(support)
+    };
     let projections = support
         .iter()
         .flat_map(|frame| frame.atoms.iter())
@@ -1066,6 +1082,13 @@ fn enumerate_value_projection_candidates(support: &[RelationFrame]) -> Vec<Respo
                 .all(|frame| program_is_consistent(program, frame))
         })
         .collect()
+}
+
+fn first_observation_selector(frame: &RelationFrame) -> Option<ResponseValueSelector> {
+    frame.atoms.iter().find_map(|atom| match atom {
+        RelationAtom::ObservationSelector { selector, .. } => Some(selector.clone()),
+        _ => None,
+    })
 }
 
 fn enumerate_custom_tool_candidates(
@@ -1821,6 +1844,20 @@ fn value_projection_frame_matches(
     renderer: &crate::CollectionOutputRenderer,
     completion_state: &str,
 ) -> bool {
+    let observation_count = frame
+        .atoms
+        .iter()
+        .filter(|atom| matches!(atom, RelationAtom::ObservationSelector { .. }))
+        .count();
+    if observation_count > 1 {
+        return multi_role_value_projection_frame_matches(
+            frame,
+            selector,
+            format,
+            renderer,
+            completion_state,
+        );
+    }
     if !matches!(completion_state, "pending" | "completed")
         || frame
             .atoms
@@ -1902,6 +1939,131 @@ fn value_projection_frame_matches(
         && frame.atoms.iter().any(
             |atom| matches!(atom, RelationAtom::UniqueSlot { slot_id } if slot_id == source_slot),
         )
+}
+
+fn multi_role_value_projection_frame_matches(
+    frame: &RelationFrame,
+    selector: &crate::ResponseValueSelector,
+    format: crate::ValueProjectionFormat,
+    renderer: &crate::CollectionOutputRenderer,
+    completion_state: &str,
+) -> bool {
+    if !matches!(completion_state, "pending" | "completed")
+        || frame
+            .atoms
+            .iter()
+            .filter(|atom| matches!(atom, RelationAtom::ActionValueProjection { .. }))
+            .count()
+            != 1
+        || frame.atoms.iter().any(|atom| {
+            matches!(
+                atom,
+                RelationAtom::ActionFunction { .. }
+                    | RelationAtom::ActionCustomTool { .. }
+                    | RelationAtom::ActionRoleArgument { .. }
+            )
+        })
+    {
+        return false;
+    }
+    let Some(RelationAtom::CompletionState { value }) = frame
+        .atoms
+        .iter()
+        .find(|atom| matches!(atom, RelationAtom::CompletionState { .. }))
+    else {
+        return false;
+    };
+    if value != completion_state
+        || !frame.atoms.iter().any(|atom| {
+            matches!(atom, RelationAtom::ActionValueProjection {
+                format: observed,
+                renderer: observed_renderer,
+            } if *observed == format && observed_renderer == renderer)
+        })
+    {
+        return false;
+    }
+    let observations = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::ObservationSelector { slot_id, selector } => {
+                Some((*slot_id, selector.clone()))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if !(2..=32).contains(&observations.len())
+        || observations.first().map(|(_, observed)| observed) != Some(selector)
+    {
+        return false;
+    }
+    let mut required = BTreeSet::from([selector.clone()]);
+    let crate::CollectionOutputRenderer::RenderSequence { segments } = renderer else {
+        return false;
+    };
+    if !segments
+        .iter()
+        .any(|segment| matches!(segment, ResponseRenderSegment::Primary))
+    {
+        return false;
+    }
+    for segment in segments {
+        if let ResponseRenderSegment::Selected { selector, .. } = segment {
+            required.insert(selector.clone());
+        }
+    }
+    let observed = observations
+        .iter()
+        .map(|(_, selector)| selector.clone())
+        .collect::<BTreeSet<_>>();
+    if observed.len() != observations.len() || observed != required {
+        return false;
+    }
+    observations
+        .iter()
+        .all(|(observation_slot, _)| frame_has_exact_action_transfer(frame, *observation_slot))
+}
+
+fn frame_has_exact_action_transfer(frame: &RelationFrame, observation_slot: u16) -> bool {
+    let Some((value_type, value_sha256)) = frame.atoms.iter().find_map(|atom| match atom {
+        RelationAtom::TypedSlot {
+            slot_id,
+            value_type,
+            source: crate::AtomSource::Observation,
+            value_sha256,
+        } if *slot_id == observation_slot => Some((*value_type, value_sha256)),
+        _ => None,
+    }) else {
+        return false;
+    };
+    let action_slots = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::SlotEquality {
+                left_slot,
+                right_slot,
+            } if *left_slot == observation_slot => Some(*right_slot),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    action_slots.len() == 1
+        && action_slots.iter().all(|action_slot| {
+            frame.atoms.iter().any(|atom| {
+                matches!(
+                    atom,
+                    RelationAtom::TypedSlot {
+                        slot_id,
+                        value_type: action_type,
+                        source: crate::AtomSource::Action,
+                        value_sha256: action_sha256,
+                    } if slot_id == action_slot
+                        && *action_type == value_type
+                        && action_sha256 == value_sha256
+                )
+            })
+        })
 }
 
 fn custom_program_shape_matches(left: &ResponseProgram, right: &ResponseProgram) -> bool {

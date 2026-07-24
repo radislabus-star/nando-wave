@@ -9,8 +9,8 @@ use std::thread;
 use memchr::memchr_iter;
 use nando_operator_kernel::{
     AtomSource, AtomValueType, CollectionOutputRenderer, RELATION_FRAME_SCHEMA, RelationAtom,
-    RelationFrame, ResponseProgram, ResponseValueSelector, ValueProjectionFormat, VerifierProgram,
-    sha256_bytes,
+    RelationFrame, ResponseProgram, ResponseRenderSegment, ResponseValueSelector,
+    ValueProjectionFormat, VerifierProgram, canonical_json_sha256, sha256_bytes,
 };
 #[cfg(test)]
 use nando_operator_learning::DeterministicEvidenceLedger;
@@ -289,6 +289,7 @@ struct CallShape {
 struct Observation {
     value_sha256: String,
     value_type: AtomValueType,
+    render_value: Option<String>,
     selector: ResponseValueSelector,
     tool_kind: String,
     call_shape: String,
@@ -2113,6 +2114,7 @@ fn scalar_observations(output: &Value, call: &CallShape, output_sha256: &str) ->
         .map(|(value, value_type, selector)| Observation {
             value_sha256: hash_value(&value),
             value_type,
+            render_value: scalar_render_value(&value),
             selector,
             tool_kind: call.name.clone(),
             call_shape: call.shape.clone(),
@@ -2120,6 +2122,16 @@ fn scalar_observations(output: &Value, call: &CallShape, output_sha256: &str) ->
             completion_state,
         })
         .collect()
+}
+
+fn scalar_render_value(value: &Value) -> Option<String> {
+    let rendered = match value {
+        Value::String(value) => value.clone(),
+        Value::Number(value) => value.to_string(),
+        Value::Bool(value) => value.to_string(),
+        _ => return None,
+    };
+    (!rendered.is_empty() && rendered.len() <= 512).then_some(rendered)
 }
 
 fn session_embedded_json_objects(text: &str) -> Vec<serde_json::Map<String, Value>> {
@@ -2256,22 +2268,35 @@ fn action_frames(
             }
         }
     }
-    let identifier_matches = matches
-        .iter()
-        .copied()
-        .filter(|(observation, _)| observation.value_type == AtomValueType::Identifier)
-        .collect::<Vec<_>>();
-    let selected = if !identifier_matches.is_empty() {
-        unique_structural_action_match(&identifier_matches)
-    } else {
-        unique_structural_action_match(&matches)
-    };
-    let Some((observation, argument)) = selected else {
+    let Some(bindings) = unique_structural_action_bindings(&matches) else {
         return Vec::new();
     };
-    let observation = observation.clone();
-    let argument = argument.to_owned();
-    let mut atoms = base_atoms(&observation, state);
+    let mut observations = BTreeMap::new();
+    for (observation, _) in &bindings {
+        observations
+            .entry((
+                observation.value_sha256.clone(),
+                observation.value_type,
+                observation.selector.clone(),
+            ))
+            .or_insert(*observation);
+    }
+    let observation_slots = observations
+        .keys()
+        .cloned()
+        .enumerate()
+        .map(|(index, key)| (key, u16::try_from(index + 1).unwrap_or(u16::MAX)))
+        .collect::<BTreeMap<_, _>>();
+    let observations_with_slots = observations
+        .iter()
+        .filter_map(|(key, observation)| {
+            observation_slots
+                .get(key)
+                .copied()
+                .map(|slot_id| (*observation, slot_id))
+        })
+        .collect::<Vec<_>>();
+    let mut atoms = base_atoms_for_observations(&observations_with_slots, state);
     atoms.push(RelationAtom::ResponseShape {
         value: if custom.is_some() {
             "custom_tool_call".to_owned()
@@ -2292,25 +2317,40 @@ fn action_frames(
             value: action_name.to_owned(),
         });
     }
-    atoms.push(RelationAtom::TypedSlot {
-        slot_id: 2,
-        value_type: observation.value_type,
-        source: AtomSource::Action,
-        value_sha256: observation.value_sha256.clone(),
-    });
-    atoms.push(RelationAtom::ActionRoleArgument {
-        name: argument.clone(),
-        slot_id: 2,
-        value_type: arguments
-            .get(&argument)
-            .and_then(action_argument_value_type),
-    });
-    atoms.push(RelationAtom::SlotEquality {
-        left_slot: 1,
-        right_slot: 2,
-    });
+    let first_action_slot = u16::try_from(observations.len() + 1).unwrap_or(u16::MAX);
+    let mut bound_arguments = BTreeSet::new();
+    for (index, (observation, argument)) in bindings.iter().enumerate() {
+        let key = (
+            observation.value_sha256.clone(),
+            observation.value_type,
+            observation.selector.clone(),
+        );
+        let Some(observation_slot) = observation_slots.get(&key).copied() else {
+            return Vec::new();
+        };
+        let action_slot =
+            first_action_slot.saturating_add(u16::try_from(index).unwrap_or(u16::MAX));
+        atoms.push(RelationAtom::TypedSlot {
+            slot_id: action_slot,
+            value_type: observation.value_type,
+            source: AtomSource::Action,
+            value_sha256: observation.value_sha256.clone(),
+        });
+        atoms.push(RelationAtom::ActionRoleArgument {
+            name: (*argument).to_owned(),
+            slot_id: action_slot,
+            value_type: arguments
+                .get(*argument)
+                .and_then(action_argument_value_type),
+        });
+        atoms.push(RelationAtom::SlotEquality {
+            left_slot: observation_slot,
+            right_slot: action_slot,
+        });
+        bound_arguments.insert(*argument);
+    }
     for (name, value) in &arguments {
-        if name == &argument {
+        if bound_arguments.contains(name.as_str()) {
             continue;
         }
         match value {
@@ -2331,7 +2371,15 @@ fn action_frames(
             _ => {}
         }
     }
-    let mut frame = build_frame(row, state, atoms, false, &observation.output_sha256);
+    let evidence = canonical_json_sha256(&(
+        "nando.multi-role-action-evidence.v1",
+        observations
+            .values()
+            .map(|observation| observation.output_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+    .unwrap_or_default();
+    let mut frame = build_frame(row, state, atoms, false, &evidence);
     frame.verifier_label = None;
     if let Some(provider_payload) = bounded_runtime_provider_payload(state)
         && let Some(expected_response) =
@@ -2350,6 +2398,33 @@ fn action_frames(
         trim_runtime_parity_outbox(state);
     }
     vec![frame]
+}
+
+fn unique_structural_action_bindings<'a>(
+    matches: &[(&'a Observation, &'a str)],
+) -> Option<Vec<(&'a Observation, &'a str)>> {
+    let mut by_argument = BTreeMap::<&str, Vec<(&Observation, &str)>>::new();
+    for (observation, argument) in matches {
+        by_argument
+            .entry(*argument)
+            .or_default()
+            .push((*observation, *argument));
+    }
+    let mut bindings = Vec::with_capacity(by_argument.len());
+    for candidates in by_argument.into_values() {
+        let identifier_candidates = candidates
+            .iter()
+            .copied()
+            .filter(|(observation, _)| observation.value_type == AtomValueType::Identifier)
+            .collect::<Vec<_>>();
+        let selected = if identifier_candidates.is_empty() {
+            unique_structural_action_match(&candidates)
+        } else {
+            unique_structural_action_match(&identifier_candidates)
+        }?;
+        bindings.push(selected);
+    }
+    (!bindings.is_empty()).then_some(bindings)
 }
 
 /// Collapses only duplicate extraction of the same structural anchor. Equal
@@ -2857,33 +2932,37 @@ fn assistant_frames(row: &Value, text: &str, state: &mut SessionState) -> Vec<Re
         .iter()
         .filter(|observation| hash_value(&parsed) == observation.value_sha256)
         .collect::<Vec<_>>();
-    if matches.len() != 1 {
-        return Vec::new();
-    }
-    let observation = matches[0];
-    let mut atoms = base_atoms(observation, state);
-    atoms.push(RelationAtom::ResponseShape {
-        value: "assistant_message".to_owned(),
-    });
-    atoms.push(RelationAtom::TypedSlot {
-        slot_id: 2,
-        value_type: observation.value_type,
-        source: AtomSource::Action,
-        value_sha256: observation.value_sha256.clone(),
-    });
-    atoms.push(RelationAtom::SlotEquality {
-        left_slot: 1,
-        right_slot: 2,
-    });
-    atoms.push(RelationAtom::ActionValueProjection {
-        format: if matches!(parsed, Value::String(_)) {
-            ValueProjectionFormat::PlainText
-        } else {
-            ValueProjectionFormat::CanonicalJson
-        },
-        renderer: CollectionOutputRenderer::Direct,
-    });
-    let frame = build_frame(row, state, atoms, true, &observation.output_sha256);
+    let frame = if matches.len() == 1 {
+        let observation = matches[0];
+        let mut atoms = base_atoms(observation, state);
+        atoms.push(RelationAtom::ResponseShape {
+            value: "assistant_message".to_owned(),
+        });
+        atoms.push(RelationAtom::TypedSlot {
+            slot_id: 2,
+            value_type: observation.value_type,
+            source: AtomSource::Action,
+            value_sha256: observation.value_sha256.clone(),
+        });
+        atoms.push(RelationAtom::SlotEquality {
+            left_slot: 1,
+            right_slot: 2,
+        });
+        atoms.push(RelationAtom::ActionValueProjection {
+            format: if matches!(parsed, Value::String(_)) {
+                ValueProjectionFormat::PlainText
+            } else {
+                ValueProjectionFormat::CanonicalJson
+            },
+            renderer: CollectionOutputRenderer::Direct,
+        });
+        build_frame(row, state, atoms, true, &observation.output_sha256)
+    } else {
+        let Some(frame) = multi_role_assistant_frame(row, text, state) else {
+            return Vec::new();
+        };
+        frame
+    };
     if let Some(provider_payload) = bounded_runtime_provider_payload(state) {
         state.runtime_parity_cases.insert(
             frame.frame_id_sha256.clone(),
@@ -2898,6 +2977,198 @@ fn assistant_frames(row: &Value, text: &str, state: &mut SessionState) -> Vec<Re
         trim_runtime_parity_outbox(state);
     }
     vec![frame]
+}
+
+fn multi_role_assistant_frame(
+    row: &Value,
+    text: &str,
+    state: &SessionState,
+) -> Option<RelationFrame> {
+    if text.is_empty() || text.len() > 16_384 {
+        return None;
+    }
+    let mut by_rendered =
+        BTreeMap::<String, BTreeMap<(AtomValueType, ResponseValueSelector), &Observation>>::new();
+    for observation in &state.observations {
+        let Some(rendered) = observation.render_value.as_ref() else {
+            continue;
+        };
+        if rendered_occurrences(text, rendered)?.is_empty() {
+            continue;
+        }
+        by_rendered.entry(rendered.clone()).or_default().insert(
+            (observation.value_type, observation.selector.clone()),
+            observation,
+        );
+    }
+    let mut role_occurrences = Vec::new();
+    for (rendered, candidates) in by_rendered {
+        if candidates.len() != 1 {
+            return None;
+        }
+        let observation = candidates.into_values().next()?;
+        for (start, end) in rendered_occurrences(text, &rendered)? {
+            role_occurrences.push((start, end, observation));
+        }
+    }
+    role_occurrences.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.cmp(&right.1))
+            .then_with(|| left.2.selector.cmp(&right.2.selector))
+    });
+    if role_occurrences
+        .windows(2)
+        .any(|pair| pair[0].1 > pair[1].0)
+    {
+        return None;
+    }
+    let mut observations = Vec::<&Observation>::new();
+    for (_, _, observation) in &role_occurrences {
+        if !observations.iter().any(|known| {
+            known.value_sha256 == observation.value_sha256
+                && known.value_type == observation.value_type
+                && known.selector == observation.selector
+        }) {
+            observations.push(observation);
+        }
+    }
+    if observations.len() < 2 || observations.len() > 32 {
+        return None;
+    }
+    let observation_slots = observations
+        .iter()
+        .enumerate()
+        .map(|(index, observation)| {
+            (
+                (
+                    observation.value_sha256.clone(),
+                    observation.value_type,
+                    observation.selector.clone(),
+                ),
+                u16::try_from(index + 1).unwrap_or(u16::MAX),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let observations_with_slots = observations
+        .iter()
+        .filter_map(|observation| {
+            observation_slots
+                .get(&(
+                    observation.value_sha256.clone(),
+                    observation.value_type,
+                    observation.selector.clone(),
+                ))
+                .copied()
+                .map(|slot_id| (*observation, slot_id))
+        })
+        .collect::<Vec<_>>();
+    let mut segments = Vec::new();
+    let mut cursor = 0usize;
+    for (start, end, observation) in &role_occurrences {
+        if *start > cursor {
+            segments.push(ResponseRenderSegment::Static {
+                text: text.get(cursor..*start)?.to_owned(),
+            });
+        }
+        let role_index = observations.iter().position(|known| {
+            known.value_sha256 == observation.value_sha256
+                && known.value_type == observation.value_type
+                && known.selector == observation.selector
+        })?;
+        if role_index == 0 {
+            segments.push(ResponseRenderSegment::Primary);
+        } else {
+            segments.push(ResponseRenderSegment::Selected {
+                selector: observation.selector.clone(),
+                format: ValueProjectionFormat::PlainText,
+            });
+        }
+        cursor = *end;
+    }
+    if cursor < text.len() {
+        segments.push(ResponseRenderSegment::Static {
+            text: text.get(cursor..)?.to_owned(),
+        });
+    }
+    let static_bytes = segments
+        .iter()
+        .filter_map(|segment| match segment {
+            ResponseRenderSegment::Static { text } => Some(text.len()),
+            _ => None,
+        })
+        .sum::<usize>();
+    if segments.len() > 64 || static_bytes > 1_024 {
+        return None;
+    }
+    let renderer = CollectionOutputRenderer::RenderSequence { segments };
+    let mut atoms = base_atoms_for_observations(&observations_with_slots, state);
+    atoms.push(RelationAtom::ResponseShape {
+        value: "assistant_message".to_owned(),
+    });
+    let first_action_slot = u16::try_from(observations.len() + 1).ok()?;
+    for (index, observation) in observations.iter().enumerate() {
+        let observation_slot = u16::try_from(index + 1).ok()?;
+        let action_slot = first_action_slot.checked_add(u16::try_from(index).ok()?)?;
+        atoms.push(RelationAtom::TypedSlot {
+            slot_id: action_slot,
+            value_type: observation.value_type,
+            source: AtomSource::Action,
+            value_sha256: observation.value_sha256.clone(),
+        });
+        atoms.push(RelationAtom::SlotEquality {
+            left_slot: observation_slot,
+            right_slot: action_slot,
+        });
+    }
+    atoms.push(RelationAtom::ActionValueProjection {
+        format: ValueProjectionFormat::PlainText,
+        renderer,
+    });
+    let evidence = canonical_json_sha256(&(
+        "nando.multi-role-assistant-evidence.v1",
+        observations
+            .iter()
+            .map(|observation| observation.output_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+    .ok()?;
+    Some(build_frame(row, state, atoms, true, &evidence))
+}
+
+fn rendered_occurrences(text: &str, rendered: &str) -> Option<Vec<(usize, usize)>> {
+    if rendered.is_empty() || rendered.len() > 512 {
+        return None;
+    }
+    let starts_word = rendered
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_alphanumeric() || character == '_');
+    let ends_word = rendered
+        .chars()
+        .next_back()
+        .is_some_and(|character| character.is_alphanumeric() || character == '_');
+    let mut occurrences = Vec::new();
+    for (start, _) in text.match_indices(rendered) {
+        let end = start.checked_add(rendered.len())?;
+        let left_ok = !starts_word
+            || text
+                .get(..start)
+                .and_then(|prefix| prefix.chars().next_back())
+                .is_none_or(|character| !(character.is_alphanumeric() || character == '_'));
+        let right_ok = !ends_word
+            || text
+                .get(end..)
+                .and_then(|suffix| suffix.chars().next())
+                .is_none_or(|character| !(character.is_alphanumeric() || character == '_'));
+        if left_ok && right_ok {
+            occurrences.push((start, end));
+            if occurrences.len() > 64 {
+                return None;
+            }
+        }
+    }
+    Some(occurrences)
 }
 
 fn trim_runtime_parity_outbox(state: &mut SessionState) {
@@ -2930,30 +3201,42 @@ fn bounded_runtime_provider_payload(state: &SessionState) -> Option<Value> {
 }
 
 fn base_atoms(observation: &Observation, state: &SessionState) -> Vec<RelationAtom> {
-    let mut atoms = vec![
-        RelationAtom::ToolKind {
+    base_atoms_for_observations(&[(observation, 1)], state)
+}
+
+fn base_atoms_for_observations(
+    observations: &[(&Observation, u16)],
+    state: &SessionState,
+) -> Vec<RelationAtom> {
+    let mut atoms = Vec::new();
+    for (index, (observation, slot_id)) in observations.iter().enumerate() {
+        atoms.push(RelationAtom::ToolKind {
             value: observation.tool_kind.clone(),
-        },
-        RelationAtom::ObservationCallShape {
+        });
+        atoms.push(RelationAtom::ObservationCallShape {
             value: observation.call_shape.clone(),
-        },
-        RelationAtom::CompletionState {
+        });
+        atoms.push(RelationAtom::CompletionState {
             value: observation.completion_state.to_owned(),
-        },
-        RelationAtom::ResponseShape {
-            value: "model_action".to_owned(),
-        },
-        RelationAtom::TypedSlot {
-            slot_id: 1,
+        });
+        if index == 0 {
+            atoms.push(RelationAtom::ResponseShape {
+                value: "model_action".to_owned(),
+            });
+        }
+        atoms.push(RelationAtom::TypedSlot {
+            slot_id: *slot_id,
             value_type: observation.value_type,
             source: AtomSource::Observation,
             value_sha256: observation.value_sha256.clone(),
-        },
-        RelationAtom::UniqueSlot { slot_id: 1 },
-        RelationAtom::ObservationSelector {
-            slot_id: 1,
+        });
+        atoms.push(RelationAtom::UniqueSlot { slot_id: *slot_id });
+        atoms.push(RelationAtom::ObservationSelector {
+            slot_id: *slot_id,
             selector: observation.selector.clone(),
-        },
+        });
+    }
+    atoms.extend([
         RelationAtom::Cardinality {
             role: "turn_call_count_band".to_owned(),
             count: count_band(state.call_count),
@@ -2966,7 +3249,7 @@ fn base_atoms(observation: &Observation, state: &SessionState) -> Vec<RelationAt
             role: "turn_message_count_band".to_owned(),
             count: count_band(state.message_count),
         },
-    ];
+    ]);
     atoms.extend(
         state
             .request_phase_atom_ids
@@ -4303,6 +4586,59 @@ mod tests {
     }
 
     #[test]
+    fn assistant_renderer_captures_two_source_roles_without_raw_output_payload() {
+        let call = CallShape {
+            name: "lookup".to_owned(),
+            shape: "function_call".to_owned(),
+        };
+        let observations = scalar_observations(
+            &json!("{\"city\":\"Tallinn\",\"temperature\":7}"),
+            &call,
+            &"e".repeat(64),
+        );
+        let mut state = SessionState {
+            session_id_sha256: "a".repeat(64),
+            observations,
+            ..SessionState::default()
+        };
+        let row = json!({"type":"event_msg","payload":{"type":"agent_message"}});
+
+        let frames = assistant_frames(&row, "Tallinn: 7 C", &mut state);
+
+        assert_eq!(frames.len(), 1);
+        assert_eq!(
+            frames[0]
+                .atoms
+                .iter()
+                .filter(|atom| matches!(atom, RelationAtom::ObservationSelector { .. }))
+                .count(),
+            2
+        );
+        assert_eq!(
+            frames[0]
+                .atoms
+                .iter()
+                .filter(|atom| matches!(atom, RelationAtom::SlotEquality { .. }))
+                .count(),
+            2
+        );
+        let renderer = frames[0].atoms.iter().find_map(|atom| match atom {
+            RelationAtom::ActionValueProjection { renderer, .. } => Some(renderer),
+            _ => None,
+        });
+        assert!(matches!(
+            renderer,
+            Some(CollectionOutputRenderer::RenderSequence { segments })
+                if segments.iter().filter(|segment| matches!(
+                    segment,
+                    ResponseRenderSegment::Primary | ResponseRenderSegment::Selected { .. }
+                )).count() == 2
+        ));
+        let encoded = serde_json::to_string(&frames[0]).expect("frame");
+        assert!(!encoded.contains("{\"city\""));
+    }
+
+    #[test]
     fn yielded_cell_is_extracted_structurally_for_wait() {
         let call = CallShape {
             name: "exec".to_owned(),
@@ -4338,6 +4674,7 @@ mod tests {
         let identifier = Observation {
             value_sha256: hash_value(&json!("2911")),
             value_type: AtomValueType::Identifier,
+            render_value: Some("2911".to_owned()),
             selector: ResponseValueSelector::ContentLinePrefix {
                 prefix: "Script running with cell ID ".to_owned(),
                 value_type: AtomValueType::Identifier,
@@ -4350,6 +4687,7 @@ mod tests {
         let incidental = Observation {
             value_sha256: hash_value(&json!(1000)),
             value_type: AtomValueType::Integer,
+            render_value: Some("1000".to_owned()),
             selector: ResponseValueSelector::UniqueScalar {
                 value_type: AtomValueType::Integer,
             },
@@ -4381,10 +4719,80 @@ mod tests {
     }
 
     #[test]
+    fn multi_role_action_emits_every_unambiguous_source_binding() {
+        let left = Observation {
+            value_sha256: hash_value(&json!(7)),
+            value_type: AtomValueType::Integer,
+            render_value: Some("7".to_owned()),
+            selector: ResponseValueSelector::JsonField {
+                field: "alpha".to_owned(),
+                value_type: AtomValueType::Integer,
+            },
+            tool_kind: "lookup".to_owned(),
+            call_shape: "function_call".to_owned(),
+            output_sha256: "a".repeat(64),
+            completion_state: "completed",
+        };
+        let right = Observation {
+            value_sha256: hash_value(&json!("ok")),
+            value_type: AtomValueType::String,
+            render_value: Some("ok".to_owned()),
+            selector: ResponseValueSelector::JsonField {
+                field: "beta".to_owned(),
+                value_type: AtomValueType::String,
+            },
+            tool_kind: "lookup".to_owned(),
+            call_shape: "function_call".to_owned(),
+            output_sha256: "b".repeat(64),
+            completion_state: "completed",
+        };
+        let mut state = SessionState {
+            session_id_sha256: "a".repeat(64),
+            observations: vec![left, right],
+            ..SessionState::default()
+        };
+        let row = json!({"type":"response_item","payload":{}});
+        let payload = json!({
+            "name":"combine",
+            "arguments":"{\"left\":7,\"right\":\"ok\",\"mode\":\"exact\"}"
+        });
+
+        let frames = action_frames(
+            &row,
+            payload.as_object().expect("action payload"),
+            &mut state,
+        );
+
+        assert_eq!(frames.len(), 1);
+        assert_eq!(
+            frames[0]
+                .atoms
+                .iter()
+                .filter(|atom| matches!(atom, RelationAtom::ActionRoleArgument { .. }))
+                .count(),
+            2
+        );
+        assert_eq!(
+            frames[0]
+                .atoms
+                .iter()
+                .filter(|atom| matches!(atom, RelationAtom::SlotEquality { .. }))
+                .count(),
+            2
+        );
+        assert!(frames[0].atoms.iter().any(|atom| matches!(
+            atom,
+            RelationAtom::ActionStringArgument { name, value }
+                if name == "mode" && value == "exact"
+        )));
+    }
+
+    #[test]
     fn duplicate_extraction_of_same_structural_selector_is_one_binding() {
         let first = Observation {
             value_sha256: hash_value(&json!(2911)),
             value_type: AtomValueType::Identifier,
+            render_value: Some("2911".to_owned()),
             selector: ResponseValueSelector::LatestTurnOutputScalarOrdinal {
                 scalar_ordinal: 0,
                 value_type: AtomValueType::Identifier,
@@ -4408,6 +4816,7 @@ mod tests {
         let first = Observation {
             value_sha256: hash_value(&json!(2911)),
             value_type: AtomValueType::Identifier,
+            render_value: Some("2911".to_owned()),
             selector: ResponseValueSelector::LatestTurnOutputScalarOrdinal {
                 scalar_ordinal: 0,
                 value_type: AtomValueType::Identifier,
