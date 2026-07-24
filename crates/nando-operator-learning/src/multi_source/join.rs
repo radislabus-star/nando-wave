@@ -377,7 +377,7 @@ fn completed_refs(
             completed_frame_root_sha256: completed_frame_root_sha256.clone(),
             physical_action_root_sha256: physical_action_root_sha256.clone(),
             semantic_action_root_sha256,
-            effect_atoms: completed_effect_atoms(&action.atoms),
+            effect_atoms: completed_effect_atoms(&action.atoms, &frame.atoms),
             observed_at_unix_nanos: frame.observed_at_unix_nanos,
             estimated_input_tokens: frame.estimated_input_tokens,
         },
@@ -514,8 +514,43 @@ fn joined_row(
     Ok(joined)
 }
 
-fn completed_effect_atoms(atoms: &[RelationAtom]) -> Vec<CompletedEffectAtomV1> {
-    let mut result = atoms
+fn completed_effect_atoms(
+    action_atoms: &[RelationAtom],
+    frame_atoms: &[RelationAtom],
+) -> Vec<CompletedEffectAtomV1> {
+    let action_slots = frame_atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::TypedSlot {
+                slot_id,
+                source: nando_operator_kernel::AtomSource::Action,
+                ..
+            } => Some(*slot_id),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let observation_slots = frame_atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::TypedSlot {
+                slot_id,
+                source: nando_operator_kernel::AtomSource::Observation,
+                ..
+            } => Some(*slot_id),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let slot_transfer = action_atoms.iter().any(|atom| {
+        matches!(
+            atom,
+            RelationAtom::SlotEquality {
+                left_slot,
+                right_slot,
+            } if (action_slots.contains(left_slot) && observation_slots.contains(right_slot))
+                || (action_slots.contains(right_slot) && observation_slots.contains(left_slot))
+        )
+    });
+    let mut result = action_atoms
         .iter()
         .filter_map(|atom| match atom {
             RelationAtom::ActionRoleArgument { .. } => Some(CompletedEffectAtomV1::RoleInput),
@@ -547,6 +582,10 @@ fn completed_effect_atoms(atoms: &[RelationAtom]) -> Vec<CompletedEffectAtomV1> 
             _ => None,
         })
         .collect::<Vec<_>>();
+    if slot_transfer {
+        result.push(CompletedEffectAtomV1::RoleInput);
+    }
     result.sort_unstable();
+    result.dedup();
     result
 }
