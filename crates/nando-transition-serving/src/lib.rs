@@ -162,6 +162,8 @@ pub struct ServingConfig {
     pub opportunity_bridge_producer_enabled: bool,
     pub opportunity_bridge_consumer_enabled: bool,
     pub opportunity_bridge_poll_ms: u64,
+    pub multi_source_snapshot_path: PathBuf,
+    pub multi_source_snapshot_poll_ms: u64,
 }
 
 impl ServingConfig {
@@ -351,6 +353,13 @@ impl ServingConfig {
                 "NANDO_OPPORTUNITY_BRIDGE_CONSUMER_ENABLED",
             ),
             opportunity_bridge_poll_ms: env_u64("NANDO_OPPORTUNITY_BRIDGE_POLL_MS", 100),
+            multi_source_snapshot_path: env_path_join(
+                "NANDO_MULTI_SOURCE_SNAPSHOT_PATH",
+                &state_dir,
+                "multi-source-live-v2/snapshot.cbor",
+            ),
+            multi_source_snapshot_poll_ms: env_u64("NANDO_MULTI_SOURCE_SNAPSHOT_POLL_MS", 15_000)
+                .clamp(250, 60_000),
         })
     }
 }
@@ -1498,26 +1507,40 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
         .spawn(move || {
             let mut published = false;
             loop {
-                let evidence =
-                    current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
-                let requests = state.request_learning.audit_snapshot_v1();
-                if let (Some(evidence), Ok(requests)) = (evidence, requests)
-                    && let Ok(snapshot) = multi_source_live::build_snapshot(
-                        evidence.opportunities,
-                        requests,
-                        evidence.frames,
-                    )
-                {
+                let snapshot = if state.config.embedded_response_miner_enabled {
+                    let evidence = current_miner_worker(&state)
+                        .and_then(|worker| worker.multi_source_evidence());
+                    let requests = state.request_learning.audit_snapshot_v1();
+                    match (evidence, requests) {
+                        (Some(evidence), Ok(requests)) => multi_source_live::build_snapshot(
+                            evidence.opportunities,
+                            requests,
+                            evidence.frames,
+                        )
+                        .and_then(|snapshot| {
+                            multi_source_live::write_snapshot(
+                                &state.config.multi_source_snapshot_path,
+                                &snapshot,
+                            )?;
+                            Ok(snapshot)
+                        }),
+                        _ => Err("live_multi_source_snapshot_inputs_pending".to_owned()),
+                    }
+                } else {
+                    multi_source_live::read_snapshot(&state.config.multi_source_snapshot_path)
+                };
+                if let Ok(snapshot) = snapshot {
                     if let Ok(mut target) = state.multi_source_snapshot.write() {
                         *target = Some(snapshot);
                     }
                     published = true;
                 }
-                std::thread::sleep(if published {
-                    Duration::from_secs(60)
+                let retry_ms = if published {
+                    state.config.multi_source_snapshot_poll_ms
                 } else {
-                    Duration::from_secs(1)
-                });
+                    state.config.multi_source_snapshot_poll_ms.min(1_000)
+                };
+                std::thread::sleep(Duration::from_millis(retry_ms));
             }
         })
         .map(|_| ())
@@ -5427,6 +5450,8 @@ mod tests {
             opportunity_bridge_producer_enabled: false,
             opportunity_bridge_consumer_enabled: false,
             opportunity_bridge_poll_ms: 100,
+            multi_source_snapshot_path: root.join("multi-source-live-v2/snapshot.cbor"),
+            multi_source_snapshot_poll_ms: 1_000,
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
