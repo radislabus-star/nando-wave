@@ -1,0 +1,39 @@
+{
+  "schema": "nando.reproducible-build-receipt.v1",
+  "source": {
+    "commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+    "tree": "4427fdde20492988425d14ebfd86b97a6214387e",
+    "archive_sha256": "0013f0011605de149a8789c3fa760143d3f5dad331e3fe614daedd9362b3b7c6",
+    "source_date_epoch": 1785017666,
+    "cargo_lock_sha256": "fc5b6460cf3c0caf8782a4234be55670fe31f58b597b347c46255da75ec3b419",
+    "tracked_worktree_clean": true
+  },
+  "toolchain": {
+    "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)\nbinary: rustc\ncommit-hash: 2d8144b7880597b6e6d3dfd63a9a9efae3f533d3\ncommit-date: 2026-07-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0\nLLVM version: 22.1.6",
+    "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)",
+    "linker": "LLD 22.1.6 (/checkout/src/llvm-project/llvm 08c84e69a84d95936296dfcab0e38b34100725d5) (compatible with GNU linkers)",
+    "libc": "ldd (Ubuntu GLIBC 2.43-2ubuntu2) 2.43",
+    "kernel": "Linux 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux"
+  },
+  "protocol": {
+    "network": "offline",
+    "incremental": false,
+    "source_path_remap": "<checkout>=/usr/src/nando-wave",
+    "command_template": "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD) CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=<independent-dir> RUSTFLAGS=--remap-path-prefix=$(pwd)=/usr/src/nando-wave cargo +1.97.0 build -j 2 --locked --offline --release -p nando-transition-serving --bin nando-transition-serving",
+    "independent_target_dirs": 2
+  },
+  "result": {
+    "build_a_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+    "build_b_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+    "byte_identical": true,
+    "binary_bytes": 44987216,
+    "elf_build_id": "beda79b38c47fc5c4b26f3f7b3788da4d764b217",
+    "deployed_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+    "deployed_matches_build": true
+  },
+  "build_manifest": {
+    "build_id": "2026.07.26-b001",
+    "git_commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+    "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7"
+  }
+}

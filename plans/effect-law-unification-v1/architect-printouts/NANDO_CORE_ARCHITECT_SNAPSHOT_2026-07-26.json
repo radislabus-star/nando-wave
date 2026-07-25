@@ -1,141 +1,420 @@
 {
-  "schema": "nando.operator-architecture-snapshot.v2",
-  "captured_at_unix_ms": 1785016441199,
-  "captured_at_local": "2026-07-26 00:54:01 EEST",
-  "scope": "one routed Nando window; not a machine-global traffic denominator",
-  "source": {
-    "baseline_tag": "nando-stable-live-operator-machine-2026-07-26",
-    "baseline_commit": "2c87141f0be509b4755587cafcbafad25e782c3a",
-    "corrective_release_tag": "nando-stable-live-operator-machine-2026-07-26-r1",
-    "runtime_source_file_sha256": "ac78c55d851f8e6b99628949c9d6f1b55c133e18f711e516a3953a59958b5c72",
-    "runtime_patch_from_baseline_sha256": "e1c576be9e6cb31b4fb73b295d816ba84148fbd2f76dcd3a9696288723ecf7f9"
+  "schema": "nando.operator-architecture-snapshot.v3",
+  "captured_at_unix_ms": 1785020104211509308,
+  "captured_at_local": "2026-07-26 01:55:04 EEST",
+  "scope": "one Nando-routed control plane; machine-global token denominator remains unavailable",
+  "verdicts": {
+    "stable_runtime_checkpoint": "PASS",
+    "reproducible_release": "PASS",
+    "m3": "WATCH"
   },
-  "deployment": {
-    "hot_serving_binary_path": "/opt/nando-wave/bin/nando-transition-serving",
-    "hot_serving_binary_sha256": "685b5f8bce700dea3f0ab7d348fa470dd65a572822cc3c2dd0aece2414ede57c",
-    "hot_serving_invocation_after_corrective_restart": "ff0bc7c187584e318b26a5b00445afc7",
-    "gateway_control_binary_path": "/opt/nando-wave/bin/nando-gateway-control",
-    "gateway_control_binary_sha256": "6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2",
+  "release": {
+    "schema": "nando.reproducible-runtime-release.v1",
+    "release_tag": "nando-stable-live-operator-machine-2026-07-26-r2",
+    "supersedes": "nando-stable-live-operator-machine-2026-07-26-r1",
+    "status": "REPRODUCIBLE_RELEASE_PASS",
+    "runtime_source_commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+    "tag_binding": "this manifest is tracked by the annotated release tag",
+    "asset": {
+      "name": "nando-stable-live-operator-machine-2026-07-26-r2.tar.zst",
+      "bytes": 38971283,
+      "sha256": "d2e2b868b90c7f110d948b77618a1a6f108632da30c17cf877e6b1383a0b5e89",
+      "url": "https://github.com/radislabus-star/nando-wave/releases/download/nando-stable-live-operator-machine-2026-07-26-r2/nando-stable-live-operator-machine-2026-07-26-r2.tar.zst",
+      "content_verification": "CONTENTS.json + verify-release.sh"
+    },
+    "receipts": [
+      {
+        "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/API_PAYLOAD_MANIFEST.json",
+        "bytes": 1299,
+        "sha256": "074bc05c4c69d2ff0ab11599660d1b67290473b08389750078c0c39e3793b0f6"
+      },
+      {
+        "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/ASSET_CONTENTS.json",
+        "bytes": 5250,
+        "sha256": "f893c6d7faa5a3475a7a89a83a6ea6683ca5330276c22dadb42644d826b849e8"
+      },
+      {
+        "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/BUILD_MANIFEST.json",
+        "bytes": 1697,
+        "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7"
+      },
+      {
+        "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/BUILD_REPRODUCIBILITY_RECEIPT.json",
+        "bytes": 2156,
+        "sha256": "a426780343f5844c947e1718a9238c95f9d9b66667be3a75acb3663ec7f97d94"
+      },
+      {
+        "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/RUNTIME_RESOURCE_RECEIPT.json",
+        "bytes": 5794,
+        "sha256": "40dbaad748301bdee94442c76b634a07922cc406e2306a296e54bfe9d24374bc"
+      }
+    ],
+    "rollback_runbook": "plans/effect-law-unification-v1/architect-printouts/release-r2/ROLLBACK.md",
+    "m3_status": "WATCH"
+  },
+  "build": {
+    "schema": "nando.reproducible-build-receipt.v1",
+    "source": {
+      "commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+      "tree": "4427fdde20492988425d14ebfd86b97a6214387e",
+      "archive_sha256": "0013f0011605de149a8789c3fa760143d3f5dad331e3fe614daedd9362b3b7c6",
+      "source_date_epoch": 1785017666,
+      "cargo_lock_sha256": "fc5b6460cf3c0caf8782a4234be55670fe31f58b597b347c46255da75ec3b419",
+      "tracked_worktree_clean": true
+    },
+    "toolchain": {
+      "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)\nbinary: rustc\ncommit-hash: 2d8144b7880597b6e6d3dfd63a9a9efae3f533d3\ncommit-date: 2026-07-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0\nLLVM version: 22.1.6",
+      "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)",
+      "linker": "LLD 22.1.6 (/checkout/src/llvm-project/llvm 08c84e69a84d95936296dfcab0e38b34100725d5) (compatible with GNU linkers)",
+      "libc": "ldd (Ubuntu GLIBC 2.43-2ubuntu2) 2.43",
+      "kernel": "Linux 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux"
+    },
+    "protocol": {
+      "network": "offline",
+      "incremental": false,
+      "source_path_remap": "<checkout>=/usr/src/nando-wave",
+      "command_template": "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD) CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=<independent-dir> RUSTFLAGS=--remap-path-prefix=$(pwd)=/usr/src/nando-wave cargo +1.97.0 build -j 2 --locked --offline --release -p nando-transition-serving --bin nando-transition-serving",
+      "independent_target_dirs": 2
+    },
+    "result": {
+      "build_a_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+      "build_b_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+      "byte_identical": true,
+      "binary_bytes": 44987216,
+      "elf_build_id": "beda79b38c47fc5c4b26f3f7b3788da4d764b217",
+      "deployed_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+      "deployed_matches_build": true
+    },
     "build_manifest": {
-      "build_id": "2026.07.23-b001",
-      "git_commit": "49771908dfbab15e3d473e3f16382ce18ca8cf9d",
-      "source_state_sha256": "4638425703d9b4b93fa561efaf1c54a2a30a2916adc00b47e6c990185d0f8105",
-      "note": "manifest git_commit predates this corrective source release; binary SHA is the deployed identity"
+      "build_id": "2026.07.26-b001",
+      "git_commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+      "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7"
     }
   },
-  "authority": {
-    "registry_schema": "nando.response-registry.v6",
-    "registry_revision": 5467418188856192864,
-    "registry_file_sha256": "71065c5c8eb50f2de8a3ded3667f335525480ba8219594ffef5fa21b505b9aee",
-    "registry_authority_sha256": "229d7a4b323d87743c1010f005f1193e127d53def5c474e263ac81d2d7781808",
+  "api_payloads": {
+    "manifest": {
+      "schema": "nando.architecture-api-payload-manifest.v1",
+      "captured_at_unix_ms": 1785020104211509308,
+      "captured_at_local": "2026-07-26 01:55:04 EEST",
+      "scope": "one Nando-routed control plane; payloads are immutable release evidence, not machine-global traffic",
+      "payloads": [
+        {
+          "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/api-v1-signal-path.json",
+          "bytes": 8690,
+          "sha256": "9d556fd832b078fdb8c0a13087a471cdfb35c8577b60e1419a4089d08f3142fb",
+          "normalization": "jq -S ."
+        },
+        {
+          "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/connections.json",
+          "bytes": 3810,
+          "sha256": "7c72578a875b82e466dddf83f852825bbfe0ecf6c1bb04301bd9a4970cbac4c8",
+          "normalization": "jq -S ."
+        },
+        {
+          "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/state.json",
+          "bytes": 2029462,
+          "sha256": "629727221a10fac632698072450e945c3ed52c71471e56d884500d1cd76fe5da",
+          "normalization": "jq -S ."
+        },
+        {
+          "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/tokens.json",
+          "bytes": 1965,
+          "sha256": "cae888b0400fb2455f2a12507f10670aca76a3381dc60a6eb22dcb3111a7d76b",
+          "normalization": "jq -S ."
+        }
+      ]
+    },
+    "manifest_sha256": "074bc05c4c69d2ff0ab11599660d1b67290473b08389750078c0c39e3793b0f6"
+  },
+  "runtime_resources": {
+    "receipt_path": "plans/effect-law-unification-v1/architect-printouts/release-r2/RUNTIME_RESOURCE_RECEIPT.json",
+    "receipt_sha256": "40dbaad748301bdee94442c76b634a07922cc406e2306a296e54bfe9d24374bc",
+    "summary": {
+      "transition_tree_bytes": 2734237755,
+      "services": [
+        {
+          "unit": "nando-response-learning.service",
+          "active": "active",
+          "pid": 2725253,
+          "invocation_id": "1feb696ee626486282a8ba324c86d202",
+          "started_at": "Sun 2026-07-26 01:52:58 EEST",
+          "binary_path": "/opt/nando-wave/bin/nando-transition-serving",
+          "binary_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+          "binary_bytes": 44987216,
+          "rss_bytes": 728674304,
+          "peak_rss_bytes": 1052237824,
+          "threads": 23
+        },
+        {
+          "unit": "nando-transition-serving.service",
+          "active": "active",
+          "pid": 2725262,
+          "invocation_id": "e5afa541a6384b069c15c02cd58c73f8",
+          "started_at": "Sun 2026-07-26 01:52:58 EEST",
+          "binary_path": "/opt/nando-wave/bin/nando-transition-serving",
+          "binary_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+          "binary_bytes": 44987216,
+          "rss_bytes": 126603264,
+          "peak_rss_bytes": 150675456,
+          "threads": 17
+        },
+        {
+          "unit": "nando-gateway-control.service",
+          "active": "active",
+          "pid": 2478151,
+          "invocation_id": "41c2beb3b78b4c83ac2410b4fd988e69",
+          "started_at": "Sat 2026-07-25 23:02:07 EEST",
+          "binary_path": "/opt/nando-wave/bin/nando-gateway-control",
+          "binary_sha256": "6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2",
+          "binary_bytes": 4017448,
+          "rss_bytes": 65363968,
+          "peak_rss_bytes": 69410816,
+          "threads": 9
+        }
+      ],
+      "checkpoint_files": [
+        {
+          "source_path": "/var/lib/nando-wave/transition/response-online-miner.checkpoint",
+          "archive_member": "state/response-online-miner.checkpoint",
+          "bytes": 178383063,
+          "sha256": "6ff5ce600dd8057ac39dc7fca55ea9be2ef14a71c997a2aa436370b6f19f093c",
+          "source_modified_at": "2026-07-26 01:56:04.655819122 +0300",
+          "archive_inode": 2136533,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/online-collection-program-pools-v37.checkpoint",
+          "archive_member": "state/online-collection-program-pools-v37.checkpoint",
+          "bytes": 1126439,
+          "sha256": "090039018f18963f9af01806954cfa0408037316612b3b4fca147caf25010e5e",
+          "source_modified_at": "2026-07-26 01:54:38.517790602 +0300",
+          "archive_inode": 2136534,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/learning-structure-bridge-v2/request-learning-v2.checkpoint.cbor",
+          "archive_member": "state/learning-structure-bridge-v2/request-learning-v2.checkpoint.cbor",
+          "bytes": 16774700,
+          "sha256": "723876fa05bf1aaee21a5a5ae89ef48cfa5ce5ff670acdb228573b380ac1fcce",
+          "source_modified_at": "2026-07-26 01:53:06.057687307 +0300",
+          "archive_inode": 2136540,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/streaming-evidence-v2/checkpoint.cbor",
+          "archive_member": "state/streaming-evidence-v2/checkpoint.cbor",
+          "bytes": 4206293,
+          "sha256": "cf79cee502d38fd14f1cab0dfe9108db00ebe6fa9bca67a08c99996d0196db93",
+          "source_modified_at": "2026-07-26 01:56:09.334875008 +0300",
+          "archive_inode": 2136541,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/economics-live-v4.checkpoint",
+          "archive_member": "state/economics-live-v4.checkpoint",
+          "bytes": 1950091,
+          "sha256": "e50cd9b76b16688ed54e8013a54d1d2ff074bd1fa0c6c2205d6fcf2dbb513a0d",
+          "source_modified_at": "2026-07-26 01:56:10.537889377 +0300",
+          "archive_inode": 2136535,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/response-registry.json",
+          "archive_member": "state/response-registry.json",
+          "bytes": 264745,
+          "sha256": "71065c5c8eb50f2de8a3ded3667f335525480ba8219594ffef5fa21b505b9aee",
+          "source_modified_at": "2026-07-24 19:44:32.110991038 +0300",
+          "archive_inode": 2136536,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/admission.json",
+          "archive_member": "state/admission.json",
+          "bytes": 12529,
+          "sha256": "b61fc64c2e4a34cc86c9dcb2b72a283de5b93d8160c94a3101cf445e1368fa63",
+          "source_modified_at": "2026-07-26 01:55:58.967751187 +0300",
+          "archive_inode": 2136537,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/response-admission-controller-report.json",
+          "archive_member": "state/response-admission-controller-report.json",
+          "bytes": 982,
+          "sha256": "c347c883d11ac1a892ed9c67076e9ae803fc7554bffe6a37abcf5c9316c113a3",
+          "source_modified_at": "2026-07-26 01:55:34.603460220 +0300",
+          "archive_inode": 2136538,
+          "mode": "600",
+          "owner": "ubu:ubu"
+        },
+        {
+          "source_path": "/var/lib/nando-wave/transition/build-manifest.json",
+          "archive_member": "state/build-manifest.json",
+          "bytes": 1697,
+          "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7",
+          "source_modified_at": "2026-07-26 01:53:00.868625412 +0300",
+          "archive_inode": 2136539,
+          "mode": "644",
+          "owner": "ubu:ubu"
+        }
+      ]
+    }
+  },
+  "deployment": {
+    "build_manifest": {
+      "build_id": "2026.07.26-b001",
+      "generated_at_unix": 1785019979,
+      "git_commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+      "modules": [
+        {
+          "contract": "6b873d519b3370ab3c3a2dbacedcbe24600c9613a02990935c6674ca377b4f09",
+          "name": "Rust serving",
+          "sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+          "version": "0.1.0"
+        },
+        {
+          "contract": "control-plane.v1",
+          "name": "Gateway control",
+          "sha256": "6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2",
+          "version": "0.1.0"
+        },
+        {
+          "contract": "nando.self-training-stream-state.v5",
+          "name": "Teacher/student miner",
+          "sha256": "",
+          "version": "strategy.v3"
+        },
+        {
+          "contract": "event-time-disjoint",
+          "name": "Frozen future",
+          "sha256": "",
+          "version": "partition.v9"
+        },
+        {
+          "contract": "NCO3",
+          "name": "Collection miner",
+          "sha256": "",
+          "version": "pooling.v0"
+        },
+        {
+          "contract": "6b873d519b3370ab3c3a2dbacedcbe24600c9613a02990935c6674ca377b4f09",
+          "name": "Typed DSL + verifier",
+          "sha256": "",
+          "version": "nando.response-registry.v6"
+        },
+        {
+          "contract": "proof-carrying",
+          "name": "Admission",
+          "sha256": "2d6cf083355930034c70c6d68175cf60a0e4f9472f847813987d8c5da897e2ec",
+          "version": "nando.live-transition-composite-gate.v2"
+        },
+        {
+          "contract": "verified-only",
+          "name": "Economics",
+          "sha256": "",
+          "version": "nando.economics-snapshot.v4"
+        }
+      ],
+      "schema": "nando.build-manifest.v1",
+      "source_state_sha256": "ad53e804c2075f8df2919c9b73e45b783b91d3c73923e7c7e13593df7ca2a90c"
+    },
     "active_packages": 3,
-    "admission_verdict": "PASS",
-    "eligible_for_local_accept": true
+    "signal_path_verdict": "PASS"
   },
   "routing": {
     "total_windows": 14,
     "configured_for_nando": 1,
     "active_nando": 1,
-    "active_outside_nando": 5,
+    "active_outside_nando": 11,
     "active_mixed": 0,
-    "idle": 8,
+    "idle": 2,
     "misrouted": 0
   },
   "nando_routed_traffic": {
+    "accounting_epoch_cpu_input_tokens": 2221872724,
+    "accounting_epoch_cpu_share_ppm": 804781,
+    "accounting_epoch_nando_input_tokens": 2760838885,
     "accounting_exact": true,
-    "nando_input_tokens": 8498201973,
-    "miner_visible_input_tokens": 217214792,
-    "cpu_input_tokens": 2202058529,
-    "miner_share_ppm": 25560,
-    "cpu_share_ppm": 259120,
-    "accounting_epoch_nando_input_tokens": 2536421249,
-    "accounting_epoch_cpu_input_tokens": 2159543232,
-    "accounting_epoch_cpu_share_ppm": 851413,
-    "process_nando_input_tokens": 307883170,
-    "process_miner_input_tokens": 203692751,
-    "process_miner_share_ppm": 661591,
-    "process_cpu_input_tokens": 257234483,
-    "process_cpu_share_ppm": 835493,
-    "verified_local_accepts": 11196,
-    "economics_age_seconds": 6,
-    "scope_warning": "all token shares use only requests routed through Nando; machine-global share is unavailable"
+    "cpu_input_tokens": 2264388021,
+    "cpu_share_ppm": 259599,
+    "economics_age_seconds": 2,
+    "miner_share_ppm": 25800,
+    "miner_visible_input_tokens": 225047330,
+    "nando_input_tokens": 8722619609,
+    "process_cpu_input_tokens": 246869,
+    "process_cpu_share_ppm": 144196,
+    "process_miner_input_tokens": 13348968,
+    "process_miner_share_ppm": null,
+    "process_nando_input_tokens": 1712036,
+    "verified_local_accepts": 11331
   },
   "operator_execution": {
-    "active_packages": 3,
-    "ordinary_exercised_packages": 1,
-    "controlled_only_packages": 1,
-    "packages_with_zero_ordinary_accepts": 1,
-    "live_process_counters_at_capture": [
+    "operators": [
       {
-        "package_id": "crystallized-scalar-a40ca964f20c4b67",
-        "function_name": "write_stdin",
-        "origin": "grounded_synthesis",
-        "state": "active",
-        "support_rows": 1,
-        "future_rows": 64,
         "distinct_sessions": 4,
-        "wrong_accepts": 0,
-        "runtime_parity_failures": 0,
+        "function_name": "write_stdin",
+        "future_rows": 64,
+        "live_cpu_accepts": 1,
         "live_cpu_counters_valid": true,
-        "live_cpu_accepts": 1563,
-        "live_cpu_input_tokens": 257234483
-      },
-      {
-        "package_id": "crystallized-scalar-db6407c627296d8b",
-        "function_name": "project_selected_value",
+        "live_cpu_input_tokens": 246869,
         "origin": "grounded_synthesis",
+        "package_id": "crystallized-scalar-a40ca964f20c4b67",
+        "runtime_parity_failures": 0,
         "state": "active",
         "support_rows": 1,
-        "future_rows": 1,
+        "wrong_accepts": 0
+      },
+      {
         "distinct_sessions": 2,
-        "wrong_accepts": 0,
-        "runtime_parity_failures": 0,
-        "live_cpu_counters_valid": true,
+        "function_name": "project_selected_value",
+        "future_rows": 1,
         "live_cpu_accepts": 0,
-        "live_cpu_input_tokens": 0
-      },
-      {
-        "package_id": "crystallized-scalar-e35441ca7863327d",
-        "function_name": "wait",
+        "live_cpu_counters_valid": true,
+        "live_cpu_input_tokens": 0,
         "origin": "grounded_synthesis",
+        "package_id": "crystallized-scalar-db6407c627296d8b",
+        "runtime_parity_failures": 0,
         "state": "active",
         "support_rows": 1,
-        "future_rows": 28,
+        "wrong_accepts": 0
+      },
+      {
         "distinct_sessions": 5,
-        "wrong_accepts": 0,
-        "runtime_parity_failures": 0,
-        "live_cpu_counters_valid": true,
+        "function_name": "wait",
+        "future_rows": 28,
         "live_cpu_accepts": 0,
-        "live_cpu_input_tokens": 0
+        "live_cpu_counters_valid": true,
+        "live_cpu_input_tokens": 0,
+        "origin": "grounded_synthesis",
+        "package_id": "crystallized-scalar-e35441ca7863327d",
+        "runtime_parity_failures": 0,
+        "state": "active",
+        "support_rows": 1,
+        "wrong_accepts": 0
       }
     ],
-    "audit_classification": [
-      {
-        "function_name": "write_stdin",
-        "class": "ordinary_cpu_exercised"
-      },
-      {
-        "function_name": "wait",
-        "class": "controlled_only"
-      },
-      {
-        "function_name": "project_selected_value",
-        "class": "ordinary_accepts_zero"
-      }
-    ]
+    "ordinary_exercised_packages": 1
   },
   "safety_scope": {
-    "current_epoch_false_accepts": 0,
-    "current_epoch_parity_mismatches": 0,
+    "current_runtime": {
+      "bridge_failures": 0,
+      "false_accepts": 0,
+      "runtime_parity_failures": 0,
+      "runtime_revocation_state_valid": true,
+      "unresolved_active_runtime_revocations": 0
+    },
     "historical_completed_window_false_accepts_from_external_audit": 7,
     "historical_zero_claim_allowed": false
   },
   "m3": {
-    "qualifying_streak": 1,
-    "required_consecutive_windows": 3,
-    "current_live_api": {
-      "completed_windows_exposed": 1,
-      "windows": [
+    "live_ledger": {
+      "completed_windows": [
         {
           "ended_at_unix": 1784942619,
           "false_accepts": 0,
@@ -150,7 +429,23 @@
           "verified_intents": 7774,
           "verified_tokens": 1351640771
         }
-      ]
+      ],
+      "current_window": {
+        "ended_at_unix": 1785020033,
+        "false_accepts": 0,
+        "ordinary_intents": 12409,
+        "ordinary_tokens": 2760838885,
+        "parity_failures": 0,
+        "pass": false,
+        "pipeline_dropped": 0,
+        "started_at_unix": 1784942619,
+        "token_share_milli": 804,
+        "unresolved_outcomes": 0,
+        "verified_intents": 11331,
+        "verified_tokens": 2221872724
+      },
+      "required_consecutive_windows": 3,
+      "product_m3_pass": false
     },
     "external_audit": {
       "completed_windows": 2,
@@ -168,12 +463,7 @@
       ]
     },
     "history_status": "HISTORY_SCOPE_CONFLICT",
-    "rule": "qualifying streak is authoritative; do not claim all-history safety until the durable window ledger reconciles both views"
-  },
-  "api_payload_sha256": {
-    "tokens": "fd6ff6789c2d34a5719d3e548993c5b3deb97375299a4c71dc59a50defe4b707",
-    "connections": "f1e5ae5b09ce338884f8db2c74a15ce45b4ded2044b454cff64580d795e51c4d",
-    "signal_path": "353065418a1810f0becd349273236c2ad7233e30e22e9ae4b79a4951461c06ad",
-    "state": "bc722159b7e37950890924c76f7dbd1117b478ee39619520a88ad5b48a56995a"
+    "qualifying_streak": 1,
+    "rule": "do not claim all-history safety until the durable window ledger reconciles both views"
   }
 }

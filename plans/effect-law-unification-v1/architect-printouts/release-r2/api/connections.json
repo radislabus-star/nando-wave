@@ -1,0 +1,177 @@
+{
+  "active_mixed": 0,
+  "active_nando": 1,
+  "active_outside_nando": 11,
+  "configured_for_nando": 1,
+  "generated_at_unix_ms": 1785020035001,
+  "idle": 2,
+  "misrouted": 0,
+  "total_windows": 14,
+  "windows": [
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6933
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019dd928-91e0-78b1-a1fe-8204238ebf38"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        7021
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019dd928-91e0-78b1-a1fe-8204238ebf38"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6841
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019e22b7-f6fc-70b3-9339-c4c9feaec857"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6863
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019e22b7-f6fc-70b3-9339-c4c9feaec857"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6845
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019e3309-e6c6-75d0-80a9-25969b44266e"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6842
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019e6470-ba33-7840-9015-79a294d89a15"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6840
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019e7efa-a845-7b90-bad6-6015a32cafc5"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6823
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019e89ea-3c96-77f3-8260-317547689e91"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6967
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019f181a-8420-7021-acff-b0903e8ba0e5"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        6934
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019f19d5-ebed-7931-a132-8ceeec61ac6d"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        7001
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "172.64.155.209:443"
+      ],
+      "route": "outside_nando",
+      "session": "019f4904-6810-74d3-9343-e7a29224a2fd"
+    },
+    {
+      "configured_for_nando": true,
+      "pids": [
+        2112709
+      ],
+      "project": "~",
+      "remote_endpoints": [
+        "127.0.0.1:8787",
+        "172.64.155.209:443"
+      ],
+      "route": "nando",
+      "session": "019dd9bc-b358-7d01-b32d-7e64d0b9509a"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        1878848
+      ],
+      "project": "telegram-bridge",
+      "remote_endpoints": [],
+      "route": "idle",
+      "session": "pid-1878848"
+    },
+    {
+      "configured_for_nando": false,
+      "pids": [
+        35618
+      ],
+      "project": "~",
+      "remote_endpoints": [],
+      "route": "idle",
+      "session": "pid-35618"
+    }
+  ]
+}

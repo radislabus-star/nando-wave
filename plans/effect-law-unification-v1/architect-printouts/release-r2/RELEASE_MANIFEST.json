@@ -1,0 +1,44 @@
+{
+  "schema": "nando.reproducible-runtime-release.v1",
+  "release_tag": "nando-stable-live-operator-machine-2026-07-26-r2",
+  "supersedes": "nando-stable-live-operator-machine-2026-07-26-r1",
+  "status": "REPRODUCIBLE_RELEASE_PASS",
+  "runtime_source_commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+  "tag_binding": "this manifest is tracked by the annotated release tag",
+  "asset": {
+    "name": "nando-stable-live-operator-machine-2026-07-26-r2.tar.zst",
+    "bytes": 38971283,
+    "sha256": "d2e2b868b90c7f110d948b77618a1a6f108632da30c17cf877e6b1383a0b5e89",
+    "url": "https://github.com/radislabus-star/nando-wave/releases/download/nando-stable-live-operator-machine-2026-07-26-r2/nando-stable-live-operator-machine-2026-07-26-r2.tar.zst",
+    "content_verification": "CONTENTS.json + verify-release.sh"
+  },
+  "receipts": [
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/API_PAYLOAD_MANIFEST.json",
+      "bytes": 1299,
+      "sha256": "074bc05c4c69d2ff0ab11599660d1b67290473b08389750078c0c39e3793b0f6"
+    },
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/ASSET_CONTENTS.json",
+      "bytes": 5250,
+      "sha256": "f893c6d7faa5a3475a7a89a83a6ea6683ca5330276c22dadb42644d826b849e8"
+    },
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/BUILD_MANIFEST.json",
+      "bytes": 1697,
+      "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7"
+    },
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/BUILD_REPRODUCIBILITY_RECEIPT.json",
+      "bytes": 2156,
+      "sha256": "a426780343f5844c947e1718a9238c95f9d9b66667be3a75acb3663ec7f97d94"
+    },
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/RUNTIME_RESOURCE_RECEIPT.json",
+      "bytes": 5794,
+      "sha256": "40dbaad748301bdee94442c76b634a07922cc406e2306a296e54bfe9d24374bc"
+    }
+  ],
+  "rollback_runbook": "plans/effect-law-unification-v1/architect-printouts/release-r2/ROLLBACK.md",
+  "m3_status": "WATCH"
+}

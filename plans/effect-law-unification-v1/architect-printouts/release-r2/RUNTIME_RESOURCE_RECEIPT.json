@@ -1,0 +1,142 @@
+{
+  "schema": "nando.runtime-resource-receipt.v2",
+  "captured_at_unix_ms": 1785020214966121014,
+  "captured_at_local": "2026-07-26 01:56:54 EEST",
+  "machine_id_sha256": "d28e6c758834eb1229f6005a45627aba8c172d0ac209de94360e4619f874a44c",
+  "kernel": "Linux 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux",
+  "transition_tree_bytes": 2734237755,
+  "asset_root_name": "nando-stable-live-operator-machine-2026-07-26-r2",
+  "services": [
+    {
+      "unit": "nando-response-learning.service",
+      "active": "active",
+      "pid": 2725253,
+      "invocation_id": "1feb696ee626486282a8ba324c86d202",
+      "started_at": "Sun 2026-07-26 01:52:58 EEST",
+      "binary_path": "/opt/nando-wave/bin/nando-transition-serving",
+      "binary_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+      "binary_bytes": 44987216,
+      "rss_bytes": 728674304,
+      "peak_rss_bytes": 1052237824,
+      "threads": 23
+    },
+    {
+      "unit": "nando-transition-serving.service",
+      "active": "active",
+      "pid": 2725262,
+      "invocation_id": "e5afa541a6384b069c15c02cd58c73f8",
+      "started_at": "Sun 2026-07-26 01:52:58 EEST",
+      "binary_path": "/opt/nando-wave/bin/nando-transition-serving",
+      "binary_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+      "binary_bytes": 44987216,
+      "rss_bytes": 126603264,
+      "peak_rss_bytes": 150675456,
+      "threads": 17
+    },
+    {
+      "unit": "nando-gateway-control.service",
+      "active": "active",
+      "pid": 2478151,
+      "invocation_id": "41c2beb3b78b4c83ac2410b4fd988e69",
+      "started_at": "Sat 2026-07-25 23:02:07 EEST",
+      "binary_path": "/opt/nando-wave/bin/nando-gateway-control",
+      "binary_sha256": "6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2",
+      "binary_bytes": 4017448,
+      "rss_bytes": 65363968,
+      "peak_rss_bytes": 69410816,
+      "threads": 9
+    }
+  ],
+  "files": [
+    {
+      "source_path": "/var/lib/nando-wave/transition/response-online-miner.checkpoint",
+      "archive_member": "state/response-online-miner.checkpoint",
+      "bytes": 178383063,
+      "sha256": "6ff5ce600dd8057ac39dc7fca55ea9be2ef14a71c997a2aa436370b6f19f093c",
+      "source_modified_at": "2026-07-26 01:56:04.655819122 +0300",
+      "archive_inode": 2136533,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/online-collection-program-pools-v37.checkpoint",
+      "archive_member": "state/online-collection-program-pools-v37.checkpoint",
+      "bytes": 1126439,
+      "sha256": "090039018f18963f9af01806954cfa0408037316612b3b4fca147caf25010e5e",
+      "source_modified_at": "2026-07-26 01:54:38.517790602 +0300",
+      "archive_inode": 2136534,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/learning-structure-bridge-v2/request-learning-v2.checkpoint.cbor",
+      "archive_member": "state/learning-structure-bridge-v2/request-learning-v2.checkpoint.cbor",
+      "bytes": 16774700,
+      "sha256": "723876fa05bf1aaee21a5a5ae89ef48cfa5ce5ff670acdb228573b380ac1fcce",
+      "source_modified_at": "2026-07-26 01:53:06.057687307 +0300",
+      "archive_inode": 2136540,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/streaming-evidence-v2/checkpoint.cbor",
+      "archive_member": "state/streaming-evidence-v2/checkpoint.cbor",
+      "bytes": 4206293,
+      "sha256": "cf79cee502d38fd14f1cab0dfe9108db00ebe6fa9bca67a08c99996d0196db93",
+      "source_modified_at": "2026-07-26 01:56:09.334875008 +0300",
+      "archive_inode": 2136541,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/economics-live-v4.checkpoint",
+      "archive_member": "state/economics-live-v4.checkpoint",
+      "bytes": 1950091,
+      "sha256": "e50cd9b76b16688ed54e8013a54d1d2ff074bd1fa0c6c2205d6fcf2dbb513a0d",
+      "source_modified_at": "2026-07-26 01:56:10.537889377 +0300",
+      "archive_inode": 2136535,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/response-registry.json",
+      "archive_member": "state/response-registry.json",
+      "bytes": 264745,
+      "sha256": "71065c5c8eb50f2de8a3ded3667f335525480ba8219594ffef5fa21b505b9aee",
+      "source_modified_at": "2026-07-24 19:44:32.110991038 +0300",
+      "archive_inode": 2136536,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/admission.json",
+      "archive_member": "state/admission.json",
+      "bytes": 12529,
+      "sha256": "b61fc64c2e4a34cc86c9dcb2b72a283de5b93d8160c94a3101cf445e1368fa63",
+      "source_modified_at": "2026-07-26 01:55:58.967751187 +0300",
+      "archive_inode": 2136537,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/response-admission-controller-report.json",
+      "archive_member": "state/response-admission-controller-report.json",
+      "bytes": 982,
+      "sha256": "c347c883d11ac1a892ed9c67076e9ae803fc7554bffe6a37abcf5c9316c113a3",
+      "source_modified_at": "2026-07-26 01:55:34.603460220 +0300",
+      "archive_inode": 2136538,
+      "mode": "600",
+      "owner": "ubu:ubu"
+    },
+    {
+      "source_path": "/var/lib/nando-wave/transition/build-manifest.json",
+      "archive_member": "state/build-manifest.json",
+      "bytes": 1697,
+      "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7",
+      "source_modified_at": "2026-07-26 01:53:00.868625412 +0300",
+      "archive_inode": 2136539,
+      "mode": "644",
+      "owner": "ubu:ubu"
+    }
+  ]
+}

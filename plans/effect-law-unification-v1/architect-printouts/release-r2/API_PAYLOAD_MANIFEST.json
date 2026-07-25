@@ -1,0 +1,32 @@
+{
+  "schema": "nando.architecture-api-payload-manifest.v1",
+  "captured_at_unix_ms": 1785020104211509308,
+  "captured_at_local": "2026-07-26 01:55:04 EEST",
+  "scope": "one Nando-routed control plane; payloads are immutable release evidence, not machine-global traffic",
+  "payloads": [
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/api-v1-signal-path.json",
+      "bytes": 8690,
+      "sha256": "9d556fd832b078fdb8c0a13087a471cdfb35c8577b60e1419a4089d08f3142fb",
+      "normalization": "jq -S ."
+    },
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/connections.json",
+      "bytes": 3810,
+      "sha256": "7c72578a875b82e466dddf83f852825bbfe0ecf6c1bb04301bd9a4970cbac4c8",
+      "normalization": "jq -S ."
+    },
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/state.json",
+      "bytes": 2029462,
+      "sha256": "629727221a10fac632698072450e945c3ed52c71471e56d884500d1cd76fe5da",
+      "normalization": "jq -S ."
+    },
+    {
+      "path": "plans/effect-law-unification-v1/architect-printouts/release-r2/api/tokens.json",
+      "bytes": 1965,
+      "sha256": "cae888b0400fb2455f2a12507f10670aca76a3381dc60a6eb22dcb3111a7d76b",
+      "normalization": "jq -S ."
+    }
+  ]
+}

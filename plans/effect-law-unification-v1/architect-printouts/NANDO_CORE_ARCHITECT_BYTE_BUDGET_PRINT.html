@@ -180,8 +180,8 @@ code { font-family: inherit; font-weight: 700; }
     <div class="brand">NANDO / OPERATOR MACHINE</div>
     <div class="meta">
       Реальная архитектура и byte budget<br>
-      Снимок: 2026-07-26 00:54 EEST<br>
-      Release: nando-stable-live-operator-machine-2026-07-26-r1
+      Снимок: 2026-07-26 01:55 EEST<br>
+      Release: nando-stable-live-operator-machine-2026-07-26-r2
     </div>
   </header>
 
@@ -616,9 +616,9 @@ remaining for dispatch / metadata / scratch
       <tr><td>Controller admission</td><td>5 702 B</td><td>Authority decision envelope</td></tr>
       <tr><td>Authority candidate</td><td>5 368 B</td><td>Cold candidate, не self-authority</td></tr>
       <tr><td>Controller report</td><td>982 B</td><td>Observability only</td></tr>
-      <tr><td>Response learner checkpoint</td><td>178 845 934 B</td><td>Cold mutable learning state</td></tr>
-      <tr><td>Collection checkpoint</td><td>1 105 896 B</td><td>Bounded online collection state</td></tr>
-      <tr><td>Transition data tree</td><td>2.4 GiB</td><td>Включает исторические backups/tmp</td></tr>
+      <tr><td>Response learner checkpoint</td><td>178 383 063 B</td><td>Frozen asset copy + SHA receipt</td></tr>
+      <tr><td>Collection checkpoint</td><td>1 126 439 B</td><td>Frozen asset copy + SHA receipt</td></tr>
+      <tr><td>Transition data tree</td><td>2.546 GiB</td><td>Полный stat; asset хранит active state</td></tr>
     </tbody>
   </table>
 
@@ -628,9 +628,9 @@ remaining for dispatch / metadata / scratch
       <tr><th>Процесс</th><th>RSS</th><th>Роль</th></tr>
     </thead>
     <tbody>
-      <tr><td>nando-transition-serving</td><td>≈ 137.9 MiB</td><td>Hot serving + registry + protocol runtime</td></tr>
-      <tr><td>nando-response-learning</td><td>≈ 714.3 MiB</td><td>Cold learner / evidence / candidate state</td></tr>
-      <tr><td>nando-gateway-control</td><td>≈ 63.5 MiB</td><td>Control-plane API, dashboard, mode watchdog</td></tr>
+      <tr><td>nando-transition-serving</td><td>120.7 MiB</td><td>PID 2725262 · invocation e5afa541…</td></tr>
+      <tr><td>nando-response-learning</td><td>694.9 MiB</td><td>PID 2725253 · invocation 1feb696e…</td></tr>
+      <tr><td>nando-gateway-control</td><td>62.3 MiB</td><td>PID 2478151 · invocation 41c2beb3…</td></tr>
     </tbody>
   </table>
 
@@ -723,7 +723,7 @@ remaining for dispatch / metadata / scratch
   </div>
 
   <div class="band">
-    <strong>Исправлено в release r1:</strong>
+    <strong>Исправлено в r1, воспроизводимо закреплено в r2:</strong>
     authority lease обновляет отдельный background runtime каждые
     <code>max_age/3</code>. Request path только читает cache; просроченный
     lease даёт fail-closed fallback. Registry/admission read и renewal write
@@ -782,7 +782,7 @@ official provider / upstream LLM fallback</pre></div>
 <section class="page">
   <header>
     <div class="brand">05 / LIVE ECONOMICS</div>
-    <div class="meta">Frozen snapshot · 2026-07-26 00:54 EEST</div>
+    <div class="meta">Frozen snapshot · 2026-07-26 01:55 EEST</div>
   </header>
 
   <h1>Какой трафик реально доходит до CPU</h1>
@@ -816,26 +816,26 @@ official provider / upstream LLM fallback</pre></div>
     </thead>
     <tbody>
       <tr><td>Вся машина</td><td>Нет глобального token denominator</td><td>НЕ ИЗМЕРЕНО</td></tr>
-      <tr><td>Nando lifetime</td><td>2.202B / 8.498B</td><td>25.912%</td></tr>
-      <tr><td>Nando current epoch</td><td>2.160B / 2.536B</td><td>85.141%</td></tr>
-      <tr><td>Nando verified window</td><td>154.5M / 217.2M</td><td>71.124%</td></tr>
-      <tr><td>Opportunity upper bound</td><td>197.0M / 217.2M</td><td>90.695% · не savings</td></tr>
+      <tr><td>Nando lifetime</td><td>2.264B / 8.723B</td><td>25.960%</td></tr>
+      <tr><td>Nando current epoch</td><td>2.222B / 2.761B</td><td>80.478%</td></tr>
+      <tr><td>Nando verified window</td><td>162.2M / 225.0M</td><td>72.069%</td></tr>
+      <tr><td>Opportunity upper bound</td><td>204.8M / 225.0M</td><td>91.019% · не savings</td></tr>
     </tbody>
   </table>
 
   <h2>Маршрут и реальные операторы</h2>
   <div class="tree"><pre>входящий трафик                         PASS
-├─ active вне Nando                     5
-├─ idle                                 8
+├─ active вне Nando                    11
+├─ idle                                 2
 └─ направлено через Nando               1
    └─ immutable registry                3 ACTIVE
       ├─ write_stdin                    ordinary CPU exercised
-      │  └─ 1 563 accepts / 257.2M tokens
+      │  └─ post-restart 1 / cumulative 11 331 accepts
       ├─ wait                           controlled-only evidence
       └─ project_selected_value         ordinary accepts = 0
 
-Снимок counters снят до corrective restart и сохранён в JSON.
-Restart обнуляет process counters, но не отменяет evidence.</pre></div>
+R2 snapshot снят после установки exact reproducible binary.
+Process counters перезапущены; cumulative ledger сохранён.</pre></div>
 
   <div class="band">
     <strong>Два независимых ограничения:</strong>
@@ -873,7 +873,7 @@ Restart обнуляет process counters, но не отменяет evidence.<
 
   <div class="footer">
     Snapshot SHA-256:
-    <code>262445058e0a15bbe98ebade31d59fd9d02ca5586790d4764bb608f9f53cb1ea</code>.
+    <code>5594c4efbd37a5423ea97a614b8dfcfb242e43237e3abc778b6e4ec9116c4f7f</code>.
     Nando-only ratios не являются долей CPU по всей машине.
   </div>
 </section>
@@ -963,6 +963,7 @@ OperatorPage32 + restart                     PASS
 Independent verifier                        PASS
 External admission                          PASS
 Live ACTIVE CPU execution                    PASS, 3 admitted / 1 ordinary exercised
+Reproducible release asset                   PASS, byte-identical builds + frozen state
 Natural circuit-attractor in ordinary live   NOT PROVEN
 BackwardWave broad self-correction           PARTIAL
 Machine-global token denominator             MISSING, 1 / 14 windows routed
@@ -987,17 +988,26 @@ Current engineering objective:
 /home/ubu/projects/nando-wave/plans/multi-source-discovery-v1/MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md
 /home/ubu/projects/nando-wave/plans/cpu-coverage-to-50-v1/CPU_COVERAGE_TO_50_PLAN_V1.md
 /home/ubu/projects/nando-wave/plans/effect-law-unification-v1/architect-printouts/NANDO_CORE_ARCHITECT_SNAPSHOT_2026-07-26.json
+/home/ubu/projects/nando-wave/plans/effect-law-unification-v1/architect-printouts/release-r2/RELEASE_MANIFEST.json
+/home/ubu/projects/nando-wave/plans/effect-law-unification-v1/architect-printouts/release-r2/ROLLBACK.md
 /var/lib/nando-wave/transition/response-registry.json
 /var/lib/nando-wave/transition/response-admission-controller-report.json</pre>
 
   <h2>Release provenance</h2>
-  <pre class="small">corrective tag    nando-stable-live-operator-machine-2026-07-26-r1
-serving binary   685b5f8bce700dea3f0ab7d348fa470dd65a572822cc3c2dd0aece2414ede57c
+  <pre class="small">corrective tag    nando-stable-live-operator-machine-2026-07-26-r2
+runtime source   3151f0533bba4250ca71947d3bbd5449ee143db7
+build manifest   2026.07.26-b001 · git 3151f053 · SHA 95ee62ae0408…
+serving build A  58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e
+serving build B  58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e
+deployed binary  58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e
 gateway binary   6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2
 registry rev     5467418188856192864
 registry file    71065c5c8eb50f2de8a3ded3667f335525480ba8219594ffef5fa21b505b9aee
 authority root   229d7a4b323d87743c1010f005f1193e127d53def5c474e263ac81d2d7781808
-snapshot JSON    262445058e0a15bbe98ebade31d59fd9d02ca5586790d4764bb608f9f53cb1ea</pre>
+release asset    38 971 283 B · SHA d2e2b868b90c7f110d948b77618a1a6f108632da30c17cf877e6b1383a0b5e89
+API payloads     4 normalized JSON · manifest SHA 074bc05c4c69…
+resource receipt PID / invocation / RSS / 9 active state files
+snapshot JSON    5594c4efbd37a5423ea97a614b8dfcfb242e43237e3abc778b6e4ec9116c4f7f</pre>
 
   <div class="band">
     <strong>Суть текущей архитектуры:</strong>
@@ -1008,7 +1018,7 @@ snapshot JSON    262445058e0a15bbe98ebade31d59fd9d02ca5586790d4764bb608f9f53cb1e
 
   <div class="footer">
     Документ заменяет старый F5-A/Cell32 byte-budget snapshot.
-    Live-цифры — frozen snapshot 2026-07-26 00:54 EEST; перед внешним claim
+    Live-цифры — frozen snapshot 2026-07-26 01:55 EEST; перед внешним claim
     требуется новый snapshot с тем же schema.
   </div>
 </section>

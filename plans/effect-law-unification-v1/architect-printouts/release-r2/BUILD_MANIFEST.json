@@ -1,0 +1,57 @@
+{
+  "schema": "nando.build-manifest.v1",
+  "build_id": "2026.07.26-b001",
+  "generated_at_unix": 1785019979,
+  "git_commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+  "source_state_sha256": "ad53e804c2075f8df2919c9b73e45b783b91d3c73923e7c7e13593df7ca2a90c",
+  "modules": [
+    {
+      "name": "Rust serving",
+      "version": "0.1.0",
+      "contract": "6b873d519b3370ab3c3a2dbacedcbe24600c9613a02990935c6674ca377b4f09",
+      "sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e"
+    },
+    {
+      "name": "Gateway control",
+      "version": "0.1.0",
+      "contract": "control-plane.v1",
+      "sha256": "6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2"
+    },
+    {
+      "name": "Teacher/student miner",
+      "version": "strategy.v3",
+      "contract": "nando.self-training-stream-state.v5",
+      "sha256": ""
+    },
+    {
+      "name": "Frozen future",
+      "version": "partition.v9",
+      "contract": "event-time-disjoint",
+      "sha256": ""
+    },
+    {
+      "name": "Collection miner",
+      "version": "pooling.v0",
+      "contract": "NCO3",
+      "sha256": ""
+    },
+    {
+      "name": "Typed DSL + verifier",
+      "version": "nando.response-registry.v6",
+      "contract": "6b873d519b3370ab3c3a2dbacedcbe24600c9613a02990935c6674ca377b4f09",
+      "sha256": ""
+    },
+    {
+      "name": "Admission",
+      "version": "nando.live-transition-composite-gate.v2",
+      "contract": "proof-carrying",
+      "sha256": "2d6cf083355930034c70c6d68175cf60a0e4f9472f847813987d8c5da897e2ec"
+    },
+    {
+      "name": "Economics",
+      "version": "nando.economics-snapshot.v4",
+      "contract": "verified-only",
+      "sha256": ""
+    }
+  ]
+}

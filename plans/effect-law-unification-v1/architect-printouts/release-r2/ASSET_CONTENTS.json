@@ -1,0 +1,164 @@
+{
+  "schema": "nando.release-asset-contents.v1",
+  "release_tag": "nando-stable-live-operator-machine-2026-07-26-r2",
+  "source_commit": "3151f0533bba4250ca71947d3bbd5449ee143db7",
+  "serving_sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e",
+  "files": [
+    {
+      "member": "ROLLBACK.md",
+      "bytes": 3642,
+      "mode": "644",
+      "sha256": "54d12ac1f7788fc57e610cd2814025c0e8c137e90e6b0ec10ee350aecc8bafb6"
+    },
+    {
+      "member": "api/api-v1-signal-path.json",
+      "bytes": 8690,
+      "mode": "644",
+      "sha256": "9d556fd832b078fdb8c0a13087a471cdfb35c8577b60e1419a4089d08f3142fb"
+    },
+    {
+      "member": "api/connections.json",
+      "bytes": 3810,
+      "mode": "644",
+      "sha256": "7c72578a875b82e466dddf83f852825bbfe0ecf6c1bb04301bd9a4970cbac4c8"
+    },
+    {
+      "member": "api/state.json",
+      "bytes": 2029462,
+      "mode": "644",
+      "sha256": "629727221a10fac632698072450e945c3ed52c71471e56d884500d1cd76fe5da"
+    },
+    {
+      "member": "api/tokens.json",
+      "bytes": 1965,
+      "mode": "644",
+      "sha256": "cae888b0400fb2455f2a12507f10670aca76a3381dc60a6eb22dcb3111a7d76b"
+    },
+    {
+      "member": "bin/nando-gateway-control",
+      "bytes": 4017448,
+      "mode": "755",
+      "sha256": "6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2"
+    },
+    {
+      "member": "bin/nando-live-transition-gate",
+      "bytes": 43879,
+      "mode": "755",
+      "sha256": "2d6cf083355930034c70c6d68175cf60a0e4f9472f847813987d8c5da897e2ec"
+    },
+    {
+      "member": "bin/nando-record-build",
+      "bytes": 4366,
+      "mode": "755",
+      "sha256": "78ebfd2cff3a66a49a160b8b79c36623e543fd688495a1ac57cdfae98ce68cc8"
+    },
+    {
+      "member": "bin/nando-transition-serving",
+      "bytes": 44987216,
+      "mode": "755",
+      "sha256": "58672cc5829b20d3b58f9208daf5fd874205ff419237db5edf43c427d984798e"
+    },
+    {
+      "member": "receipts/API_PAYLOAD_MANIFEST.json",
+      "bytes": 1299,
+      "mode": "644",
+      "sha256": "074bc05c4c69d2ff0ab11599660d1b67290473b08389750078c0c39e3793b0f6"
+    },
+    {
+      "member": "receipts/BUILD_MANIFEST.json",
+      "bytes": 1697,
+      "mode": "644",
+      "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7"
+    },
+    {
+      "member": "receipts/BUILD_REPRODUCIBILITY_RECEIPT.json",
+      "bytes": 2156,
+      "mode": "644",
+      "sha256": "a426780343f5844c947e1718a9238c95f9d9b66667be3a75acb3663ec7f97d94"
+    },
+    {
+      "member": "receipts/RUNTIME_RESOURCE_RECEIPT.json",
+      "bytes": 5794,
+      "mode": "644",
+      "sha256": "40dbaad748301bdee94442c76b634a07922cc406e2306a296e54bfe9d24374bc"
+    },
+    {
+      "member": "state/admission.json",
+      "bytes": 12529,
+      "mode": "600",
+      "sha256": "b61fc64c2e4a34cc86c9dcb2b72a283de5b93d8160c94a3101cf445e1368fa63"
+    },
+    {
+      "member": "state/build-manifest.json",
+      "bytes": 1697,
+      "mode": "644",
+      "sha256": "95ee62ae0408edeb208616ec53bd6ab2288e7c87710879d20f9b45bb671333e7"
+    },
+    {
+      "member": "state/economics-live-v4.checkpoint",
+      "bytes": 1950091,
+      "mode": "600",
+      "sha256": "e50cd9b76b16688ed54e8013a54d1d2ff074bd1fa0c6c2205d6fcf2dbb513a0d"
+    },
+    {
+      "member": "state/learning-structure-bridge-v2/request-learning-v2.checkpoint.cbor",
+      "bytes": 16774700,
+      "mode": "600",
+      "sha256": "723876fa05bf1aaee21a5a5ae89ef48cfa5ce5ff670acdb228573b380ac1fcce"
+    },
+    {
+      "member": "state/online-collection-program-pools-v37.checkpoint",
+      "bytes": 1126439,
+      "mode": "600",
+      "sha256": "090039018f18963f9af01806954cfa0408037316612b3b4fca147caf25010e5e"
+    },
+    {
+      "member": "state/response-admission-controller-report.json",
+      "bytes": 982,
+      "mode": "600",
+      "sha256": "c347c883d11ac1a892ed9c67076e9ae803fc7554bffe6a37abcf5c9316c113a3"
+    },
+    {
+      "member": "state/response-online-miner.checkpoint",
+      "bytes": 178383063,
+      "mode": "600",
+      "sha256": "6ff5ce600dd8057ac39dc7fca55ea9be2ef14a71c997a2aa436370b6f19f093c"
+    },
+    {
+      "member": "state/response-registry.json",
+      "bytes": 264745,
+      "mode": "600",
+      "sha256": "71065c5c8eb50f2de8a3ded3667f335525480ba8219594ffef5fa21b505b9aee"
+    },
+    {
+      "member": "state/streaming-evidence-v2/checkpoint.cbor",
+      "bytes": 4206293,
+      "mode": "600",
+      "sha256": "cf79cee502d38fd14f1cab0dfe9108db00ebe6fa9bca67a08c99996d0196db93"
+    },
+    {
+      "member": "systemd/nando-gateway-control.service",
+      "bytes": 1149,
+      "mode": "664",
+      "sha256": "f31df32ff2fd9cbd4038125444ffdb61a6e1f3f275fcf34c15b6f1d73fc6f630"
+    },
+    {
+      "member": "systemd/nando-response-learning.service",
+      "bytes": 3384,
+      "mode": "664",
+      "sha256": "a742fefd3ea4f64103d9ab854f285e422c50a5e96d3da96f691f7682e0ec1ca7"
+    },
+    {
+      "member": "systemd/nando-transition-serving.service",
+      "bytes": 2612,
+      "mode": "664",
+      "sha256": "82e5c42aa01d1d264d637310d5c9aafd4bc0516f81cce7dc0be4190f4df4aeae"
+    },
+    {
+      "member": "verify-release.sh",
+      "bytes": 785,
+      "mode": "755",
+      "sha256": "fcea372fa78392b88ebc5328309762afd968eb1d9da865f120915bd213e3ebf2"
+    }
+  ]
+}
