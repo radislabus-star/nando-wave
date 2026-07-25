@@ -90,7 +90,7 @@ use generation_shadow::{
 };
 use learning_evidence_bridge::LearningEvidenceBridgeRuntimeV1;
 use learning_structure_bridge::LearningStructureBridgeRuntimeV2;
-use miner_worker::{MinerWorkerHandle, spawn_miner_worker};
+use miner_worker::{CollectionMinerPublishedSnapshot, MinerWorkerHandle, spawn_miner_worker};
 use opportunity_bridge::OpportunityBridgeRuntime;
 use provider_capture::{
     ProviderCaptureConfigV3, ProviderCaptureIngressV3, ProviderCaptureRuntimeV3,
@@ -1009,7 +1009,7 @@ async fn health(State(state): State<AppState>) -> Response {
                 .as_ref()
                 .and_then(MinerWorkerHandle::response_status)
         });
-    let miner_worker = miner_worker_handle.map(|worker| worker.status());
+    let miner_worker = miner_worker_handle.as_ref().map(MinerWorkerHandle::status);
     let miner_warmup = state
         .miner_warmup
         .read()
@@ -1100,19 +1100,14 @@ async fn health(State(state): State<AppState>) -> Response {
     });
     let (bridge_pending, bridge_dropped, bridge_worker_ready) = state.session_miner_bridge.status();
     let collection_miner = current_collection_miner(&state);
-    let collection_read_snapshot = collection_miner
+    let collection_snapshot = miner_worker_handle
         .as_ref()
-        .and_then(|miner| miner.try_lock().ok().map(|miner| miner.read_snapshot()));
-    let collection_snapshot = collection_read_snapshot.as_ref().map(|snapshot| {
-        let packages = snapshot
-            .quarantine_packages()
-            .map_or(0, |packages| packages.len());
-        (snapshot.status(), packages)
-    });
+        .and_then(MinerWorkerHandle::collection_snapshot)
+        .or_else(|| collection_snapshot_without_worker(collection_miner.as_ref()));
     let collection_busy = collection_miner.is_some() && collection_snapshot.is_none();
     let mut collection_status = collection_snapshot.as_ref().map_or_else(
         || json!({}),
-        |value| serde_json::to_value(&value.0).unwrap_or_else(|_| json!({})),
+        |value| serde_json::to_value(&value.status).unwrap_or_else(|_| json!({})),
     );
     if let Some(object) = collection_status.as_object_mut() {
         object.insert(
@@ -1123,7 +1118,11 @@ async fn health(State(state): State<AppState>) -> Response {
         object.insert("busy".to_owned(), json!(collection_busy));
         object.insert(
             "quarantine_packages".to_owned(),
-            json!(collection_snapshot.as_ref().map(|value| value.1)),
+            json!(
+                collection_snapshot
+                    .as_ref()
+                    .map(|value| { value.quarantine_packages.as_ref().map_or(0, Vec::len) })
+            ),
         );
         object.insert("raw_examples_persisted".to_owned(), json!(false));
     }
@@ -1373,25 +1372,24 @@ async fn bridge_health(State(state): State<AppState>) -> Response {
 }
 
 async fn miner_report(State(state): State<AppState>) -> Response {
-    let response_report = current_miner_worker(&state)
-        .and_then(|worker| worker.response_report())
+    let miner_worker = current_miner_worker(&state);
+    let response_report = miner_worker
+        .as_ref()
+        .and_then(MinerWorkerHandle::response_report)
         .or_else(|| {
             current_response_miner(&state)
                 .as_ref()
                 .and_then(|miner| miner.try_lock().ok().map(|miner| miner.report()))
         });
     let collection_miner = current_collection_miner(&state);
-    let collection_read_snapshot = collection_miner
+    let collection_snapshot = miner_worker
         .as_ref()
-        .and_then(|miner| miner.try_lock().ok().map(|miner| miner.read_snapshot()));
-    let collection_snapshot = collection_read_snapshot.as_ref().map(|snapshot| {
-        let status = snapshot.status();
-        let quarantine_packages = snapshot.quarantine_packages();
-        let admission_candidates = snapshot.admission_candidates();
-        (status, quarantine_packages, admission_candidates)
-    });
-    let collection_report = collection_snapshot.as_ref().map(
-        |(status, quarantine_packages, admission_candidates)| {
+        .and_then(MinerWorkerHandle::collection_snapshot)
+        .or_else(|| collection_snapshot_without_worker(collection_miner.as_ref()));
+    let collection_report = collection_snapshot.as_ref().map(|snapshot| {
+            let status = &snapshot.status;
+            let quarantine_packages = &snapshot.quarantine_packages;
+            let admission_candidates = &snapshot.admission_candidates;
             let emitted_candidates = admission_candidates.as_ref().map_or(0, Vec::len);
             let explicitly_blocked_candidates = status
                 .frozen_buckets_total
@@ -1416,8 +1414,7 @@ async fn miner_report(State(state): State<AppState>) -> Response {
                 },
                 "coverage_contract": "program-explainable evidence is not counted as saved tokens until a verifier-authorized runtime accept",
             })
-        },
-    );
+        });
     let evidence_ledger = state
         .deterministic_evidence
         .read()
@@ -1441,10 +1438,10 @@ async fn miner_report(State(state): State<AppState>) -> Response {
     let signal_tree = streaming_miner_signal_tree(
         &state,
         response_report.as_ref(),
-        collection_snapshot.as_ref().map(|value| &value.0),
+        collection_snapshot.as_ref().map(|value| &value.status),
         collection_snapshot
             .as_ref()
-            .and_then(|value| value.2.as_ref().ok())
+            .and_then(|value| value.admission_candidates.as_ref().ok())
             .map_or(0, Vec::len),
         economics.as_ref(),
     );
@@ -1454,7 +1451,7 @@ async fn miner_report(State(state): State<AppState>) -> Response {
             "schema": "nando.streaming-miner-report.v3",
             "generated_at_unix": unix_now(),
             "warmup": state.miner_warmup.read().map(|status| status.clone()).unwrap_or_default(),
-            "worker": current_miner_worker(&state).map(|worker| worker.status()),
+            "worker": miner_worker.as_ref().map(MinerWorkerHandle::status),
             "session_bridge": {
                 "pending": state.session_miner_bridge.status().0,
                 "dropped": state.session_miner_bridge.status().1,
@@ -1473,6 +1470,21 @@ async fn miner_report(State(state): State<AppState>) -> Response {
             "claim_boundary": "in-memory Rust state and generated snapshots; only admission receipts grant execution authority",
         }),
     )
+}
+
+fn collection_snapshot_without_worker(
+    miner: Option<&Arc<Mutex<OnlineCollectionMiner>>>,
+) -> Option<CollectionMinerPublishedSnapshot> {
+    miner.and_then(|miner| {
+        miner
+            .try_lock()
+            .ok()
+            .map(|miner| CollectionMinerPublishedSnapshot {
+                status: miner.status(),
+                quarantine_packages: miner.quarantine_packages(),
+                admission_candidates: miner.admission_candidates(),
+            })
+    })
 }
 
 async fn multi_source_report(State(state): State<AppState>) -> Response {

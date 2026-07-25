@@ -15,8 +15,8 @@ use nando_operator_learning::{
     teacher_transition_from_completed,
 };
 use nando_response_actor::{
-    OnlineCollectionMiner, OnlineResponseMinerReport, OnlineResponseStream,
-    OnlineResponseStreamStatus,
+    OnlineCollectionAdmissionCandidate, OnlineCollectionMiner, OnlineCollectionStatus,
+    OnlineResponseMinerReport, OnlineResponseStream, OnlineResponseStreamStatus, ResponsePackage,
 };
 
 const QUEUE_CAPACITY: usize = 4_096;
@@ -121,8 +121,26 @@ pub struct MinerWorkerHandle {
     counters: Arc<MinerWorkerCounters>,
     response_report: Arc<std::sync::RwLock<Option<OnlineResponseMinerReport>>>,
     response_status: Arc<std::sync::RwLock<Option<OnlineResponseStreamStatus>>>,
+    collection_snapshot: Arc<std::sync::RwLock<Option<CollectionMinerPublishedSnapshot>>>,
     multi_source_evidence: Arc<std::sync::RwLock<Option<MultiSourceMinerEvidenceSnapshotV1>>>,
     _report_heartbeat_lifetime: Arc<()>,
+}
+
+#[derive(Clone)]
+pub(crate) struct CollectionMinerPublishedSnapshot {
+    pub(crate) status: OnlineCollectionStatus,
+    pub(crate) quarantine_packages: Result<Vec<ResponsePackage>, String>,
+    pub(crate) admission_candidates: Result<Vec<OnlineCollectionAdmissionCandidate>, String>,
+}
+
+impl CollectionMinerPublishedSnapshot {
+    fn from_miner(miner: &OnlineCollectionMiner) -> Self {
+        Self {
+            status: miner.status(),
+            quarantine_packages: miner.quarantine_packages(),
+            admission_candidates: miner.admission_candidates(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -409,6 +427,14 @@ impl MinerWorkerHandle {
     }
 
     #[must_use]
+    pub(crate) fn collection_snapshot(&self) -> Option<CollectionMinerPublishedSnapshot> {
+        self.collection_snapshot
+            .read()
+            .ok()
+            .and_then(|snapshot| snapshot.clone())
+    }
+
+    #[must_use]
     pub(crate) fn multi_source_evidence(&self) -> Option<MultiSourceMinerEvidenceSnapshotV1> {
         self.multi_source_evidence
             .read()
@@ -499,16 +525,22 @@ fn spawn_miner_worker_with_report_heartbeat(
             },
         )
     };
+    let initial_collection_snapshot = collection_miner
+        .lock()
+        .map_err(|_| "miner_worker_initial_collection_snapshot_lock_poisoned".to_owned())
+        .map(|collection| CollectionMinerPublishedSnapshot::from_miner(&collection))?;
     // Building the full report re-synthesizes every bucket. It is diagnostic
     // output, not checkpoint restoration, so defer it until an event-driven
     // checkpoint instead of blocking serving startup.
     let response_report = Arc::new(std::sync::RwLock::new(None));
     let response_status = Arc::new(std::sync::RwLock::new(Some(initial_status)));
+    let collection_snapshot = Arc::new(std::sync::RwLock::new(Some(initial_collection_snapshot)));
     let multi_source_evidence =
         Arc::new(std::sync::RwLock::new(Some(initial_multi_source_evidence)));
     let thread_counters = Arc::clone(&counters);
     let thread_response_report = Arc::clone(&response_report);
     let thread_response_status = Arc::clone(&response_status);
+    let thread_collection_snapshot = Arc::clone(&collection_snapshot);
     let thread_multi_source_evidence = Arc::clone(&multi_source_evidence);
     let report_heartbeat_lifetime = Arc::new(());
     let weak_report_heartbeat_lifetime = Arc::downgrade(&report_heartbeat_lifetime);
@@ -597,6 +629,8 @@ fn spawn_miner_worker_with_report_heartbeat(
                     if let Err(error) = replay_persisted {
                         thread_counters.failed.fetch_add(1, Ordering::Relaxed);
                         eprintln!("nando-response-miner-v2 replay checkpoint: {error}");
+                    } else {
+                        publish_collection_snapshot(&collection_miner, &thread_collection_snapshot);
                     }
                     thread_counters
                         .startup_replay_micros
@@ -957,6 +991,10 @@ fn spawn_miner_worker_with_report_heartbeat(
                                     *published = Some(status);
                                 }
                             }
+                            publish_collection_snapshot(
+                                &collection_miner,
+                                &thread_collection_snapshot,
+                            );
                             thread_counters.checkpoints.fetch_add(1, Ordering::Relaxed);
                             events_since_checkpoint = 0;
                             last_checkpoint = Instant::now();
@@ -990,9 +1028,28 @@ fn spawn_miner_worker_with_report_heartbeat(
         counters,
         response_report,
         response_status,
+        collection_snapshot,
         multi_source_evidence,
         _report_heartbeat_lifetime: report_heartbeat_lifetime,
     })
+}
+
+fn publish_collection_snapshot(
+    miner: &Mutex<OnlineCollectionMiner>,
+    target: &std::sync::RwLock<Option<CollectionMinerPublishedSnapshot>>,
+) {
+    // This is a diagnostic projection published by the sole mutation worker.
+    // Authority paths must continue reading the current miner directly.
+    let Some(snapshot) = miner
+        .lock()
+        .ok()
+        .map(|miner| CollectionMinerPublishedSnapshot::from_miner(&miner))
+    else {
+        return;
+    };
+    if let Ok(mut published) = target.write() {
+        *published = Some(snapshot);
+    }
 }
 
 fn publish_multi_source_evidence(
@@ -1081,8 +1138,14 @@ mod tests {
             )
             .expect("collection miner"),
         ));
-        let worker = spawn_miner_worker(response.clone(), collection, root.clone(), None)
+        let worker = spawn_miner_worker(response.clone(), collection.clone(), root.clone(), None)
             .expect("miner worker");
+        let collection_guard = collection.lock().expect("collection state");
+        let published = worker
+            .collection_snapshot()
+            .expect("collection status is published before the worker starts");
+        assert_eq!(published.status.observations_total, 0);
+        drop(collection_guard);
         worker
             .submit_opportunity_durable(
                 OpportunityBridgeEventV1::request("51".repeat(32), 29, 1),
