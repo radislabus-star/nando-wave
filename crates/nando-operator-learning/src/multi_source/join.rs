@@ -114,7 +114,6 @@ pub struct MultiSourceJoinReportV1 {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MultiSourceJoinLedgerV1 {
     joined_by_root: BTreeMap<String, BlindThenRevealJoinedTransitionV1>,
-    used_topology_commitments: BTreeSet<String>,
     used_completed_frames: BTreeSet<String>,
     report: MultiSourceJoinReportV1,
 }
@@ -195,15 +194,12 @@ impl MultiSourceJoinLedgerV1 {
                 .get(action.turn_intent_id_sha256.as_str())
                 .map(Vec::as_slice)
                 .unwrap_or_default();
+            // One immutable request topology may ground several unique actions from the
+            // same response. Evidence independence is enforced later by session lineage.
             let candidates = same_intent
                 .iter()
                 .copied()
-                .filter(|row| {
-                    !ledger
-                        .used_topology_commitments
-                        .contains(&row.commit.commitment_root_sha256)
-                        && topology_matches_frame(row, &action)
-                })
+                .filter(|row| topology_matches_frame(row, &action))
                 .collect::<Vec<_>>();
             let Some(selected) = select_latest_unique(&candidates) else {
                 let reason = classify_missing_match(same_intent, &action, &candidates);
@@ -221,9 +217,6 @@ impl MultiSourceJoinLedgerV1 {
                         }
                         continue;
                     }
-                    ledger
-                        .used_topology_commitments
-                        .insert(selected.commit.commitment_root_sha256.clone());
                     ledger
                         .used_completed_frames
                         .insert(action.completed_frame_root_sha256.clone());

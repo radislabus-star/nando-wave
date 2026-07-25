@@ -638,6 +638,35 @@ fn blind_then_reveal_join_preserves_repeated_turn_events_without_overwrite() {
 }
 
 #[test]
+fn one_pre_action_topology_can_ground_multiple_unique_actions() {
+    let topologies = vec![topology_row("turn", "request-a", "session", 1, 1_000)];
+    let frames = vec![
+        completed_frame("turn", "action-a", "session", 1_500),
+        completed_frame("turn", "action-b", "session", 1_600),
+        completed_frame("turn", "action-a", "session", 1_500),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let report = ledger.report();
+
+    assert_eq!(report.joined_rows, 2);
+    assert_eq!(report.accepted_rows, 2);
+    assert_eq!(report.duplicate_idempotent, 1);
+    assert_eq!(
+        report
+            .censored
+            .get(&MultiSourceJoinCensoredReasonV1::PreActionOrderInvalid),
+        None
+    );
+    assert!(
+        ledger
+            .rows()
+            .iter()
+            .all(|row| row.topology_commitment_root_sha256
+                == topologies[0].commit.commitment_root_sha256)
+    );
+}
+
+#[test]
 fn topology_captured_after_action_never_joins() {
     let topologies = vec![topology_row("turn", "request-a", "session", 1, 2_000)];
     let frames = vec![completed_frame("turn", "action-a", "session", 1_500)];
