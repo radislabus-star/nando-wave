@@ -519,6 +519,7 @@ fn training_cases_from_session_range(
             .map_err(|error| format!("session_backfill_partial:{error}"))?;
     }
     let mut state = canonical_session_state(path, start_offset)?;
+    state.censor_until_turn_boundary = start_offset > 0;
     let mut emitted = Vec::new();
     let mut line = Vec::new();
     let end_offset = max_bytes.map(|bytes| start_offset.saturating_add(bytes));
@@ -3403,7 +3404,7 @@ mod tests {
     };
     use nando_response_actor::frame_matches_program_action_contract;
     use serde_json::json;
-    use std::io::Write;
+    use std::io::{Seek, Write};
 
     #[derive(Default)]
     struct RecordingMinerSink {
@@ -4382,6 +4383,49 @@ mod tests {
 
         assert_eq!(cases.len(), 1);
         assert_eq!(teacher_action_symbol(&cases[0].0), "function:write_stdin");
+        assert!(cases[0].1.is_some());
+    }
+
+    #[test]
+    fn tail_backfill_waits_for_an_authoritative_turn_boundary() {
+        let path = std::env::temp_dir().join(format!(
+            "nando-tail-turn-boundary-{}-{}.jsonl",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let mut file = File::create(&path).expect("session file");
+        for row in [
+            json!({"type":"session_meta","payload":{"id":"tail-boundary-session"}}),
+            json!({"type":"turn_context","payload":{"turn_id":"partial-turn"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"partial-exec","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"partial-exec","output":"Process running with session ID 11"}}),
+        ] {
+            writeln!(file, "{row}").expect("prefix row");
+        }
+        let tail_offset = file.stream_position().expect("tail offset");
+        for row in [
+            json!({"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"partial-wait","arguments":"{\"session_id\":11,\"yield_time_ms\":1000}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"partial-wait","output":"accepted"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":111}}}}),
+            json!({"type":"turn_context","payload":{"turn_id":"complete-turn"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"complete-exec","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"complete-exec","output":"Process running with session ID 22"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"complete-wait","arguments":"{\"session_id\":22,\"yield_time_ms\":1000}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"complete-wait","output":"accepted"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":222}}}}),
+        ] {
+            writeln!(file, "{row}").expect("tail row");
+        }
+        drop(file);
+
+        let cases = training_cases_from_session_at(&path, tail_offset).expect("bounded tail cases");
+        fs::remove_file(path).ok();
+
+        assert_eq!(cases.len(), 1);
+        assert_eq!(cases[0].0.estimated_input_tokens, 222);
         assert!(cases[0].1.is_some());
     }
 
