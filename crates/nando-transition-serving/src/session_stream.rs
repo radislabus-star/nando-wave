@@ -259,6 +259,7 @@ pub struct SessionStreamMetrics {
     finalized_graphs: AtomicU64,
     rejected_overflow_graphs: AtomicU64,
     censored_invalid_session_identities: AtomicU64,
+    censored_invalid_utf8_rows: AtomicU64,
     watcher_alive: std::sync::atomic::AtomicBool,
     watcher_events: AtomicU64,
     watcher_last_event_unix: AtomicU64,
@@ -266,12 +267,13 @@ pub struct SessionStreamMetrics {
 
 impl SessionStreamMetrics {
     #[must_use]
-    pub fn snapshot(&self) -> (u64, u64, u64, bool, u64, u64) {
+    pub fn snapshot(&self) -> (u64, u64, u64, u64, bool, u64, u64) {
         (
             self.finalized_graphs.load(Ordering::Relaxed),
             self.rejected_overflow_graphs.load(Ordering::Relaxed),
             self.censored_invalid_session_identities
                 .load(Ordering::Relaxed),
+            self.censored_invalid_utf8_rows.load(Ordering::Relaxed),
             self.watcher_alive.load(Ordering::Acquire),
             self.watcher_events.load(Ordering::Relaxed),
             self.watcher_last_event_unix.load(Ordering::Relaxed),
@@ -443,7 +445,10 @@ where
                     ) {
                         Ok(frames) => frames,
                         Err(error) => {
-                            eprintln!("nando-session-stream capture error: {error}");
+                            eprintln!(
+                                "nando-session-stream capture error path={}: {error}",
+                                path.display()
+                            );
                             continue;
                         }
                     };
@@ -515,7 +520,7 @@ fn training_cases_from_session_range(
     }
     let mut state = canonical_session_state(path, start_offset)?;
     let mut emitted = Vec::new();
-    let mut line = String::new();
+    let mut line = Vec::new();
     let end_offset = max_bytes.map(|bytes| start_offset.saturating_add(bytes));
     loop {
         line.clear();
@@ -526,18 +531,30 @@ fn training_cases_from_session_range(
             break;
         }
         let bytes = reader
-            .read_line(&mut line)
+            .read_until(b'\n', &mut line)
             .map_err(|error| format!("session_backfill_read:{error}"))?;
         if bytes == 0 {
             break;
         }
-        if !line.ends_with('\n') {
+        if line.last() != Some(&b'\n') {
             break;
         }
         state.offset = position;
+        let Ok(line) = std::str::from_utf8(&line) else {
+            state.censor_until_turn_boundary = true;
+            continue;
+        };
         let Ok(row) = serde_json::from_str::<Value>(line.trim_end()) else {
             continue;
         };
+        if state.censor_until_turn_boundary {
+            if is_authoritative_turn_boundary(&row) {
+                state.censor_until_turn_boundary = false;
+                discard_partial_turn(&mut state);
+            } else {
+                continue;
+            }
+        }
         begin_turn_identity(&row, &mut state);
         observe_row(&row, &mut state, &mut emitted);
     }
@@ -1200,7 +1217,7 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
     }
     let (mut reader, aligned_offset) = aligned_session_reader(file, state.offset)?;
     state.offset = aligned_offset;
-    let mut line = String::new();
+    let mut line = Vec::new();
     let mut emitted = Vec::new();
     loop {
         line.clear();
@@ -1208,17 +1225,29 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             .stream_position()
             .map_err(|error| error.to_string())?;
         let bytes = reader
-            .read_line(&mut line)
+            .read_until(b'\n', &mut line)
             .map_err(|error| error.to_string())?;
         if bytes == 0 {
             state.offset = position;
             break;
         }
-        if !line.ends_with('\n') {
+        if line.last() != Some(&b'\n') {
             state.offset = position;
             break;
         }
         state.offset = position.saturating_add(bytes as u64);
+        let Ok(line) = std::str::from_utf8(&line) else {
+            // A malformed row invalidates its partial turn, not every later
+            // turn in the same append-only session.
+            if state.replay_source_offset == Some(position) {
+                state.replay_source_offset = None;
+            }
+            state.censor_until_turn_boundary = true;
+            metrics
+                .censored_invalid_utf8_rows
+                .fetch_add(1, Ordering::Relaxed);
+            continue;
+        };
         let parsed = serde_json::from_str::<Value>(line.trim_end()).ok();
         if state.replay_source_offset == Some(position) {
             state.replay_source_offset = None;
@@ -1227,6 +1256,7 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         if state.censor_until_turn_boundary {
             if parsed.as_ref().is_some_and(is_authoritative_turn_boundary) {
                 state.censor_until_turn_boundary = false;
+                discard_partial_turn(state);
             } else {
                 continue;
             }
@@ -1778,6 +1808,15 @@ fn reset_turn(state: &mut SessionState) {
     // reset_turn. Preserve that one record as the first commitment of the new
     // turn and discard all commitments from the completed turn.
     state.turn_capture_records = state.current_capture_record.clone().into_iter().collect();
+}
+
+fn discard_partial_turn(state: &mut SessionState) {
+    reset_turn(state);
+    state.turn_event_graphs.clear();
+    state.turn_event_nodes = 0;
+    state.turn_graph_overflow = false;
+    state.runtime_parity_cases.clear();
+    state.turn_capture_records.clear();
 }
 
 fn current_capture_receipt(state: &SessionState) -> Option<CaptureEvidenceReceipt> {
@@ -4299,6 +4338,51 @@ mod tests {
             verified_training_cases_from_session_tail(&path, 128).expect("tail training cases");
         assert!(tail.is_empty());
         fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn invalid_utf8_censors_only_the_partial_turn() {
+        let path = std::env::temp_dir().join(format!(
+            "nando-invalid-utf8-session-{}-{}.jsonl",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let mut file = File::create(&path).expect("session file");
+        let first_turn = [
+            json!({"type":"session_meta","payload":{"id":"invalid-utf8-session"}}),
+            json!({"type":"turn_context","payload":{"turn_id":"turn-before-corruption"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"exec-before","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"exec-before","output":"Process running with session ID 11"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"wait-before","arguments":"{\"session_id\":11,\"yield_time_ms\":1000}"}}),
+        ];
+        for row in first_turn {
+            writeln!(file, "{row}").expect("first turn row");
+        }
+        file.write_all(b"{\"corrupt\":\"\xff\"}\n")
+            .expect("corrupt row");
+        let second_turn = [
+            json!({"type":"turn_context","payload":{"turn_id":"turn-after-corruption"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"exec-after","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"exec-after","output":"Process running with session ID 22"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"wait-after","arguments":"{\"session_id\":22,\"yield_time_ms\":1000}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-after","output":"accepted"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123}}}}),
+        ];
+        for row in second_turn {
+            writeln!(file, "{row}").expect("second turn row");
+        }
+        drop(file);
+
+        let cases =
+            verified_training_cases_from_session(&path).expect("training after corrupt row");
+        fs::remove_file(path).ok();
+
+        assert_eq!(cases.len(), 1);
+        assert_eq!(teacher_action_symbol(&cases[0].0), "function:write_stdin");
+        assert!(cases[0].1.is_some());
     }
 
     #[test]
