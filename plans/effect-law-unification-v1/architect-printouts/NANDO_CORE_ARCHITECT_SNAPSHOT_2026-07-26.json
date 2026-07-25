@@ -1,0 +1,179 @@
+{
+  "schema": "nando.operator-architecture-snapshot.v2",
+  "captured_at_unix_ms": 1785016441199,
+  "captured_at_local": "2026-07-26 00:54:01 EEST",
+  "scope": "one routed Nando window; not a machine-global traffic denominator",
+  "source": {
+    "baseline_tag": "nando-stable-live-operator-machine-2026-07-26",
+    "baseline_commit": "2c87141f0be509b4755587cafcbafad25e782c3a",
+    "corrective_release_tag": "nando-stable-live-operator-machine-2026-07-26-r1",
+    "runtime_source_file_sha256": "ac78c55d851f8e6b99628949c9d6f1b55c133e18f711e516a3953a59958b5c72",
+    "runtime_patch_from_baseline_sha256": "e1c576be9e6cb31b4fb73b295d816ba84148fbd2f76dcd3a9696288723ecf7f9"
+  },
+  "deployment": {
+    "hot_serving_binary_path": "/opt/nando-wave/bin/nando-transition-serving",
+    "hot_serving_binary_sha256": "685b5f8bce700dea3f0ab7d348fa470dd65a572822cc3c2dd0aece2414ede57c",
+    "hot_serving_invocation_after_corrective_restart": "ff0bc7c187584e318b26a5b00445afc7",
+    "gateway_control_binary_path": "/opt/nando-wave/bin/nando-gateway-control",
+    "gateway_control_binary_sha256": "6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2",
+    "build_manifest": {
+      "build_id": "2026.07.23-b001",
+      "git_commit": "49771908dfbab15e3d473e3f16382ce18ca8cf9d",
+      "source_state_sha256": "4638425703d9b4b93fa561efaf1c54a2a30a2916adc00b47e6c990185d0f8105",
+      "note": "manifest git_commit predates this corrective source release; binary SHA is the deployed identity"
+    }
+  },
+  "authority": {
+    "registry_schema": "nando.response-registry.v6",
+    "registry_revision": 5467418188856192864,
+    "registry_file_sha256": "71065c5c8eb50f2de8a3ded3667f335525480ba8219594ffef5fa21b505b9aee",
+    "registry_authority_sha256": "229d7a4b323d87743c1010f005f1193e127d53def5c474e263ac81d2d7781808",
+    "active_packages": 3,
+    "admission_verdict": "PASS",
+    "eligible_for_local_accept": true
+  },
+  "routing": {
+    "total_windows": 14,
+    "configured_for_nando": 1,
+    "active_nando": 1,
+    "active_outside_nando": 5,
+    "active_mixed": 0,
+    "idle": 8,
+    "misrouted": 0
+  },
+  "nando_routed_traffic": {
+    "accounting_exact": true,
+    "nando_input_tokens": 8498201973,
+    "miner_visible_input_tokens": 217214792,
+    "cpu_input_tokens": 2202058529,
+    "miner_share_ppm": 25560,
+    "cpu_share_ppm": 259120,
+    "accounting_epoch_nando_input_tokens": 2536421249,
+    "accounting_epoch_cpu_input_tokens": 2159543232,
+    "accounting_epoch_cpu_share_ppm": 851413,
+    "process_nando_input_tokens": 307883170,
+    "process_miner_input_tokens": 203692751,
+    "process_miner_share_ppm": 661591,
+    "process_cpu_input_tokens": 257234483,
+    "process_cpu_share_ppm": 835493,
+    "verified_local_accepts": 11196,
+    "economics_age_seconds": 6,
+    "scope_warning": "all token shares use only requests routed through Nando; machine-global share is unavailable"
+  },
+  "operator_execution": {
+    "active_packages": 3,
+    "ordinary_exercised_packages": 1,
+    "controlled_only_packages": 1,
+    "packages_with_zero_ordinary_accepts": 1,
+    "live_process_counters_at_capture": [
+      {
+        "package_id": "crystallized-scalar-a40ca964f20c4b67",
+        "function_name": "write_stdin",
+        "origin": "grounded_synthesis",
+        "state": "active",
+        "support_rows": 1,
+        "future_rows": 64,
+        "distinct_sessions": 4,
+        "wrong_accepts": 0,
+        "runtime_parity_failures": 0,
+        "live_cpu_counters_valid": true,
+        "live_cpu_accepts": 1563,
+        "live_cpu_input_tokens": 257234483
+      },
+      {
+        "package_id": "crystallized-scalar-db6407c627296d8b",
+        "function_name": "project_selected_value",
+        "origin": "grounded_synthesis",
+        "state": "active",
+        "support_rows": 1,
+        "future_rows": 1,
+        "distinct_sessions": 2,
+        "wrong_accepts": 0,
+        "runtime_parity_failures": 0,
+        "live_cpu_counters_valid": true,
+        "live_cpu_accepts": 0,
+        "live_cpu_input_tokens": 0
+      },
+      {
+        "package_id": "crystallized-scalar-e35441ca7863327d",
+        "function_name": "wait",
+        "origin": "grounded_synthesis",
+        "state": "active",
+        "support_rows": 1,
+        "future_rows": 28,
+        "distinct_sessions": 5,
+        "wrong_accepts": 0,
+        "runtime_parity_failures": 0,
+        "live_cpu_counters_valid": true,
+        "live_cpu_accepts": 0,
+        "live_cpu_input_tokens": 0
+      }
+    ],
+    "audit_classification": [
+      {
+        "function_name": "write_stdin",
+        "class": "ordinary_cpu_exercised"
+      },
+      {
+        "function_name": "wait",
+        "class": "controlled_only"
+      },
+      {
+        "function_name": "project_selected_value",
+        "class": "ordinary_accepts_zero"
+      }
+    ]
+  },
+  "safety_scope": {
+    "current_epoch_false_accepts": 0,
+    "current_epoch_parity_mismatches": 0,
+    "historical_completed_window_false_accepts_from_external_audit": 7,
+    "historical_zero_claim_allowed": false
+  },
+  "m3": {
+    "qualifying_streak": 1,
+    "required_consecutive_windows": 3,
+    "current_live_api": {
+      "completed_windows_exposed": 1,
+      "windows": [
+        {
+          "ended_at_unix": 1784942619,
+          "false_accepts": 0,
+          "ordinary_intents": 10000,
+          "ordinary_tokens": 1835776569,
+          "parity_failures": 0,
+          "pass": true,
+          "pipeline_dropped": 0,
+          "started_at_unix": 1784827294,
+          "token_share_milli": 736,
+          "unresolved_outcomes": 0,
+          "verified_intents": 7774,
+          "verified_tokens": 1351640771
+        }
+      ]
+    },
+    "external_audit": {
+      "completed_windows": 2,
+      "windows": [
+        {
+          "token_share_milli": 329,
+          "verdict": "FAIL",
+          "false_accepts": 7
+        },
+        {
+          "token_share_milli": 895,
+          "verdict": "PASS",
+          "false_accepts": 0
+        }
+      ]
+    },
+    "history_status": "HISTORY_SCOPE_CONFLICT",
+    "rule": "qualifying streak is authoritative; do not claim all-history safety until the durable window ledger reconciles both views"
+  },
+  "api_payload_sha256": {
+    "tokens": "fd6ff6789c2d34a5719d3e548993c5b3deb97375299a4c71dc59a50defe4b707",
+    "connections": "f1e5ae5b09ce338884f8db2c74a15ce45b4ded2044b454cff64580d795e51c4d",
+    "signal_path": "353065418a1810f0becd349273236c2ad7233e30e22e9ae4b79a4951461c06ad",
+    "state": "bc722159b7e37950890924c76f7dbd1117b478ee39619520a88ad5b48a56995a"
+  }
+}

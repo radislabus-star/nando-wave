@@ -2585,7 +2585,8 @@ fn try_response_actor(
         })
         .unwrap_or("ordinary");
     let natural_evidence_eligible = traffic_source_natural_evidence_eligible(traffic_source);
-    refresh_response_authority_at_hot_expiry(state);
+    // Authority renewal belongs to the background runtime. The request path
+    // reads only the cache and fails closed to upstream when its lease expires.
     if !response_local_accept_enabled(state) {
         record_response_actor_fallback(
             state,
@@ -2924,20 +2925,6 @@ fn response_local_accept_enabled(state: &AppState) -> bool {
         && state.config.client_allow_local_accept
         && state.config.route_ready
         && !state.runtime_policy.kill_switch()
-}
-
-fn refresh_response_authority_at_hot_expiry(state: &AppState) {
-    let now = unix_now();
-    let refresh = state.response_cache.read().is_ok_and(|cache| {
-        cache.ready
-            && cache.executor.is_some()
-            && now.saturating_add(1) >= cache.admission_expires_at_unix
-    });
-    if refresh {
-        // The background controller remains the authority owner. This only
-        // reloads its immutable receipt before a valid hot lease goes dark.
-        refresh_response_executor(state);
-    }
 }
 
 fn refresh_response_authority(state: &AppState) {
@@ -5793,9 +5780,9 @@ mod tests {
     }
 
     #[test]
-    fn hot_request_refreshes_an_expiring_valid_response_lease() {
+    fn expired_hot_cache_guard_does_not_renew_authority() {
         let root = std::env::temp_dir().join(format!(
-            "nando-serving-hot-authority-renewal-{}-{}",
+            "nando-serving-hot-authority-no-io-{}-{}",
             std::process::id(),
             PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
         ));
@@ -5806,18 +5793,23 @@ mod tests {
             &serde_json::to_value(project_status_registry()).expect("registry"),
         );
         let state = project_status_test_state(&root, &registry_path);
+        let admission_before =
+            fs::read(&state.config.admission_path).expect("admission before hot guard");
         {
             let mut cache = state.response_cache.write().expect("response cache");
             assert!(cache.ready);
-            cache.admission_expires_at_unix = unix_now();
+            cache.admission_expires_at_unix = unix_now().saturating_sub(1);
         }
 
-        refresh_response_authority_at_hot_expiry(&state);
-
+        assert!(!response_local_accept_enabled(&state));
+        assert_eq!(
+            fs::read(&state.config.admission_path).expect("admission after hot guard"),
+            admission_before
+        );
         let cache = state.response_cache.read().expect("response cache");
         assert!(cache.ready);
         assert!(cache.executor.is_some());
-        assert!(cache.admission_expires_at_unix > unix_now());
+        assert!(cache.admission_expires_at_unix <= unix_now());
         assert!(cache.last_error.is_empty());
         fs::remove_dir_all(&root).expect("cleanup test root");
     }

@@ -180,8 +180,8 @@ code { font-family: inherit; font-weight: 700; }
     <div class="brand">NANDO / OPERATOR MACHINE</div>
     <div class="meta">
       Реальная архитектура и byte budget<br>
-      Снимок: 2026-07-25 23:10 EEST<br>
-      HEAD: ca42f01 · live + working tree
+      Снимок: 2026-07-26 00:54 EEST<br>
+      Release: nando-stable-live-operator-machine-2026-07-26-r1
     </div>
   </header>
 
@@ -189,7 +189,8 @@ code { font-family: inherit; font-weight: 700; }
   <p class="lead">
     Nando превращает завершённый опыт в компактные типизированные программы.
     Новый навык должен становиться данными и bytecode, а не новой веткой Rust.
-    Сегодня production уже исполняет три узких adaptive-оператора. Полное
+    Сегодня production допускает три узких adaptive-оператора, но обычный
+    live-трафик доказанно исполняет только <code>write_stdin</code>. Полное
     рождение нового circuit-attractor из multi-source fragments остаётся
     следующим научным рубежом, а не выданным результатом.
   </p>
@@ -204,7 +205,11 @@ code { font-family: inherit; font-weight: 700; }
   </div>
 
   <h2>Текущая живая линия</h2>
-  <div class="tree"><pre>OpenAI-compatible request
+  <div class="tree"><pre>Все наблюдаемые Codex-окна                     14
+└─ реально направлено через Nando               1
+   │
+   v
+OpenAI-compatible request
 │
 ├─ Nginx gateway / provider fallback
 │
@@ -252,7 +257,7 @@ code { font-family: inherit; font-weight: 700; }
       <span class="value held">1</span>
     </div>
     <div class="status">
-      <span class="label">FALSE ACCEPTS</span>
+      <span class="label">CURRENT EPOCH FALSE</span>
       <span class="value ok">0</span>
     </div>
     <div class="status">
@@ -261,26 +266,33 @@ code { font-family: inherit; font-weight: 700; }
     </div>
   </div>
 
+  <div class="band">
+    <strong>Safety scope:</strong>
+    текущая эпоха сообщает false accepts = 0 и parity = 0. Внешний audit
+    завершённых исторических окон сообщает 7 false accepts; до reconciliation
+    durable M3 ledger общий исторический ноль запрещено заявлять.
+  </div>
+
   <h2>Что реально исполняется</h2>
   <table>
     <thead>
-      <tr><th>Пакет</th><th>Эффект</th><th>Состояние</th></tr>
+      <tr><th>Пакет</th><th>Эффект</th><th>Фактический live scope</th></tr>
     </thead>
     <tbody>
       <tr>
         <td><code>crystallized-scalar-a40ca964f20c4b67</code></td>
         <td>Продолжение процесса через <code>write_stdin(session_id)</code></td>
-        <td class="ok">ACTIVE</td>
+        <td class="ok">ACTIVE · ordinary CPU exercised</td>
       </tr>
       <tr>
         <td><code>crystallized-scalar-db6407c627296d8b</code></td>
         <td>Проекция первого структурно упомянутого JSON-поля без имени поля</td>
-        <td class="ok">ACTIVE</td>
+        <td class="watch">ACTIVE · ordinary accepts = 0</td>
       </tr>
       <tr>
         <td><code>crystallized-scalar-e35441ca7863327d</code></td>
         <td>Продолжение cell через <code>wait(cell_id)</code></td>
-        <td class="ok">ACTIVE</td>
+        <td class="info">ACTIVE · controlled-only evidence</td>
       </tr>
       <tr>
         <td><code>candidate generation g+1</code></td>
@@ -373,7 +385,10 @@ nando-transition-serving
 └─ hot HTTP ingress, registry route, CPU accept, fallback
 
 nando-gateway-control
-└─ read-only observability; отчёт никогда не authority</pre></div>
+├─ control-plane UI/API и read-only observability
+├─ POST /mode → manual mode transition
+├─ watchdog → automatic CPU promotion / revoke
+└─ не создаёт proof, но реально управляет serving mode</pre></div>
 
   <h2>Направление зависимости</h2>
   <div class="cols">
@@ -615,7 +630,7 @@ remaining for dispatch / metadata / scratch
     <tbody>
       <tr><td>nando-transition-serving</td><td>≈ 137.9 MiB</td><td>Hot serving + registry + protocol runtime</td></tr>
       <tr><td>nando-response-learning</td><td>≈ 714.3 MiB</td><td>Cold learner / evidence / candidate state</td></tr>
-      <tr><td>nando-gateway-control</td><td>≈ 63.5 MiB</td><td>Read-only dashboard/API</td></tr>
+      <tr><td>nando-gateway-control</td><td>≈ 63.5 MiB</td><td>Control-plane API, dashboard, mode watchdog</td></tr>
     </tbody>
   </table>
 
@@ -702,9 +717,17 @@ remaining for dispatch / metadata / scratch
       <span class="value">≤ 2 ms</span>
     </div>
     <div class="status">
-      <span class="label">HOT-PATH IO</span>
+      <span class="label">AUTHORITY FS IO / REQUEST</span>
       <span class="value ok">0</span>
     </div>
+  </div>
+
+  <div class="band">
+    <strong>Исправлено в release r1:</strong>
+    authority lease обновляет отдельный background runtime каждые
+    <code>max_age/3</code>. Request path только читает cache; просроченный
+    lease даёт fail-closed fallback. Registry/admission read и renewal write
+    больше не выполняются синхронно из запроса.
   </div>
 
   <h2>Независимый verifier</h2>
@@ -759,76 +782,79 @@ official provider / upstream LLM fallback</pre></div>
 <section class="page">
   <header>
     <div class="brand">05 / LIVE ECONOMICS</div>
-    <div class="meta">Read-only API snapshot; значения меняются</div>
+    <div class="meta">Frozen snapshot · 2026-07-26 00:54 EEST</div>
   </header>
 
-  <h1>Что система делает сейчас</h1>
+  <h1>Какой трафик реально доходит до CPU</h1>
   <p class="lead">
-    Это измеренный live-снимок, а не обещание и не fixture. Источник —
-    локальный <code>/control/&lt;key&gt;/tokens</code> API и immutable response registry.
+    Снимок отделяет весь трафик машины от единственного окна, направленного
+    через Nando. Проценты ниже относятся только к Nando-routed потоку.
   </p>
 
   <div class="status-grid">
     <div class="status">
-      <span class="label">ПРОШЛО ЧЕРЕЗ NANDO</span>
-      <span class="value">8.286B</span>
+      <span class="label">ВСЕ НАБЛЮДАЕМЫЕ ОКНА</span>
+      <span class="value">14</span>
     </div>
     <div class="status">
-      <span class="label">УВИДЕЛ МАЙНЕР</span>
-      <span class="value info">164.8M</span>
+      <span class="label">НАПРАВЛЕНО ЧЕРЕЗ NANDO</span>
+      <span class="value warn">1</span>
     </div>
     <div class="status">
-      <span class="label">ИСПОЛНЕНО НА CPU</span>
-      <span class="value ok">1.995B</span>
-    </div>
-    <div class="status">
-      <span class="label">ACTIVE</span>
+      <span class="label">ACTIVE PACKAGES</span>
       <span class="value ok">3</span>
+    </div>
+    <div class="status">
+      <span class="label">ORDINARY CPU EXERCISED</span>
+      <span class="value warn">1</span>
     </div>
   </div>
 
   <table>
     <thead>
-      <tr><th>Метрика</th><th>Текущее значение</th><th>Смысл</th></tr>
+      <tr><th>Scope</th><th>CPU / denominator</th><th>Доля</th></tr>
     </thead>
     <tbody>
-      <tr><td>Lifetime miner visibility</td><td>1.988%</td><td>164.8M / 8.286B; не CPU coverage</td></tr>
-      <tr><td>Lifetime CPU share</td><td>24.074%</td><td>1.995B / 8.286B за всё время</td></tr>
-      <tr><td>Current epoch CPU share</td><td>83.997%</td><td>1.952B / 2.324B после текущего epoch boundary</td></tr>
-      <tr><td>Current verified window</td><td>70.155%</td><td>115.6M / 164.8M в текущем проверяемом окне</td></tr>
-      <tr><td>Optimistic upper bound</td><td>89.449%</td><td>147.4M / 164.8M; opportunity, не доказанная экономия</td></tr>
-      <tr><td>M3 completed windows</td><td>1 / 3</td><td>Последнее завершённое окно: 73.6%, safety 0/0</td></tr>
-      <tr><td>Structural bridge</td><td>13 091 / 13 091</td><td>Pending 0, sequence gaps 0</td></tr>
-      <tr><td>Relation joins</td><td>30 982 / 67 579</td><td>Остальное — реальные misses, не transport loss</td></tr>
-      <tr><td>Ready cohorts</td><td>42</td><td>Ещё не равно admitted operators</td></tr>
-      <tr><td>Crystallizer</td><td>4 / 3 / 1</td><td>Input / admissible / HELD</td></tr>
-      <tr><td>Bridge loss</td><td>0</td><td>Hot/cold delivery intact</td></tr>
-      <tr><td>False accepts / parity</td><td>0 / 0</td><td>Safety gate сохраняется</td></tr>
+      <tr><td>Вся машина</td><td>Нет глобального token denominator</td><td>НЕ ИЗМЕРЕНО</td></tr>
+      <tr><td>Nando lifetime</td><td>2.202B / 8.498B</td><td>25.912%</td></tr>
+      <tr><td>Nando current epoch</td><td>2.160B / 2.536B</td><td>85.141%</td></tr>
+      <tr><td>Nando verified window</td><td>154.5M / 217.2M</td><td>71.124%</td></tr>
+      <tr><td>Opportunity upper bound</td><td>197.0M / 217.2M</td><td>90.695% · не savings</td></tr>
     </tbody>
   </table>
 
-  <h2>Где находится реальный разрыв</h2>
+  <h2>Маршрут и реальные операторы</h2>
   <div class="tree"><pre>входящий трафик                         PASS
-  -> structural bridge                 PASS
-  -> relation frames                   LIVE
-  -> operator discovery                42 cohorts
-  -> candidate export                  1 relation candidate
-  -> crystallizer                      4 input / 3 admitted / 1 held
-  -> immutable registry                3 ACTIVE
-  -> admission                         OPEN
-  -> CPU                               ENABLED
+├─ active вне Nando                     5
+├─ idle                                 8
+└─ направлено через Nando               1
+   └─ immutable registry                3 ACTIVE
+      ├─ write_stdin                    ordinary CPU exercised
+      │  └─ 1 563 accepts / 257.2M tokens
+      ├─ wait                           controlled-only evidence
+      └─ project_selected_value         ordinary accepts = 0
 
-ПРОДУКТОВАЯ ПРОБЛЕМА:
-  библиотека ACTIVE-операторов слишком узкая,
-  поэтому lifetime CPU share = 24.074%, а не ≥ 50%.
+Снимок counters снят до corrective restart и сохранён в JSON.
+Restart обнуляет process counters, но не отменяет evidence.</pre></div>
 
-НАУЧНЫЙ РУБЕЖ:
-  MS3 natural completed RelationFrame
-  -> actor / independent verifier parity
-  -> MS4 first natural multi-source ACTIVE package.
+  <div class="band">
+    <strong>Два независимых ограничения:</strong>
+    13 из 14 окон не направлены через Nando; внутри направленного потока
+    ordinary traffic реально исполняет только 1 из 3 ACTIVE packages.
+  </div>
 
-НЕ ПРОБЛЕМА:
-  signal connectivity, bridge delivery или authority wiring.</pre></div>
+  <h2>Safety и M3: только с явным scope</h2>
+  <table>
+    <thead>
+      <tr><th>Срез</th><th>Результат</th><th>Допустимый claim</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Current epoch</td><td>false 0 / parity 0</td><td>Только текущая эпоха</td></tr>
+      <tr><td>External completed-window audit</td><td>32.9% FAIL, false 7; 89.5% PASS, false 0</td><td>Исторический ноль запрещён</td></tr>
+      <tr><td>Current live API ledger</td><td>одно окно 73.6%, false 0</td><td>Конфликт истории требует reconciliation</td></tr>
+      <tr><td>M3</td><td>qualifying streak 1 / 3</td><td>WATCH</td></tr>
+    </tbody>
+  </table>
 
   <h2>Путь к 50%</h2>
   <table>
@@ -836,25 +862,19 @@ official provider / upstream LLM fallback</pre></div>
       <tr><th>Шаг</th><th>Что должно появиться</th><th>Что запрещено</th></tr>
     </thead>
     <tbody>
+      <tr><td>Routing</td><td>Глобальный denominator и намеренно подключённые окна</td><td>Выдать Nando-only ratio за machine-global</td></tr>
       <tr><td>MS3</td><td>Первый natural multi-source RelationFrame и parity</td><td>Выдать code/fixture PASS за live result</td></tr>
       <tr><td>MS4</td><td>Первый independently admitted multi-source package</td><td>Самоавторизацию crystallizer-а</td></tr>
-      <tr><td>MS5</td><td>Circuit из частичных независимых поверхностей</td><td>Перенос raw teacher/output payload</td></tr>
-      <tr><td>MS6–7</td><td>Status/count/filter/compose и rich multi-role laws</td><td>Ручные function-name profiles как закон</td></tr>
-      <tr><td>MS8</td><td>Marginal coverage ledger выбирает следующий закон</td><td>Двойной счёт overlapping token mass</td></tr>
+      <tr><td>MS5–7</td><td>Partial circuits + rich multi-role laws</td><td>Перенос raw teacher/output payload</td></tr>
+      <tr><td>MS8</td><td>Disjoint marginal coverage ledger</td><td>Двойной счёт token mass</td></tr>
       <tr><td>M3</td><td>Три завершённых verified windows ≥ 50%</td><td>Подменять окно epoch или upper bound</td></tr>
     </tbody>
   </table>
 
-  <div class="band">
-    <strong>Главный продуктовый рычаг:</strong>
-    не ускорять два уже ACTIVE оператора, а увеличивать объём трафика,
-    покрытый новыми независимо доказанными operator packages.
-  </div>
-
   <div class="footer">
-    Lifetime, epoch, current verified window, optimistic ceiling и mature M3
-    windows — пять разных величин. Для M3 нужны три последовательных
-    завершённых окна ≥ 50%, false accepts = 0 и parity mismatches = 0.
+    Snapshot SHA-256:
+    <code>262445058e0a15bbe98ebade31d59fd9d02ca5586790d4764bb608f9f53cb1ea</code>.
+    Nando-only ratios не являются долей CPU по всей машине.
   </div>
 </section>
 
@@ -879,8 +899,7 @@ official provider / upstream LLM fallback</pre></div>
 [ ] ACTIVE generation не мутирует на месте
 [ ] censored outcomes не обновляют semantic field
 [ ] fallback сохраняется для каждого неизвестного случая
-[ ] false accepts = 0
-[ ] runtime parity mismatches = 0
+[ ] false accepts и parity публикуются с явным epoch/window scope
 [ ] coverage публикуется с глобальным denominator</pre></div>
 
   <h2>Перед изменением core</h2>
@@ -943,16 +962,18 @@ Runtime role grounding                      PASS, 3 narrow laws
 OperatorPage32 + restart                     PASS
 Independent verifier                        PASS
 External admission                          PASS
-Live ACTIVE CPU execution                    PASS, 3 packages
+Live ACTIVE CPU execution                    PASS, 3 admitted / 1 ordinary exercised
 Natural circuit-attractor in ordinary live   NOT PROVEN
 BackwardWave broad self-correction           PARTIAL
-M3: ≥50% for 3 verified windows              WATCH, 1 / 3
+Machine-global token denominator             MISSING, 1 / 14 windows routed
+M3: ≥50% for 3 verified windows              WATCH, streak 1 / 3; history conflict
 
 Current engineering objective:
-  ordinary MS3 evidence
+  intentional window routing + global denominator
+  -> ordinary MS3 evidence
   -> MS4 independent admission
   -> wider rich-operator portfolio
-  -> safety counters remain zero</pre></div>
+  -> scoped safety counters remain zero</pre></div>
 
   <h2>Canonical sources</h2>
   <pre class="small">/home/ubu/projects/nando-wave/ARCHITECTURE_CANON.md
@@ -965,8 +986,18 @@ Current engineering objective:
 /home/ubu/projects/nando-wave/crates/nando-operator-admission/
 /home/ubu/projects/nando-wave/plans/multi-source-discovery-v1/MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md
 /home/ubu/projects/nando-wave/plans/cpu-coverage-to-50-v1/CPU_COVERAGE_TO_50_PLAN_V1.md
+/home/ubu/projects/nando-wave/plans/effect-law-unification-v1/architect-printouts/NANDO_CORE_ARCHITECT_SNAPSHOT_2026-07-26.json
 /var/lib/nando-wave/transition/response-registry.json
 /var/lib/nando-wave/transition/response-admission-controller-report.json</pre>
+
+  <h2>Release provenance</h2>
+  <pre class="small">corrective tag    nando-stable-live-operator-machine-2026-07-26-r1
+serving binary   685b5f8bce700dea3f0ab7d348fa470dd65a572822cc3c2dd0aece2414ede57c
+gateway binary   6434ba55e047fd480c1607f63623481a22138e20e32df0e35126a77b9a88c5a2
+registry rev     5467418188856192864
+registry file    71065c5c8eb50f2de8a3ded3667f335525480ba8219594ffef5fa21b505b9aee
+authority root   229d7a4b323d87743c1010f005f1193e127d53def5c474e263ac81d2d7781808
+snapshot JSON    262445058e0a15bbe98ebade31d59fd9d02ca5586790d4764bb608f9f53cb1ea</pre>
 
   <div class="band">
     <strong>Суть текущей архитектуры:</strong>
@@ -977,8 +1008,8 @@ Current engineering objective:
 
   <div class="footer">
     Документ заменяет старый F5-A/Cell32 byte-budget snapshot.
-    Live-цифры — снимок 2026-07-25 23:10 EEST и должны обновляться перед
-    внешним claim.
+    Live-цифры — frozen snapshot 2026-07-26 00:54 EEST; перед внешним claim
+    требуется новый snapshot с тем же schema.
   </div>
 </section>
 
