@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -93,9 +93,13 @@ const ONLINE_COLLECTION_POOLING_STRATEGY_V35: u32 = 35;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V36: u32 = 36;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V37: u32 = 37;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V38: u32 = 38;
+const ONLINE_COLLECTION_POOLING_STRATEGY_V39: u32 = 39;
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V2: &[u8; 4] = b"NCO2";
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NCO3";
 const MAX_PERSISTED_PARITY_BYTES_PER_BUCKET: usize = 2 * 1024 * 1024;
+// The live compact checkpoint is currently about 175 MiB; keep restart bounded
+// while leaving enough headroom for one full generation rollover.
+const MAX_COLLECTION_CHECKPOINT_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_NEW_ADAPTERS_PER_OBSERVATION: usize = 8;
 const MAX_UNFROZEN_ROUTE_BUCKETS: usize = 8;
 const MAX_UNFROZEN_ROUTE_PROGRAMS: usize = 8;
@@ -290,6 +294,7 @@ struct CollectionFutureManifestMaterial<'a> {
 pub struct OnlineCollectionMiner {
     path: PathBuf,
     checkpoint: OnlineCollectionCheckpoint,
+    _owner_lock: Option<File>,
 }
 
 pub struct OnlineCollectionReadSnapshot {
@@ -303,6 +308,7 @@ impl OnlineCollectionMiner {
             miner: Self {
                 path: PathBuf::new(),
                 checkpoint: self.checkpoint.clone(),
+                _owner_lock: None,
             },
         }
     }
@@ -320,6 +326,19 @@ impl OnlineCollectionReadSnapshot {
 
     pub fn admission_candidates(&self) -> Result<Vec<OnlineCollectionAdmissionCandidate>, String> {
         self.miner.admission_candidates()
+    }
+
+    #[must_use]
+    pub fn consensus_diagnostics(&self) -> Vec<OnlineCollectionConsensusDiagnostic> {
+        self.miner.consensus_diagnostics()
+    }
+
+    #[must_use]
+    pub fn consensus_diagnostic_for_bucket(
+        &self,
+        bucket_id: &str,
+    ) -> Option<OnlineCollectionConsensusDiagnostic> {
+        self.miner.consensus_diagnostic_for_bucket(bucket_id)
     }
 }
 

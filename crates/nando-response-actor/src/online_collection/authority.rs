@@ -39,6 +39,7 @@ pub(super) fn receipt(
             .into_iter()
             .collect(),
         matched_program_sha256: Vec::new(),
+        verified_semantic_program_sha256: Vec::new(),
         matched_program_dynamic_value_root_sha256: BTreeMap::new(),
         witness_class_commitment_sha256: None,
         witness_round: None,
@@ -59,10 +60,15 @@ pub(super) fn receipt_with_program_atoms(
     value.request_atom_ids.sort_unstable();
     value.request_atom_ids.dedup();
     for (digest, program) in programs {
-        if !independently_verified_teacher_match(program, &observation.example) {
+        let Ok(response) =
+            independently_verified_authority_response_result(program, &observation.example)
+        else {
             continue;
+        };
+        value.verified_semantic_program_sha256.push(digest.clone());
+        if response == observation.example.expected_response {
+            value.matched_program_sha256.push(digest.clone());
         }
-        value.matched_program_sha256.push(digest.clone());
         if let Ok(Some(root)) =
             response_program_dynamic_value_root_sha256(program, &observation.example)
         {
@@ -71,6 +77,8 @@ pub(super) fn receipt_with_program_atoms(
                 .insert(digest.clone(), root);
         }
     }
+    value.verified_semantic_program_sha256.sort();
+    value.verified_semantic_program_sha256.dedup();
     Ok(value)
 }
 
@@ -240,7 +248,7 @@ pub(super) fn update_applicability_negative_sessions(
 }
 
 pub(super) fn structural_layout_sha256(value: &Value) -> Result<String, String> {
-    canonical_json_sha256(&structural_layout(value)).map_err(str::to_owned)
+    nando_operator_runtime::actor_structural_layout_sha256(value).map_err(str::to_owned)
 }
 
 pub(super) fn independently_verified_authority_response(
@@ -267,7 +275,10 @@ pub(super) fn independently_verified_authority_response_result(
     if !response_program_authority_matches_example(program, example) {
         return Err("authority_mismatch");
     }
-    let execution = execute_response(program, "", &example.provider_payload);
+    let request_text =
+        crate::collection_synthesis::synthesis_request_text(&example.provider_payload)
+            .unwrap_or_default();
+    let execution = execute_response(program, &request_text, &example.provider_payload);
     if execution.status != ResponseExecutionStatus::Executed {
         return Err("actor_abstain");
     }
@@ -899,7 +910,7 @@ pub(super) fn unguarded_unique_consensus_candidate(
 pub(super) fn support_consensus_candidate(
     bucket: &OnlineCollectionBucket,
 ) -> Result<SupportConsensusCandidate, String> {
-    let globally_proven = bucket
+    let mut globally_proven = bucket
         .programs
         .iter()
         .filter(|(digest, _)| {
@@ -913,6 +924,21 @@ pub(super) fn support_consensus_candidate(
         })
         .map(|(digest, program)| (digest.clone(), program.clone()))
         .collect::<BTreeMap<_, _>>();
+    let globally_semantic_proven = bucket
+        .programs
+        .iter()
+        .filter(|(digest, _)| {
+            bucket.support.iter().all(|receipt| {
+                receipt.verifier_pass
+                    && receipt
+                        .verified_semantic_program_sha256
+                        .iter()
+                        .any(|matched| matched == *digest)
+            })
+        })
+        .map(|(digest, program)| (digest.clone(), program.clone()))
+        .collect::<BTreeMap<_, _>>();
+    globally_proven.extend(globally_semantic_proven);
     let mut variants = if let Some((_, program)) = best_adapter(globally_proven.iter()) {
         vec![ResponseConsensusVariant {
             program: program.clone(),
@@ -1011,13 +1037,25 @@ pub(super) fn candidate_authority_verified_on_support(
 ) -> bool {
     bucket.support.iter().all(|receipt| {
         if let Some(example) = bucket.runtime_examples.get(&receipt.evidence_graph_sha256) {
-            // Structural teacher alignment may train a canonical law, but a
-            // frozen CPU package must reproduce the complete teacher response.
-            return independently_verified_teacher_match(candidate, example);
+            return independently_verified_authority_response(candidate, example).is_some();
         }
         durable_adapter_wave_proves_candidate(bucket, receipt, candidate)
             || receipt_proves_candidate_authority(receipt, candidate)
+            || receipt_proves_candidate_semantic_authority(receipt, candidate)
     })
+}
+
+pub(super) fn receipt_proves_candidate_semantic_authority(
+    receipt: &OnlineCollectionReceipt,
+    candidate: &ResponseProgram,
+) -> bool {
+    receipt.verifier_pass
+        && canonical_json_sha256(candidate).is_ok_and(|digest| {
+            receipt
+                .verified_semantic_program_sha256
+                .binary_search(&digest)
+                .is_ok()
+        })
 }
 
 pub(super) fn durable_adapter_wave_proves_candidate(

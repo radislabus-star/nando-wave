@@ -195,6 +195,17 @@ pub fn ground_roles(frame: &RelationFrame) -> Vec<RoleHypothesis> {
             _ => None,
         })
         .collect::<BTreeMap<_, _>>();
+    if frame.atoms.iter().any(|atom| match atom {
+        RelationAtom::ObservationSelector { slot_id, .. } => slots
+            .get(slot_id)
+            .is_none_or(|(_, _, source)| *source != AtomSource::Observation),
+        RelationAtom::ActionRoleArgument { slot_id, .. } => slots
+            .get(slot_id)
+            .is_none_or(|(_, _, source)| *source != AtomSource::Action),
+        _ => false,
+    }) {
+        return Vec::new();
+    }
     if frame
         .atoms
         .iter()

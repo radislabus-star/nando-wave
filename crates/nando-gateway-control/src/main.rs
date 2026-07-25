@@ -600,6 +600,12 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         cpu_tokens: visible_cpu_tokens,
         current_epoch_total_tokens,
         current_epoch_cpu_tokens,
+        verified_window_total_tokens: metric_u64(online_opportunity, "ordinary_tokens"),
+        verified_window_cpu_tokens: metric_u64(online_opportunity, "verified_tokens"),
+        optimistic_upper_bound_tokens: metric_u64(
+            online_opportunity,
+            "optimistic_executable_upper_bound_tokens",
+        ),
         cpu_allowed: admission.cpu_allowed,
     });
     let body = format!(
@@ -1074,6 +1080,9 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         .pointer("/miner/admission_ready_cohorts")
         .and_then(Value::as_u64)
         .unwrap_or(0);
+    let online_opportunity = persisted_miner
+        .pointer("/miner/self_training_v2/opportunity")
+        .unwrap_or(&Value::Null);
     let response_package_count = response_registry
         .get("packages")
         .and_then(Value::as_array)
@@ -1112,6 +1121,9 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "cpu_input_tokens": cpu_input_tokens,
             "current_epoch_total_input_tokens": current_epoch_total_input_tokens,
             "current_epoch_cpu_input_tokens": current_epoch_cpu_input_tokens,
+            "verified_window_total_input_tokens": metric_u64(online_opportunity, "ordinary_tokens"),
+            "verified_window_cpu_input_tokens": metric_u64(online_opportunity, "verified_tokens"),
+            "optimistic_upper_bound_tokens": metric_u64(online_opportunity, "optimistic_executable_upper_bound_tokens"),
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
             "controller_relation_candidates": controller_relation_candidates,

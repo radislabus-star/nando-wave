@@ -305,7 +305,9 @@ fn aggregate_protocol_roots_do_not_explain_every_v1_pair() {
 
 #[test]
 fn protocol_only_merge_candidate_remains_watch_without_label_free_fixture() {
-    assert!(!PROTOCOL_ONLY_MERGE_FIXTURE_PROVEN_V3);
+    const {
+        assert!(!PROTOCOL_ONLY_MERGE_FIXTURE_PROVEN_V3);
+    }
     let law_id = "shared-v3-law".to_owned();
     let facets_by_law = BTreeMap::from([(
         law_id.clone(),

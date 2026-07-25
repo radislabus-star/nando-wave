@@ -43,38 +43,6 @@ pub(super) fn request_content_text(content: &Value) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-pub(super) fn structural_layout(value: &Value) -> Value {
-    match value {
-        Value::Null => Value::String("null".to_owned()),
-        Value::Bool(_) => Value::String("bool".to_owned()),
-        Value::Number(number) if number.is_i64() || number.is_u64() => {
-            Value::String("integer".to_owned())
-        }
-        Value::Number(_) => Value::String("number".to_owned()),
-        Value::String(value) => serde_json::from_str::<Value>(value)
-            .ok()
-            .filter(|parsed| !matches!(parsed, Value::String(_)))
-            .map_or_else(
-                || Value::String("string".to_owned()),
-                |parsed| structural_layout(&parsed),
-            ),
-        Value::Array(values) => Value::Array(values.iter().map(structural_layout).collect()),
-        Value::Object(values) => {
-            let mut shapes = values
-                .iter()
-                .map(|(key, value)| {
-                    Value::Array(vec![
-                        Value::String(sha256_bytes(key.as_bytes())),
-                        structural_layout(value),
-                    ])
-                })
-                .collect::<Vec<_>>();
-            shapes.sort_by_cached_key(|shape| serde_json::to_vec(shape).unwrap_or_default());
-            Value::Array(shapes)
-        }
-    }
-}
-
 pub(super) fn support_freeze_blocker(
     bucket: &OnlineCollectionBucket,
     required_support_rows: usize,
@@ -137,6 +105,7 @@ pub(super) fn bucket_status(
         let receipt_laws = receipt
             .matched_program_sha256
             .iter()
+            .chain(&receipt.verified_semantic_program_sha256)
             .filter_map(|digest| digest_law_keys.get(digest.as_str()).cloned())
             .collect::<BTreeSet<_>>();
         for law_key in receipt_laws {
@@ -218,7 +187,7 @@ pub(super) fn bucket_status(
                     .contains_key(&receipt.evidence_graph_sha256)
         })
         .count();
-    let adaptive = bucket.adaptive_candidate_freeze.is_some();
+    let adaptive = proof_mode == OnlineCollectionProofMode::AdaptiveVersionSpace;
     let all_sessions = bucket
         .support
         .iter()
@@ -233,7 +202,12 @@ pub(super) fn bucket_status(
         .map(|receipt| receipt.evidence_graph_sha256.as_str())
         .collect::<BTreeSet<_>>()
         .len();
-    let admission_blocker = if bucket.frozen_program_sha256.is_none() {
+    let admission_blocker = if bucket.frozen_program_sha256.is_some()
+        && adaptive
+        && bucket.adaptive_candidate_freeze.is_none()
+    {
+        Some("adaptive_identification_lost".to_owned())
+    } else if bucket.frozen_program_sha256.is_none() {
         status_support_freeze_blocker(
             bucket,
             proof_mode,
@@ -330,11 +304,11 @@ pub(super) fn status_support_freeze_blocker(
         if bucket.support.is_empty() {
             return Some("adaptive_support_missing".to_owned());
         }
-        if bucket
-            .support
-            .iter()
-            .any(|receipt| !receipt.verifier_pass || receipt.matched_program_sha256.is_empty())
-        {
+        if bucket.support.iter().any(|receipt| {
+            !receipt.verifier_pass
+                || (receipt.matched_program_sha256.is_empty()
+                    && receipt.verified_semantic_program_sha256.is_empty())
+        }) {
             return Some("adaptive_support_verifier_incomplete".to_owned());
         }
         return match identify_collection_bucket(bucket) {
@@ -353,11 +327,11 @@ pub(super) fn status_support_freeze_blocker(
         // thresholds while preserving the same admission logic.
         return Some(format!("support_rows_below_{required_support_rows}"));
     }
-    if bucket
-        .support
-        .iter()
-        .any(|receipt| !receipt.verifier_pass || receipt.matched_program_sha256.is_empty())
-    {
+    if bucket.support.iter().any(|receipt| {
+        !receipt.verifier_pass
+            || (receipt.matched_program_sha256.is_empty()
+                && receipt.verified_semantic_program_sha256.is_empty())
+    }) {
         return Some("support_verifier_incomplete".to_owned());
     }
     if verified_law_support_rows < required_support_rows {
@@ -407,6 +381,14 @@ pub(super) fn merge_receipts(
                 .append(&mut receipt.matched_program_sha256);
             existing.matched_program_sha256.sort();
             existing.matched_program_sha256.dedup();
+            existing
+                .verified_semantic_program_sha256
+                .append(&mut receipt.verified_semantic_program_sha256);
+            existing.verified_semantic_program_sha256.sort();
+            existing.verified_semantic_program_sha256.dedup();
+            existing
+                .matched_program_dynamic_value_root_sha256
+                .append(&mut receipt.matched_program_dynamic_value_root_sha256);
             if existing.witness_class_commitment_sha256.is_none() {
                 existing.witness_class_commitment_sha256 = receipt.witness_class_commitment_sha256;
                 existing.witness_round = receipt.witness_round;
@@ -416,6 +398,8 @@ pub(super) fn merge_receipts(
         } else {
             receipt.matched_program_sha256.sort();
             receipt.matched_program_sha256.dedup();
+            receipt.verified_semantic_program_sha256.sort();
+            receipt.verified_semantic_program_sha256.dedup();
             by_evidence.insert(evidence, receipt);
         }
     }

@@ -9,9 +9,9 @@ use crate::authority::validate_response_authority_material;
 use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
     CollectionSynthesisExample, CompositeResponseAdmissionV2,
-    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt,
-    LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_SUPPORT_ROWS, LearnedWaveRoute,
-    OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate,
+    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2,
+    DurableRuntimeParityReceipt, LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_SUPPORT_ROWS,
+    LearnedWaveRoute, OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate,
     RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2, RESPONSE_REGISTRY_SCHEMA_V6,
     RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
     RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseExecutionStatus, ResponseExecutor,
@@ -789,6 +789,7 @@ struct RuntimeParityReceipt {
     actor_executed: bool,
     independent_verifier_pass: bool,
     exact_response_match: bool,
+    semantic_authority_match: bool,
     execution_budget_normalized_match: bool,
 }
 
@@ -821,8 +822,14 @@ pub fn build_durable_runtime_parity_receipt(
     if !actor_executed || !teacher_authority_match || !independent_verifier_pass {
         return Err("durable_runtime_parity_verification_failed");
     }
+    let exact_teacher_match = actor_response == example.expected_response;
     let mut receipt = DurableRuntimeParityReceipt {
-        schema: DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1.to_owned(),
+        schema: if exact_teacher_match {
+            DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1
+        } else {
+            DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2
+        }
+        .to_owned(),
         receipt_sha256: String::new(),
         evidence_ref_sha256: evidence_ref_sha256.to_owned(),
         program_sha256: canonical_json_sha256(program)?,
@@ -833,7 +840,7 @@ pub fn build_durable_runtime_parity_receipt(
         actor_executed,
         teacher_authority_match,
         independent_verifier_pass,
-        exact_teacher_match: actor_response == example.expected_response,
+        exact_teacher_match,
     };
     receipt.seal_digest()?;
     Ok(receipt)
@@ -844,8 +851,10 @@ fn validate_durable_runtime_parity_receipt(
     expected_program_sha256: &str,
     expected_verifier_sha256: &str,
 ) -> bool {
-    receipt.schema == DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1
-        && valid_nonzero_sha256(&receipt.receipt_sha256)
+    matches!(
+        receipt.schema.as_str(),
+        DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1 | DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2
+    ) && valid_nonzero_sha256(&receipt.receipt_sha256)
         && valid_nonzero_sha256(&receipt.evidence_ref_sha256)
         && receipt.program_sha256 == expected_program_sha256
         && receipt.verifier_sha256 == expected_verifier_sha256
@@ -855,7 +864,8 @@ fn validate_durable_runtime_parity_receipt(
         && receipt.actor_executed
         && receipt.teacher_authority_match
         && receipt.independent_verifier_pass
-        && receipt.exact_teacher_match
+        && (receipt.exact_teacher_match
+            || receipt.schema == DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2)
         && receipt.validate_sealed().is_ok()
 }
 
@@ -885,11 +895,12 @@ fn validate_durable_runtime_parity(
         receipts.push(RuntimeParityReceipt {
             evidence_ref_sha256: receipt.evidence_ref_sha256.clone(),
             provider_payload_sha256: receipt.input_sha256.clone(),
-            expected_response_sha256: receipt.actor_response_sha256.clone(),
+            expected_response_sha256: receipt.teacher_response_sha256.clone(),
             actual_response_sha256: Some(receipt.actor_response_sha256.clone()),
             actor_executed: true,
             independent_verifier_pass: true,
-            exact_response_match: true,
+            exact_response_match: receipt.exact_teacher_match,
+            semantic_authority_match: receipt.schema == DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2,
             execution_budget_normalized_match: false,
         });
     }
@@ -946,6 +957,7 @@ fn execute_runtime_parity(
             actor_executed,
             independent_verifier_pass,
             exact_response_match,
+            semantic_authority_match: false,
             execution_budget_normalized_match,
         });
     }
@@ -954,7 +966,9 @@ fn execute_runtime_parity(
         .filter(|receipt| {
             !receipt.actor_executed
                 || !receipt.independent_verifier_pass
-                || (!receipt.exact_response_match && !receipt.execution_budget_normalized_match)
+                || (!receipt.exact_response_match
+                    && !receipt.semantic_authority_match
+                    && !receipt.execution_budget_normalized_match)
         })
         .count();
     if std::env::var_os("NANDO_ONLINE_ADMISSION_TRACE").is_some() {
@@ -2397,27 +2411,44 @@ pub fn build_online_collection_admission_snapshot(
             candidate.candidate_freeze.is_none()
         };
         let minimum_receipts = if adaptive { 1 } else { 32 };
-        if candidate.causal_report.verdict != "PASS"
-            || candidate.causal_report.package_id != package.package_id
-            || online_collection_support_manifest_digest(candidate)
-                .map_err(|_| "online_collection_admission_support_manifest_encode_failed")?
-                != candidate.support_manifest_sha256
-            || online_collection_future_manifest_digest(candidate)
-                .map_err(|_| "online_collection_admission_future_manifest_encode_failed")?
-                != candidate.future_manifest_sha256
-            || !adaptive_proof_valid
-            || candidate.support_receipts.len() < minimum_receipts
-            || candidate.future_receipts.len() < minimum_receipts
-            || candidate
-                .support_receipts
-                .iter()
-                .any(|receipt| !receipt.verifier_pass)
-            || candidate
-                .future_receipts
-                .iter()
-                .any(|receipt| !receipt.verifier_pass)
-            || !package.eligible_for_admission_candidate()
+        let support_manifest_matches = online_collection_support_manifest_digest(candidate)
+            .map_err(|_| "online_collection_admission_support_manifest_encode_failed")?
+            == candidate.support_manifest_sha256;
+        let future_manifest_matches = online_collection_future_manifest_digest(candidate)
+            .map_err(|_| "online_collection_admission_future_manifest_encode_failed")?
+            == candidate.future_manifest_sha256;
+        let precheck_blocker = if candidate.causal_report.verdict != "PASS" {
+            Some("causal_report")
+        } else if candidate.causal_report.package_id != package.package_id {
+            Some("causal_package")
+        } else if !support_manifest_matches {
+            Some("support_manifest")
+        } else if !future_manifest_matches {
+            Some("future_manifest")
+        } else if !adaptive_proof_valid {
+            Some("adaptive_proof")
+        } else if candidate.support_receipts.len() < minimum_receipts {
+            Some("support_receipts")
+        } else if candidate.future_receipts.len() < minimum_receipts {
+            Some("future_receipts")
+        } else if candidate
+            .support_receipts
+            .iter()
+            .any(|receipt| !receipt.verifier_pass)
         {
+            Some("support_verifier")
+        } else if candidate
+            .future_receipts
+            .iter()
+            .any(|receipt| !receipt.verifier_pass)
+        {
+            Some("future_verifier")
+        } else if !package.eligible_for_admission_candidate() {
+            Some("package_policy")
+        } else {
+            None
+        };
+        if precheck_blocker.is_some() {
             continue;
         }
         let support_intents = candidate

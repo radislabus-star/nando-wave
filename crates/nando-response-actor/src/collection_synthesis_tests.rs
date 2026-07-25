@@ -822,6 +822,7 @@ fn benign_multiline_static_frame_enters_transfer_bound_version_space() {
         .find(|program| {
             response_program_exactly_matches_example(program, &example)
                 && response_program_requires_static_frame_transfer(program)
+                && is_transfer_bound_response_program(program)
         })
         .expect("transfer-bound static frame");
     assert!(is_transfer_bound_response_program(program));
@@ -1349,7 +1350,7 @@ fn semantic_canonical_projection_requires_one_unambiguous_value_and_flexible_sur
 }
 
 #[test]
-fn request_grounded_projection_has_partial_teacher_authority_without_ordinal_leak() {
+fn request_grounded_projection_remains_hypothesis_without_partial_teacher_authority() {
     let example = CollectionSynthesisExample {
         provider_payload: json!({
             "input":[
@@ -1367,7 +1368,7 @@ fn request_grounded_projection_has_partial_teacher_authority_without_ordinal_lea
         "completed",
     );
     assert!(response_program_matches_example(&grounded, &example));
-    assert!(response_program_authority_matches_example(
+    assert!(!response_program_authority_matches_example(
         &grounded, &example
     ));
     let verifier = source_neutral_verifier_for_program(&grounded).expect("verifier");
@@ -1407,7 +1408,7 @@ fn request_grounded_ordinal_projection_keeps_role_order_in_actor_and_verifier() 
         expected_response: "3 and 2".to_owned(),
     };
 
-    assert!(response_program_authority_matches_example(
+    assert!(!response_program_authority_matches_example(
         &program, &example
     ));
     let execution = execute_example(&program, &example);

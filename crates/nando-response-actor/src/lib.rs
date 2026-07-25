@@ -52,8 +52,9 @@ mod verifier;
 mod version_space;
 
 pub use admission_bundle::{
-    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt,
-    ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1, OnlineAdmissionCandidateBundle, RuntimeParityCase,
+    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2,
+    DurableRuntimeParityReceipt, ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1,
+    OnlineAdmissionCandidateBundle, RuntimeParityCase,
 };
 pub use authority::{
     COMPOSITE_ADMISSION_SCHEMA_V2, CompositeResponseAdmissionV2, FinalizedPostVerifierReceiptV1,

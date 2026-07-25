@@ -1898,7 +1898,7 @@ mod tests {
         );
         assert_eq!(
             format!("{:x}", Sha256::digest(restart_bundle.registry_cbor())),
-            "99aba3b0f8113e40d1152b4207c31f86d268d0c31ac451fda3a5f4629c626b93"
+            "48683443fb7974b8acf453074fc3b93df295d49e91ab01d203e1fe1eae39ee44"
         );
         assert_eq!(restart_bundle.page_bytes().len(), OPERATOR_PAGE32_BYTES);
         assert!(

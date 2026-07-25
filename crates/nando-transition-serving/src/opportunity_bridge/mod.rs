@@ -14,11 +14,13 @@ use serde::Serialize;
 use crate::miner_worker::MinerWorkerHandle;
 use spool::{
     PendingBridgeEvent, acknowledge_pending, create_private_directory, next_pending_sequence,
-    pending_batch, pending_stats, persist_event, recover_temporary_events, sync_pending_spool,
+    pending_batch, pending_stats, persist_event, recover_temporary_events,
+    refresh_pending_counters, spool_stats, sync_pending_spool,
 };
 
 const BRIDGE_STATUS_SCHEMA_V1: &str = "nando.opportunity-process-bridge-status.v1";
 const PRODUCER_DURABILITY_INTERVAL: Duration = Duration::from_millis(10);
+const SPOOL_RECONCILE_INTERVAL: Duration = Duration::from_secs(15);
 const MAX_CONSUMER_INFLIGHT_EVENTS: usize = 256;
 
 #[derive(Default)]
@@ -84,6 +86,10 @@ struct BridgeInner {
     consumer_poll: Duration,
     next_sequence: AtomicU64,
     persist_lock: Mutex<()>,
+    spool_files: AtomicU64,
+    spool_bytes: AtomicU64,
+    pending_events: AtomicU64,
+    pending_bytes: AtomicU64,
     producer: BridgeEndpointCounters,
     consumer: BridgeEndpointCounters,
     consumer_started: AtomicBool,
@@ -119,6 +125,8 @@ impl OpportunityBridgeRuntime {
             create_private_directory(&staging_dir)?;
             recover_temporary_events(&staging_dir, &pending_dir, &rejected_dir)?;
         }
+        let (spool_files, spool_bytes) = spool_stats(&[&staging_dir, &pending_dir, &rejected_dir])?;
+        let (pending_events, pending_bytes) = pending_stats(&pending_dir);
         let next_sequence = next_pending_sequence(&[&pending_dir, &staging_dir])?;
         let producer = BridgeEndpointCounters::default();
         producer
@@ -135,6 +143,10 @@ impl OpportunityBridgeRuntime {
                 consumer_poll: consumer_poll.max(Duration::from_millis(10)),
                 next_sequence: AtomicU64::new(next_sequence),
                 persist_lock: Mutex::new(()),
+                spool_files: AtomicU64::new(spool_files),
+                spool_bytes: AtomicU64::new(spool_bytes),
+                pending_events: AtomicU64::new(pending_events),
+                pending_bytes: AtomicU64::new(pending_bytes),
                 producer,
                 consumer: BridgeEndpointCounters::default(),
                 consumer_started: AtomicBool::new(false),
@@ -183,11 +195,16 @@ impl OpportunityBridgeRuntime {
             .name("nando-opportunity-bridge-v1".to_owned())
             .spawn(move || {
                 let mut inflight = VecDeque::new();
+                let mut last_spool_reconcile = Instant::now();
                 while let Some(inner) = inner.upgrade() {
                     if let Err(error) = advance_consumer_pipeline(&inner, &worker, &mut inflight) {
                         record_failure(&inner.consumer, &error);
                         inner.consumer_started.store(false, Ordering::Release);
                         return;
+                    }
+                    if last_spool_reconcile.elapsed() >= SPOOL_RECONCILE_INTERVAL {
+                        refresh_pending_counters(&inner);
+                        last_spool_reconcile = Instant::now();
                     }
                     inner.consumer_inflight.store(
                         u64::try_from(inflight.len()).unwrap_or(u64::MAX),
@@ -208,6 +225,7 @@ impl OpportunityBridgeRuntime {
             .name("nando-opportunity-durability-v1".to_owned())
             .spawn(move || {
                 thread::sleep(PRODUCER_DURABILITY_INTERVAL);
+                let mut last_spool_reconcile = Instant::now();
                 while let Some(inner) = inner.upgrade() {
                     if inner.producer_sync_requested.swap(false, Ordering::AcqRel) {
                         let previous = inner.producer.durable_sequence.load(Ordering::Acquire);
@@ -229,6 +247,10 @@ impl OpportunityBridgeRuntime {
                             }
                         }
                     }
+                    if last_spool_reconcile.elapsed() >= SPOOL_RECONCILE_INTERVAL {
+                        refresh_pending_counters(&inner);
+                        last_spool_reconcile = Instant::now();
+                    }
                     drop(inner);
                     thread::sleep(PRODUCER_DURABILITY_INTERVAL);
                 }
@@ -239,12 +261,11 @@ impl OpportunityBridgeRuntime {
 
     #[must_use]
     pub fn status(&self) -> OpportunityBridgeStatusV1 {
-        let (pending_events, pending_bytes) = pending_stats(&self.inner.pending_dir);
         OpportunityBridgeStatusV1 {
             schema: BRIDGE_STATUS_SCHEMA_V1.to_owned(),
             root: self.inner.root.display().to_string(),
-            pending_events,
-            pending_bytes,
+            pending_events: self.inner.pending_events.load(Ordering::Acquire),
+            pending_bytes: self.inner.pending_bytes.load(Ordering::Acquire),
             consumer_inflight_events: self.inner.consumer_inflight.load(Ordering::Acquire),
             durability_interval_ms: u64::try_from(PRODUCER_DURABILITY_INTERVAL.as_millis())
                 .unwrap_or(u64::MAX),
@@ -283,17 +304,12 @@ fn advance_consumer_pipeline(
         }
     }
 
-    let mut submitted_paths = inflight
+    let submitted_paths = inflight
         .iter()
         .map(|entry| entry.pending.path.clone())
         .collect::<BTreeSet<_>>();
-    for pending in pending_batch(inner)? {
-        if inflight.len() >= MAX_CONSUMER_INFLIGHT_EVENTS {
-            break;
-        }
-        if !submitted_paths.insert(pending.path.clone()) {
-            continue;
-        }
+    let available = MAX_CONSUMER_INFLIGHT_EVENTS.saturating_sub(inflight.len());
+    for pending in pending_batch(inner, available, &submitted_paths)? {
         let ack = match worker.submit_opportunity_durable_async(pending.event.clone()) {
             Ok(ack) => ack,
             Err(error) if error == "miner_worker_queue_full" => break,

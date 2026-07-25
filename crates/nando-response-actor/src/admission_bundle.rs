@@ -6,7 +6,8 @@ use crate::{
 };
 
 pub use nando_operator_admission::{
-    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt,
+    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2,
+    DurableRuntimeParityReceipt,
 };
 pub use nando_operator_learning::RuntimeParityCase;
 

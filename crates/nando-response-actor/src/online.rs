@@ -620,7 +620,14 @@ impl OnlineResponseMiner {
                     .collect::<BTreeMap<_, _>>();
                 let mut shadow_support = preserved_shadow_support
                     .into_iter()
-                    .map(|transition| (transition.before.frame_id_sha256.clone(), transition))
+                    .map(|transition| {
+                        let identity = if transition.before.evidence_ref_sha256.is_empty() {
+                            transition.before.frame_id_sha256.clone()
+                        } else {
+                            transition.before.evidence_ref_sha256.clone()
+                        };
+                        (identity, transition)
+                    })
                     .collect::<BTreeMap<_, _>>();
                 if !restart_live_scalar_generation {
                     for frame in &support_frames {
@@ -629,9 +636,12 @@ impl OnlineResponseMiner {
                                 teacher_transition_from_completed(frame, None)
                         {
                             transition.runtime_parity_case = Some(parity_case.clone());
-                            shadow_support
-                                .entry(transition.before.frame_id_sha256.clone())
-                                .or_insert(transition);
+                            let identity = if transition.before.evidence_ref_sha256.is_empty() {
+                                transition.before.frame_id_sha256.clone()
+                            } else {
+                                transition.before.evidence_ref_sha256.clone()
+                            };
+                            shadow_support.entry(identity).or_insert(transition);
                         }
                     }
                 }

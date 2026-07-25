@@ -442,45 +442,17 @@ pub fn response_program_authority_matches_example(
     let Some(response) = execute_example(program, example).response else {
         return false;
     };
-    if response_program_has_structurally_grounded_partial_authority(program) {
+    if matches!(
+        program.operation,
+        ResponseOperation::ComposeCollection { .. }
+    ) {
         return true;
     }
-    mentioned_tool_scalars(example)
-        .iter()
-        .all(|scalar| contains_token(&response, scalar))
-}
-
-fn response_program_has_structurally_grounded_partial_authority(program: &ResponseProgram) -> bool {
-    match &program.operation {
-        ResponseOperation::ProjectSelectedValue {
-            selector:
-                ResponseValueSelector::RequestReferencedJsonField { .. }
-                | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. },
-            ..
-        }
-        | ResponseOperation::ProjectStatus {
-            selector:
-                ResponseValueSelector::RequestReferencedJsonField { .. }
-                | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. },
-            ..
-        }
-        | ResponseOperation::ComposeCollection { .. } => true,
-        ResponseOperation::UniqueConsensus {
-            adapter_wave: Some(_),
-            ..
-        } => {
-            is_source_neutral_response_program(program)
-                && is_privacy_safe_online_response_program(program)
-                && is_learned_bounded_response_program(program)
-        }
-        ResponseOperation::UniqueConsensus { variants, .. } => {
-            !variants.is_empty()
-                && variants.iter().all(|variant| {
-                    response_program_has_structurally_grounded_partial_authority(&variant.program)
-                })
-        }
-        _ => false,
-    }
+    let mentioned = mentioned_tool_scalars(example);
+    !mentioned.is_empty()
+        && mentioned
+            .iter()
+            .all(|scalar| contains_token(&response, scalar))
 }
 
 #[must_use]
@@ -497,7 +469,23 @@ fn response_program_match_quality(
 ) -> u8 {
     // 0 = incompatible, 1 = structurally aligned teacher law, 2 = exact output.
     let quality = response_program_match_quality_with_alignment(program, example, false);
-    if quality == 0 && response_program_has_structural_output_alignment(program, example) {
+    let exact_surface_blocks_flexible_direct = synthesis_request_text(&example.provider_payload)
+        .is_some_and(|request| request_requires_exact_surface(&request))
+        && matches!(
+            &program.operation,
+            ResponseOperation::ProjectSelectedValue {
+                format: ValueProjectionFormat::PlainText,
+                renderer: CollectionOutputRenderer::Direct,
+                ..
+            } | ResponseOperation::ProjectStatus {
+                renderer: CollectionOutputRenderer::Direct,
+                ..
+            }
+        );
+    if quality == 0
+        && !exact_surface_blocks_flexible_direct
+        && response_program_has_structural_output_alignment(program, example)
+    {
         1
     } else {
         quality
@@ -2170,25 +2158,8 @@ fn request_template_markers(payload: &Value) -> Vec<RequestTemplateMarker> {
     .collect()
 }
 
-fn synthesis_request_text(payload: &Value) -> Option<String> {
-    let request = payload
-        .get("input")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|item| item.get("role").and_then(Value::as_str) == Some("user"))
-        .filter_map(|item| item.get("content"))
-        .flat_map(|content| match content {
-            Value::String(text) => vec![text.as_str()],
-            Value::Array(parts) => parts
-                .iter()
-                .filter_map(|part| part.get("text").and_then(Value::as_str))
-                .collect(),
-            _ => Vec::new(),
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    (!request.is_empty()).then_some(request)
+pub(crate) fn synthesis_request_text(payload: &Value) -> Option<String> {
+    crate::runtime::request_text_from_provider_payload(payload)
 }
 
 fn latest_output_json(payload: &Value) -> Result<Value, &'static str> {

@@ -181,7 +181,9 @@ mod tests {
         assert!(html.contains("F7 ЗАВЕРШЁН"));
         assert!(html.contains("F8 ЗАВЕРШЁН"));
         assert!(html.contains("SHADOW_READY"));
-        assert!(html.contains("ACTIVE=0 · authority=false"));
+        assert!(html.contains("F8 seed: ACTIVE=0 · authority=false"));
+        assert!(html.contains("это не статус живого ACTIVE registry"));
+        assert!(!html.contains(">AUTHORITY ВЫКЛЮЧЕНА<"));
         assert!(html.contains("WATCH_NO_SEARCH_GAIN"));
         assert!(!html.contains("live capture producer missing"));
         assert!(html.contains("консервативный RSS F5 49631232 / цель 16777216 Б · НАБЛЮДЕНИЕ"));

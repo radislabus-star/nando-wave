@@ -149,6 +149,7 @@ pub(super) fn support_law_subcenters(
                     receipt
                         .matched_program_sha256
                         .iter()
+                        .chain(&receipt.verified_semantic_program_sha256)
                         .any(|digest| digest == *program_sha256)
                 })
                 .map(|(program_sha256, _)| program_sha256.clone())
@@ -157,7 +158,7 @@ pub(super) fn support_law_subcenters(
                 continue;
             }
             let mut canonical_receipt = receipt.clone();
-            canonical_receipt.matched_program_sha256 = matched_program_sha256;
+            canonical_receipt.verified_semantic_program_sha256 = matched_program_sha256.clone();
             support.push(canonical_receipt);
         }
         if support.len() < required_support_rows {
@@ -166,7 +167,13 @@ pub(super) fn support_law_subcenters(
         support.truncate(max_receipts_per_bucket);
         let selected_adapter_digests = support
             .iter()
-            .flat_map(|receipt| receipt.matched_program_sha256.iter().cloned())
+            .flat_map(|receipt| {
+                receipt
+                    .matched_program_sha256
+                    .iter()
+                    .chain(&receipt.verified_semantic_program_sha256)
+                    .cloned()
+            })
             .collect::<BTreeSet<_>>();
         let programs = adapters
             .into_iter()
@@ -186,27 +193,31 @@ pub(super) fn support_law_subcenters(
             .iter()
             .map(|receipt| receipt.evidence_graph_sha256.clone())
             .collect::<BTreeSet<_>>();
+        let selected_program_ids = programs.keys().cloned().collect::<BTreeSet<_>>();
+        let law_commitment_sha256 = sha256_bytes(&law_key);
+        let archetype_id = canonical_json_sha256(&(
+            "nando.collection-support-law-subcenter-archetype.v2",
+            &law_commitment_sha256,
+        ))
+        .map_err(str::to_owned)?;
         let parent_support_ids = bucket
             .support
             .iter()
             .map(|receipt| receipt.evidence_graph_sha256.clone())
             .collect::<BTreeSet<_>>();
-        let selected_program_ids = programs.keys().cloned().collect::<BTreeSet<_>>();
         let parent_program_ids = bucket.programs.keys().cloned().collect::<BTreeSet<_>>();
-        if support_ids == parent_support_ids && selected_program_ids == parent_program_ids {
+        if bucket.archetype_id == archetype_id
+            && support_ids == parent_support_ids
+            && selected_program_ids == parent_program_ids
+        {
             continue;
         }
-        let law_commitment_sha256 = sha256_bytes(&law_key);
         let bucket_id = canonical_json_sha256(&(
-            "nando.collection-support-law-subcenter.v1",
-            &bucket.archetype_id,
+            "nando.collection-support-law-subcenter.v2",
+            &archetype_id,
             &law_commitment_sha256,
-        ))
-        .map_err(str::to_owned)?;
-        let archetype_id = canonical_json_sha256(&(
-            "nando.collection-support-law-subcenter-archetype.v1",
-            &bucket.archetype_id,
-            &law_commitment_sha256,
+            &support_ids,
+            &selected_program_ids,
         ))
         .map_err(str::to_owned)?;
         let program_bytes = programs
@@ -820,8 +831,9 @@ pub(super) fn validate_checkpoint(
     checkpoint: &OnlineCollectionCheckpoint,
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
+    validate_config(config)?;
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V38
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V39
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());
@@ -844,6 +856,75 @@ pub(super) fn validate_checkpoint(
         }
     }
     Ok(())
+}
+
+fn invalid_receipt_dynamic_root_reason(
+    bucket: &OnlineCollectionBucket,
+    kind: &str,
+    receipt: &OnlineCollectionReceipt,
+) -> Option<String> {
+    if receipt.matched_program_dynamic_value_root_sha256.is_empty() {
+        return None;
+    }
+    let verified_programs = receipt
+        .matched_program_sha256
+        .iter()
+        .chain(&receipt.verified_semantic_program_sha256)
+        .collect::<BTreeSet<_>>();
+    for (program_sha256, observed_root) in &receipt.matched_program_dynamic_value_root_sha256 {
+        if !is_sha256(observed_root) {
+            return Some(format!("{kind}_receipt_dynamic_root_invalid"));
+        }
+        if !verified_programs.contains(program_sha256) {
+            return Some(format!(
+                "{kind}_receipt_dynamic_root_without_verified_program:{program_sha256}"
+            ));
+        }
+        let Some(program) = bucket_adapter_program(bucket, program_sha256) else {
+            return Some(format!(
+                "{kind}_receipt_dynamic_root_program_missing:{program_sha256}"
+            ));
+        };
+        if let Some(example) = bucket.runtime_examples.get(&receipt.evidence_graph_sha256) {
+            let expected_root = match response_program_dynamic_value_root_sha256(program, example) {
+                Ok(Some(root)) => root,
+                Ok(None) => {
+                    return Some(format!(
+                        "{kind}_receipt_dynamic_root_for_static_program_missing:{program_sha256}"
+                    ));
+                }
+                Err(reason) => {
+                    return Some(format!(
+                        "{kind}_receipt_dynamic_root_recompute_failed:{program_sha256}:{reason}"
+                    ));
+                }
+            };
+            if expected_root != *observed_root {
+                return Some(format!(
+                    "{kind}_receipt_dynamic_root_mismatch:{program_sha256}"
+                ));
+            }
+        }
+    }
+    None
+}
+
+fn bucket_adapter_program<'a>(
+    bucket: &'a OnlineCollectionBucket,
+    program_sha256: &str,
+) -> Option<&'a ResponseProgram> {
+    bucket.programs.get(program_sha256).or_else(|| {
+        bucket.programs.values().find_map(|program| {
+            let crate::ResponseOperation::UniqueConsensus { variants, .. } = &program.operation
+            else {
+                return None;
+            };
+            variants.iter().find_map(|variant| {
+                (canonical_json_sha256(&variant.program).ok().as_deref() == Some(program_sha256))
+                    .then_some(&variant.program)
+            })
+        })
+    })
 }
 
 pub(super) fn migrate_collection_active_witness_pools(
@@ -985,7 +1066,9 @@ pub(super) fn migrate_collection_exact_receipts(
                 example: example.clone(),
             };
             let mut rebuilt = receipt_with_program_atoms(&observation, true, &bucket.programs)?;
-            if rebuilt.matched_program_sha256.is_empty() {
+            if rebuilt.matched_program_sha256.is_empty()
+                && rebuilt.verified_semantic_program_sha256.is_empty()
+            {
                 discarded_support = discarded_support.saturating_add(1);
                 continue;
             }
@@ -1025,92 +1108,113 @@ pub(super) fn migrate_collection_relational_role_programs(
     checkpoint: &mut OnlineCollectionCheckpoint,
 ) -> Result<(), String> {
     let required_support_rows = checkpoint.config.support_rows;
-    let mut authority_cache = BTreeMap::<(String, String), bool>::new();
     for bucket in &mut checkpoint.buckets {
-        if bucket.frozen_program_sha256.is_some() || bucket.runtime_examples.is_empty() {
+        migrate_bucket_relational_role_programs(bucket, required_support_rows)?;
+    }
+    Ok(())
+}
+
+pub(super) fn migrate_bucket_relational_role_programs(
+    bucket: &mut OnlineCollectionBucket,
+    required_support_rows: usize,
+) -> Result<(), String> {
+    if bucket.frozen_program_sha256.is_some() || bucket.runtime_examples.is_empty() {
+        return Ok(());
+    }
+    let law_keys = bucket
+        .programs
+        .values()
+        .filter_map(|program| response_law_key(program).ok())
+        .collect::<BTreeSet<_>>();
+    let mut relational = BTreeMap::<String, ResponseProgram>::new();
+    let mut candidates = Vec::new();
+    for program in bucket.programs.values() {
+        collect_relational_role_programs(program, &mut candidates);
+    }
+    let mut authority_cache = BTreeMap::<(String, String), bool>::new();
+    for canonical in candidates {
+        if !is_privacy_safe_online_response_program(&canonical)
+            || response_law_key(&canonical)
+                .ok()
+                .is_none_or(|law| !law_keys.contains(&law))
+        {
             continue;
         }
-        let law_keys = bucket
-            .programs
-            .values()
-            .filter_map(|program| response_law_key(program).ok())
-            .collect::<BTreeSet<_>>();
-        let mut relational = BTreeMap::<String, ResponseProgram>::new();
-        let mut candidates = Vec::new();
-        for program in bucket.programs.values() {
-            collect_relational_role_programs(program, &mut candidates);
-        }
-        for canonical in candidates {
-            if !is_privacy_safe_online_response_program(&canonical)
-                || response_law_key(&canonical)
-                    .ok()
-                    .is_none_or(|law| !law_keys.contains(&law))
-            {
-                continue;
-            }
-            let digest = canonical_json_sha256(&canonical).map_err(str::to_owned)?;
-            let support = bucket
-                .support
-                .iter()
-                .filter(|receipt| {
-                    let Some(example) = bucket.runtime_examples.get(&receipt.evidence_graph_sha256)
-                    else {
-                        return false;
-                    };
-                    *authority_cache
-                        .entry((receipt.evidence_graph_sha256.clone(), digest.clone()))
-                        .or_insert_with(|| {
-                            response_program_authority_matches_example(&canonical, example)
-                        })
-                })
-                .count();
-            if support >= required_support_rows {
-                relational.entry(digest).or_insert(canonical);
-            }
-        }
-        if relational.is_empty() {
-            continue;
-        }
-        for (digest, program) in &relational {
-            bucket.programs.insert(digest.clone(), program.clone());
-        }
-        for receipt in &mut bucket.support {
-            let Some(example) = bucket.runtime_examples.get(&receipt.evidence_graph_sha256) else {
-                continue;
-            };
-            for (digest, program) in &relational {
-                if *authority_cache
+        let digest = canonical_json_sha256(&canonical).map_err(str::to_owned)?;
+        let support = bucket
+            .support
+            .iter()
+            .filter(|receipt| {
+                let Some(example) = bucket.runtime_examples.get(&receipt.evidence_graph_sha256)
+                else {
+                    return false;
+                };
+                *authority_cache
                     .entry((receipt.evidence_graph_sha256.clone(), digest.clone()))
-                    .or_insert_with(|| response_program_authority_matches_example(program, example))
-                {
+                    .or_insert_with(|| {
+                        response_program_authority_matches_example(&canonical, example)
+                    })
+            })
+            .count();
+        if support >= required_support_rows {
+            relational.entry(digest).or_insert(canonical);
+        }
+    }
+    if relational.is_empty() {
+        return Ok(());
+    }
+    for (digest, program) in &relational {
+        bucket.programs.insert(digest.clone(), program.clone());
+    }
+    for receipt in &mut bucket.support {
+        let Some(example) = bucket.runtime_examples.get(&receipt.evidence_graph_sha256) else {
+            continue;
+        };
+        for (digest, program) in &relational {
+            if *authority_cache
+                .entry((receipt.evidence_graph_sha256.clone(), digest.clone()))
+                .or_insert_with(|| response_program_authority_matches_example(program, example))
+            {
+                receipt
+                    .verified_semantic_program_sha256
+                    .push(digest.clone());
+                if independently_verified_teacher_match(program, example) {
                     receipt.matched_program_sha256.push(digest.clone());
                 }
+                if let Ok(Some(root)) = response_program_dynamic_value_root_sha256(program, example)
+                {
+                    receipt
+                        .matched_program_dynamic_value_root_sha256
+                        .insert(digest.clone(), root);
+                }
             }
-            receipt.matched_program_sha256.sort();
-            receipt.matched_program_sha256.dedup();
         }
-        while bucket.programs.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
-            let relational_digests = relational.keys().collect::<BTreeSet<_>>();
-            let Some(evicted) = bucket
-                .programs
-                .keys()
-                .filter(|digest| !relational_digests.contains(digest))
-                .map(|digest| {
-                    let support = bucket
-                        .support
-                        .iter()
-                        .filter(|receipt| receipt.matched_program_sha256.contains(digest))
-                        .count();
-                    (support, digest.clone())
-                })
-                .min()
-                .map(|(_, digest)| digest)
-            else {
-                break;
-            };
-            bucket.programs.remove(&evicted);
-            bucket.rejected_program_sha256.insert(evicted);
-        }
+        receipt.matched_program_sha256.sort();
+        receipt.matched_program_sha256.dedup();
+        receipt.verified_semantic_program_sha256.sort();
+        receipt.verified_semantic_program_sha256.dedup();
+    }
+    while bucket.programs.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+        let relational_digests = relational.keys().collect::<BTreeSet<_>>();
+        let Some(evicted) = bucket
+            .programs
+            .keys()
+            .filter(|digest| !relational_digests.contains(digest))
+            .map(|digest| {
+                let support = bucket
+                    .support
+                    .iter()
+                    .filter(|receipt| receipt.matched_program_sha256.contains(digest))
+                    .count();
+                (support, digest.clone())
+            })
+            .min()
+            .map(|(_, digest)| digest)
+        else {
+            break;
+        };
+        bucket.programs.remove(&evicted);
+        bucket.rejected_program_sha256.insert(evicted);
     }
     Ok(())
 }
@@ -1164,6 +1268,11 @@ pub(super) fn collect_relational_role_programs(
                     *mapping,
                     completion_state.clone(),
                 ));
+            }
+        }
+        crate::ResponseOperation::ComposeCollection { .. } => {
+            if let Ok(canonical) = canonical_direct_response_program(program) {
+                output.push(canonical);
             }
         }
         crate::ResponseOperation::UniqueConsensus { variants, .. } => {
@@ -1268,7 +1377,9 @@ pub(super) fn invalid_collection_bucket_reason(bucket: &OnlineCollectionBucket) 
     let adapter_digests = bucket_adapter_digests(bucket);
     for (kind, receipts) in [("support", &bucket.support), ("future", &bucket.future)] {
         for receipt in receipts {
-            if receipt.matched_program_sha256.is_empty() {
+            if receipt.matched_program_sha256.is_empty()
+                && receipt.verified_semantic_program_sha256.is_empty()
+            {
                 return Some(format!("{kind}_receipt_programs_empty"));
             }
             if !valid_witness_receipt_metadata(receipt) {
@@ -1277,9 +1388,13 @@ pub(super) fn invalid_collection_bucket_reason(bucket: &OnlineCollectionBucket) 
             if let Some(digest) = receipt
                 .matched_program_sha256
                 .iter()
+                .chain(&receipt.verified_semantic_program_sha256)
                 .find(|digest| !adapter_digests.contains(*digest))
             {
                 return Some(format!("{kind}_receipt_program_unknown:{digest}"));
+            }
+            if let Some(reason) = invalid_receipt_dynamic_root_reason(bucket, kind, receipt) {
+                return Some(reason);
             }
         }
     }
@@ -1287,8 +1402,13 @@ pub(super) fn invalid_collection_bucket_reason(bucket: &OnlineCollectionBucket) 
 }
 
 pub(super) fn bucket_adapter_digests(bucket: &OnlineCollectionBucket) -> BTreeSet<String> {
-    let mut digests = bucket.programs.keys().cloned().collect::<BTreeSet<_>>();
+    let mut digests = bucket_active_adapter_digests(bucket);
     digests.extend(bucket.rejected_program_sha256.iter().cloned());
+    digests
+}
+
+pub(super) fn bucket_active_adapter_digests(bucket: &OnlineCollectionBucket) -> BTreeSet<String> {
+    let mut digests = bucket.programs.keys().cloned().collect::<BTreeSet<_>>();
     for program in bucket.programs.values() {
         if let crate::ResponseOperation::UniqueConsensus { variants, .. } = &program.operation {
             for variant in variants {

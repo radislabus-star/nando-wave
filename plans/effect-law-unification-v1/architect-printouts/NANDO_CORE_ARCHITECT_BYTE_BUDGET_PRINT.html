@@ -180,8 +180,8 @@ code { font-family: inherit; font-weight: 700; }
     <div class="brand">NANDO / OPERATOR MACHINE</div>
     <div class="meta">
       Реальная архитектура и byte budget<br>
-      Снимок: 2026-07-24 13:15 EEST<br>
-      Git: 945c32a864b9
+      Снимок: 2026-07-25 23:10 EEST<br>
+      HEAD: ca42f01 · live + working tree
     </div>
   </header>
 
@@ -189,15 +189,18 @@ code { font-family: inherit; font-weight: 700; }
   <p class="lead">
     Nando превращает завершённый опыт в компактные типизированные программы.
     Новый навык должен становиться данными и bytecode, а не новой веткой Rust.
-    Wave открывает и консолидирует закон; VM исполняет; независимый verifier
-    устанавливает факт; только admission выдаёт authority.
+    Сегодня production уже исполняет три узких adaptive-оператора. Полное
+    рождение нового circuit-attractor из multi-source fragments остаётся
+    следующим научным рубежом, а не выданным результатом.
   </p>
 
   <div class="band">
-    <strong>Точная формула:</strong>
-    LLM или реальный опыт обучает → Wave обнаруживает закон →
+    <strong>Точная формула машины:</strong>
+    опыт создаёт evidence → learner сужает или рождает закон →
     crystallizer компилирует → Operator VM действует →
     verifier подтверждает → admission разрешает → CPU исполняет.
+    Для сильного rich-claim learner должен родить новый связный circuit через
+    межплоскостную фазовую когерентность, а не выбрать готовый шаблон.
   </div>
 
   <h2>Текущая живая линия</h2>
@@ -205,30 +208,32 @@ code { font-family: inherit; font-weight: 700; }
 │
 ├─ Nginx gateway / provider fallback
 │
-├─ nando-transition-serving                 HOT INGRESS
+├─ nando-transition-serving                 HOT INGRESS / CPU
 │  ├─ request digest + hash-only capture
-│  ├─ compact structural evidence
-│  └─ admitted registry lookup
+│  ├─ pre-action structural record
+│  ├─ admitted registry lookup
+│  └─ upstream fallback при ABSTAIN
 │
-├─ hot → cold bridges                       PASS, LOSS 0
-│  ├─ OpportunityBridge       полный denominator
-│  ├─ LearningStructureBridge relation/capability atoms
-│  └─ bounded raw shadow      только proof/eval
+├─ hot → cold bridges                       STRUCT 13 091 / 13 091
+│  ├─ OpportunityBridge       traffic/economics events
+│  ├─ LearningStructureBridge relation/capability topology
+│  └─ bounded raw shadow      proof/eval, authority=false
 │
 ├─ nando-operator-learning                  COLD LEARNER
 │  ├─ relation frames + teacher join
 │  ├─ semantic version space
 │  ├─ adaptive identification / CEGIS
-│  └─ immutable candidate bundle
+│  ├─ multi-source factorizer / marginal ledger
+│  └─ immutable candidate freeze
 │
-├─ crystallizer                             3 INPUT
-│  ├─ 2 admissible
+├─ crystallizer                             4 INPUT
+│  ├─ 3 admissible
 │  └─ 1 HELD: semantic applicability guard отсутствует
 │
 ├─ external admission                       OPEN
 │  ├─ independent reconstruction
 │  ├─ proof / future / negatives / parity
-│  └─ immutable registry generation
+│  └─ immutable registry generation + authority lease
 │
 └─ nando-transition-serving                 HOT CPU
    ├─ Phase Router
@@ -240,7 +245,7 @@ code { font-family: inherit; font-weight: 700; }
   <div class="status-grid">
     <div class="status">
       <span class="label">ACTIVE PACKAGES</span>
-      <span class="value ok">2</span>
+      <span class="value ok">3</span>
     </div>
     <div class="status">
       <span class="label">HELD CANDIDATES</span>
@@ -264,7 +269,12 @@ code { font-family: inherit; font-weight: 700; }
     <tbody>
       <tr>
         <td><code>crystallized-scalar-a40ca964f20c4b67</code></td>
-        <td>Пассивное продолжение через <code>write_stdin(session_id)</code></td>
+        <td>Продолжение процесса через <code>write_stdin(session_id)</code></td>
+        <td class="ok">ACTIVE</td>
+      </tr>
+      <tr>
+        <td><code>crystallized-scalar-db6407c627296d8b</code></td>
+        <td>Проекция первого структурно упомянутого JSON-поля без имени поля</td>
         <td class="ok">ACTIVE</td>
       </tr>
       <tr>
@@ -273,8 +283,8 @@ code { font-family: inherit; font-weight: 700; }
         <td class="ok">ACTIVE</td>
       </tr>
       <tr>
-        <td><code>write_stdin(chars="\u0003")</code></td>
-        <td>Активная отмена; pre-action поверхность пока не отличает её безопасно</td>
+        <td><code>candidate generation g+1</code></td>
+        <td>Один кандидат не имеет доказанного semantic applicability guard</td>
         <td class="held">HELD</td>
       </tr>
     </tbody>
@@ -282,8 +292,9 @@ code { font-family: inherit; font-weight: 700; }
 
   <div class="footer">
     Главный сдвиг относительно старого документа: F5-A больше не конечная точка.
-    Полный узкий маршрут до CPU замкнут. Текущий блокер — ширина библиотеки,
-    а не отсутствие signal connectivity.
+    Полный узкий маршрут до CPU замкнут. Текущий продуктовый блокер — ширина
+    библиотеки; научный блокер — первый natural multi-source circuit, а не
+    отсутствие signal connectivity.
   </div>
 </section>
 
@@ -318,14 +329,21 @@ code { font-family: inherit; font-weight: 700; }
   </table>
 
   <h2>Владение по crate</h2>
-  <div class="tree"><pre>nando-operator-kernel
+  <div class="tree"><pre>nando-core / wave
+├─ Dynamic Operator Field, circuit/blueprint synthesis
+├─ cross-plane phase evidence and anti-centers
+├─ exact 4 032-byte OperatorPage32 layout
+└─ не знает HTTP, response schema или admission authority
+
+nando-operator-kernel
 ├─ immutable EffectLaw / ProtocolMode / VM contracts
 ├─ structural language / semantic classes
 └─ не знает filesystem, HTTP и authority
 
 nando-operator-learning
 ├─ evidence, quotient, version space, CEGIS
-├─ phase synthesis, BackwardWave, crystallizer input
+├─ adaptive identification и multi-source factorization
+├─ phase synthesis / BackwardWave candidate generation
 └─ может создать candidate, но не выполнить hot request
 
 nando-operator-runtime
@@ -349,7 +367,7 @@ nando-operator-admission
 └─ единственный владелец ACTIVE
 
 nando-response-actor
-└─ response-specific facade и cross-owner orchestration
+└─ response-specific facade; 63 813 строк, ещё переходная оболочка
 
 nando-transition-serving
 └─ hot HTTP ingress, registry route, CPU accept, fallback
@@ -361,7 +379,7 @@ nando-gateway-control
   <div class="cols">
     <div class="avoid">
       <h3>Разрешённый смысл</h3>
-      <pre>kernel
+      <pre>nando-core + kernel
   ↑
 learning / runtime / proof
   ↑
@@ -387,7 +405,7 @@ ACTIVE g ─X→ mutation in place</pre>
   </div>
 
   <div class="footer">
-    <code>nando-response-actor</code> всё ещё велик: 62 490 строк Rust.
+    <code>nando-response-actor</code> всё ещё велик: 63 813 строк Rust.
     Декомпозиция уже вынесла владельцев в отдельные crates, но facade остаётся
     переходным интеграционным слоем, а не желаемым конечным ядром.
   </div>
@@ -454,7 +472,7 @@ OperatorPage32 + versioned VM program           HOT SNAPSHOT</pre></div>
       <tr><td>Момент решения</td><td>Остаётся один executable class</td><td>Возникает новый coherent connected circuit</td></tr>
       <tr><td>Новый topology</td><td>Не обязателен</td><td>Обязателен для сильного claim</td></tr>
       <tr><td>Proof basis</td><td>Столько evidence, сколько снимает ambiguity</td><td>Independent surfaces + transfer + phase ablations</td></tr>
-      <tr><td>Текущий live статус</td><td class="ok">PASS, 2 узких ACTIVE</td><td class="watch">LAB PASS / broad live NOT PROVEN</td></tr>
+      <tr><td>Текущий live статус</td><td class="ok">PASS, 3 узких ACTIVE</td><td class="watch">LAB PASS / natural MS3 NOT EVALUATED</td></tr>
     </tbody>
   </table>
 
@@ -487,8 +505,8 @@ ACTIVE generation g никогда не мутирует на месте.</pre><
 
   <h2>Текущий живой generation delta</h2>
   <div class="status-grid">
-    <div class="status"><span class="label">CRYSTALLIZED INPUT</span><span class="value info">3</span></div>
-    <div class="status"><span class="label">ADMISSIBLE</span><span class="value ok">2</span></div>
+    <div class="status"><span class="label">CRYSTALLIZED INPUT</span><span class="value info">4</span></div>
+    <div class="status"><span class="label">ADMISSIBLE</span><span class="value ok">3</span></div>
     <div class="status"><span class="label">HELD</span><span class="value held">1</span></div>
     <div class="status"><span class="label">GENERATION DELTA</span><span class="value">0</span></div>
   </div>
@@ -501,9 +519,9 @@ ACTIVE generation g никогда не мутирует на месте.</pre><
 
   <div class="footer">
     Следующий настоящий growth event: новый independently proven operator
-    создаёт <code>generation delta &gt; 0</code>. Удержанный Ctrl-C не может
-    попасть туда, пока pre-action evidence не отделит активную отмену от
-    пассивного polling.
+    создаёт <code>generation delta &gt; 0</code>. Сейчас один кандидат остаётся
+    HELD до появления отдельного доказанного applicability guard; активная
+    generation не расширяется догадкой.
   </div>
 </section>
 
@@ -516,7 +534,9 @@ ACTIVE generation g никогда не мутирует на месте.</pre><
   <h1>4 032 байта на оператор</h1>
   <p class="lead">
     OperatorPage32 — компактная горячая форма уже кристаллизованного закона.
-    Она не хранит corpus, search frontier или proof receipts.
+    Она не хранит corpus, search frontier или proof receipts. Каждый из трёх
+    текущих ACTIVE response-пакетов содержит ровно одну страницу длиной
+    4 032 байта плюс digest-bound registry data.
   </p>
 
   <table>
@@ -575,12 +595,14 @@ remaining for dispatch / metadata / scratch
       <tr><th>Объект</th><th>Размер</th><th>Комментарий</th></tr>
     </thead>
     <tbody>
-      <tr><td>Live response registry</td><td>178 015 B</td><td>2 ACTIVE + proof-bound package data</td></tr>
-      <tr><td>Admission candidate CBOR</td><td>2 896 249 B</td><td>Cold reconstruction input</td></tr>
-      <tr><td>Controller admission</td><td>4 031 B</td><td>Authority decision envelope</td></tr>
-      <tr><td>Authority candidate</td><td>3 737 B</td><td>Cold candidate, не self-authority</td></tr>
-      <tr><td>Controller report</td><td>823 B</td><td>Observability only</td></tr>
-      <tr><td>Current learner checkpoint</td><td>156 866 363 B</td><td>Cold mutable learning state</td></tr>
+      <tr><td>Live response registry</td><td>264 745 B</td><td>3 ACTIVE + proof-bound package data</td></tr>
+      <tr><td>Три embedded OperatorPage32</td><td>12 096 B</td><td>3 × 4 032 B, остальное registry — proof/route envelope</td></tr>
+      <tr><td>Admission candidate CBOR</td><td>2 457 798 B</td><td>Cold reconstruction input</td></tr>
+      <tr><td>Controller admission</td><td>5 702 B</td><td>Authority decision envelope</td></tr>
+      <tr><td>Authority candidate</td><td>5 368 B</td><td>Cold candidate, не self-authority</td></tr>
+      <tr><td>Controller report</td><td>982 B</td><td>Observability only</td></tr>
+      <tr><td>Response learner checkpoint</td><td>178 845 934 B</td><td>Cold mutable learning state</td></tr>
+      <tr><td>Collection checkpoint</td><td>1 105 896 B</td><td>Bounded online collection state</td></tr>
       <tr><td>Transition data tree</td><td>2.4 GiB</td><td>Включает исторические backups/tmp</td></tr>
     </tbody>
   </table>
@@ -591,9 +613,9 @@ remaining for dispatch / metadata / scratch
       <tr><th>Процесс</th><th>RSS</th><th>Роль</th></tr>
     </thead>
     <tbody>
-      <tr><td>nando-transition-serving</td><td>≈ 131.3 MiB</td><td>Hot serving + registry + protocol runtime</td></tr>
-      <tr><td>nando-response-learning</td><td>≈ 572.7 MiB</td><td>Cold learner / evidence / candidate state</td></tr>
-      <tr><td>nando-gateway-control</td><td>≈ 59.4 MiB</td><td>Read-only dashboard/API</td></tr>
+      <tr><td>nando-transition-serving</td><td>≈ 137.9 MiB</td><td>Hot serving + registry + protocol runtime</td></tr>
+      <tr><td>nando-response-learning</td><td>≈ 714.3 MiB</td><td>Cold learner / evidence / candidate state</td></tr>
+      <tr><td>nando-gateway-control</td><td>≈ 63.5 MiB</td><td>Read-only dashboard/API</td></tr>
     </tbody>
   </table>
 
@@ -749,19 +771,19 @@ official provider / upstream LLM fallback</pre></div>
   <div class="status-grid">
     <div class="status">
       <span class="label">ПРОШЛО ЧЕРЕЗ NANDO</span>
-      <span class="value">6.387B</span>
+      <span class="value">8.286B</span>
     </div>
     <div class="status">
       <span class="label">УВИДЕЛ МАЙНЕР</span>
-      <span class="value info">872.2M</span>
+      <span class="value info">164.8M</span>
     </div>
     <div class="status">
       <span class="label">ИСПОЛНЕНО НА CPU</span>
-      <span class="value ok">180.0M</span>
+      <span class="value ok">1.995B</span>
     </div>
     <div class="status">
       <span class="label">ACTIVE</span>
-      <span class="value ok">2</span>
+      <span class="value ok">3</span>
     </div>
   </div>
 
@@ -770,13 +792,16 @@ official provider / upstream LLM fallback</pre></div>
       <tr><th>Метрика</th><th>Текущее значение</th><th>Смысл</th></tr>
     </thead>
     <tbody>
-      <tr><td>Lifetime miner visibility</td><td>13.657%</td><td>Доля общего denominator, увиденная miner-ом</td></tr>
-      <tr><td>Lifetime CPU share</td><td>2.819%</td><td>Весь исторический трафик, включая период до ACTIVE</td></tr>
-      <tr><td>Current epoch CPU share</td><td>32.370%</td><td>137.5M / 424.9M после текущего epoch boundary</td></tr>
-      <tr><td>Structural bridge</td><td>2 374 / 2 374</td><td>Pending 0, sequence gaps 0</td></tr>
-      <tr><td>Relation joins</td><td>15 690 / 39 888</td><td>Остальное — реальные misses, не transport loss</td></tr>
-      <tr><td>Ready cohorts</td><td>28</td><td>Ещё не равно admitted operators</td></tr>
-      <tr><td>Candidate input</td><td>3</td><td>2 admissible, 1 HELD</td></tr>
+      <tr><td>Lifetime miner visibility</td><td>1.988%</td><td>164.8M / 8.286B; не CPU coverage</td></tr>
+      <tr><td>Lifetime CPU share</td><td>24.074%</td><td>1.995B / 8.286B за всё время</td></tr>
+      <tr><td>Current epoch CPU share</td><td>83.997%</td><td>1.952B / 2.324B после текущего epoch boundary</td></tr>
+      <tr><td>Current verified window</td><td>70.155%</td><td>115.6M / 164.8M в текущем проверяемом окне</td></tr>
+      <tr><td>Optimistic upper bound</td><td>89.449%</td><td>147.4M / 164.8M; opportunity, не доказанная экономия</td></tr>
+      <tr><td>M3 completed windows</td><td>1 / 3</td><td>Последнее завершённое окно: 73.6%, safety 0/0</td></tr>
+      <tr><td>Structural bridge</td><td>13 091 / 13 091</td><td>Pending 0, sequence gaps 0</td></tr>
+      <tr><td>Relation joins</td><td>30 982 / 67 579</td><td>Остальное — реальные misses, не transport loss</td></tr>
+      <tr><td>Ready cohorts</td><td>42</td><td>Ещё не равно admitted operators</td></tr>
+      <tr><td>Crystallizer</td><td>4 / 3 / 1</td><td>Input / admissible / HELD</td></tr>
       <tr><td>Bridge loss</td><td>0</td><td>Hot/cold delivery intact</td></tr>
       <tr><td>False accepts / parity</td><td>0 / 0</td><td>Safety gate сохраняется</td></tr>
     </tbody>
@@ -786,16 +811,21 @@ official provider / upstream LLM fallback</pre></div>
   <div class="tree"><pre>входящий трафик                         PASS
   -> structural bridge                 PASS
   -> relation frames                   LIVE
-  -> operator discovery                28 cohorts
-  -> candidate export                  3
-  -> crystallizer                      2 admitted / 1 held
-  -> immutable registry                2 ACTIVE
+  -> operator discovery                42 cohorts
+  -> candidate export                  1 relation candidate
+  -> crystallizer                      4 input / 3 admitted / 1 held
+  -> immutable registry                3 ACTIVE
   -> admission                         OPEN
   -> CPU                               ENABLED
 
-ТЕКУЩАЯ ПРОБЛЕМА:
+ПРОДУКТОВАЯ ПРОБЛЕМА:
   библиотека ACTIVE-операторов слишком узкая,
-  поэтому общий lifetime CPU share всё ещё 2.819%.
+  поэтому lifetime CPU share = 24.074%, а не ≥ 50%.
+
+НАУЧНЫЙ РУБЕЖ:
+  MS3 natural completed RelationFrame
+  -> actor / independent verifier parity
+  -> MS4 first natural multi-source ACTIVE package.
 
 НЕ ПРОБЛЕМА:
   signal connectivity, bridge delivery или authority wiring.</pre></div>
@@ -806,12 +836,12 @@ official provider / upstream LLM fallback</pre></div>
       <tr><th>Шаг</th><th>Что должно появиться</th><th>Что запрещено</th></tr>
     </thead>
     <tbody>
-      <tr><td>1</td><td>Больше high-volume relation frames</td><td>Считать raw traffic authority</td></tr>
-      <tr><td>2</td><td>Source-neutral operator families</td><td>Ручные function-name profiles как закон</td></tr>
-      <tr><td>3</td><td>Distinguishing evidence только для реальных ties</td><td>Возвращать универсальные 32 + 32</td></tr>
-      <tr><td>4</td><td>Новые immutable packages</td><td>Расширять scope старого ACTIVE</td></tr>
-      <tr><td>5</td><td>Status/count/filter/compose и rich multi-role laws</td><td>Понижать verifier/admission</td></tr>
-      <tr><td>6</td><td>Три завершённых M3 windows ≥ 50%</td><td>Подменять current epoch lifetime-метрикой</td></tr>
+      <tr><td>MS3</td><td>Первый natural multi-source RelationFrame и parity</td><td>Выдать code/fixture PASS за live result</td></tr>
+      <tr><td>MS4</td><td>Первый independently admitted multi-source package</td><td>Самоавторизацию crystallizer-а</td></tr>
+      <tr><td>MS5</td><td>Circuit из частичных независимых поверхностей</td><td>Перенос raw teacher/output payload</td></tr>
+      <tr><td>MS6–7</td><td>Status/count/filter/compose и rich multi-role laws</td><td>Ручные function-name profiles как закон</td></tr>
+      <tr><td>MS8</td><td>Marginal coverage ledger выбирает следующий закон</td><td>Двойной счёт overlapping token mass</td></tr>
+      <tr><td>M3</td><td>Три завершённых verified windows ≥ 50%</td><td>Подменять окно epoch или upper bound</td></tr>
     </tbody>
   </table>
 
@@ -822,9 +852,9 @@ official provider / upstream LLM fallback</pre></div>
   </div>
 
   <div class="footer">
-    Lifetime CPU share растёт медленнее current epoch share, потому что его
-    denominator включает миллиарды токенов, прошедших до включения нынешних
-    пакетов. Для M3 нужны три последовательных проверенных окна, а не один пик.
+    Lifetime, epoch, current verified window, optimistic ceiling и mature M3
+    windows — пять разных величин. Для M3 нужны три последовательных
+    завершённых окна ≥ 50%, false accepts = 0 и parity mismatches = 0.
   </div>
 </section>
 
@@ -900,23 +930,28 @@ CPU flag without accept</pre>
 
   <h2>Текущая карта результата</h2>
   <div class="tree"><pre>Capture / provenance                         PASS
-Hot-to-cold structural bridge               PASS
+Hot-to-cold structural bridge               PASS, 13 091 / 13 091
 Adaptive version-space identification       PASS
+MS0-R / MS1 structural capture              PASS
+MS2 factorization + marginal ledger         PASS
+MS3 source-neutral witness / proof basis    CODE PASS
+MS3 natural completed RelationFrame         NOT EVALUATED
+MS3 actor / independent verifier parity     NOT EVALUATED
+MS4 natural multi-source ACTIVE package     BLOCKED
 Protocol compiler                           PASS, bounded
-Runtime role grounding                      PASS, narrow laws
+Runtime role grounding                      PASS, 3 narrow laws
 OperatorPage32 + restart                     PASS
 Independent verifier                        PASS
 External admission                          PASS
-Live ACTIVE CPU execution                    PASS, 2 packages
-Broad rich multi-role operator              WATCH
-Natural circuit-attractor in broad live      NOT PROVEN
-BackwardWave broad self-correction           PARTIAL / next generations
-M3: ≥50% for 3 verified windows              WATCH
+Live ACTIVE CPU execution                    PASS, 3 packages
+Natural circuit-attractor in ordinary live   NOT PROVEN
+BackwardWave broad self-correction           PARTIAL
+M3: ≥50% for 3 verified windows              WATCH, 1 / 3
 
 Current engineering objective:
-  more independently proven operators
-  -> generation delta > 0
-  -> wider verified CPU coverage
+  ordinary MS3 evidence
+  -> MS4 independent admission
+  -> wider rich-operator portfolio
   -> safety counters remain zero</pre></div>
 
   <h2>Canonical sources</h2>
@@ -928,6 +963,7 @@ Current engineering objective:
 /home/ubu/projects/nando-wave/crates/nando-operator-runtime/
 /home/ubu/projects/nando-wave/crates/nando-operator-proof/
 /home/ubu/projects/nando-wave/crates/nando-operator-admission/
+/home/ubu/projects/nando-wave/plans/multi-source-discovery-v1/MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md
 /home/ubu/projects/nando-wave/plans/cpu-coverage-to-50-v1/CPU_COVERAGE_TO_50_PLAN_V1.md
 /var/lib/nando-wave/transition/response-registry.json
 /var/lib/nando-wave/transition/response-admission-controller-report.json</pre>
@@ -941,7 +977,8 @@ Current engineering objective:
 
   <div class="footer">
     Документ заменяет старый F5-A/Cell32 byte-budget snapshot.
-    Live-цифры — снимок 2026-07-24 и должны обновляться перед внешним claim.
+    Live-цифры — снимок 2026-07-25 23:10 EEST и должны обновляться перед
+    внешним claim.
   </div>
 </section>
 

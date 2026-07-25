@@ -459,7 +459,9 @@ pub(super) fn repair_collection_checkpoint_accounting(
         if bucket.frozen_program_sha256.is_none() && !bucket.support.is_empty() {
             let before = bucket.support.len();
             bucket.support.retain(|receipt| {
-                receipt.verifier_pass && !receipt.matched_program_sha256.is_empty()
+                receipt.verifier_pass
+                    && (!receipt.matched_program_sha256.is_empty()
+                        || !receipt.verified_semantic_program_sha256.is_empty())
             });
             let discarded = before.saturating_sub(bucket.support.len());
             if discarded > 0 {

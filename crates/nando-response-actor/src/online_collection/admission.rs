@@ -248,9 +248,9 @@ impl OnlineCollectionMiner {
         &mut self,
         index: usize,
         negative: &OnlineCollectionReceipt,
-    ) {
+    ) -> bool {
         let Some(bucket) = self.checkpoint.buckets.get(index) else {
-            return;
+            return false;
         };
         let support_atoms = bucket
             .support
@@ -264,7 +264,7 @@ impl OnlineCollectionMiner {
             .filter(|atom| !support_atoms.contains(atom))
             .collect::<BTreeSet<_>>();
         if candidates.is_empty() {
-            return;
+            return false;
         }
         let bucket_id = bucket.bucket_id.clone();
         let evidence = self
@@ -280,6 +280,7 @@ impl OnlineCollectionMiner {
         if let Some(bucket) = self.checkpoint.buckets.get_mut(index) {
             bucket.learned_anti_atom_ids.extend(learned);
         }
+        true
     }
 
     pub(super) fn collection_causal_report(
@@ -696,7 +697,10 @@ impl OnlineCollectionMiner {
                     let support_matches = bucket
                         .support
                         .iter()
-                        .filter(|receipt| receipt.matched_program_sha256.contains(digest))
+                        .filter(|receipt| {
+                            receipt.matched_program_sha256.contains(digest)
+                                || receipt.verified_semantic_program_sha256.contains(digest)
+                        })
                         .count();
                     let routing_overlap = response_program_required_routing_atom_ids(program)
                         .iter()
@@ -804,9 +808,14 @@ impl OnlineCollectionMiner {
                 &observation.example,
             )
             .and_then(|response| {
-                // Actor/verifier agreement is necessary but not enough:
-                // frozen future must reproduce the completed teacher.
-                (response == observation.example.expected_response)
+                let exact = response == observation.example.expected_response;
+                let semantic = routed_receipt
+                    .verified_semantic_program_sha256
+                    .binary_search(&program_sha256)
+                    .is_ok();
+                // The durable receipt preserves exact and semantic parity as
+                // distinct outcomes with distinct teacher/actor commitments.
+                (exact || semantic)
                     .then_some(response)
                     .ok_or("teacher_response_mismatch")
             });
@@ -848,8 +857,11 @@ impl OnlineCollectionMiner {
                         continue;
                     }
                     ActiveWitnessDecision::Irreducible => {
-                        if !is_hard_teacher_counterexample(reason) {
-                            self.learn_applicability_anti_atoms(index, &routed_receipt);
+                        if !is_hard_teacher_counterexample(reason)
+                            && self.learn_applicability_anti_atoms(index, &routed_receipt)
+                        {
+                            self.checkpoint.counterexamples_total =
+                                self.checkpoint.counterexamples_total.saturating_add(1);
                             route_applicability_abstain =
                                 route_applicability_abstain.saturating_add(1);
                             continue;
@@ -1021,9 +1033,19 @@ impl OnlineCollectionMiner {
             if !candidate_authority_verified_on_support(bucket, &candidate) {
                 return Err("online_collection_consensus_support_authority_unproven".to_owned());
             }
+            let previous_digests = bucket.programs.keys().cloned().collect::<BTreeSet<_>>();
             for receipt in &mut bucket.support {
-                receipt.matched_program_sha256 = vec![digest.clone()];
+                receipt
+                    .verified_semantic_program_sha256
+                    .push(digest.clone());
+                receipt.verified_semantic_program_sha256.sort();
+                receipt.verified_semantic_program_sha256.dedup();
             }
+            bucket.rejected_program_sha256.extend(
+                previous_digests
+                    .into_iter()
+                    .filter(|value| value != &digest),
+            );
             bucket.programs = BTreeMap::from([(digest, candidate)]);
         }
         if adaptive
@@ -1165,7 +1187,24 @@ impl OnlineCollectionMiner {
             })
             .cloned();
         if let Some(subcenter) = preferred {
-            let subcenter_index = if let Some(existing) = self
+            let parent_is_fully_covered =
+                self.checkpoint.buckets.get(index).is_some_and(|parent| {
+                    parent.support.len() == subcenter.support.len()
+                        && parent
+                            .support
+                            .iter()
+                            .map(|receipt| &receipt.evidence_graph_sha256)
+                            .collect::<BTreeSet<_>>()
+                            == subcenter
+                                .support
+                                .iter()
+                                .map(|receipt| &receipt.evidence_graph_sha256)
+                                .collect::<BTreeSet<_>>()
+                });
+            let subcenter_index = if parent_is_fully_covered {
+                self.checkpoint.buckets[index] = subcenter;
+                index
+            } else if let Some(existing) = self
                 .checkpoint
                 .buckets
                 .iter()
@@ -1267,10 +1306,14 @@ impl OnlineCollectionMiner {
             return;
         };
         let atoms = bucket_program_atom_ids(bucket);
+        let active_programs = bucket_active_adapter_digests(bucket);
         for receipt in bucket.support.iter_mut().chain(bucket.future.iter_mut()) {
             receipt.request_atom_ids.extend(atoms.iter().copied());
             receipt.request_atom_ids.sort_unstable();
             receipt.request_atom_ids.dedup();
+            receipt
+                .matched_program_dynamic_value_root_sha256
+                .retain(|digest, _| active_programs.contains(digest));
         }
     }
 
@@ -1280,6 +1323,15 @@ impl OnlineCollectionMiner {
         // to resume; explicit replay can rehydrate examples when required.
         let mut durable_checkpoint = self.checkpoint.clone();
         for bucket in &mut durable_checkpoint.buckets {
+            let active_programs = bucket_active_adapter_digests(bucket);
+            for receipt in bucket.support.iter_mut().chain(&mut bucket.future) {
+                receipt
+                    .matched_program_dynamic_value_root_sha256
+                    .retain(|digest, _| active_programs.contains(digest));
+            }
+            if bucket.frozen_program_sha256.is_some() {
+                bucket.support_manifest_sha256 = Some(collection_support_manifest_digest(bucket)?);
+            }
             bucket.runtime_examples.clear();
             if bucket.frozen_program_sha256.is_some() {
                 bucket.durable_adapter_phase_atoms.clear();

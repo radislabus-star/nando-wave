@@ -238,21 +238,21 @@ pub(super) fn verified_panel(
     stages.push_str(&stage(
         "cpu",
         "CPU",
-        "Активное исполнение",
-        "Контролируемое evidence не может выдать production authority или заявить покрытие естественным оператором.",
-        "ACTIVE=0 · authority=false",
-        "ЗАКРЫТО",
-        "locked",
+        "Граница controlled F8 seed",
+        "Только этот исторический controlled seed не получил production authority. Живой ACTIVE registry и CPU-счётчики показаны выше.",
+        "F8 seed: ACTIVE=0 · authority=false",
+        "ИЗОЛИРОВАНО",
+        "wait",
     ));
 
     format!(
         r#"<section class="architecture research-architecture" data-research-status="stop-f8-pass-authority-false">
 <div class="architecture-head">
 <div class="architecture-title"><h2>ИССЛЕДОВАТЕЛЬСКИЙ КОНТУР ОПЕРАТОРА</h2><p>артефакт -&gt; связывание -&gt; VM -&gt; верификатор -&gt; поколение -&gt; допуск F8</p></div>
-<div class="architecture-state"><span class="state-chip pass">F5 ЗАВЕРШЁН</span><span class="state-chip pass">F6 ЗАВЕРШЁН</span><span class="state-chip pass">F7 ЗАВЕРШЁН</span><span class="state-chip pass">F8 ЗАВЕРШЁН</span><span class="state-chip locked">AUTHORITY ВЫКЛЮЧЕНА</span><span class="architecture-meta">F5 {} · квитанция F7 {}</span></div>
+<div class="architecture-state"><span class="state-chip pass">F5 ЗАВЕРШЁН</span><span class="state-chip pass">F6 ЗАВЕРШЁН</span><span class="state-chip pass">F7 ЗАВЕРШЁН</span><span class="state-chip pass">F8 ЗАВЕРШЁН</span><span class="state-chip wait">F8 SEED БЕЗ AUTHORITY</span><span class="architecture-meta">исторический controlled-контур · F5 {} · квитанция F7 {}</span></div>
 </div>
 <div class="flow-tree">{}</div>
-<div class="terminal-rule">контролируемый путь F5 -&gt; F8 в SHADOW подтверждён | p99 без совпадения/с совпадением {}/{} нс | жёсткий максимум {} нс | горячий RSS {} Б | естественный оператор НЕ ОЦЕНЕН | authority=false</div>
+<div class="terminal-rule">исторический controlled F8 seed: SHADOW подтверждён, authority=false | это не статус живого ACTIVE registry | p99 без совпадения/с совпадением {}/{} нс | жёсткий максимум {} нс | горячий RSS {} Б</div>
 </section>"#,
         escape(commit),
         escape(&status.f7_receipt_date),

@@ -2,7 +2,8 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use nando_transition_inducer::{
-    LivePackageOrigin, LiveProfileRegistry, LiveProfileState, read_package, validate_live_package,
+    LivePackageOrigin, LiveProfileRegistry, LiveProfileState, read_package,
+    read_package_artifact_bytes, validate_live_package,
 };
 use serde::Serialize;
 
@@ -129,10 +130,7 @@ fn inspect() -> Result<AdmissionReport, String> {
             package_validation_failures.push(format!("{package_id}:package_id_mismatch"));
             continue;
         }
-        let actual_bytes = package
-            .artifact_bytes()
-            .map_err(|error| format!("{package_id}:bytes:{error}"))?
-            .len();
+        let actual_bytes = read_package_artifact_bytes(path)?;
         package_bytes = package_bytes.saturating_add(actual_bytes);
         if actual_bytes != record.package_bytes {
             package_accounting_warnings.push(format!(

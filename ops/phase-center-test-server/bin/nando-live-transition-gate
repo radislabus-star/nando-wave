@@ -9,7 +9,34 @@ trap 'rm -rf -- "${TMP_DIR}"' EXIT
 
 refresh_proofs=0
 status_mode=0
-project_root="${NANDO_GATE_PROJECT_ROOT:-$(cd -- "${OPS_DIR}/../.." && pwd)}"
+
+find_project_root() {
+  local candidate current
+  for candidate in \
+    "${PWD}" \
+    "${OPS_DIR}/../.." \
+    "${HOME}/projects/nando-wave"
+  do
+    current="$(cd -- "${candidate}" 2>/dev/null && pwd)" || continue
+    while [[ "${current}" != "/" ]]; do
+      if [[ -f "${current}/ops/phase-center-test-server/gates/nando-live-transition-gate.profile.json" ]]; then
+        printf '%s\n' "${current}"
+        return 0
+      fi
+      current="$(dirname -- "${current}")"
+    done
+  done
+  return 1
+}
+
+if [[ -n "${NANDO_GATE_PROJECT_ROOT:-}" ]]; then
+  project_root="${NANDO_GATE_PROJECT_ROOT}"
+else
+  project_root="$(find_project_root)" || {
+    jq -n '{verdict:"ERROR", reason:"project_root_not_found"}'
+    exit 2
+  }
+fi
 
 usage() {
   cat <<'EOF'

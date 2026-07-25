@@ -70,6 +70,26 @@ fn adaptive_static_frame_observation(index: usize, value: i64) -> OnlineCollecti
     }
 }
 
+#[test]
+fn read_only_checkpoint_open_is_fail_closed_and_byte_preserving() {
+    let root = adaptive_root("read-only-checkpoint");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.persist().expect("persist");
+    let before = fs::read(&path).expect("checkpoint bytes");
+
+    let snapshot = OnlineCollectionMiner::open_read_only(&path).expect("read-only snapshot");
+    assert_eq!(snapshot.status().observations_total, 0);
+    assert_eq!(fs::read(&path).expect("checkpoint bytes after"), before);
+
+    let missing = root.join("missing.cbor");
+    assert!(OnlineCollectionMiner::open_read_only(&missing).is_err());
+    assert!(!missing.exists());
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
 fn adaptive_request_last_token_observation(
     index: usize,
     token: &str,
@@ -217,6 +237,69 @@ fn adaptive_singleton_freezes_after_one_support_without_fixed_rows() {
     assert_eq!(
         miner.status().buckets[0].admission_blocker.as_deref(),
         Some("adaptive_future_missing")
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn v38_adaptive_freeze_survives_v39_semantic_channel_migration() {
+    let root = adaptive_root("v38-freeze-migration");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let config = OnlineCollectionConfig::default();
+    let support = observation(1, "3");
+    let program = adaptive_count_program();
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut miner = OnlineCollectionMiner::open(&path, config).expect("miner");
+    miner.checkpoint.buckets.push(adaptive_bucket(
+        &"8".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest, program)]),
+        &support,
+    ));
+    miner.maybe_freeze(0).expect("adaptive freeze");
+    let frozen = miner.checkpoint.buckets[0]
+        .adaptive_candidate_freeze
+        .clone()
+        .expect("freeze");
+    miner.checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V38;
+    miner.persist().expect("v38 checkpoint");
+    drop(miner);
+
+    let migrated = OnlineCollectionMiner::open(&path, config).expect("migrated");
+    assert_eq!(
+        migrated.checkpoint.buckets[0].adaptive_candidate_freeze,
+        Some(frozen)
+    );
+    drop(migrated);
+    drop(OnlineCollectionMiner::open_read_only(&path).expect("persisted v39"));
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn lost_adaptive_freeze_is_not_reported_as_legacy_control() {
+    let root = adaptive_root("lost-freeze-status");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let support = observation(1, "3");
+    let program = adaptive_count_program();
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.checkpoint.buckets.push(adaptive_bucket(
+        &"9".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest, program)]),
+        &support,
+    ));
+    miner.maybe_freeze(0).expect("adaptive freeze");
+    miner.checkpoint.buckets[0].adaptive_candidate_freeze = None;
+
+    assert_eq!(
+        miner.status().buckets[0].admission_blocker.as_deref(),
+        Some("adaptive_identification_lost")
     );
     fs::remove_dir_all(root).expect("cleanup");
 }
@@ -746,4 +829,72 @@ fn adaptive_static_frame_requires_transfer_to_a_new_dynamic_value() {
     assert_eq!(snapshot.registry.packages.len(), 1);
     assert!(snapshot.admission.eligible_for_local_accept);
     fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn read_only_checkpoint_rejects_invalid_dynamic_value_root() {
+    let root = adaptive_root("dynamic-root-validation");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let support = adaptive_static_frame_observation(201, 7);
+    let program = adaptive_static_frame_program();
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.checkpoint.buckets.push(adaptive_bucket(
+        &"a".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest.clone(), program)]),
+        &support,
+    ));
+    miner.maybe_freeze(0).expect("adaptive freeze");
+    assert!(
+        miner
+            .evaluate_frozen_candidates(&adaptive_static_frame_observation(202, 11))
+            .expect("transferred future")
+    );
+    miner.persist().expect("persist valid dynamic root");
+    let mut checkpoint = miner.checkpoint.clone();
+    let dynamic_root = checkpoint.buckets[0].future[0]
+        .matched_program_dynamic_value_root_sha256
+        .get_mut(&digest)
+        .expect("dynamic root");
+    *dynamic_root = "invalid".to_owned();
+    drop(miner);
+    let mut bytes = ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3.to_vec();
+    bytes.extend_from_slice(&serde_cbor::to_vec(&checkpoint).expect("checkpoint payload"));
+    fs::write(&path, bytes).expect("tampered checkpoint");
+
+    let error = OnlineCollectionMiner::open_read_only(&path)
+        .err()
+        .expect("tampered dynamic root must fail");
+    assert!(
+        error.contains("future_receipt_dynamic_root_invalid"),
+        "{error}"
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn live_bucket_recomputes_dynamic_value_root_from_runtime_example() {
+    let support = adaptive_static_frame_observation(203, 7);
+    let program = adaptive_static_frame_program();
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut bucket = adaptive_bucket(
+        &"b".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest.clone(), program)]),
+        &support,
+    );
+    *bucket.support[0]
+        .matched_program_dynamic_value_root_sha256
+        .get_mut(&digest)
+        .expect("dynamic root") = "0".repeat(64);
+
+    assert_eq!(
+        invalid_collection_bucket_reason(&bucket),
+        Some(format!("support_receipt_dynamic_root_mismatch:{digest}"))
+    );
 }

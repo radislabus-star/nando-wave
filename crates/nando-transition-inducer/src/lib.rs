@@ -41,7 +41,7 @@ pub use live_profile::{
     LivePackageRecord, LiveProfileRegistry, LiveProfileState, LiveRuntimeProfile,
     LiveTransitionTelemetry, RawPhaseFamilyState, RawPhaseSurfaceState, atomic_write_json,
     import_package, import_package_with_origin, packages_from_value, read_package,
-    timestamp_unix_nanos, validate_live_package,
+    read_package_artifact_bytes, timestamp_unix_nanos, validate_live_package,
 };
 pub use package::{
     InducedExecution, InducedExecutionStatus, InducedTransition, InducedTransitionPackage,

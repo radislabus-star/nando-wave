@@ -8,7 +8,7 @@ use nando_operator_learning::{
 };
 
 use super::OpportunityBridgeRuntime;
-use super::spool::{drain_pending_once, event_file_name};
+use super::spool::{drain_pending_once, event_file_name, pending_batch};
 
 fn temporary_root(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -20,6 +20,28 @@ fn temporary_root(name: &str) -> PathBuf {
 
 fn intent() -> String {
     "42".repeat(32)
+}
+
+#[test]
+fn spool_capacity_rejects_new_events_before_disk_growth() {
+    let root = temporary_root("capacity");
+    let rejected = root.join("rejected");
+    fs::create_dir_all(&rejected).expect("rejected");
+    let sentinel = rejected.join("capacity.sparse");
+    fs::File::create(&sentinel)
+        .expect("sentinel")
+        .set_len(super::spool::MAX_SPOOL_BYTES)
+        .expect("sparse capacity sentinel");
+    let runtime =
+        OpportunityBridgeRuntime::new(root.clone(), true, false, Duration::from_millis(10))
+            .expect("runtime");
+    let error = runtime
+        .submit(OpportunityBridgeEventV1::request(intent(), 17, 1))
+        .expect_err("full spool must reject");
+    assert!(error.starts_with("opportunity_bridge_spool_capacity_exceeded:"));
+    assert_eq!(runtime.status().pending_events, 0);
+    drop(runtime);
+    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -110,6 +132,38 @@ fn producer_recovers_a_complete_staging_event_after_restart() {
     assert_eq!(runtime.status().pending_events, 1);
     assert_eq!(runtime.inner.next_sequence.load(Ordering::Acquire), 8);
     assert!(!temporary.exists());
+    drop(runtime);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn pending_batch_decodes_only_the_requested_backlog_window() {
+    let root = temporary_root("bounded-batch");
+    let runtime =
+        OpportunityBridgeRuntime::new(root.clone(), true, false, Duration::from_millis(10))
+            .expect("runtime");
+    for index in 0..(super::MAX_CONSUMER_INFLIGHT_EVENTS + 17) {
+        runtime
+            .submit(OpportunityBridgeEventV1::request(
+                format!("{index:064x}"),
+                17,
+                u64::try_from(index.saturating_add(1)).unwrap_or(u64::MAX),
+            ))
+            .expect("request");
+    }
+
+    let first = pending_batch(&runtime.inner, 17, &std::collections::BTreeSet::new())
+        .expect("bounded batch");
+    assert_eq!(first.len(), 17);
+    assert_eq!(first.first().map(|event| event.sequence), Some(1));
+    assert_eq!(first.last().map(|event| event.sequence), Some(17));
+    let excluded = first
+        .iter()
+        .map(|event| event.path.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let second = pending_batch(&runtime.inner, 5, &excluded).expect("next bounded batch");
+    assert_eq!(second.len(), 5);
+    assert_eq!(second.first().map(|event| event.sequence), Some(18));
     drop(runtime);
     let _ = fs::remove_dir_all(root);
 }

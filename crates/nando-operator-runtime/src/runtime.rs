@@ -16,6 +16,7 @@ mod structural_json_roles;
 
 #[cfg(test)]
 use selection::latest_turn_output_scalar_from_end;
+pub(crate) use selection::observed_output_scalar_type_counts;
 pub use selection::{
     ExtractedScalar, ObservedRoleCandidate, ObservedSourceClass,
     canonical_request_ordinal_selector, immediate_selected_scalar, immediate_tool_output_value,
@@ -767,8 +768,11 @@ const fn adapter_value_type_name(value_type: AtomValueType) -> &'static str {
 pub fn actor_structural_layout_sha256(value: &Value) -> Result<String, &'static str> {
     // Layout guards describe the current observation, not the entire provider
     // transcript. History length must not fragment equivalent tool outcomes.
-    let output = immediate_tool_output_value(value).ok_or("immediate_tool_output_missing")?;
-    crate::canonical_json_sha256(&actor_structural_layout(output))
+    let layout = immediate_tool_output_value(value).map_or_else(
+        || Value::String("no_immediate_tool_output".to_owned()),
+        actor_structural_layout,
+    );
+    crate::canonical_json_sha256(&layout)
 }
 
 fn actor_structural_layout(value: &Value) -> Value {

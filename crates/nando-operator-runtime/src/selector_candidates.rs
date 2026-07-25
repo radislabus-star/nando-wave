@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use nando_operator_kernel::{AtomValueType, ResponseValueSelector};
 use serde_json::Value;
 
+use crate::runtime::observed_output_scalar_type_counts;
+
 pub const MAX_SELECTOR_CANDIDATES: usize = 128;
 
 /// Enumerates physical selectors from the current bounded runtime surface.
@@ -101,12 +103,10 @@ pub fn selector_candidates(payload: &Value) -> Vec<ResponseValueSelector> {
             break;
         };
         if output_index < 16 {
-            for value_type in [
-                AtomValueType::String,
-                AtomValueType::Integer,
-                AtomValueType::Boolean,
-            ] {
-                for scalar_ordinal in 0_u16..16 {
+            for (value_type, count) in
+                observed_output_scalar_type_counts(output).unwrap_or_default()
+            {
+                for scalar_ordinal in 0..u16::try_from(count.min(16)).unwrap_or(16) {
                     selectors.push(ResponseValueSelector::TurnOutputScalarOrdinal {
                         output_ordinal,
                         scalar_ordinal,

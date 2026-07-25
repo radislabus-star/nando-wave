@@ -50,7 +50,7 @@ fn run() -> Result<(), String> {
         if args.next().is_some() {
             return Err(usage());
         }
-        let miner = OnlineCollectionMiner::open(checkpoint, OnlineCollectionConfig::default())?;
+        let miner = OnlineCollectionMiner::open_read_only(checkpoint)?;
         println!(
             "{}",
             serde_json::to_string(&miner.status())
@@ -63,7 +63,7 @@ fn run() -> Result<(), String> {
         if args.next().is_some() {
             return Err(usage());
         }
-        let miner = OnlineCollectionMiner::open(checkpoint, OnlineCollectionConfig::default())?;
+        let miner = OnlineCollectionMiner::open_read_only(checkpoint)?;
         let packages = miner.quarantine_packages()?;
         let candidates = miner.admission_candidates()?;
         println!(
@@ -97,7 +97,7 @@ fn run() -> Result<(), String> {
         if args.next().is_some() {
             return Err(usage());
         }
-        let miner = OnlineCollectionMiner::open(checkpoint, OnlineCollectionConfig::default())?;
+        let miner = OnlineCollectionMiner::open_read_only(checkpoint)?;
         let report = if let Some(bucket_id) = bucket_id {
             vec![
                 miner

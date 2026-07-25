@@ -1304,6 +1304,20 @@ fn collect_runtime_output_scalars(
     collect_plain_text_scalars(text, output)
 }
 
+pub(crate) fn observed_output_scalar_type_counts(
+    output: &Value,
+) -> Result<BTreeMap<AtomValueType, usize>, &'static str> {
+    let mut scalars = Vec::new();
+    for text in output_text_parts(output)? {
+        collect_runtime_output_scalars(text, &mut scalars)?;
+    }
+    let mut counts = BTreeMap::new();
+    for scalar in scalars {
+        *counts.entry(scalar.value_type).or_default() += 1;
+    }
+    Ok(counts)
+}
+
 fn collect_plain_text_scalars(
     text: &str,
     output: &mut Vec<ExtractedScalar>,

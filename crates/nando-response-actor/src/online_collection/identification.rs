@@ -188,6 +188,9 @@ fn identify_collection_version_space(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let program_roots = programs.keys().cloned().collect::<Vec<_>>();
+    let semantic_receipt_channel = support
+        .iter()
+        .any(|receipt| !receipt.verified_semantic_program_sha256.is_empty());
     let manifest = seal_operator_generation_manifest_v3(
         1,
         None,
@@ -279,8 +282,15 @@ fn identify_collection_version_space(
             .map(|(version_root, canonical_digest)| ExactProgramEvaluation {
                 program_digest_sha256: version_root.clone(),
                 accepted: receipt.verifier_pass
-                    && receipt.matched_program_sha256.contains(canonical_digest),
-                reason: if receipt.matched_program_sha256.contains(canonical_digest) {
+                    && (receipt.matched_program_sha256.contains(canonical_digest)
+                        || receipt
+                            .verified_semantic_program_sha256
+                            .contains(canonical_digest)),
+                reason: if receipt.matched_program_sha256.contains(canonical_digest)
+                    || receipt
+                        .verified_semantic_program_sha256
+                        .contains(canonical_digest)
+                {
                     String::new()
                 } else {
                     "exact_teacher_mismatch".to_owned()
@@ -298,11 +308,20 @@ fn identify_collection_version_space(
                 &receipt.request_atom_ids,
             ))
             .map_err(str::to_owned)?,
-            observed_action_root_sha256: canonical_json_sha256(&(
-                "nando.collection-observed-action.v1",
-                &receipt.matched_program_sha256,
-            ))
-            .map_err(str::to_owned)?,
+            observed_action_root_sha256: if semantic_receipt_channel {
+                canonical_json_sha256(&(
+                    "nando.collection-observed-action.v2",
+                    &receipt.matched_program_sha256,
+                    &receipt.verified_semantic_program_sha256,
+                ))
+                .map_err(str::to_owned)?
+            } else {
+                canonical_json_sha256(&(
+                    "nando.collection-observed-action.v1",
+                    &receipt.matched_program_sha256,
+                ))
+                .map_err(str::to_owned)?
+            },
             observed_delta_root_sha256: observation_root("delta", receipt),
             verifier_receipt_root_sha256: observation_root("verifier", receipt),
             outcome: GenerationLearningOutcomeV3::VerifiedPass,

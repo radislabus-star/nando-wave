@@ -583,6 +583,16 @@ pub fn read_package(path: &Path) -> Result<InducedTransitionPackage, String> {
         .map_err(|error| format!("package_json:{}:{error}", path.display()))
 }
 
+pub fn read_package_artifact_bytes(path: &Path) -> Result<usize, String> {
+    let bytes =
+        fs::read(path).map_err(|error| format!("package_read:{}:{error}", path.display()))?;
+    let value: Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("package_json:{}:{error}", path.display()))?;
+    serde_json::to_vec(&value)
+        .map(|canonical| canonical.len())
+        .map_err(|error| format!("package_serialization:{}:{error}", path.display()))
+}
+
 pub fn validate_live_package(
     package: &InducedTransitionPackage,
     max_package_bytes: usize,

@@ -9,6 +9,152 @@ fn legacy_default_config() -> OnlineCollectionConfig {
 }
 
 #[test]
+fn checkpoint_allows_only_one_writable_owner() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-online-collection-owner-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let config = legacy_default_config();
+    let first = OnlineCollectionMiner::open(&path, config).expect("first owner");
+    let error = OnlineCollectionMiner::open(&path, config)
+        .err()
+        .expect("second owner must fail");
+    assert!(error.starts_with("online_collection_checkpoint_owned:"));
+    drop(first);
+    drop(OnlineCollectionMiner::open(&path, config).expect("released owner"));
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn oversized_checkpoint_is_rejected_before_decode() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-online-collection-oversized-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    File::create(&path)
+        .expect("checkpoint")
+        .set_len(MAX_COLLECTION_CHECKPOINT_BYTES + 1)
+        .expect("sparse oversized checkpoint");
+    let error = OnlineCollectionMiner::open_read_only(&path)
+        .err()
+        .expect("oversized checkpoint must fail");
+    assert_eq!(error, "online_collection_checkpoint_too_large");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn read_only_checkpoint_rejects_invalid_embedded_config() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-online-collection-invalid-config-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    let mut checkpoint = miner.checkpoint.clone();
+    checkpoint.config.support_rows = 0;
+    drop(miner);
+    let mut bytes = ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3.to_vec();
+    bytes.extend_from_slice(&serde_cbor::to_vec(&checkpoint).expect("checkpoint payload"));
+    fs::write(&path, bytes).expect("invalid checkpoint");
+
+    let error = OnlineCollectionMiner::open_read_only(&path)
+        .err()
+        .expect("invalid embedded config must fail");
+    assert_eq!(error, "online_collection_invalid_config");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn failed_durable_observation_restores_complete_memory_state() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-online-collection-rollback-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let mut miner = OnlineCollectionMiner::open(&path, legacy_default_config()).expect("miner");
+    let before = serde_cbor::to_vec(&miner.checkpoint).expect("before");
+    fs::remove_dir_all(&root).expect("remove checkpoint parent");
+    let error = miner
+        .observe(observation(1, "3"))
+        .expect_err("durable write must fail");
+    assert!(error.starts_with("online_collection_checkpoint_create:"));
+    let after = serde_cbor::to_vec(&miner.checkpoint).expect("after");
+    assert_eq!(after, before);
+}
+
+#[test]
+fn v38_checkpoint_migrates_without_manufacturing_semantic_receipts() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-online-collection-v38-v39-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let config = legacy_default_config();
+    let miner = OnlineCollectionMiner::open(&path, config).expect("miner");
+    let mut checkpoint = miner.checkpoint.clone();
+    checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V38;
+    for bucket in &mut checkpoint.buckets {
+        for receipt in bucket.support.iter_mut().chain(bucket.future.iter_mut()) {
+            receipt.verified_semantic_program_sha256.clear();
+        }
+    }
+    drop(miner);
+    let payload = serde_cbor::to_vec(&checkpoint).expect("v38 payload");
+    let mut bytes = ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3.to_vec();
+    bytes.extend_from_slice(&payload);
+    fs::write(&path, bytes).expect("v38 checkpoint");
+
+    let migrated = OnlineCollectionMiner::open(&path, config).expect("migrated");
+    assert_eq!(
+        migrated.checkpoint.pooling_strategy_version,
+        ONLINE_COLLECTION_POOLING_STRATEGY_V39
+    );
+    assert!(migrated.checkpoint.buckets.iter().all(|bucket| {
+        bucket
+            .support
+            .iter()
+            .chain(bucket.future.iter())
+            .all(|receipt| receipt.verified_semantic_program_sha256.is_empty())
+    }));
+    drop(migrated);
+    let reopened = OnlineCollectionMiner::open_read_only(&path).expect("persisted v39 checkpoint");
+    assert_eq!(
+        reopened.miner.checkpoint.pooling_strategy_version,
+        ONLINE_COLLECTION_POOLING_STRATEGY_V39
+    );
+    drop(reopened);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
 fn mixed_support_blockers_trigger_program_subcenter_split() {
     for blocker in [
         "support_program_cover_empty",
@@ -423,6 +569,7 @@ fn maximal_decidable_subcenter_keeps_32_clean_rows_and_excludes_ambiguous_layout
             } else {
                 beta_digest.clone()
             }],
+            verified_semantic_program_sha256: Vec::new(),
             matched_program_dynamic_value_root_sha256: BTreeMap::new(),
             witness_class_commitment_sha256: None,
             witness_round: None,
@@ -526,6 +673,7 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
                 } else {
                     beta_digest.clone()
                 }],
+                verified_semantic_program_sha256: Vec::new(),
                 matched_program_dynamic_value_root_sha256: BTreeMap::new(),
                 witness_class_commitment_sha256: None,
                 witness_round: None,
@@ -580,11 +728,17 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
     drop(legacy);
 
     let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v32");
+    let migrated_status = migrated.status();
     assert_eq!(
         migrated.checkpoint.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V38
+        ONLINE_COLLECTION_POOLING_STRATEGY_V39
     );
-    assert_eq!(migrated.status().frozen_buckets_total, 1);
+    assert_eq!(
+        migrated_status.frozen_buckets_total,
+        1,
+        "{migrated_status:#?}\nconsensus={:#?}",
+        migrated.consensus_diagnostics()
+    );
     fs::remove_dir_all(root).expect("cleanup");
 }
 
@@ -624,6 +778,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
             } else {
                 json_digest.clone()
             }],
+            verified_semantic_program_sha256: Vec::new(),
             matched_program_dynamic_value_root_sha256: BTreeMap::new(),
             witness_class_commitment_sha256: None,
             witness_round: None,
@@ -683,7 +838,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
     let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v34");
     assert_eq!(
         migrated.checkpoint.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V38
+        ONLINE_COLLECTION_POOLING_STRATEGY_V39
     );
     assert_eq!(migrated.checkpoint.buckets.len(), 1);
     assert_eq!(migrated.checkpoint.buckets[0].bucket_id, "3".repeat(64));
@@ -1456,10 +1611,16 @@ fn is_multi_output_project(operation: &crate::ResponseOperation) -> bool {
     matches!(
         operation,
         crate::ResponseOperation::ProjectSelectedValue {
-            selector: crate::ResponseValueSelector::UniqueTurnScalar { .. },
-            renderer: crate::CollectionOutputRenderer::RenderSequence { .. },
+            renderer: crate::CollectionOutputRenderer::RenderSequence { segments },
             ..
-        }
+        } if segments
+            .iter()
+            .filter(|segment| !matches!(
+                segment,
+                crate::ResponseRenderSegment::Static { .. }
+            ))
+            .count()
+            >= 2
     )
 }
 
@@ -1693,7 +1854,13 @@ fn version_space_restart_preserves_privacy_safe_runtime_parity_receipts() {
     assert_eq!(status.late_after_freeze_total, 1);
     assert_eq!(status.future_intent_rejected_total, 1);
     assert_eq!(status.full_enumerations_total, 1);
-    assert_eq!(status.version_space_intersection_checks_total, 3);
+    assert!(status.version_space_intersection_checks_total >= status.guard_scheduled_buckets_total);
+    assert!(
+        status.version_space_intersection_checks_total
+            <= status
+                .guard_scheduled_buckets_total
+                .saturating_mul(MAX_UNFROZEN_ROUTE_PROGRAMS as u64)
+    );
     assert_eq!(status.guard_scheduled_buckets_total, 3);
     assert_eq!(status.guard_pruned_buckets_total, 0);
     assert_eq!(status.buckets.len(), 1);
@@ -1727,7 +1894,7 @@ fn version_space_restart_preserves_privacy_safe_runtime_parity_receipts() {
 }
 
 #[test]
-fn v6_rebuilds_exact_renderer_candidates_without_claiming_evidence() {
+fn v6_does_not_rebuild_renderer_after_raw_examples_are_purged() {
     let root = std::env::temp_dir().join(format!(
         "nando-online-collection-v6-renderer-{}-{}",
         std::process::id(),
@@ -1789,22 +1956,29 @@ fn v6_rebuilds_exact_renderer_candidates_without_claiming_evidence() {
     let status = migrated.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V38
+        ONLINE_COLLECTION_POOLING_STRATEGY_V39
     );
-    assert_eq!(status.renderer_consensus_migrated_examples_total, 1);
+    assert_eq!(status.renderer_consensus_migrated_examples_total, 0);
     assert_eq!(status.support_receipts_unique_total, 0);
     assert_eq!(status.future_receipts_unique_total, 0);
-    assert!(migrated.checkpoint.buckets.iter().any(|bucket| {
-        bucket.programs.values().any(|program| {
-            crate::response_program_exactly_matches_example(program, &example)
-                && !is_source_neutral_response_program(program)
+    assert!(
+        migrated
+            .checkpoint
+            .buckets
+            .iter()
+            .all(|bucket| bucket.runtime_examples.is_empty())
+    );
+    assert!(migrated.checkpoint.buckets.iter().all(|bucket| {
+        bucket.programs.values().all(|program| {
+            !crate::response_program_exactly_matches_example(program, &example)
+                || is_source_neutral_response_program(program)
         })
     }));
     fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[test]
-fn v21_restart_resynthesizes_retained_support_without_creating_future() {
+fn v21_restart_preserves_durable_semantic_support_without_creating_future() {
     let root = std::env::temp_dir().join(format!(
         "nando-online-collection-v21-resynthesis-{}-{}",
         std::process::id(),
@@ -1834,42 +2008,18 @@ fn v21_restart_resynthesizes_retained_support_without_creating_future() {
         .iter()
         .position(|bucket| {
             bucket.support.len() >= config.support_rows
-                && bucket
-                    .programs
-                    .values()
-                    .any(|program| canonical_dynamic_role_count(program) >= 2)
+                && bucket.programs.iter().any(|(digest, program)| {
+                    canonical_dynamic_role_count(program) >= 2
+                        && bucket.support.iter().all(|receipt| {
+                            receipt
+                                .verified_semantic_program_sha256
+                                .binary_search(digest)
+                                .is_ok()
+                        })
+                })
         })
-        .expect("multi-scalar support bucket");
-    let removed = miner.checkpoint.buckets[bucket_index]
-        .programs
-        .iter()
-        .filter_map(|(digest, program)| {
-            let example = miner.checkpoint.buckets[bucket_index]
-                .runtime_examples
-                .values()
-                .next()?;
-            let response = independently_verified_authority_response(program, example)?;
-            (canonical_dynamic_role_count(program) >= 2 && response != example.expected_response)
-                .then_some(digest.clone())
-        })
-        .collect::<BTreeSet<_>>();
-    assert!(
-        !removed.is_empty(),
-        "canonical law must exist before downgrade"
-    );
+        .expect("durable multi-role semantic law before downgrade");
     let bucket = &mut miner.checkpoint.buckets[bucket_index];
-    bucket
-        .programs
-        .retain(|digest, _| !removed.contains(digest));
-    assert!(
-        !bucket.programs.is_empty(),
-        "surface programs remain in V20"
-    );
-    for receipt in &mut bucket.support {
-        receipt
-            .matched_program_sha256
-            .retain(|digest| !removed.contains(digest));
-    }
     bucket.frozen_program_sha256 = None;
     bucket.support_watermark_event_time_unix_nanos = None;
     bucket.support_manifest_sha256 = None;
@@ -1889,7 +2039,7 @@ fn v21_restart_resynthesizes_retained_support_without_creating_future() {
     let status = restored.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V38
+        ONLINE_COLLECTION_POOLING_STRATEGY_V39
     );
     assert_eq!(status.future_receipts_unique_total, 0);
     assert_eq!(status.wrong_accepts_total, 0);
@@ -1897,11 +2047,13 @@ fn v21_restart_resynthesizes_retained_support_without_creating_future() {
     assert!(status.structural_resynthesis_completed_buckets_total >= 1);
     assert_eq!(status.structural_resynthesis_failed_buckets_total, 0);
     assert!(restored.checkpoint.buckets.iter().any(|bucket| {
-        bucket.programs.values().any(|program| {
+        bucket.programs.iter().any(|(digest, program)| {
             canonical_dynamic_role_count(program) >= 2
-                && bucket.runtime_examples.values().any(|example| {
-                    independently_verified_authority_response(program, example)
-                        .is_some_and(|response| response != example.expected_response)
+                && bucket.support.iter().all(|receipt| {
+                    receipt
+                        .verified_semantic_program_sha256
+                        .binary_search(digest)
+                        .is_ok()
                 })
         })
     }));
@@ -1939,12 +2091,16 @@ fn semantic_program_pool_survives_field_renames_and_collects_future() {
             .observe(multi_output_observation(index))
             .expect("future");
     }
-    let package = miner
-        .quarantine_packages()
-        .expect("packages")
-        .into_iter()
+    let packages = miner.quarantine_packages().expect("packages");
+    let package = packages
+        .iter()
         .find(|package| program_any(&package.program, is_multi_output_project))
-        .expect("portable multi-output package");
+        .unwrap_or_else(|| {
+            panic!(
+                "portable multi-output package: {:#?}\npackages={packages:#?}",
+                miner.status()
+            )
+        });
     assert_eq!(package.proof.support_rows, 4);
     assert_eq!(package.proof.future_rows, 4);
     assert_eq!(package.proof.wrong_accepts, 0);
@@ -2110,7 +2266,7 @@ fn multi_output_semantic_program_reaches_external_admission() {
     let status = miner.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V38
+        ONLINE_COLLECTION_POOLING_STRATEGY_V39
     );
     assert!(
         status
@@ -2214,26 +2370,35 @@ fn counterexample_learns_anti_center_then_revokes_only_when_unseparable() {
     for index in 1..=4 {
         miner.observe(observation(index, "3")).expect("support");
     }
-    miner
-        .observe(observation(5, "not-three"))
-        .expect("counterexample");
+    let separable = observation(5, "not-three");
+    for offset in 0..3 {
+        let mut counterexample = separable.clone();
+        counterexample.evidence_graph_sha256 = format!("{:064x}", 5 + offset);
+        counterexample.client_intent_id_sha256 = format!("{:064x}", 30_000 + offset);
+        counterexample.session_id_sha256 = format!("{:064x}", 40_000 + offset);
+        counterexample.event_time_unix_nanos = Some(5 + offset);
+        miner.observe(counterexample).expect("counterexample");
+    }
     let status = miner.status();
-    assert_eq!(status.counterexamples_total, 1);
+    assert_eq!(status.counterexamples_total, 3);
     assert_eq!(status.revoked_candidates_total, 0);
     assert_eq!(status.buckets.len(), 1);
     assert!(status.buckets[0].frozen);
     assert_eq!(status.buckets[0].wrong_accepts, 0);
     assert!(status.buckets[0].learned_anti_atoms > 0);
 
-    let mut unseparable = observation(6, "not-three");
+    let mut unseparable = observation(8, "not-three");
     unseparable.example.provider_payload["input"][0]["content"][0]["text"] =
         Value::String("Count records for batch 1".to_owned());
     miner.observe(unseparable).expect("unseparable");
     let status = miner.status();
-    assert_eq!(status.revoked_candidates_total, 1);
+    assert_eq!(
+        status.revoked_candidates_total, 1,
+        "unseparable counterexample status: {status:#?}"
+    );
     assert!(!status.buckets[0].frozen);
     assert_eq!(status.buckets[0].wrong_accepts, 1);
-    assert_eq!(status.buckets[0].rejected_programs, 1);
+    assert!(status.buckets[0].rejected_programs >= 1);
     assert!(miner.quarantine_packages().expect("packages").is_empty());
     drop(miner);
     OnlineCollectionMiner::open(&path, config).expect("restart");

@@ -67,7 +67,7 @@ use nando_transition_inducer::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
@@ -80,6 +80,9 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 const RESPONSE_PACKAGE_CPU_COUNTER_CAPACITY: usize = 2_048;
+const OBSERVATION_DEDUPE_CAPACITY: usize = 65_536;
+const OBSERVATION_TRACE_SEGMENT_BYTES: u64 = 64 * 1024 * 1024;
+const OBSERVATION_TRACE_SEGMENTS: usize = 4;
 
 use custom_tool_projection::{
     parse_actor_custom_tool_call, responses_projection as custom_tool_responses_projection,
@@ -455,7 +458,33 @@ struct ResponsePackageCpuCounters {
 
 struct ObservationStore {
     trace_path: PathBuf,
-    ids: Mutex<BTreeSet<[u8; 32]>>,
+    ids: Mutex<ObservationIds>,
+    writer: Mutex<()>,
+}
+
+#[derive(Default)]
+struct ObservationIds {
+    digests: BTreeSet<[u8; 32]>,
+    insertion_order: VecDeque<[u8; 32]>,
+}
+
+impl ObservationIds {
+    fn insert(&mut self, digest: [u8; 32]) -> bool {
+        if !self.digests.insert(digest) {
+            return false;
+        }
+        self.insertion_order.push_back(digest);
+        while self.insertion_order.len() > OBSERVATION_DEDUPE_CAPACITY {
+            if let Some(expired) = self.insertion_order.pop_front() {
+                self.digests.remove(&expired);
+            }
+        }
+        true
+    }
+
+    fn contains(&self, digest: &[u8; 32]) -> bool {
+        self.digests.contains(digest)
+    }
 }
 
 #[derive(Deserialize)]
@@ -466,7 +495,7 @@ struct TraceIdOnly<'a> {
 
 impl ObservationStore {
     fn load(trace_path: PathBuf) -> Result<Self, String> {
-        let mut ids = BTreeSet::new();
+        let mut ids = ObservationIds::default();
         if trace_path.exists() {
             let mut file = fs::File::open(&trace_path)
                 .map_err(|error| format!("trace_open:{}:{error}", trace_path.display()))?;
@@ -497,22 +526,77 @@ impl ObservationStore {
         Ok(Self {
             trace_path,
             ids: Mutex::new(ids),
+            writer: Mutex::new(()),
         })
     }
 
     fn append(&self, trace_id: &str, row: &Value) -> Result<bool, String> {
-        let mut ids = self
-            .ids
+        let mut bytes =
+            serde_json::to_vec(row).map_err(|error| format!("trace_json_encode:{error}"))?;
+        bytes.push(b'\n');
+        let _writer = self
+            .writer
             .lock()
-            .map_err(|_| "trace_id_lock_poisoned".to_owned())?;
+            .map_err(|_| "trace_writer_lock_poisoned".to_owned())?;
         let trace_id_digest = trace_id_digest(trace_id);
-        if ids.contains(&trace_id_digest) {
-            return Ok(false);
+        {
+            let mut ids = self
+                .ids
+                .lock()
+                .map_err(|_| "trace_id_lock_poisoned".to_owned())?;
+            if ids.contains(&trace_id_digest) {
+                return Ok(false);
+            }
+            ids.insert(trace_id_digest);
         }
-        append_json_line(&self.trace_path, row)?;
-        ids.insert(trace_id_digest);
+        if let Err(error) = append_rotating_trace(&self.trace_path, &bytes) {
+            if let Ok(mut ids) = self.ids.lock() {
+                ids.digests.remove(&trace_id_digest);
+                ids.insertion_order
+                    .retain(|digest| digest != &trace_id_digest);
+            }
+            return Err(error);
+        }
         Ok(true)
     }
+}
+
+fn append_rotating_trace(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    ensure_parent(path)?;
+    let current = path.metadata().map_or(0, |metadata| metadata.len());
+    if current > 0
+        && current.saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
+            > OBSERVATION_TRACE_SEGMENT_BYTES
+    {
+        for index in (1..OBSERVATION_TRACE_SEGMENTS).rev() {
+            let source = trace_segment_path(path, index);
+            let destination = trace_segment_path(path, index.saturating_add(1));
+            if source.exists() {
+                fs::rename(&source, &destination)
+                    .map_err(|error| format!("trace_rotate:{}:{error}", source.display()))?;
+            }
+        }
+        let first = trace_segment_path(path, 1);
+        fs::rename(path, &first)
+            .map_err(|error| format!("trace_rotate:{}:{error}", path.display()))?;
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| format!("trace_append_open:{}:{error}", path.display()))?;
+    file.write_all(bytes)
+        .map_err(|error| format!("trace_append_write:{}:{error}", path.display()))?;
+    file.flush()
+        .map_err(|error| format!("trace_append_flush:{}:{error}", path.display()))
+}
+
+fn trace_segment_path(path: &Path, index: usize) -> PathBuf {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    path.with_extension(format!("{extension}.{index}"))
 }
 
 fn trace_id_digest(trace_id: &str) -> [u8; 32] {
@@ -5310,6 +5394,48 @@ mod tests {
     static PROJECT_STATUS_TEST_ID: AtomicU64 = AtomicU64::new(0);
     const STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA: &str =
         "status_projection_external_evidence.v1";
+
+    #[test]
+    fn observation_dedupe_memory_is_bounded() {
+        let mut ids = ObservationIds::default();
+        for value in 0..=OBSERVATION_DEDUPE_CAPACITY {
+            let digest = Sha256::digest(value.to_le_bytes()).into();
+            assert!(ids.insert(digest));
+        }
+        assert_eq!(ids.digests.len(), OBSERVATION_DEDUPE_CAPACITY);
+        assert_eq!(ids.insertion_order.len(), OBSERVATION_DEDUPE_CAPACITY);
+        let expired = Sha256::digest(0_usize.to_le_bytes()).into();
+        let newest = Sha256::digest(OBSERVATION_DEDUPE_CAPACITY.to_le_bytes()).into();
+        assert!(!ids.contains(&expired));
+        assert!(ids.contains(&newest));
+    }
+
+    #[test]
+    fn observation_trace_rotates_before_exceeding_segment_budget() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-observation-trace-rotation-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let path = root.join("observations.jsonl");
+        fs::File::create(&path)
+            .expect("trace")
+            .set_len(OBSERVATION_TRACE_SEGMENT_BYTES)
+            .expect("sparse trace");
+        append_rotating_trace(&path, b"{\"trace_id\":\"next\"}\n").expect("rotate and append");
+        assert_eq!(
+            fs::metadata(&path).expect("current trace").len(),
+            b"{\"trace_id\":\"next\"}\n".len() as u64
+        );
+        assert_eq!(
+            fs::metadata(trace_segment_path(&path, 1))
+                .expect("rotated trace")
+                .len(),
+            OBSERVATION_TRACE_SEGMENT_BYTES
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
 
     fn project_status_registry() -> ResponseRegistry {
         let selector = ResponseValueSelector::JsonField {

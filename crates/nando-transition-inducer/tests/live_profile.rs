@@ -9,8 +9,44 @@ use nando_transition_inducer::a2_lab::{
 };
 use nando_transition_inducer::{
     LivePackageOrigin, LiveProfileRegistry, LiveProfileState, read_package,
+    read_package_artifact_bytes,
 };
 use serde_json::{Value, json};
+
+#[test]
+fn stored_package_accounting_uses_the_persisted_schema() {
+    let fixture = build_a2_live_smoke_fixture().expect("fixture");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/nando-wave/package-accounting-schema-test");
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("package.json");
+    let mut persisted = serde_json::to_value(&fixture.package).expect("package value");
+    persisted
+        .as_object_mut()
+        .expect("package object")
+        .insert("legacy_extension".to_owned(), json!({"version": 1}));
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&persisted).expect("persisted package"),
+    )
+    .expect("package write");
+
+    let stored_bytes = read_package_artifact_bytes(&path).expect("stored artifact bytes");
+    let decoded_bytes = read_package(&path)
+        .expect("current package")
+        .artifact_bytes()
+        .expect("current artifact bytes")
+        .len();
+    assert_eq!(
+        stored_bytes,
+        serde_json::to_vec(&persisted)
+            .expect("canonical persisted bytes")
+            .len()
+    );
+    assert_ne!(stored_bytes, decoded_bytes);
+    fs::remove_dir_all(root).expect("cleanup");
+}
 
 #[test]
 fn imported_smoke_profile_never_promotes_or_executes() {

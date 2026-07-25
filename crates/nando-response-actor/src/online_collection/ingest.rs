@@ -3,7 +3,68 @@
 use super::admission::CollectionAdmissionPreparation;
 use super::*;
 
+fn read_collection_checkpoint_bounded(path: &Path) -> Result<Vec<u8>, String> {
+    let file = File::open(path).map_err(|error| {
+        format!(
+            "online_collection_checkpoint_read:{}:{error}",
+            path.display()
+        )
+    })?;
+    let mut bytes = Vec::new();
+    file.take(MAX_COLLECTION_CHECKPOINT_BYTES.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|error| {
+            format!(
+                "online_collection_checkpoint_read:{}:{error}",
+                path.display()
+            )
+        })?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_COLLECTION_CHECKPOINT_BYTES {
+        return Err("online_collection_checkpoint_too_large".to_owned());
+    }
+    Ok(bytes)
+}
+
+fn acquire_collection_checkpoint_owner(path: &Path) -> Result<File, String> {
+    let lock_path = path.with_extension("owner.lock");
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .open(&lock_path)
+        .map_err(|error| format!("online_collection_checkpoint_owner_open:{error}"))?;
+    file.try_lock()
+        .map_err(|error| format!("online_collection_checkpoint_owned:{error}"))?;
+    Ok(file)
+}
+
 impl OnlineCollectionMiner {
+    pub fn open_read_only(
+        path: impl Into<PathBuf>,
+    ) -> Result<OnlineCollectionReadSnapshot, String> {
+        let path = path.into();
+        let bytes = read_collection_checkpoint_bounded(&path)?;
+        let checkpoint = decode_collection_checkpoint(&bytes)?;
+        if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
+            || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V39
+        {
+            return Err(format!(
+                "online_collection_checkpoint_migration_required:schema={}:pooling_strategy_version={}",
+                checkpoint.schema, checkpoint.pooling_strategy_version
+            ));
+        }
+        validate_checkpoint(&checkpoint, checkpoint.config)?;
+        Ok(OnlineCollectionReadSnapshot {
+            miner: Self {
+                path,
+                checkpoint,
+                _owner_lock: None,
+            },
+        })
+    }
+
     pub fn open(path: impl Into<PathBuf>, config: OnlineCollectionConfig) -> Result<Self, String> {
         validate_config(config)?;
         let path = path.into();
@@ -15,17 +76,13 @@ impl OnlineCollectionMiner {
                 )
             })?;
         }
+        let owner_lock = acquire_collection_checkpoint_owner(&path)?;
         let mut checkpoint = if path.exists() {
-            decode_collection_checkpoint(&fs::read(&path).map_err(|error| {
-                format!(
-                    "online_collection_checkpoint_read:{}:{error}",
-                    path.display()
-                )
-            })?)?
+            decode_collection_checkpoint(&read_collection_checkpoint_bounded(&path)?)?
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V38,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V39,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -385,12 +442,23 @@ impl OnlineCollectionMiner {
             }
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V38;
         }
+        let semantic_receipt_channel_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V39;
+        if semantic_receipt_channel_migrated {
+            // Empty semantic channels are omitted from serialization, so V38
+            // support/freeze commitments remain byte-stable during migration.
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V39;
+        }
         let adaptive_phase_seed_repaired = repair_empty_adaptive_phase_seeds(&mut checkpoint);
         let adaptive_frozen_routing_repaired =
             repair_adaptive_frozen_routing_atoms(&mut checkpoint)?;
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
-        let mut miner = Self { path, checkpoint };
+        let mut miner = Self {
+            path,
+            checkpoint,
+            _owner_lock: Some(owner_lock),
+        };
         if replayable_support_revalidated {
             miner.revalidate_replayable_support_buffered()?;
         }
@@ -425,6 +493,7 @@ impl OnlineCollectionMiner {
             || adaptive_identification_migrated
             || legacy_frozen_adaptive_migrated
             || capture_bound_adaptive_generation_migrated
+            || semantic_receipt_channel_migrated
             || adaptive_phase_seed_repaired
             || adaptive_frozen_routing_repaired;
         if checkpoint_migrated {
@@ -467,7 +536,10 @@ impl OnlineCollectionMiner {
                     })
                     .map(|(index, _)| index)
                     .collect::<Vec<_>>()
-            } else if legacy_frozen_adaptive_migrated {
+            } else if legacy_frozen_adaptive_migrated
+                && miner.checkpoint.config.proof_mode
+                    == OnlineCollectionProofMode::AdaptiveVersionSpace
+            {
                 Vec::new()
             } else if pre_v17_migrated {
                 (0..miner.checkpoint.buckets.len()).collect::<Vec<_>>()
@@ -524,7 +596,14 @@ impl OnlineCollectionMiner {
     }
 
     pub fn observe(&mut self, observation: OnlineCollectionObservation) -> Result<(), String> {
-        self.observe_with_persistence(observation, true, false)
+        let checkpoint_before = self.checkpoint.clone();
+        match self.observe_with_persistence(observation, true, false) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.checkpoint = checkpoint_before;
+                Err(error)
+            }
+        }
     }
 
     pub fn observe_buffered(
@@ -743,15 +822,21 @@ impl OnlineCollectionMiner {
                 let has_retained_match = receipt
                     .matched_program_sha256
                     .iter()
+                    .chain(&receipt.verified_semantic_program_sha256)
                     .any(|digest| bucket.programs.contains_key(digest));
                 for (digest, program) in &bucket.programs {
-                    if !receipt.matched_program_sha256.contains(digest)
-                        && (!structural_only
-                            || !has_retained_match
-                            || canonical_dynamic_role_count(program) >= 2)
-                        && independently_verified_teacher_match(program, example)
+                    if (!structural_only
+                        || !has_retained_match
+                        || canonical_dynamic_role_count(program) >= 2)
+                        && let Ok(response) =
+                            independently_verified_authority_response_result(program, example)
                     {
-                        links.push((receipt_index, digest.clone()));
+                        let exact = response == example.expected_response;
+                        if (exact && !receipt.matched_program_sha256.contains(digest))
+                            || !receipt.verified_semantic_program_sha256.contains(digest)
+                        {
+                            links.push((receipt_index, digest.clone(), exact));
+                        }
                     }
                 }
             }
@@ -760,14 +845,20 @@ impl OnlineCollectionMiner {
         let links_added = u64::try_from(links.len()).unwrap_or(u64::MAX);
         if !links.is_empty() {
             let bucket = &mut self.checkpoint.buckets[index];
-            for (receipt_index, digest) in links {
-                bucket.support[receipt_index]
-                    .matched_program_sha256
-                    .push(digest);
+            for (receipt_index, digest, exact) in links {
+                let receipt = &mut bucket.support[receipt_index];
+                receipt
+                    .verified_semantic_program_sha256
+                    .push(digest.clone());
+                if exact {
+                    receipt.matched_program_sha256.push(digest);
+                }
             }
             for receipt in &mut bucket.support {
                 receipt.matched_program_sha256.sort();
                 receipt.matched_program_sha256.dedup();
+                receipt.verified_semantic_program_sha256.sort();
+                receipt.verified_semantic_program_sha256.dedup();
             }
         }
         self.normalize_bucket_receipts(index);
@@ -1559,6 +1650,12 @@ impl OnlineCollectionMiner {
                     receipt
                         .matched_program_sha256
                         .retain(|digest| selected_programs.contains(digest));
+                    receipt
+                        .verified_semantic_program_sha256
+                        .retain(|digest| selected_programs.contains(digest));
+                    receipt
+                        .matched_program_dynamic_value_root_sha256
+                        .retain(|digest, _| selected_programs.contains(digest));
                 }
                 for (digest, example) in other.runtime_examples {
                     bucket.runtime_examples.entry(digest).or_insert(example);
