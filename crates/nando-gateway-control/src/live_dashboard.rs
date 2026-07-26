@@ -1,18 +1,18 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.25-b011";
+const DASHBOARD_BUILD: &str = "2026.07.26-b012";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
-    pub(crate) total_tokens: u64,
-    pub(crate) miner_tokens: u64,
-    pub(crate) cpu_tokens: u64,
-    pub(crate) current_epoch_total_tokens: u64,
-    pub(crate) current_epoch_cpu_tokens: u64,
-    pub(crate) verified_window_total_tokens: u64,
-    pub(crate) verified_window_cpu_tokens: u64,
+    pub(crate) epoch_total_tokens: u64,
+    pub(crate) epoch_cpu_tokens: u64,
+    pub(crate) miner_window_total_tokens: u64,
+    pub(crate) miner_window_cpu_tokens: u64,
+    pub(crate) miner_window_unresolved_tokens: u64,
     pub(crate) optimistic_upper_bound_tokens: u64,
+    pub(crate) legacy_total_tokens: u64,
+    pub(crate) legacy_cpu_tokens: u64,
     pub(crate) cpu_allowed: bool,
 }
 
@@ -122,10 +122,10 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
 }
 
 pub(crate) fn render(initial: InitialMetrics) -> String {
-    let cumulative_cpu = format!(
-        "НАКОПИТЕЛЬНО: {} / {}",
-        format_number(initial.cpu_tokens),
-        format_number(initial.total_tokens),
+    let epoch_cpu = format!(
+        "ПРОВЕРЕНО: {} / {}",
+        format_number(initial.epoch_cpu_tokens),
+        format_number(initial.epoch_total_tokens),
     );
     let (
         pipeline_title,
@@ -141,7 +141,7 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         (
             "МАРШРУТ ДО CPU",
             "good",
-            cumulative_cpu,
+            epoch_cpu,
             "good",
             "OPEN",
             "good",
@@ -164,58 +164,44 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
     };
     TEMPLATE
         .replace("__DASHBOARD_BUILD__", DASHBOARD_BUILD)
-        .replace("__TOTAL__", &format_number(initial.total_tokens))
-        .replace("__MINER__", &format_number(initial.miner_tokens))
-        .replace("__CPU__", &format_number(initial.cpu_tokens))
         .replace(
-            "__MINER_SHARE__",
-            &format_percent(initial.miner_tokens, initial.total_tokens, 2),
+            "__EPOCH_TOTAL__",
+            &format_number(initial.epoch_total_tokens),
+        )
+        .replace("__EPOCH_CPU__", &format_number(initial.epoch_cpu_tokens))
+        .replace(
+            "__EPOCH_CPU_SHARE__",
+            &format_percent(initial.epoch_cpu_tokens, initial.epoch_total_tokens, 1),
         )
         .replace(
-            "__CPU_SHARE__",
-            &format_percent(initial.cpu_tokens, initial.total_tokens, 3),
+            "__MINER_TOTAL__",
+            &format_number(initial.miner_window_total_tokens),
         )
         .replace(
-            "__CUMULATIVE_VALUES__",
+            "__MINER_CPU_VALUES__",
             &format!(
                 "{} / {}",
-                format_number(initial.cpu_tokens),
-                format_number(initial.total_tokens)
+                format_number(initial.miner_window_cpu_tokens),
+                format_number(initial.miner_window_total_tokens)
             ),
         )
         .replace(
-            "__CUMULATIVE_SHARE__",
-            &format_percent(initial.cpu_tokens, initial.total_tokens, 1),
-        )
-        .replace(
-            "__EPOCH_VALUES__",
-            &format!(
-                "{} / {}",
-                format_number(initial.current_epoch_cpu_tokens),
-                format_number(initial.current_epoch_total_tokens)
-            ),
-        )
-        .replace(
-            "__EPOCH_SHARE__",
+            "__MINER_CPU_SHARE__",
             &format_percent(
-                initial.current_epoch_cpu_tokens,
-                initial.current_epoch_total_tokens,
+                initial.miner_window_cpu_tokens,
+                initial.miner_window_total_tokens,
                 1,
             ),
         )
         .replace(
-            "__WINDOW_VALUES__",
-            &format!(
-                "{} / {}",
-                format_number(initial.verified_window_cpu_tokens),
-                format_number(initial.verified_window_total_tokens)
-            ),
+            "__MINER_UNRESOLVED__",
+            &format_number(initial.miner_window_unresolved_tokens),
         )
         .replace(
-            "__WINDOW_SHARE__",
+            "__MINER_UNRESOLVED_SHARE__",
             &format_percent(
-                initial.verified_window_cpu_tokens,
-                initial.verified_window_total_tokens,
+                initial.miner_window_unresolved_tokens,
+                initial.miner_window_total_tokens,
                 1,
             ),
         )
@@ -224,15 +210,23 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
             &format!(
                 "{} / {}",
                 format_number(initial.optimistic_upper_bound_tokens),
-                format_number(initial.verified_window_total_tokens)
+                format_number(initial.miner_window_total_tokens)
             ),
         )
         .replace(
             "__CEILING_SHARE__",
             &format_percent(
                 initial.optimistic_upper_bound_tokens,
-                initial.verified_window_total_tokens,
+                initial.miner_window_total_tokens,
                 1,
+            ),
+        )
+        .replace(
+            "__LEGACY_VALUES__",
+            &format!(
+                "{} вход / {} CPU",
+                format_number(initial.legacy_total_tokens),
+                format_number(initial.legacy_cpu_tokens)
             ),
         )
         .replace("__PIPELINE_TITLE__", pipeline_title)
@@ -322,6 +316,19 @@ const TEMPLATE: &str = r#"
 .scope-share { display:block; margin-top:5px; color:var(--green); font-size:22px; font-weight:800; }
 .scope-note { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.35; }
 .scope-metric.ceiling .scope-share { color:var(--amber); }
+.scope-metric.unresolved .scope-share { color:var(--amber); }
+.legacy-strip { display:flex; justify-content:center; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 24px; border-top:1px solid var(--line); color:var(--muted); text-align:center; font-size:12px; font-weight:700; }
+.legacy-strip b { color:#dce2e6; }
+.legacy-warning { color:var(--red); }
+.ms3-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.ms3-cell { min-width:0; padding:14px 18px; border-right:1px solid var(--line); }
+.ms3-cell:last-child { border-right:0; }
+.ms3-label { color:var(--muted); font-size:11px; font-weight:800; }
+.ms3-value { margin-top:7px; color:var(--cyan); font-size:15px; font-weight:800; overflow-wrap:anywhere; }
+.ms3-value.good { color:var(--green); }
+.ms3-value.watch { color:var(--amber); }
+.ms3-value.locked { color:var(--red); }
+.ms3-note { margin-top:11px; color:var(--muted); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
 .epoch-strip { display:flex; justify-content:center; gap:24px; align-items:center; flex-wrap:wrap; padding:15px 24px; border-bottom:1px solid var(--line); color:#d8dde1; text-align:center; font-size:14px; font-weight:700; }
 .epoch-strip b,.epoch-visibility { color:var(--green); }
 .window-head { display:flex; justify-content:space-between; gap:20px; align-items:baseline; margin-bottom:12px; }
@@ -384,6 +391,10 @@ const TEMPLATE: &str = r#"
   .scope-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .scope-metric:nth-child(2) { border-right:0; }
   .scope-metric:nth-child(-n+2) { border-bottom:1px solid var(--line); }
+  .ms3-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ms3-cell { border-bottom:1px solid var(--line); }
+  .ms3-cell:nth-child(2n) { border-right:0; }
+  .ms3-cell:last-child { grid-column:1 / -1; border-bottom:0; }
   .window-head,.live-foot .live-inner { align-items:flex-start; flex-direction:column; gap:8px; }
 }
 @media (max-width:560px) {
@@ -395,6 +406,9 @@ const TEMPLATE: &str = r#"
   .scope-grid { grid-template-columns:1fr; }
   .scope-metric,.scope-metric:first-child,.scope-metric:last-child { padding:13px 0; border-right:0; border-bottom:1px solid var(--line); }
   .scope-metric:last-child { border-bottom:0; }
+  .ms3-grid { grid-template-columns:1fr; }
+  .ms3-cell,.ms3-cell:last-child { grid-column:auto; padding:12px 0; border-right:0; border-bottom:1px solid var(--line); }
+  .ms3-cell:last-child { border-bottom:0; }
   .epoch-strip { padding:13px 12px; font-size:12px; }
   .window-scroll { max-height:430px; overflow-y:auto; overflow-x:visible; scrollbar-gutter:auto; }
   .pipeline-scroll { overflow-x:visible; }
@@ -426,23 +440,36 @@ const TEMPLATE: &str = r#"
     <div class="live-clock"><b>LIVE</b> · обновлено <span id="live-age">0</span> с назад · SERVICES <span id="services-count">—/3</span></div>
   </div></header>
   <section class="live-band"><div class="live-inner">
-    <h2 class="band-title">ОБРАБОТКА ТОКЕНОВ</h2>
+    <h2 class="band-title">РЕАЛЬНАЯ ОБРАБОТКА · ТЕКУЩАЯ ТОЧНАЯ V4-ЭПОХА</h2>
     <div class="token-tracks">
-      <article class="token-track"><div class="track-label">ВХОД NANDO · ЗА ВСЁ ВРЕМЯ</div><div class="track-value-row"><output id="total-token-count" class="track-value">__TOTAL__</output><span class="track-share">100%</span></div><div class="track-rail"><div id="total-bar" class="track-fill" style="width:100%"></div></div><div class="track-note">НАКОПИТЕЛЬНЫЙ ЗНАМЕНАТЕЛЬ</div></article>
-      <article class="token-track track-miner"><div class="track-label">ВИДИТ МАЙНЕР · ТЕКУЩИЙ КОРПУС</div><div class="track-value-row"><output id="miner-token-count" class="track-value">__MINER__</output><output id="miner-token-share" class="track-share">__MINER_SHARE__</output></div><div class="track-rail"><div id="miner-bar" class="track-fill"></div></div><div id="miner-epoch" class="track-note good">МОСТ: ЗАГРУЗКА</div></article>
-      <article class="token-track track-cpu"><div class="track-label">CPU · ЗА ВСЁ ВРЕМЯ</div><div class="track-value-row"><output id="cpu-token-count" class="track-value">__CPU__</output><output id="cpu-token-share" class="track-share">__CPU_SHARE__</output></div><div class="track-rail"><div id="cpu-bar" class="track-fill"></div></div><div id="cpu-note" class="track-note __CPU_NOTE_CLASS__">__CPU_NOTE__</div></article>
+      <article class="token-track"><div class="track-label">ВХОД NANDO · REQUEST_EVENT.V1</div><div class="track-value-row"><output id="epoch-total-token-count" class="track-value">__EPOCH_TOTAL__</output><span class="track-share">100%</span></div><div class="track-rail"><div class="track-fill" style="width:100%"></div></div><div id="epoch-accounting-note" class="track-note">ТОЧНЫЙ LOCAL O200K УЧЁТ</div></article>
+      <article class="token-track track-cpu"><div class="track-label">ПРОВЕРЕНО И ИСПОЛНЕНО НА CPU</div><div class="track-value-row"><output id="epoch-cpu-token-count" class="track-value">__EPOCH_CPU__</output><output id="epoch-cpu-token-share" class="track-share">__EPOCH_CPU_SHARE__</output></div><div class="track-rail"><div id="epoch-cpu-bar" class="track-fill"></div></div><div id="cpu-note" class="track-note __CPU_NOTE_CLASS__">__CPU_NOTE__</div></article>
+      <article class="token-track track-cpu"><div class="track-label">РЕАЛЬНАЯ CPU-ДОЛЯ V4</div><div class="track-value-row"><output id="epoch-share-large" class="track-value">__EPOCH_CPU_SHARE__</output><span class="track-share">CPU / ВХОД</span></div><div class="track-rail"><div id="epoch-share-bar" class="track-fill"></div></div><div id="epoch-start-note" class="track-note">ОДИН ЗНАМЕНАТЕЛЬ · ОДНА IDENTITY DOMAIN</div></article>
     </div>
   </div></section>
   <section class="live-band"><div class="live-inner">
-    <h2 class="band-title">КАКОЙ ИМЕННО ПРОЦЕНТ ПОКАЗАН</h2>
+    <h2 class="band-title">ОТДЕЛЬНОЕ ОКНО МАЙНЕРА · НЕ ДЕЛИТЬ НА V4 ИЛИ LEGACY</h2>
     <div class="scope-grid">
-      <div class="scope-metric"><div class="scope-label">ЗА ВСЁ ВРЕМЯ</div><div id="scope-cumulative-values" class="scope-value">__CUMULATIVE_VALUES__</div><output id="scope-cumulative-share" class="scope-share">__CUMULATIVE_SHARE__</output><div class="scope-note">CPU-токены / весь накопленный вход Nando</div></div>
-      <div class="scope-metric"><div class="scope-label">ТЕКУЩАЯ ЭПОХА</div><div id="scope-epoch-values" class="scope-value">__EPOCH_VALUES__</div><output id="scope-epoch-share" class="scope-share">__EPOCH_SHARE__</output><div class="scope-note">CPU-токены / вход после начала текущего accounting epoch</div></div>
-      <div class="scope-metric"><div class="scope-label">ТЕКУЩЕЕ ПРОВЕРЕННОЕ ОКНО</div><div id="scope-window-values" class="scope-value">__WINDOW_VALUES__</div><output id="scope-window-share" class="scope-share">__WINDOW_SHARE__</output><div class="scope-note">доказанно исполнимые токены / корпус текущего окна</div></div>
-      <div class="scope-metric ceiling"><div class="scope-label">ОПТИМИСТИЧНЫЙ ПОТОЛОК</div><div id="scope-ceiling-values" class="scope-value">__CEILING_VALUES__</div><output id="scope-ceiling-share" class="scope-share">__CEILING_SHARE__</output><div class="scope-note">потенциально исполнимо; это не подтверждённая экономия</div></div>
+      <div class="scope-metric"><div class="scope-label">КОРПУС МАЙНЕРА</div><div id="miner-window-total" class="scope-value">__MINER_TOTAL__</div><output class="scope-share">100%</output><div id="miner-window-start" class="scope-note">СВОЙ WATERMARK И ПЕРИОД</div></div>
+      <div class="scope-metric"><div class="scope-label">CPU_VERIFIED В КОРПУСЕ</div><div id="miner-window-cpu-values" class="scope-value">__MINER_CPU_VALUES__</div><output id="miner-window-cpu-share" class="scope-share">__MINER_CPU_SHARE__</output><div class="scope-note">подтверждённые CPU intents внутри этого корпуса</div></div>
+      <div class="scope-metric unresolved"><div class="scope-label">ЕЩЁ НЕ РАЗРЕШЕНО</div><div id="miner-unresolved-values" class="scope-value">__MINER_UNRESOLVED__</div><output id="miner-unresolved-share" class="scope-share">__MINER_UNRESOLVED_SHARE__</output><div class="scope-note">классы без доказанного CPU-оператора</div></div>
+      <div class="scope-metric ceiling"><div class="scope-label">ТЕОРЕТИЧЕСКИЙ ПОТОЛОК</div><div id="scope-ceiling-values" class="scope-value">__CEILING_VALUES__</div><output id="scope-ceiling-share" class="scope-share">__CEILING_SHARE__</output><div class="scope-note">ordinary минус доказанно irreducible; не CPU и не authority</div></div>
     </div>
+    <div id="miner-class-ledger" class="ms3-note">Загрузка классов opportunity…</div>
+    <div class="legacy-strip"><span>АРХИВ V3: <b id="legacy-values">__LEGACY_VALUES__</b></span><span class="legacy-warning">ДРУГАЯ IDENTITY DOMAIN · С V4 НЕ СУММИРУЕТСЯ</span></div>
   </div></section>
-  <div class="epoch-strip"><span>МОСТ: <b>opportunity seq <span id="bridge-pair">— / —</span></b> · токены <span id="bridge-tokens">—</span> · pending <span id="bridge-queue">—</span></span><span id="epoch-visibility" class="epoch-visibility">STRUCTURE —</span></div>
+  <section class="live-band"><div class="live-inner">
+    <h2 class="band-title">ЕСТЕСТВЕННЫЙ ОПЕРАТОР · MS3</h2>
+    <div class="ms3-grid">
+      <div class="ms3-cell"><div class="ms3-label">ЗАКОН</div><div id="ms3-law" class="ms3-value good">FROZEN</div></div>
+      <div class="ms3-cell"><div class="ms3-label">НЕЗАВИСИМЫЕ TOPOLOGY</div><div id="ms3-topologies" class="ms3-value watch">— / 256</div></div>
+      <div class="ms3-cell"><div class="ms3-label">ПРИМЕНИМЫЕ / PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">FUTURE PROOF</div><div id="ms3-future" class="ms3-value watch">НЕ ОЦЕНЕН</div></div>
+      <div class="ms3-cell"><div class="ms3-label">AUTHORITY</div><div id="ms3-authority" class="ms3-value locked">FALSE</div></div>
+    </div>
+    <div id="ms3-note" class="ms3-note">Загрузка frozen future applicability contract…</div>
+  </div></section>
+  <div class="epoch-strip"><span>МОСТ: <b>opportunity seq <span id="bridge-pair">— / —</span></b> · hot process tokens <span id="bridge-tokens">—</span> · pending <span id="bridge-queue">—</span></span><span id="epoch-visibility" class="epoch-visibility">STRUCTURE —</span></div>
   <section class="live-band"><div class="live-inner">
     <h2 id="pipeline-title" class="band-title">__PIPELINE_TITLE__</h2>
     <div class="pipeline-scroll"><div class="pipeline">
@@ -478,6 +505,8 @@ const TEMPLATE: &str = r#"
   const stateClass = (id, value) => { const target = node(id); if (target) target.className = value; };
   const ratio = (part, total, digits) => total > 0 ? `${(part * 100 / total).toFixed(digits).replace(".", ",")}%` : `0,${"0".repeat(digits)}%`;
   const width = (id, part, total) => { const target = node(id); if (target) target.style.width = total > 0 ? `${Math.max(0.25, part * 100 / total)}%` : "0"; };
+  const localTime = (unix) => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short", timeStyle:"medium"}) : "—";
+  const duration = (seconds) => { const value = Math.max(0, seconds); const hours = Math.floor(value / 3600); const minutes = Math.floor((value % 3600) / 60); return `${hours} ч ${minutes} мин`; };
   const routeLabel = (window) => window.route === "nando" ? "NANDO" : window.route === "mixed" ? "СМЕШАННО" : window.route === "outside_nando" ? "ВНЕ NANDO" : "ОЖИДАНИЕ";
   const renderWindows = (snapshot) => {
     text("window-summary", `NANDO ${snapshot.active_nando} / MIXED ${snapshot.active_mixed} / OUTSIDE ${snapshot.active_outside_nando} / IDLE ${snapshot.idle}`);
@@ -504,19 +533,67 @@ const TEMPLATE: &str = r#"
     for (let index = 0; index < 30; index += 1) { const bar = document.createElement("span"); bar.className = "activity-bar"; const value = samples[index] || 0; bar.style.height = `${Math.max(2, value * 36 / max)}px`; bars.appendChild(bar); }
   };
   const renderTokens = (snapshot) => {
-    text("total-token-count", number.format(snapshot.total_input_tokens)); text("miner-token-count", number.format(snapshot.miner_input_tokens)); text("cpu-token-count", number.format(snapshot.cpu_input_tokens));
-    text("miner-token-share", ratio(snapshot.miner_input_tokens, snapshot.total_input_tokens, 2)); text("cpu-token-share", ratio(snapshot.cpu_input_tokens, snapshot.total_input_tokens, 3));
-    width("miner-bar", snapshot.miner_input_tokens, snapshot.total_input_tokens); width("cpu-bar", snapshot.cpu_input_tokens, snapshot.total_input_tokens);
+    const accounting = snapshot.accounting || {};
+    const epochTotal = accounting.input_tokens ?? snapshot.current_epoch_total_input_tokens ?? 0;
+    const epochCpu = accounting.cpu_verified_input_tokens ?? snapshot.current_epoch_cpu_input_tokens ?? 0;
+    text("epoch-total-token-count", number.format(epochTotal));
+    text("epoch-cpu-token-count", number.format(epochCpu));
+    text("epoch-cpu-token-share", ratio(epochCpu, epochTotal, 1));
+    text("epoch-share-large", ratio(epochCpu, epochTotal, 1));
+    text("epoch-accounting-note", `${String(accounting.identity_domain || "UNKNOWN").toUpperCase()} · ${accounting.provider_billed_tokens_available ? "PROVIDER TOKENS" : "LOCAL O200K TOKENS"}`);
+    const completedWindows = Array.isArray(accounting.completed_m3_windows) ? accounting.completed_m3_windows : [];
+    let m3Streak = 0;
+    for (let index = completedWindows.length - 1; index >= 0 && completedWindows[index]?.pass === true; index -= 1) m3Streak += 1;
+    text("epoch-start-note", `ЭПОХА С ${localTime(accounting.epoch_started_at_unix || 0)} · ACCEPTS ${number.format(accounting.actual_local_accepts || 0)} · M3 ${m3Streak}/${accounting.m3_required_consecutive_windows || 3}`);
+    width("epoch-cpu-bar", epochCpu, epochTotal);
+    width("epoch-share-bar", epochCpu, epochTotal);
+
+    const miner = snapshot.miner_window || {};
+    const minerTotal = miner.ordinary_tokens ?? snapshot.verified_window_total_input_tokens ?? 0;
+    const minerCpu = miner.cpu_verified_tokens ?? snapshot.verified_window_cpu_input_tokens ?? 0;
+    const minerUnresolved = miner.unresolved_tokens || 0;
+    const optimisticTokens = miner.optimistic_upper_bound_tokens ?? snapshot.optimistic_upper_bound_tokens ?? 0;
+    text("miner-window-total", number.format(minerTotal));
+    text("miner-window-start", `ОКНО С ${localTime(miner.started_at_unix || 0)} · ОТДЕЛЬНЫЙ WATERMARK`);
+    text("miner-window-cpu-values", `${number.format(minerCpu)} / ${number.format(minerTotal)}`);
+    text("miner-window-cpu-share", ratio(minerCpu, minerTotal, 1));
+    text("miner-unresolved-values", number.format(minerUnresolved));
+    text("miner-unresolved-share", ratio(minerUnresolved, minerTotal, 1));
+    text("scope-ceiling-values", `${number.format(optimisticTokens)} / ${number.format(minerTotal)}`);
+    text("scope-ceiling-share", ratio(optimisticTokens, minerTotal, 1));
+    const classRows = Object.entries(miner.classes || {})
+      .filter(([name]) => name !== "CPU_VERIFIED")
+      .sort((left, right) => (right[1]?.input_tokens || 0) - (left[1]?.input_tokens || 0))
+      .map(([name, row]) => `${name} ${number.format(row?.input_tokens || 0)}`);
+    text("miner-class-ledger", classRows.length > 0 ? `НЕЗАКРЫТЫЕ КЛАССЫ: ${classRows.join(" · ")}` : "НЕЗАКРЫТЫЕ КЛАССЫ: НЕТ ДАННЫХ");
+
+    const legacy = snapshot.legacy_v3 || {};
+    text("legacy-values", `${number.format(legacy.input_tokens || 0)} вход / ${number.format(legacy.cpu_tokens || 0)} CPU`);
+
+    const ms3 = snapshot.ms3 || {};
+    const contract = ms3.contract || {};
+    const independent = ms3.independent_topologies || 0;
+    const limit = contract.max_independent_topologies || 256;
+    const predictions = ms3.predictions_committed || 0;
+    const applicable = Math.max(0, independent - (ms3.structurally_not_applicable || 0));
+    text("ms3-law", contract.frozen_law_contract_root_sha256 ? "UNIQUE LAW FROZEN" : "НЕТ КОНТРАКТА");
+    text("ms3-topologies", `${independent} / ${limit}`);
+    text("ms3-predictions", `${applicable} / ${predictions}`);
+    text("ms3-future", ms3.verdict === "future_pass" ? "PASS" : ms3.verdict === "contradiction" ? "CONTRADICTION" : "НЕ ОЦЕНЕН");
+    text("ms3-authority", ms3.authority_ready ? "TRUE" : "FALSE");
+    stateClass("ms3-law", `ms3-value ${contract.frozen_law_contract_root_sha256 ? "good" : "locked"}`);
+    stateClass("ms3-future", `ms3-value ${ms3.verdict === "future_pass" ? "good" : ms3.verdict === "contradiction" ? "locked" : "watch"}`);
+    stateClass("ms3-authority", `ms3-value ${ms3.authority_ready ? "good" : "locked"}`);
+    text("ms3-note", `${ms3.blocker || "report unavailable"} · неприменимых ${ms3.structurally_not_applicable || 0} · precommit missing ${ms3.precommitted_prediction_missing || 0} · до deadline ${duration((contract.deadline_unix || 0) - Math.floor(Date.now() / 1000))} · phase mutation ${ms3.phase_mutation_allowed ? "TRUE" : "FALSE"}`);
+
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending + bridge.opportunity_inflight; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
-    text("miner-epoch", minerCurrentComplete ? `ДОЛЯ ОТ ВСЕГО ВХОДА · МОСТ 100% · ${number.format(bridge.request_tokens)} ТОКЕНОВ` : structureComparable ? `ДОЛЯ ОТ ВСЕГО ВХОДА · STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : bridgeAvailable ? "STRUCTURE: EPOCH НЕ СОВПАДАЕТ" : "STRUCTURE: HEALTH НЕДОСТУПЕН"); text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
-    const currentEpochTotal = snapshot.current_epoch_total_input_tokens || 0; const currentEpochCpu = snapshot.current_epoch_cpu_input_tokens || 0; const verifiedWindowTotal = snapshot.verified_window_total_input_tokens || 0; const verifiedWindowCpu = snapshot.verified_window_cpu_input_tokens || 0; const optimisticTokens = snapshot.optimistic_upper_bound_tokens || 0;
-    text("scope-cumulative-values", `${number.format(snapshot.cpu_input_tokens)} / ${number.format(snapshot.total_input_tokens)}`); text("scope-cumulative-share", ratio(snapshot.cpu_input_tokens, snapshot.total_input_tokens, 1)); text("scope-epoch-values", `${number.format(currentEpochCpu)} / ${number.format(currentEpochTotal)}`); text("scope-epoch-share", ratio(currentEpochCpu, currentEpochTotal, 1)); text("scope-window-values", `${number.format(verifiedWindowCpu)} / ${number.format(verifiedWindowTotal)}`); text("scope-window-share", ratio(verifiedWindowCpu, verifiedWindowTotal, 1)); text("scope-ceiling-values", `${number.format(optimisticTokens)} / ${number.format(verifiedWindowTotal)}`); text("scope-ceiling-share", ratio(optimisticTokens, verifiedWindowTotal, 1));
+    text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
     const crystallizedInput = snapshot.controller_crystallized_candidates || 0; const crystallizedAdmissible = snapshot.controller_crystallized_admissible_candidates || 0; const crystallizedHeld = snapshot.controller_crystallized_held_candidates || 0; const semanticGuardHeld = snapshot.controller_crystallized_held_semantic_guard_candidates || 0; const generationDelta = snapshot.controller_generation_delta_packages || 0;
     text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-candidate", controllerInput); text("pipe-crystallizer", `ВХОД ${crystallizedInput} · ДОПУЩЕНО ${crystallizedAdmissible} · HELD ${crystallizedHeld}`);
-    text("pipe-package", `DELTA ${generationDelta} · ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? `НАКОПИТЕЛЬНО: ${number.format(snapshot.cpu_input_tokens)} / ${number.format(snapshot.total_input_tokens)}` : "НЕ РАСТЁТ: AUTHORITY LOCKED"); text("pipeline-title", snapshot.cpu_allowed ? "МАРШРУТ ДО CPU" : "ПОЧЕМУ CPU НЕ РАСТЁТ"); text("pipeline-note-label", snapshot.cpu_allowed ? "РАЗВИТИЕ ПОКРЫТИЯ" : "ТЕКУЩИЙ РАЗРЫВ");
+    text("pipe-package", `DELTA ${generationDelta} · ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? `ПРОВЕРЕНО: ${number.format(epochCpu)} / ${number.format(epochTotal)}` : "НЕ РАСТЁТ: AUTHORITY LOCKED"); text("pipeline-title", snapshot.cpu_allowed ? "МАРШРУТ ДО CPU" : "ПОЧЕМУ CPU НЕ РАСТЁТ"); text("pipeline-note-label", snapshot.cpu_allowed ? "РАЗВИТИЕ ПОКРЫТИЯ" : "ТЕКУЩИЙ РАЗРЫВ");
     stateClass("cpu-note", `track-note ${snapshot.cpu_allowed ? "good" : "watch"}`); stateClass("pipeline-note", `blocker ${snapshot.cpu_allowed ? "coverage" : "critical"}`); stateClass("pipe-discovery-step", `pipe-step ${snapshot.admission_ready_cohorts > 0 ? "good" : "watch"}`); stateClass("pipe-candidate-step", `pipe-step ${controllerInput > 0 ? "good" : "watch"}`); stateClass("pipe-crystallizer-step", `pipe-step ${crystallizedAdmissible > 0 ? "good" : crystallizedHeld > 0 ? "watch" : "block"}`); stateClass("pipe-package-step", `pipe-step ${snapshot.response_package_count > 0 ? "good" : "block"}`); stateClass("pipe-admission-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "locked"}`); stateClass("pipe-cpu-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "muted"}`);
     text("blocker-text", semanticGuardHeld > 0 ? `CPU работает на ${snapshot.response_package_count} ACTIVE; ${semanticGuardHeld} кандидат HELD: semantic_applicability_guard_missing; generation delta ${generationDelta}` : controllerInput > 0 && crystallizedInput === 0 ? `ТЕКУЩИЙ РАЗРЫВ: INPUT ${controllerInput} → CRYST 0. Legacy candidate: ${snapshot.controller_blocker}` : controllerInput === 0 ? `discovery → candidate export: ${snapshot.controller_blocker}` : crystallizedInput > 0 && !snapshot.cpu_allowed ? `crystallized operator готов, admission закрыт: ${snapshot.controller_blocker}` : snapshot.cpu_allowed ? "маршрут до CPU открыт" : snapshot.controller_blocker);
     renderActivity(bridge.request_events); lastSuccess = Date.now();
@@ -597,18 +674,19 @@ mod tests {
     #[test]
     fn render_contains_the_selected_signal_first_layout() {
         let html = render(InitialMetrics {
-            total_tokens: 5_948_645_890,
-            miner_tokens: 548_423_296,
-            cpu_tokens: 42_515_297,
-            current_epoch_total_tokens: 200_000_000,
-            current_epoch_cpu_tokens: 48_000_000,
-            verified_window_total_tokens: 135_000_000,
-            verified_window_cpu_tokens: 98_000_000,
+            epoch_total_tokens: 200_000_000,
+            epoch_cpu_tokens: 48_000_000,
+            miner_window_total_tokens: 135_000_000,
+            miner_window_cpu_tokens: 98_000_000,
+            miner_window_unresolved_tokens: 10_000_000,
             optimistic_upper_bound_tokens: 121_000_000,
+            legacy_total_tokens: 5_748_645_890,
+            legacy_cpu_tokens: 42_515_297,
             cpu_allowed: false,
         });
-        assert!(html.contains("ОБРАБОТКА ТОКЕНОВ"));
-        assert!(html.contains("КАКОЙ ИМЕННО ПРОЦЕНТ ПОКАЗАН"));
+        assert!(html.contains("ТЕКУЩАЯ ТОЧНАЯ V4-ЭПОХА"));
+        assert!(html.contains("ОТДЕЛЬНОЕ ОКНО МАЙНЕРА"));
+        assert!(html.contains("ЕСТЕСТВЕННЫЙ ОПЕРАТОР · MS3"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));
         assert!(html.contains("CANDIDATE INPUT"));
         assert!(html.contains("CRYSTALLIZER"));
@@ -616,34 +694,36 @@ mod tests {
         assert!(html.contains("DELTA 0 · ACTIVE 0"));
         assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
         assert!(html.contains("ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С"));
-        assert!(html.contains("5 948 645 890"));
-        assert!(html.contains("9,22%"));
+        assert!(html.contains("200 000 000"));
+        assert!(html.contains("24,0%"));
+        assert!(html.contains("5 748 645 890 вход / 42 515 297 CPU"));
+        assert!(html.contains("С V4 НЕ СУММИРУЕТСЯ"));
         assert!(
             html.find("ПОЧЕМУ CPU НЕ РАСТЁТ").unwrap_or(usize::MAX)
                 < html.find("ЖИВЫЕ ОКНА").unwrap_or(usize::MAX)
         );
-        assert!(html.contains("ТЕКУЩЕЕ ПРОВЕРЕННОЕ ОКНО"));
         assert!(html.contains("72,6%"));
         assert!(html.contains("89,6%"));
+        assert!(!html.contains("ВХОД NANDO · ЗА ВСЁ ВРЕМЯ"));
     }
 
     #[test]
     fn admitted_cpu_route_is_rendered_open_before_the_first_refresh() {
         let html = render(InitialMetrics {
-            total_tokens: 10_000,
-            miner_tokens: 2_000,
-            cpu_tokens: 100,
-            current_epoch_total_tokens: 1_000,
-            current_epoch_cpu_tokens: 240,
-            verified_window_total_tokens: 800,
-            verified_window_cpu_tokens: 600,
+            epoch_total_tokens: 1_000,
+            epoch_cpu_tokens: 240,
+            miner_window_total_tokens: 800,
+            miner_window_cpu_tokens: 600,
+            miner_window_unresolved_tokens: 80,
             optimistic_upper_bound_tokens: 720,
+            legacy_total_tokens: 9_000,
+            legacy_cpu_tokens: 100,
             cpu_allowed: true,
         });
         assert!(html.contains("МАРШРУТ ДО CPU"));
-        assert!(html.contains("class=\"track-note good\">НАКОПИТЕЛЬНО: 100 / 10 000"));
-        assert!(html.contains("id=\"scope-epoch-share\" class=\"scope-share\">24,0%"));
-        assert!(html.contains("id=\"scope-window-share\" class=\"scope-share\">75,0%"));
+        assert!(html.contains("class=\"track-note good\">ПРОВЕРЕНО: 240 / 1 000"));
+        assert!(html.contains("id=\"epoch-cpu-token-share\" class=\"track-share\">24,0%"));
+        assert!(html.contains("id=\"miner-window-cpu-share\" class=\"scope-share\">75,0%"));
         assert!(html.contains("id=\"scope-ceiling-share\" class=\"scope-share\">90,0%"));
         assert!(html.contains("class=\"pipe-step good\"><div class=\"pipe-name\">ADMISSION"));
         assert!(html.contains("class=\"pipe-state\">OPEN"));

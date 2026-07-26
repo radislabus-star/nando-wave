@@ -1,5 +1,5 @@
 use super::model::{
-    FirstNonPass, SIGNAL_PATH_SCHEMA_V1, SafetySnapshot, SignalPathInputs, SignalPathSnapshot,
+    FirstNonPass, SIGNAL_PATH_SCHEMA_V2, SafetySnapshot, SignalPathInputs, SignalPathSnapshot,
     SignalPathStage, StageStatus, TrafficSnapshot,
 };
 use crate::client_connections::ClientConnectionSnapshot;
@@ -98,15 +98,19 @@ pub(super) fn build(inputs: SignalPathInputs) -> SignalPathSnapshot {
         StageStatus::Pass
     };
 
-    let accounting_exact = inputs.total_input_tokens.is_some()
-        && inputs.miner_input_tokens.is_some()
-        && inputs.cpu_input_tokens.is_some();
+    let accounting_exact = inputs.total_input_tokens.is_some() && inputs.cpu_input_tokens.is_some();
     let traffic = TrafficSnapshot {
         accounting_exact,
         nando_input_tokens: inputs.total_input_tokens,
         miner_visible_input_tokens: inputs.miner_input_tokens,
+        miner_cpu_verified_input_tokens: inputs.miner_cpu_verified_input_tokens,
         cpu_input_tokens: inputs.cpu_input_tokens,
-        miner_share_ppm: ratio_ppm(inputs.miner_input_tokens, inputs.total_input_tokens),
+        // The miner corpus and V4 economics start at different watermarks.
+        miner_share_ppm: None,
+        miner_cpu_verified_share_ppm: ratio_ppm(
+            inputs.miner_cpu_verified_input_tokens,
+            inputs.miner_input_tokens,
+        ),
         cpu_share_ppm: ratio_ppm(inputs.cpu_input_tokens, inputs.total_input_tokens),
         accounting_epoch_nando_input_tokens: inputs.accounting_epoch_total_input_tokens,
         accounting_epoch_cpu_input_tokens: inputs.accounting_epoch_cpu_input_tokens,
@@ -116,10 +120,8 @@ pub(super) fn build(inputs: SignalPathInputs) -> SignalPathSnapshot {
         ),
         process_nando_input_tokens: inputs.process_nando_input_tokens,
         process_miner_input_tokens: inputs.process_miner_input_tokens,
-        process_miner_share_ppm: ratio_ppm(
-            Some(inputs.process_miner_input_tokens),
-            Some(inputs.process_nando_input_tokens),
-        ),
+        // Producer and consumer counters reset with their owning process.
+        process_miner_share_ppm: None,
         process_cpu_input_tokens: inputs.process_cpu_input_tokens,
         process_cpu_share_ppm: ratio_ppm(
             Some(inputs.process_cpu_input_tokens),
@@ -130,7 +132,7 @@ pub(super) fn build(inputs: SignalPathInputs) -> SignalPathSnapshot {
     };
 
     SignalPathSnapshot {
-        schema: SIGNAL_PATH_SCHEMA_V1,
+        schema: SIGNAL_PATH_SCHEMA_V2,
         generated_at_unix_ms: inputs.generated_at_unix_ms,
         verdict,
         complete: first_non_pass.is_none(),

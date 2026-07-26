@@ -2,7 +2,7 @@ use crate::client_connections::ClientConnectionSnapshot;
 use serde::Serialize;
 
 // This projection may diagnose an authority path, but it can never mint or widen authority.
-pub(crate) const SIGNAL_PATH_SCHEMA_V1: &str = "nando.signal-path-status.v1";
+pub(crate) const SIGNAL_PATH_SCHEMA_V2: &str = "nando.signal-path-status.v2";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -33,8 +33,10 @@ pub(crate) struct TrafficSnapshot {
     pub(crate) accounting_exact: bool,
     pub(crate) nando_input_tokens: Option<u64>,
     pub(crate) miner_visible_input_tokens: Option<u64>,
+    pub(crate) miner_cpu_verified_input_tokens: Option<u64>,
     pub(crate) cpu_input_tokens: Option<u64>,
     pub(crate) miner_share_ppm: Option<u64>,
+    pub(crate) miner_cpu_verified_share_ppm: Option<u64>,
     pub(crate) cpu_share_ppm: Option<u64>,
     pub(crate) accounting_epoch_nando_input_tokens: Option<u64>,
     pub(crate) accounting_epoch_cpu_input_tokens: Option<u64>,
@@ -191,6 +193,7 @@ pub(crate) struct SignalPathInputs {
     pub(crate) operators: Vec<OperatorSummary>,
     pub(crate) total_input_tokens: Option<u64>,
     pub(crate) miner_input_tokens: Option<u64>,
+    pub(crate) miner_cpu_verified_input_tokens: Option<u64>,
     pub(crate) cpu_input_tokens: Option<u64>,
     pub(crate) accounting_epoch_total_input_tokens: Option<u64>,
     pub(crate) accounting_epoch_cpu_input_tokens: Option<u64>,

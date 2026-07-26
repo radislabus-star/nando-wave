@@ -2,8 +2,8 @@ use super::evaluation;
 use super::model::{OperatorSummary, SignalPathInputs};
 use crate::{
     AppState, COLD_LEARNING_HEALTH_URL, HOT_SERVING_HEALTH_URL, HOT_SERVING_RUNTIME_HEALTH_URL,
-    authorized, exact_current_epoch_token_totals, exact_miner_observed_tokens, exact_token_totals,
-    metric_str, metric_u64, not_found, read_json, read_live_json, read_live_miner_report, unix_now,
+    authorized, exact_current_epoch_token_totals, exact_miner_opportunity, metric_str, metric_u64,
+    not_found, read_json, read_live_json, read_live_miner_report, unix_now,
 };
 use axum::Json;
 use axum::extract::{Path, State};
@@ -39,8 +39,8 @@ pub(crate) async fn control_signal_path(
         .get("economics")
         .filter(|value| value.is_object())
         .unwrap_or(&fallback_economics);
-    let token_totals = exact_token_totals(economics);
-    let accounting_epoch_token_totals = exact_current_epoch_token_totals(economics);
+    let token_totals = exact_current_epoch_token_totals(economics);
+    let miner_opportunity = exact_miner_opportunity(&live, &persisted_miner);
     let bridge = crate::live_dashboard::bridge_view(&hot_health, &cold_health);
     let now_seconds = unix_now();
     let now_millis = unix_now_ms();
@@ -97,10 +97,12 @@ pub(crate) async fn control_signal_path(
         controller_max_age_seconds: state.config.response_controller_report_max_age_seconds,
         operators: active_operator_summaries(&registry, &runtime_health),
         total_input_tokens: token_totals.map(|(total, _)| total),
-        miner_input_tokens: exact_miner_observed_tokens(&live, &persisted_miner),
+        miner_input_tokens: miner_opportunity.map(|value| metric_u64(value, "ordinary_tokens")),
+        miner_cpu_verified_input_tokens: miner_opportunity
+            .map(|value| metric_u64(value, "verified_tokens")),
         cpu_input_tokens: token_totals.map(|(_, cpu)| cpu),
-        accounting_epoch_total_input_tokens: accounting_epoch_token_totals.map(|(total, _)| total),
-        accounting_epoch_cpu_input_tokens: accounting_epoch_token_totals.map(|(_, cpu)| cpu),
+        accounting_epoch_total_input_tokens: token_totals.map(|(total, _)| total),
+        accounting_epoch_cpu_input_tokens: token_totals.map(|(_, cpu)| cpu),
         process_nando_input_tokens: bridge.request_tokens,
         process_miner_input_tokens: bridge.miner_request_tokens,
         process_cpu_input_tokens: metric_u64(

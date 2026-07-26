@@ -30,6 +30,8 @@ const LIVE_MINER_REPORT_URL: &str = "http://127.0.0.1:18789/v2/miner/report";
 const HOT_SERVING_HEALTH_URL: &str = "http://127.0.0.1:18789/health/bridge";
 const HOT_SERVING_RUNTIME_HEALTH_URL: &str = "http://127.0.0.1:18789/health";
 const COLD_LEARNING_HEALTH_URL: &str = "http://127.0.0.1:18790/health/bridge";
+const COLD_MS3_FUTURE_APPLICABILITY_URL: &str =
+    "http://127.0.0.1:18790/v2/multi-source/ms3-future-applicability";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -123,10 +125,10 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         .get("economics")
         .filter(|value| value.is_object())
         .unwrap_or(&economics);
-    let (visible_total_tokens, visible_cpu_tokens) =
-        exact_token_totals(live_economics).unwrap_or((0, 0));
     let (current_epoch_total_tokens, current_epoch_cpu_tokens) =
         exact_current_epoch_token_totals(live_economics).unwrap_or((0, 0));
+    let (legacy_total_tokens, legacy_cpu_tokens) =
+        legacy_prior_epoch_token_totals(live_economics).unwrap_or((0, 0));
     let build_manifest = read_json(&state.config.build_manifest_path);
     let admission_receipt = read_json(&state.config.admission_path);
     let runtime_admission = admission_receipt
@@ -595,17 +597,17 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     );
     let research_architecture = f5_runtime_status::panel_html();
     let live_dashboard = live_dashboard::render(live_dashboard::InitialMetrics {
-        total_tokens: visible_total_tokens,
-        miner_tokens: visible_miner_tokens,
-        cpu_tokens: visible_cpu_tokens,
-        current_epoch_total_tokens,
-        current_epoch_cpu_tokens,
-        verified_window_total_tokens: metric_u64(online_opportunity, "ordinary_tokens"),
-        verified_window_cpu_tokens: metric_u64(online_opportunity, "verified_tokens"),
+        epoch_total_tokens: current_epoch_total_tokens,
+        epoch_cpu_tokens: current_epoch_cpu_tokens,
+        miner_window_total_tokens: visible_miner_tokens,
+        miner_window_cpu_tokens: metric_u64(online_opportunity, "verified_tokens"),
+        miner_window_unresolved_tokens: metric_u64(online_opportunity, "unresolved_tokens"),
         optimistic_upper_bound_tokens: metric_u64(
             online_opportunity,
             "optimistic_executable_upper_bound_tokens",
         ),
+        legacy_total_tokens,
+        legacy_cpu_tokens,
         cpu_allowed: admission.cpu_allowed,
     });
     let body = format!(
@@ -1047,16 +1049,19 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let response_registry = read_json(&state.config.response_registry_path);
     let response_admission_controller =
         read_json(&state.config.response_admission_controller_report_path);
-    let (live, hot_health, cold_health) = tokio::join!(
+    let (live, hot_health, cold_health, ms3_future) = tokio::join!(
         read_live_miner_report(),
         read_live_json(HOT_SERVING_HEALTH_URL),
         read_live_json(COLD_LEARNING_HEALTH_URL),
+        read_live_json(COLD_MS3_FUTURE_APPLICABILITY_URL),
     );
     let economics = live
         .get("economics")
         .filter(|value| value.is_object())
         .unwrap_or(&fallback);
-    let Some((total_input_tokens, cpu_input_tokens)) = exact_token_totals(economics) else {
+    let Some((current_epoch_total_input_tokens, current_epoch_cpu_input_tokens)) =
+        exact_current_epoch_token_totals(economics)
+    else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             [(header::CACHE_CONTROL, "no-store")],
@@ -1064,9 +1069,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         )
             .into_response();
     };
-    let (current_epoch_total_input_tokens, current_epoch_cpu_input_tokens) =
-        exact_current_epoch_token_totals(economics).unwrap_or((0, 0));
-    let Some(miner_input_tokens) = exact_miner_observed_tokens(&live, &persisted_miner) else {
+    let Some(miner_opportunity) = exact_miner_opportunity(&live, &persisted_miner) else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             [(header::CACHE_CONTROL, "no-store")],
@@ -1074,15 +1077,22 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         )
             .into_response();
     };
+    let miner_input_tokens = metric_u64(miner_opportunity, "ordinary_tokens");
+    let miner_verified_tokens = metric_u64(miner_opportunity, "verified_tokens");
+    let miner_unresolved_tokens = metric_u64(miner_opportunity, "unresolved_tokens");
+    let miner_optimistic_tokens = metric_u64(
+        miner_opportunity,
+        "optimistic_executable_upper_bound_tokens",
+    );
+    let (legacy_total_input_tokens, legacy_cpu_input_tokens) =
+        legacy_prior_epoch_token_totals(economics).unwrap_or((0, 0));
     let bridge = live_dashboard::bridge_view(&hot_health, &cold_health);
     let admission = admission_status(&state.config);
     let admission_ready_cohorts = persisted_miner
         .pointer("/miner/admission_ready_cohorts")
         .and_then(Value::as_u64)
         .unwrap_or(0);
-    let online_opportunity = persisted_miner
-        .pointer("/miner/self_training_v2/opportunity")
-        .unwrap_or(&Value::Null);
+    let online_opportunity = miner_opportunity;
     let response_package_count = response_registry
         .get("packages")
         .and_then(Value::as_array)
@@ -1116,14 +1126,67 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         [(header::CACHE_CONTROL, "no-store")],
         Json(json!({
             "available": true,
-            "total_input_tokens": total_input_tokens,
+            "total_input_tokens": current_epoch_total_input_tokens,
             "miner_input_tokens": miner_input_tokens,
-            "cpu_input_tokens": cpu_input_tokens,
+            "cpu_input_tokens": current_epoch_cpu_input_tokens,
             "current_epoch_total_input_tokens": current_epoch_total_input_tokens,
             "current_epoch_cpu_input_tokens": current_epoch_cpu_input_tokens,
-            "verified_window_total_input_tokens": metric_u64(online_opportunity, "ordinary_tokens"),
-            "verified_window_cpu_input_tokens": metric_u64(online_opportunity, "verified_tokens"),
-            "optimistic_upper_bound_tokens": metric_u64(online_opportunity, "optimistic_executable_upper_bound_tokens"),
+            "verified_window_total_input_tokens": miner_input_tokens,
+            "verified_window_cpu_input_tokens": miner_verified_tokens,
+            "optimistic_upper_bound_tokens": miner_optimistic_tokens,
+            "accounting": {
+                "schema": economics.get("schema").and_then(Value::as_str).unwrap_or(""),
+                "identity_domain": economics.get("identity_domain").and_then(Value::as_str).unwrap_or(""),
+                "input_token_accounting": economics.get("input_token_accounting").and_then(Value::as_str).unwrap_or(""),
+                "epoch_started_at_unix": metric_u64(economics, "accounting_epoch_started_at_unix"),
+                "generated_at_unix": metric_u64(economics, "generated_at_unix"),
+                "input_tokens": current_epoch_total_input_tokens,
+                "cpu_verified_input_tokens": current_epoch_cpu_input_tokens,
+                "actual_local_accepts": metric_u64(economics, "actual_local_accepts"),
+                "input_token_saving_share_milli": metric_u64(economics, "input_token_saving_share_milli"),
+                "completed_m3_windows": economics
+                    .get("completed_m3_windows")
+                    .cloned()
+                    .unwrap_or_else(|| json!([])),
+                "m3_required_consecutive_windows": metric_u64(
+                    economics,
+                    "m3_required_consecutive_windows",
+                ),
+                "m3_current_window_pass": economics
+                    .get("m3_current_window_pass")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "product_m3_pass": economics
+                    .get("product_m3_pass")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "exact": true,
+                "provider_billed_tokens_available": economics
+                    .get("provider_billed_token_count_available_for_avoided_calls")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            },
+            "legacy_v3": {
+                "schema": economics.get("display_prior_epoch_schema").and_then(Value::as_str).unwrap_or(""),
+                "input_tokens": legacy_total_input_tokens,
+                "cpu_tokens": legacy_cpu_input_tokens,
+                "composable_with_current": false,
+            },
+            "miner_window": {
+                "schema": online_opportunity.get("schema").and_then(Value::as_str).unwrap_or(""),
+                "started_at_unix": metric_u64(online_opportunity, "window_started_at_unix"),
+                "ordinary_tokens": miner_input_tokens,
+                "cpu_verified_tokens": miner_verified_tokens,
+                "verified_share_milli": metric_u64(online_opportunity, "verified_token_share_milli"),
+                "unresolved_tokens": miner_unresolved_tokens,
+                "optimistic_upper_bound_tokens": miner_optimistic_tokens,
+                "optimistic_upper_bound_share_milli": metric_u64(
+                    online_opportunity,
+                    "optimistic_executable_upper_bound_share_milli",
+                ),
+                "classes": online_opportunity.get("classes").cloned().unwrap_or_else(|| json!({})),
+            },
+            "ms3": ms3_future,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
             "controller_relation_candidates": controller_relation_candidates,
@@ -1303,7 +1366,23 @@ fn exact_current_epoch_token_totals(economics: &Value) -> Option<(u64, u64)> {
     (cpu <= total).then_some((total, cpu))
 }
 
-fn exact_miner_observed_tokens(live: &Value, persisted: &Value) -> Option<u64> {
+fn legacy_prior_epoch_token_totals(economics: &Value) -> Option<(u64, u64)> {
+    if economics
+        .get("display_input_token_accounting_partitioned")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return None;
+    }
+    let (display_total, display_cpu) = exact_token_totals(economics)?;
+    let (current_total, current_cpu) = exact_current_epoch_token_totals(economics)?;
+    Some((
+        display_total.checked_sub(current_total)?,
+        display_cpu.checked_sub(current_cpu)?,
+    ))
+}
+
+fn exact_miner_opportunity<'a>(live: &'a Value, persisted: &'a Value) -> Option<&'a Value> {
     let opportunity = live
         .pointer("/response/self_training_v2/opportunity")
         .filter(|value| value.is_object())
@@ -1316,7 +1395,18 @@ fn exact_miner_observed_tokens(live: &Value, persisted: &Value) -> Option<u64> {
     {
         return None;
     }
-    opportunity.get("ordinary_tokens")?.as_u64()
+    let ordinary = opportunity.get("ordinary_tokens")?.as_u64()?;
+    let verified = opportunity.get("verified_tokens")?.as_u64()?;
+    let optimistic = opportunity
+        .get("optimistic_executable_upper_bound_tokens")?
+        .as_u64()?;
+    (verified <= ordinary && optimistic <= ordinary).then_some(opportunity)
+}
+
+fn exact_miner_observed_tokens(live: &Value, persisted: &Value) -> Option<u64> {
+    exact_miner_opportunity(live, persisted)?
+        .get("ordinary_tokens")?
+        .as_u64()
 }
 
 fn strongest_signal_generation(generations: &[Value]) -> Option<&Value> {
@@ -1621,6 +1711,10 @@ mod tests {
             exact_current_epoch_token_totals(&partitioned),
             Some((100, 5))
         );
+        assert_eq!(
+            legacy_prior_epoch_token_totals(&partitioned),
+            Some((1_000, 125))
+        );
 
         let estimated = json!({
             "schema": "nando.economics-snapshot.v3",
@@ -1639,6 +1733,20 @@ mod tests {
         });
         assert_eq!(exact_token_totals(&impossible), None);
         assert_eq!(exact_current_epoch_token_totals(&impossible), None);
+
+        let inconsistent_partition = json!({
+            "schema": "nando.economics-snapshot.v4",
+            "input_token_accounting_exact": true,
+            "global_input_tokens": 200,
+            "avoided_input_tokens": 20,
+            "display_input_token_accounting_partitioned": true,
+            "display_global_input_tokens": 100,
+            "display_avoided_input_tokens": 10,
+        });
+        assert_eq!(
+            legacy_prior_epoch_token_totals(&inconsistent_partition),
+            None
+        );
     }
 
     #[test]
@@ -1648,6 +1756,8 @@ mod tests {
                 "schema": "nando.opportunity-board.v3",
                 "classification_identity_holds": true,
                 "ordinary_tokens": 497_237_835,
+                "verified_tokens": 42_515_297,
+                "optimistic_executable_upper_bound_tokens": 480_000_000,
             }}}
         });
         assert_eq!(
@@ -1660,6 +1770,8 @@ mod tests {
                 "schema": "nando.opportunity-board.v3",
                 "classification_identity_holds": false,
                 "ordinary_tokens": 497_237_835,
+                "verified_tokens": 42_515_297,
+                "optimistic_executable_upper_bound_tokens": 480_000_000,
             }}}
         });
         assert_eq!(
