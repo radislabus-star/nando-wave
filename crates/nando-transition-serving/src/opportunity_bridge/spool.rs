@@ -124,13 +124,13 @@ where
         if batch.is_empty() {
             return Ok(());
         }
-        for pending in batch {
-            let started = Instant::now();
+        let started = Instant::now();
+        for pending in &batch {
             if let Err(error) = deliver(pending.event.clone()) {
                 return Err(format!("opportunity_bridge_delivery:{error}"));
             }
-            acknowledge_pending(inner, pending, started)?;
         }
+        acknowledge_pending_batch(inner, batch, started)?;
     }
 }
 
@@ -164,24 +164,37 @@ pub(super) fn pending_batch(
     Ok(pending)
 }
 
-pub(super) fn acknowledge_pending(
+pub(super) fn acknowledge_pending_batch(
     inner: &BridgeInner,
-    pending: PendingBridgeEvent,
+    pending: Vec<PendingBridgeEvent>,
     started: Instant,
 ) -> Result<(), String> {
+    if pending.is_empty() {
+        return Err("opportunity_bridge_ack_batch_empty".to_owned());
+    }
     let _guard = inner
         .persist_lock
         .lock()
         .map_err(|_| "opportunity_bridge_persist_lock_poisoned".to_owned())?;
-    let bytes = pending.path.metadata().map_or(0, |metadata| metadata.len());
-    fs::remove_file(&pending.path)
-        .map_err(|error| format!("opportunity_bridge_ack_remove:{error}"))?;
-    saturating_atomic_sub(&inner.spool_files, 1);
-    saturating_atomic_sub(&inner.spool_bytes, bytes);
-    saturating_atomic_sub(&inner.pending_events, 1);
-    saturating_atomic_sub(&inner.pending_bytes, bytes);
-    sync_directory(&inner.pending_dir)?;
-    record_event(&inner.consumer, &pending.event, pending.sequence);
+    for row in pending {
+        let bytes = row.path.metadata().map_or(0, |metadata| metadata.len());
+        if let Err(error) = fs::remove_file(&row.path) {
+            refresh_pending_counters(inner);
+            return Err(format!("opportunity_bridge_ack_remove:{error}"));
+        }
+        saturating_atomic_sub(&inner.spool_files, 1);
+        saturating_atomic_sub(&inner.spool_bytes, bytes);
+        saturating_atomic_sub(&inner.pending_events, 1);
+        saturating_atomic_sub(&inner.pending_bytes, bytes);
+        // Count only an event whose spool file was actually removed. If a
+        // later unlink fails, the durable worker ledger remains authoritative
+        // and the remaining suffix is retried without losing this prefix.
+        record_event(&inner.consumer, &row.event, row.sequence);
+    }
+    if let Err(error) = sync_directory(&inner.pending_dir) {
+        refresh_pending_counters(inner);
+        return Err(error);
+    }
     record_timing(&inner.consumer, started);
     Ok(())
 }
@@ -357,6 +370,25 @@ pub(super) fn next_pending_sequence(directories: &[&Path]) -> Result<u64, String
         }
     }
     Ok(maximum.saturating_add(1).max(1))
+}
+
+pub(super) fn first_pending_sequence(directory: &Path) -> Result<Option<u64>, String> {
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("opportunity_bridge_sequence_read_dir:{error}")),
+    };
+    let mut minimum = None::<u64>;
+    for entry in entries {
+        let path = entry
+            .map_err(|error| format!("opportunity_bridge_sequence_entry:{error}"))?
+            .path();
+        let Ok((sequence, _)) = pending_identity(&path) else {
+            continue;
+        };
+        minimum = Some(minimum.map_or(sequence, |current| current.min(sequence)));
+    }
+    Ok(minimum)
 }
 
 pub(super) fn event_file_name(sequence: u64, digest: &str) -> String {

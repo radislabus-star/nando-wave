@@ -30,10 +30,12 @@ pub(super) struct CompactOpportunityStatusV2 {
     pub(super) producer_request_input_tokens: u64,
     pub(super) producer_last_sequence: u64,
     pub(super) producer_durable_sequence: u64,
+    pub(super) producer_counter_started_after_sequence: u64,
     pub(super) consumer_events: u64,
     pub(super) consumer_request_events: u64,
     pub(super) consumer_request_input_tokens: u64,
     pub(super) consumer_last_sequence: u64,
+    pub(super) consumer_counter_started_after_sequence: u64,
     pub(super) pending_events: u64,
     pub(super) pending_bytes: u64,
     pub(super) consumer_inflight_events: u64,
@@ -107,10 +109,16 @@ pub(super) fn snapshot(
             producer_request_input_tokens: opportunity.producer.request_input_tokens,
             producer_last_sequence: opportunity.producer.last_sequence,
             producer_durable_sequence: opportunity.producer.durable_sequence,
+            producer_counter_started_after_sequence: opportunity
+                .producer
+                .counter_started_after_sequence,
             consumer_events: opportunity.consumer.events,
             consumer_request_events: opportunity.consumer.request_events,
             consumer_request_input_tokens: opportunity.consumer.request_input_tokens,
             consumer_last_sequence: opportunity.consumer.last_sequence,
+            consumer_counter_started_after_sequence: opportunity
+                .consumer
+                .counter_started_after_sequence,
             pending_events: opportunity.pending_events,
             pending_bytes: opportunity.pending_bytes,
             consumer_inflight_events: opportunity.consumer_inflight_events,

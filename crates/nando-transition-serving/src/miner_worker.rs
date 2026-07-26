@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -22,10 +22,13 @@ use nando_response_actor::{
 use crate::multi_source_frame_archive::MultiSourceFrameArchive;
 
 const QUEUE_CAPACITY: usize = 4_096;
+const MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS: usize = 256;
+const OPPORTUNITY_LEDGER_SEGMENT_BYTES: u64 = 64 * 1024 * 1024;
 const INPUTS_PER_SYNTHESIS_SLICE: u64 = 64;
 const MAX_SYNTHESIS_SLICES_PER_BURST: u64 = 8;
 const MAX_SYNTHESIS_BURST: Duration = Duration::from_millis(5);
 const CHECKPOINT_EVENTS: u64 = 4_096;
+const CHECKPOINT_MAX_DEFERRED_EVENTS: u64 = 65_536;
 const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(60);
 const REPORT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 const EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED: bool = true;
@@ -44,6 +47,8 @@ struct MinerWorkerCounters {
     collection_maintenance_slices: AtomicU64,
     collection_replayed_records: AtomicU64,
     opportunity_processed: AtomicU64,
+    opportunity_batches: AtomicU64,
+    opportunity_batch_syncs: AtomicU64,
     opportunity_replayed_records: AtomicU64,
     replay_rejected_records: AtomicU64,
     opportunity_dropped: AtomicU64,
@@ -76,6 +81,7 @@ pub struct MinerWorkerStatus {
     pub queue_capacity: usize,
     pub inputs_per_synthesis_slice: u64,
     pub checkpoint_events: u64,
+    pub checkpoint_max_deferred_events: u64,
     pub checkpoint_interval_seconds: u64,
     pub enqueued: u64,
     pub processed: u64,
@@ -89,6 +95,9 @@ pub struct MinerWorkerStatus {
     pub collection_maintenance_slices: u64,
     pub collection_replayed_records: u64,
     pub opportunity_processed: u64,
+    pub opportunity_batches: u64,
+    pub opportunity_batch_syncs: u64,
+    pub maximum_durable_opportunity_batch_events: usize,
     pub opportunity_replayed_records: u64,
     pub replay_rejected_records: u64,
     pub opportunity_dropped: u64,
@@ -153,15 +162,17 @@ pub(crate) struct MultiSourceMinerEvidenceSnapshotV1 {
 enum MinerCommand {
     Transition(Box<TeacherTransition>),
     Collection(Box<OnlineCollectionObservation>),
-    Opportunity {
-        event: MinerOpportunityEvent,
-        durable_ack: Option<SyncSender<Result<(), String>>>,
+    Opportunity(MinerOpportunityEvent),
+    OpportunityBatch {
+        events: Vec<MinerOpportunityEvent>,
+        event_count: u64,
+        durable_ack: SyncSender<Result<(), String>>,
     },
 }
 
 // Keep the persisted V2 opportunity ledger byte-compatible. The versioned
 // bridge envelope is a transport contract and is lowered only at this owner.
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 enum MinerOpportunityEvent {
     Request {
         intent_sha256: String,
@@ -214,6 +225,47 @@ impl From<OpportunityBridgeEventV1> for MinerOpportunityEvent {
             OpportunityBridgeEventKindV1::FalseAccept { intent_sha256 } => {
                 Self::FalseAccept { intent_sha256 }
             }
+        }
+    }
+}
+
+const OPPORTUNITY_BATCH_RECORD_SCHEMA_V3: &str = "nando.miner-opportunity-batch.v3";
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+struct MinerOpportunityBatchRecordV3 {
+    schema: String,
+    events: Vec<MinerOpportunityEvent>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(untagged)]
+enum MinerOpportunityLedgerRecord {
+    Batch(MinerOpportunityBatchRecordV3),
+    Legacy(MinerOpportunityEvent),
+}
+
+impl MinerOpportunityLedgerRecord {
+    fn batch(events: &[MinerOpportunityEvent]) -> Self {
+        Self::Batch(MinerOpportunityBatchRecordV3 {
+            schema: OPPORTUNITY_BATCH_RECORD_SCHEMA_V3.to_owned(),
+            events: events.to_vec(),
+        })
+    }
+
+    fn into_events(self) -> Result<Vec<MinerOpportunityEvent>, String> {
+        match self {
+            Self::Batch(batch) => {
+                if batch.schema != OPPORTUNITY_BATCH_RECORD_SCHEMA_V3 {
+                    return Err("miner_worker_opportunity_batch_schema".to_owned());
+                }
+                if batch.events.is_empty()
+                    || batch.events.len() > MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS
+                {
+                    return Err("miner_worker_opportunity_batch_size".to_owned());
+                }
+                Ok(batch.events)
+            }
+            Self::Legacy(event) => Ok(vec![event]),
         }
     }
 }
@@ -272,24 +324,40 @@ impl MinerWorkerHandle {
         event: OpportunityBridgeEventV1,
         timeout: Duration,
     ) -> Result<(), String> {
-        self.submit_opportunity_durable_async(event)?
+        self.submit_opportunity_durable_batch_async(vec![event])?
             .recv_timeout(timeout)
             .map_err(|error| format!("miner_worker_durable_ack:{error}"))?
     }
 
-    pub fn submit_opportunity_durable_async(
+    pub fn submit_opportunity_durable_batch_async(
         &self,
-        event: OpportunityBridgeEventV1,
+        events: Vec<OpportunityBridgeEventV1>,
     ) -> Result<mpsc::Receiver<Result<(), String>>, String> {
-        event.validate()?;
-        let event = MinerOpportunityEvent::from(event);
+        if events.is_empty() {
+            return Err("miner_worker_opportunity_batch_empty".to_owned());
+        }
+        if events.len() > MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS {
+            return Err("miner_worker_opportunity_batch_too_large".to_owned());
+        }
+        for event in &events {
+            event.validate()?;
+        }
+        let event_count = u64::try_from(events.len())
+            .map_err(|_| "miner_worker_opportunity_batch_too_large".to_owned())?;
+        let events = events
+            .into_iter()
+            .map(MinerOpportunityEvent::from)
+            .collect();
         let (ack_sender, ack_receiver) = mpsc::sync_channel(1);
-        match self.sender.try_send(MinerCommand::Opportunity {
-            event,
-            durable_ack: Some(ack_sender),
+        match self.sender.try_send(MinerCommand::OpportunityBatch {
+            events,
+            event_count,
+            durable_ack: ack_sender,
         }) {
             Ok(()) => {
-                self.counters.enqueued.fetch_add(1, Ordering::Relaxed);
+                self.counters
+                    .enqueued
+                    .fetch_add(event_count, Ordering::Relaxed);
                 Ok(ack_receiver)
             }
             Err(mpsc::TrySendError::Full(_)) => Err("miner_worker_queue_full".to_owned()),
@@ -300,10 +368,7 @@ impl MinerWorkerHandle {
     fn try_submit_opportunity(&self, event: OpportunityBridgeEventV1) -> Result<(), String> {
         event.validate()?;
         let event = MinerOpportunityEvent::from(event);
-        match self.sender.try_send(MinerCommand::Opportunity {
-            event,
-            durable_ack: None,
-        }) {
+        match self.sender.try_send(MinerCommand::Opportunity(event)) {
             Ok(()) => {
                 self.counters.enqueued.fetch_add(1, Ordering::Relaxed);
                 Ok(())
@@ -327,6 +392,7 @@ impl MinerWorkerHandle {
             queue_capacity: QUEUE_CAPACITY,
             inputs_per_synthesis_slice: INPUTS_PER_SYNTHESIS_SLICE,
             checkpoint_events: CHECKPOINT_EVENTS,
+            checkpoint_max_deferred_events: CHECKPOINT_MAX_DEFERRED_EVENTS,
             checkpoint_interval_seconds: CHECKPOINT_INTERVAL.as_secs(),
             enqueued,
             processed,
@@ -346,6 +412,12 @@ impl MinerWorkerHandle {
                 .collection_replayed_records
                 .load(Ordering::Relaxed),
             opportunity_processed: self.counters.opportunity_processed.load(Ordering::Relaxed),
+            opportunity_batches: self.counters.opportunity_batches.load(Ordering::Relaxed),
+            opportunity_batch_syncs: self
+                .counters
+                .opportunity_batch_syncs
+                .load(Ordering::Relaxed),
+            maximum_durable_opportunity_batch_events: MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS,
             opportunity_replayed_records: self
                 .counters
                 .opportunity_replayed_records
@@ -490,8 +562,7 @@ fn spawn_miner_worker_with_report_heartbeat(
         &collection_ledger_dir,
         "collection-observation",
     )?;
-    let opportunity_replay =
-        read_framed_cbor::<MinerOpportunityEvent>(&opportunity_ledger_dir, "opportunity")?;
+    let opportunity_replay = read_opportunity_ledger_events(&opportunity_ledger_dir)?;
     let startup_replay_support_before = miner
         .lock()
         .map_err(|_| "miner_worker_initial_support_lock_poisoned".to_owned())?
@@ -499,7 +570,12 @@ fn spawn_miner_worker_with_report_heartbeat(
     let mut teacher_ledger = FramedCborLedger::open(&teacher_ledger_dir, "teacher-transition")?;
     let mut collection_ledger =
         FramedCborLedger::open(&collection_ledger_dir, "collection-observation")?;
-    let mut opportunity_ledger = FramedCborLedger::open(&opportunity_ledger_dir, "opportunity")?;
+    let mut opportunity_ledger = FramedCborLedger::open_with_limits(
+        &opportunity_ledger_dir,
+        "opportunity",
+        OPPORTUNITY_LEDGER_SEGMENT_BYTES,
+        u32::try_from(MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS).unwrap_or(u32::MAX),
+    )?;
     let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
     let counters = Arc::new(MinerWorkerCounters::default());
     counters.startup_replay_support_before.store(
@@ -669,10 +745,7 @@ fn spawn_miner_worker_with_report_heartbeat(
                         .or_else(|| {
                             opportunity_replay
                                 .pop_front()
-                                .map(|event| MinerCommand::Opportunity {
-                                    event,
-                                    durable_ack: None,
-                                })
+                                .map(MinerCommand::Opportunity)
                         })
                 };
                 let command = if let Ok(command) = live_probe {
@@ -705,6 +778,7 @@ fn spawn_miner_worker_with_report_heartbeat(
                 };
 
                 let input_was_available = command.is_some();
+                let mut live_inputs_applied = 0_u64;
                 match command {
                     Some(MinerCommand::Transition(transition)) => {
                         let started = Instant::now();
@@ -759,6 +833,7 @@ fn spawn_miner_worker_with_report_heartbeat(
                         } else {
                             thread_counters.processed.fetch_add(1, Ordering::Relaxed);
                             events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                            live_inputs_applied = 1;
                             synthesis_pending = EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED;
                         }
                         collection_maintenance_pending |= collection_miner
@@ -806,25 +881,19 @@ fn spawn_miner_worker_with_report_heartbeat(
                                 .collection_processed
                                 .fetch_add(1, Ordering::Relaxed);
                             events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                            live_inputs_applied = 1;
                             collection_maintenance_pending = true;
                         }
                         if let Some(trigger) = &authority_trigger {
                             let _ = trigger.try_send(());
                         }
                     }
-                    Some(MinerCommand::Opportunity { event, durable_ack }) => {
+                    Some(MinerCommand::Opportunity(event)) => {
                         let started = Instant::now();
                         let result = (if command_is_replay {
                             Ok(())
                         } else {
                             opportunity_ledger.append(&event).map(|_| ())
-                        })
-                        .and_then(|()| {
-                            if durable_ack.is_some() {
-                                opportunity_ledger.sync()
-                            } else {
-                                Ok(())
-                            }
                         })
                         .and_then(|_| {
                             let mut stream = miner
@@ -839,9 +908,6 @@ fn spawn_miner_worker_with_report_heartbeat(
                             &thread_counters.opportunity_total_micros,
                             elapsed_micros(started),
                         );
-                        if let Some(ack) = durable_ack {
-                            let _ = ack.send(result.clone());
-                        }
                         if let Err(error) = result {
                             if command_is_replay {
                                 replay_rejected_records = replay_rejected_records.saturating_add(1);
@@ -861,13 +927,56 @@ fn spawn_miner_worker_with_report_heartbeat(
                                 .opportunity_processed
                                 .fetch_add(1, Ordering::Relaxed);
                             events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                            live_inputs_applied = 1;
                         }
+                    }
+                    Some(MinerCommand::OpportunityBatch {
+                        events,
+                        event_count,
+                        durable_ack,
+                    }) => {
+                        let started = Instant::now();
+                        let result = append_sync_apply_opportunity_batch(
+                            &mut opportunity_ledger,
+                            &miner,
+                            &events,
+                        );
+                        record_timing(
+                            &thread_counters.opportunity_last_micros,
+                            &thread_counters.opportunity_max_micros,
+                            &thread_counters.opportunity_total_micros,
+                            elapsed_micros(started),
+                        );
+                        let _ = durable_ack.send(result.clone());
+                        if let Err(error) = result {
+                            thread_counters
+                                .failed
+                                .fetch_add(event_count, Ordering::Relaxed);
+                            eprintln!("nando-response-miner-v2 opportunity batch error: {error}");
+                            continue;
+                        }
+                        thread_counters
+                            .processed
+                            .fetch_add(event_count, Ordering::Relaxed);
+                        thread_counters
+                            .opportunity_processed
+                            .fetch_add(event_count, Ordering::Relaxed);
+                        thread_counters
+                            .opportunity_batches
+                            .fetch_add(1, Ordering::Relaxed);
+                        thread_counters
+                            .opportunity_batch_syncs
+                            .fetch_add(1, Ordering::Relaxed);
+                        events_since_checkpoint =
+                            events_since_checkpoint.saturating_add(event_count);
+                        live_inputs_applied = event_count;
                     }
                     None => {}
                 }
 
                 if input_was_available && !command_is_replay {
-                    inputs_since_synthesis = inputs_since_synthesis.saturating_add(1);
+                    inputs_since_synthesis =
+                        inputs_since_synthesis.saturating_add(live_inputs_applied);
                 }
                 let slice_due =
                     !input_was_available || inputs_since_synthesis >= INPUTS_PER_SYNTHESIS_SLICE;
@@ -977,10 +1086,12 @@ fn spawn_miner_worker_with_report_heartbeat(
                     }
                 }
 
-                if events_since_checkpoint >= CHECKPOINT_EVENTS
+                let checkpoint_due = events_since_checkpoint >= CHECKPOINT_EVENTS
                     || (events_since_checkpoint > 0
-                        && last_checkpoint.elapsed() >= CHECKPOINT_INTERVAL)
-                {
+                        && last_checkpoint.elapsed() >= CHECKPOINT_INTERVAL);
+                let checkpoint_boundary_is_safe = !input_was_available
+                    || events_since_checkpoint >= CHECKPOINT_MAX_DEFERRED_EVENTS;
+                if checkpoint_due && checkpoint_boundary_is_safe {
                     let started = Instant::now();
                     let persisted = miner
                         .lock()
@@ -1091,6 +1202,33 @@ fn publish_multi_source_evidence(
     }
 }
 
+fn append_sync_apply_opportunity_batch(
+    ledger: &mut FramedCborLedger,
+    miner: &Arc<Mutex<OnlineResponseStream>>,
+    events: &[MinerOpportunityEvent],
+) -> Result<(), String> {
+    // One framed record is the durability boundary. A torn write is discarded
+    // as one incomplete batch by ledger recovery, never as an applied prefix.
+    ledger.append(&MinerOpportunityLedgerRecord::batch(events))?;
+    ledger.sync()?;
+    let mut stream = miner
+        .lock()
+        .map_err(|_| "miner_worker_opportunity_lock_poisoned".to_owned())?;
+    for event in events {
+        apply_opportunity_event(&mut stream, event.clone());
+    }
+    Ok(())
+}
+
+fn read_opportunity_ledger_events(directory: &Path) -> Result<Vec<MinerOpportunityEvent>, String> {
+    read_framed_cbor::<MinerOpportunityLedgerRecord>(directory, "opportunity")?
+        .into_iter()
+        .try_fold(Vec::new(), |mut events, record| {
+            events.extend(record.into_events()?);
+            Ok(events)
+        })
+}
+
 fn apply_opportunity_event(stream: &mut OnlineResponseStream, event: MinerOpportunityEvent) {
     match event {
         MinerOpportunityEvent::Request {
@@ -1135,6 +1273,52 @@ mod tests {
 
     use nando_operator_learning::{OnlineCollectionConfig, OpportunityBridgeEventV1};
     use nando_response_actor::{OnlineResponseStream, OnlineResponseTailConfig};
+
+    #[test]
+    fn opportunity_ledger_replays_legacy_events_and_atomic_batches() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-miner-opportunity-ledger-compat-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let legacy = MinerOpportunityEvent::Request {
+            intent_sha256: "41".repeat(32),
+            input_tokens: 3,
+            now_unix: 1,
+        };
+        let batch = vec![
+            MinerOpportunityEvent::Verified {
+                intent_sha256: "41".repeat(32),
+            },
+            MinerOpportunityEvent::Request {
+                intent_sha256: "42".repeat(32),
+                input_tokens: 5,
+                now_unix: 2,
+            },
+        ];
+        let mut ledger = FramedCborLedger::open(&root, "opportunity").expect("ledger");
+        ledger.append(&legacy).expect("legacy append");
+        ledger
+            .append(&MinerOpportunityLedgerRecord::batch(&batch))
+            .expect("batch append");
+        ledger.sync().expect("sync");
+        drop(ledger);
+
+        let replay = read_opportunity_ledger_events(&root).expect("mixed replay");
+        assert_eq!(replay, [vec![legacy], batch].concat());
+        let records = read_framed_cbor::<MinerOpportunityLedgerRecord>(&root, "opportunity")
+            .expect("record replay");
+        assert_eq!(records.len(), 2);
+        assert!(matches!(
+            records[0],
+            MinerOpportunityLedgerRecord::Legacy(_)
+        ));
+        assert!(matches!(records[1], MinerOpportunityLedgerRecord::Batch(_)));
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn durable_opportunity_ack_follows_synced_ledger_and_applied_state() {
@@ -1185,13 +1369,32 @@ mod tests {
                 Duration::from_secs(2),
             )
             .expect("durable ack");
+        let batch = (0_u64..64)
+            .map(|index| {
+                OpportunityBridgeEventV1::request(
+                    format!("{index:064x}"),
+                    1,
+                    index.saturating_add(2),
+                )
+            })
+            .collect();
+        worker
+            .submit_opportunity_durable_batch_async(batch)
+            .expect("batch accepted")
+            .recv_timeout(Duration::from_secs(2))
+            .expect("batch ack received")
+            .expect("batch durable ack");
 
-        let persisted = read_framed_cbor::<MinerOpportunityEvent>(
+        let persisted =
+            read_opportunity_ledger_events(&root.join("response-opportunity-segments-v2"))
+                .expect("persisted ledger");
+        let persisted_records = read_framed_cbor::<MinerOpportunityLedgerRecord>(
             &root.join("response-opportunity-segments-v2"),
             "opportunity",
         )
-        .expect("persisted ledger");
-        assert_eq!(persisted.len(), 1);
+        .expect("persisted records");
+        assert_eq!(persisted_records.len(), 2);
+        assert_eq!(persisted.len(), 65);
         assert!(matches!(
             persisted.first(),
             Some(MinerOpportunityEvent::Request {
@@ -1205,8 +1408,12 @@ mod tests {
                 .expect("response state")
                 .status()
                 .opportunity_ordinary_tokens,
-            29
+            93
         );
+        let status = worker.status();
+        assert_eq!(status.opportunity_processed, 65);
+        assert_eq!(status.opportunity_batches, 2);
+        assert_eq!(status.opportunity_batch_syncs, 2);
         drop(worker);
         let _ = fs::remove_dir_all(root);
     }
@@ -1281,6 +1488,87 @@ mod tests {
         );
 
         drop(worker);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[ignore = "remote durability benchmark"]
+    fn opportunity_group_commit_benchmark_receipt() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-opportunity-group-commit-bench-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let legacy_dir = root.join("legacy");
+        let batched_dir = root.join("batched");
+        let events = (0_u64..4_096)
+            .map(|index| MinerOpportunityEvent::Request {
+                intent_sha256: format!("{index:064x}"),
+                input_tokens: index.saturating_add(1),
+                now_unix: index.saturating_add(1),
+            })
+            .collect::<Vec<_>>();
+
+        let mut legacy = FramedCborLedger::open_with_limits(
+            &legacy_dir,
+            "opportunity",
+            OPPORTUNITY_LEDGER_SEGMENT_BYTES,
+            u32::try_from(MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS).unwrap_or(u32::MAX),
+        )
+        .expect("legacy ledger");
+        let legacy_started = Instant::now();
+        for event in &events {
+            legacy.append(event).expect("legacy append");
+            legacy.sync().expect("legacy sync");
+        }
+        let legacy_elapsed = legacy_started.elapsed();
+        let legacy_fsyncs = legacy.status().fsync_count;
+
+        let mut batched = FramedCborLedger::open_with_limits(
+            &batched_dir,
+            "opportunity",
+            OPPORTUNITY_LEDGER_SEGMENT_BYTES,
+            u32::try_from(MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS).unwrap_or(u32::MAX),
+        )
+        .expect("batched ledger");
+        let batched_started = Instant::now();
+        for batch in events.chunks(MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS) {
+            batched
+                .append(&MinerOpportunityLedgerRecord::batch(batch))
+                .expect("batch append");
+            batched.sync().expect("batch sync");
+        }
+        let batched_elapsed = batched_started.elapsed();
+        let batched_fsyncs = batched.status().fsync_count;
+
+        assert_eq!(legacy_fsyncs, 4_096);
+        assert_eq!(batched_fsyncs, 16);
+        assert_eq!(
+            read_opportunity_ledger_events(&legacy_dir)
+                .expect("legacy replay")
+                .len(),
+            events.len()
+        );
+        assert_eq!(
+            read_opportunity_ledger_events(&batched_dir)
+                .expect("batched replay")
+                .len(),
+            events.len()
+        );
+        println!(
+            "opportunity_group_commit events={} legacy_micros={} batched_micros={} legacy_fsyncs={} batched_fsyncs={} speedup={:.2}",
+            events.len(),
+            legacy_elapsed.as_micros(),
+            batched_elapsed.as_micros(),
+            legacy_fsyncs,
+            batched_fsyncs,
+            legacy_elapsed.as_secs_f64() / batched_elapsed.as_secs_f64()
+        );
+        drop(legacy);
+        drop(batched);
         let _ = fs::remove_dir_all(root);
     }
 }

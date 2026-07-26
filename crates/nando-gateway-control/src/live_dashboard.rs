@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.27-b015";
+const DASHBOARD_BUILD: &str = "2026.07.27-b016";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -44,6 +44,11 @@ pub(crate) struct BridgeView {
     pub(crate) join_misses: u64,
     pub(crate) opportunity_produced_sequence: u64,
     pub(crate) opportunity_consumed_sequence: u64,
+    pub(crate) opportunity_counter_epoch_match: bool,
+    pub(crate) producer_counter_started_after_sequence: u64,
+    pub(crate) consumer_counter_started_after_sequence: u64,
+    pub(crate) hot_started_at_unix_ms: u64,
+    pub(crate) cold_started_at_unix_ms: u64,
     pub(crate) request_events: u64,
     pub(crate) request_tokens: u64,
     pub(crate) miner_request_events: u64,
@@ -76,6 +81,21 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         .max(pointer_u64(cold, "/durable_structure/pending_records"));
     let opportunity_pending = pointer_u64(hot, "/opportunity/pending_events");
     let opportunity_inflight = pointer_u64(cold, "/opportunity/consumer_inflight_events");
+    let hot_started_at_unix_ms = pointer_u64(hot, "/process/started_at_unix_ms");
+    let cold_started_at_unix_ms = pointer_u64(cold, "/process/started_at_unix_ms");
+    let producer_counter_started_after_sequence =
+        pointer_u64(hot, "/opportunity/producer_counter_started_after_sequence");
+    let consumer_counter_started_after_sequence =
+        pointer_u64(cold, "/opportunity/consumer_counter_started_after_sequence");
+    let opportunity_counter_epoch_match = hot
+        .pointer("/opportunity/producer_counter_started_after_sequence")
+        .and_then(Value::as_u64)
+        .is_some()
+        && cold
+            .pointer("/opportunity/consumer_counter_started_after_sequence")
+            .and_then(Value::as_u64)
+            .is_some()
+        && producer_counter_started_after_sequence == consumer_counter_started_after_sequence;
     BridgeView {
         hot_available,
         cold_available,
@@ -86,9 +106,9 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         } else {
             0
         },
-        queue: structural_pending
-            .saturating_add(opportunity_pending)
-            .saturating_add(opportunity_inflight),
+        // In-flight events still own their pending spool files. Adding them
+        // again would double-count the same durable backlog.
+        queue: structural_pending.saturating_add(opportunity_pending),
         hot_instance: pointer_string(hot, "/process/instance_id_sha256"),
         cold_instance: pointer_string(cold, "/process/instance_id_sha256"),
         structural_epoch_match,
@@ -102,6 +122,11 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         join_misses: pointer_u64(cold, "/request_learning/lookup_misses"),
         opportunity_produced_sequence: pointer_u64(hot, "/opportunity/producer_last_sequence"),
         opportunity_consumed_sequence: pointer_u64(cold, "/opportunity/consumer_last_sequence"),
+        opportunity_counter_epoch_match,
+        producer_counter_started_after_sequence,
+        consumer_counter_started_after_sequence,
+        hot_started_at_unix_ms,
+        cold_started_at_unix_ms,
         request_events: pointer_u64(hot, "/opportunity/producer_request_events"),
         request_tokens: pointer_u64(hot, "/opportunity/producer_request_input_tokens"),
         miner_request_events: pointer_u64(cold, "/opportunity/consumer_request_events"),
@@ -337,6 +362,14 @@ const TEMPLATE: &str = r#"
 .scope-note { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.35; }
 .scope-metric.ceiling .scope-share { color:var(--amber); }
 .scope-metric.unresolved .scope-share { color:var(--amber); }
+.ingestion-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--line); }
+.ingestion-cell { min-width:0; padding:16px 18px; border-right:1px solid var(--line); background:#111518; }
+.ingestion-cell:last-child { border-right:0; }
+.ingestion-label { color:var(--muted); font-size:11px; font-weight:800; }
+.ingestion-value { margin-top:8px; color:var(--cyan); font-size:20px; font-weight:800; overflow-wrap:anywhere; }
+.ingestion-cell.applied .ingestion-value { color:var(--green); }
+.ingestion-cell.backlog .ingestion-value { color:var(--amber); }
+.ingestion-note { margin-top:6px; color:var(--muted); font-size:10px; line-height:1.35; }
 .legacy-strip { display:flex; justify-content:center; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 24px; border-top:1px solid var(--line); color:var(--muted); text-align:center; font-size:12px; font-weight:700; }
 .legacy-strip b { color:#dce2e6; }
 .legacy-warning { color:var(--red); }
@@ -410,6 +443,9 @@ const TEMPLATE: &str = r#"
   .traffic-stage:nth-child(2n) { border-right:0; }
   .traffic-stage:nth-last-child(-n+2) { border-bottom:0; }
   .scope-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ingestion-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ingestion-cell:nth-child(2n) { border-right:0; }
+  .ingestion-cell:nth-child(-n+2) { border-bottom:1px solid var(--line); }
   .scope-metric:nth-child(2) { border-right:0; }
   .scope-metric:nth-child(-n+2) { border-bottom:1px solid var(--line); }
   .ms3-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -430,6 +466,9 @@ const TEMPLATE: &str = r#"
   .stage-value { font-size:24px; }
   .stage-share { font-size:14px; }
   .scope-grid { grid-template-columns:1fr; }
+  .ingestion-grid { grid-template-columns:1fr; }
+  .ingestion-cell:nth-child(n) { border-right:0; border-bottom:1px solid var(--line); }
+  .ingestion-cell:last-child { border-bottom:0; }
   .scope-metric,.scope-metric:first-child,.scope-metric:last-child { padding:13px 0; border-right:0; border-bottom:1px solid var(--line); }
   .scope-metric:last-child { border-bottom:0; }
   .ms3-grid { grid-template-columns:1fr; }
@@ -468,7 +507,7 @@ const TEMPLATE: &str = r#"
   <section class="live-band"><div class="live-inner">
     <div class="overview-head">
       <h2 class="band-title">ЧЕТЫРЕ ГЛАВНЫЕ ЦИФРЫ</h2>
-      <div class="overview-rule">ВЕСЬ СЕРВЕР → МАЙНЕР → РАСПОЗНАНО → CPU</div>
+      <div class="overview-rule">ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU</div>
     </div>
     <div class="traffic-grid">
       <article class="traffic-stage">
@@ -480,10 +519,10 @@ const TEMPLATE: &str = r#"
         <div id="server-total-scope" class="stage-scope">ВСЯ СОХРАНЁННАЯ ИСТОРИЯ УЧЁТА · ТЕКУЩАЯ V4: __EPOCH_EVENTS__ ЗАПРОСОВ</div>
       </article>
       <article class="traffic-stage miner">
-        <div class="stage-index">2 · MINER WINDOW</div>
-        <div class="stage-label">МАЙНЕР УВИДЕЛ</div>
+        <div class="stage-index">2 · LEARNER APPLIED CORPUS</div>
+        <div class="stage-label">МАЙНЕР УЖЕ ПРИМЕНИЛ</div>
         <div class="stage-value-row"><output id="miner-window-total" class="stage-value">__MINER_TOTAL__</output></div>
-        <div class="stage-unit">ВХОДНЫХ ТОКЕНОВ В КОРПУСЕ</div>
+        <div class="stage-unit">ВХОДНЫХ ТОКЕНОВ В LEARNER STATE</div>
         <div id="miner-window-intents" class="stage-meta">__MINER_INTENTS__ intents</div>
         <div id="miner-window-start" class="stage-scope">СВОЙ WATERMARK И ПЕРИОД</div>
       </article>
@@ -504,7 +543,19 @@ const TEMPLATE: &str = r#"
         <div id="current-v4-execution" class="stage-scope">V4 __EPOCH_CPU__ / __EPOCH_TOTAL__ · __EPOCH_CPU_SHARE__ · __EPOCH_CPU_ACCEPTS__ accepts</div>
       </article>
     </div>
-    <div class="scope-alert"><strong>ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА.</strong> Майнер имеет отдельное более позднее окно. Процент распознавания считается только внутри окна майнера; точная CPU-доля V4 показана в четвёртом блоке.</div>
+    <div class="scope-alert"><strong>ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА.</strong> Второй блок показывает уже применённый learner state, а отдельный live-ingestion блок ниже — durable вход и очередь. Процент распознавания считается только внутри корпуса майнера.</div>
+  </div></section>
+  <section class="live-band"><div class="live-inner">
+    <div class="overview-head">
+      <h2 class="band-title">ЖИВОЙ ВХОД МАЙНЕРА</h2>
+      <div id="ingestion-epoch" class="overview-rule">PROCESS EPOCH</div>
+    </div>
+    <div class="ingestion-grid">
+      <div class="ingestion-cell"><div class="ingestion-label">ПОЛУЧЕНО DURABLE</div><div id="ingestion-received" class="ingestion-value">—</div><div id="ingestion-received-events" class="ingestion-note">hot producer</div></div>
+      <div class="ingestion-cell applied"><div class="ingestion-label">ПРИМЕНЕНО LEARNER</div><div id="ingestion-applied" class="ingestion-value">—</div><div id="ingestion-applied-events" class="ingestion-note">cold consumer</div></div>
+      <div class="ingestion-cell backlog"><div class="ingestion-label">DURABLE BACKLOG</div><div id="ingestion-backlog" class="ingestion-value">—</div><div id="ingestion-inflight" class="ingestion-note">inflight является частью backlog</div></div>
+      <div class="ingestion-cell"><div class="ingestion-label">TOKEN LAG</div><div id="ingestion-token-lag" class="ingestion-value">—</div><div id="ingestion-token-scope" class="ingestion-note">только при общем process epoch</div></div>
+    </div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <h2 class="band-title">ЧТО МАЙНЕР ЕЩЁ НЕ РАСПОЗНАЛ</h2>
@@ -664,8 +715,20 @@ const TEMPLATE: &str = r#"
     stateClass("ms3-authority", `ms3-value ${ms3.authority_ready ? "good" : "locked"}`);
     text("ms3-note", `${ms3.blocker || "report unavailable"} · неприменимых ${ms3.structurally_not_applicable || 0} · precommit missing ${ms3.precommitted_prediction_missing || 0} · до deadline ${duration((contract.deadline_unix || 0) - Math.floor(Date.now() / 1000))} · phase mutation ${ms3.phase_mutation_allowed ? "TRUE" : "FALSE"}`);
 
-    const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending + bridge.opportunity_inflight; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
+    const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
+    const opportunityLag = bridge.opportunity_pending;
+    const tokenLagComparable = bridge.opportunity_counter_epoch_match === true;
+    const tokenLag = tokenLagComparable ? Math.max(0, bridge.request_tokens - bridge.miner_request_tokens) : 0;
+    text("ingestion-received", number.format(bridge.request_tokens));
+    text("ingestion-received-events", `${number.format(bridge.request_events)} requests · seq ${number.format(bridge.opportunity_produced_sequence)}`);
+    text("ingestion-applied", number.format(bridge.miner_request_tokens));
+    text("ingestion-applied-events", `${number.format(bridge.miner_request_events)} requests · seq ${number.format(bridge.opportunity_consumed_sequence)}`);
+    text("ingestion-backlog", `${number.format(opportunityLag)} events`);
+    text("ingestion-inflight", `${number.format(bridge.opportunity_inflight)} inflight входят в durable backlog`);
+    text("ingestion-token-lag", tokenLagComparable ? number.format(tokenLag) : "НЕСОПОСТАВИМО");
+    text("ingestion-token-scope", tokenLagComparable ? "разница счётчиков одного process epoch" : "hot/cold перезапущены в разные моменты");
+    text("ingestion-epoch", tokenLagComparable ? `COUNTER ORIGIN ${number.format(bridge.producer_counter_started_after_sequence)}` : `COUNTER ORIGIN SPLIT ${number.format(bridge.producer_counter_started_after_sequence)} / ${number.format(bridge.consumer_counter_started_after_sequence)}`);
     text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
@@ -705,8 +768,8 @@ mod tests {
 
     #[test]
     fn bridge_view_keeps_hot_and_cold_owners_separate() {
-        let hot = json!({"ok":true,"process":{"instance_id_sha256":"hot"},"structural":{"producer_failures":0},"durable_structure":{"bridge_epoch_sha256":"epoch","pending_records":2,"producer":{"last_sequence":45}},"opportunity":{"producer_last_sequence":45,"pending_events":2,"producer_request_events":20,"producer_request_input_tokens":6_876_562,"failures":0}});
-        let cold = json!({"ok":true,"process":{"instance_id_sha256":"cold"},"structural":{"consumer_failures":0},"durable_structure":{"bridge_epoch_sha256":"epoch","pending_records":2,"sequence_gaps":0,"consumer":{"last_sequence":43}},"request_learning":{"structures_applied":43,"lookup_attempts":20,"lookup_hits":17,"lookup_misses":3},"opportunity":{"consumer_last_sequence":44,"consumer_inflight_events":1,"failures":0},"raw_replay":{"evaluated":12,"verified":3,"runtime_abstains":9,"execution_authority":false,"false_accepts":0,"parity_mismatches":0}});
+        let hot = json!({"ok":true,"process":{"instance_id_sha256":"hot","started_at_unix_ms":1_000},"structural":{"producer_failures":0},"durable_structure":{"bridge_epoch_sha256":"epoch","pending_records":2,"producer":{"last_sequence":45}},"opportunity":{"producer_last_sequence":45,"producer_counter_started_after_sequence":21,"pending_events":2,"producer_request_events":20,"producer_request_input_tokens":6_876_562,"failures":0}});
+        let cold = json!({"ok":true,"process":{"instance_id_sha256":"cold","started_at_unix_ms":3_000},"structural":{"consumer_failures":0},"durable_structure":{"bridge_epoch_sha256":"epoch","pending_records":2,"sequence_gaps":0,"consumer":{"last_sequence":43}},"request_learning":{"structures_applied":43,"lookup_attempts":20,"lookup_hits":17,"lookup_misses":3},"opportunity":{"consumer_last_sequence":44,"consumer_counter_started_after_sequence":21,"consumer_inflight_events":1,"failures":0},"raw_replay":{"evaluated":12,"verified":3,"runtime_abstains":9,"execution_authority":false,"false_accepts":0,"parity_mismatches":0}});
         assert_eq!(
             bridge_view(&hot, &cold),
             BridgeView {
@@ -715,7 +778,7 @@ mod tests {
                 hot_accepted: 45,
                 cold_accepted: 43,
                 loss: 2,
-                queue: 5,
+                queue: 4,
                 hot_instance: "hot".to_owned(),
                 cold_instance: "cold".to_owned(),
                 structural_epoch_match: true,
@@ -728,6 +791,11 @@ mod tests {
                 join_misses: 3,
                 opportunity_produced_sequence: 45,
                 opportunity_consumed_sequence: 44,
+                opportunity_counter_epoch_match: true,
+                producer_counter_started_after_sequence: 21,
+                consumer_counter_started_after_sequence: 21,
+                hot_started_at_unix_ms: 1_000,
+                cold_started_at_unix_ms: 3_000,
                 request_events: 20,
                 request_tokens: 6_876_562,
                 opportunity_pending: 2,
@@ -774,9 +842,12 @@ mod tests {
         assert!(html.contains("ЧЕТЫРЕ ГЛАВНЫЕ ЦИФРЫ"));
         assert!(html.contains("ВЕСЬ ТРАФИК СЕРВЕРА"));
         assert!(html.contains("РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU"));
-        assert!(html.contains("МАЙНЕР УВИДЕЛ"));
+        assert!(html.contains("МАЙНЕР УЖЕ ПРИМЕНИЛ"));
         assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
-        assert!(html.contains("ВЕСЬ СЕРВЕР → МАЙНЕР → РАСПОЗНАНО → CPU"));
+        assert!(html.contains("ЖИВОЙ ВХОД МАЙНЕРА"));
+        assert!(html.contains("ПОЛУЧЕНО DURABLE"));
+        assert!(html.contains("ПРИМЕНЕНО LEARNER"));
+        assert!(html.contains("ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU"));
         assert!(html.contains("ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА"));
         assert!(html.contains("ЕСТЕСТВЕННЫЙ ОПЕРАТОР · MS3"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));

@@ -1190,6 +1190,31 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "unresolved": {
                 "input_tokens": miner_unresolved_tokens,
             },
+            "live_ingestion": {
+                "scope": "current_hot_cold_process_epoch",
+                "counter_epoch_match": bridge.opportunity_counter_epoch_match,
+                "producer_counter_started_after_sequence":
+                    bridge.producer_counter_started_after_sequence,
+                "consumer_counter_started_after_sequence":
+                    bridge.consumer_counter_started_after_sequence,
+                "durably_received": {
+                    "input_tokens": bridge.request_tokens,
+                    "requests": bridge.request_events,
+                    "sequence": bridge.opportunity_produced_sequence,
+                },
+                "learner_applied": {
+                    "input_tokens": bridge.miner_request_tokens,
+                    "requests": bridge.miner_request_events,
+                    "sequence": bridge.opportunity_consumed_sequence,
+                },
+                "backlog": {
+                    "events": bridge.opportunity_pending,
+                    "inflight_events": bridge.opportunity_inflight,
+                    "input_tokens": bridge
+                        .opportunity_counter_epoch_match
+                        .then(|| bridge.request_tokens.saturating_sub(bridge.miner_request_tokens)),
+                },
+            },
         },
     });
     (

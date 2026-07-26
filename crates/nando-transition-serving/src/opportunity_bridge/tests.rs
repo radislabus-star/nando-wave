@@ -131,6 +131,8 @@ fn producer_recovers_a_complete_staging_event_after_restart() {
             .expect("restarted producer");
     assert_eq!(runtime.status().pending_events, 1);
     assert_eq!(runtime.inner.next_sequence.load(Ordering::Acquire), 8);
+    assert_eq!(runtime.status().producer.counter_started_after_sequence, 7);
+    assert_eq!(runtime.status().consumer.counter_started_after_sequence, 6);
     assert!(!temporary.exists());
     drop(runtime);
     let _ = fs::remove_dir_all(root);

@@ -13,15 +13,18 @@ use serde::Serialize;
 
 use crate::miner_worker::MinerWorkerHandle;
 use spool::{
-    PendingBridgeEvent, acknowledge_pending, create_private_directory, next_pending_sequence,
-    pending_batch, pending_stats, persist_event, recover_temporary_events,
-    refresh_pending_counters, spool_stats, sync_pending_spool,
+    PendingBridgeEvent, acknowledge_pending_batch, create_private_directory,
+    first_pending_sequence, next_pending_sequence, pending_batch, pending_stats, persist_event,
+    recover_temporary_events, refresh_pending_counters, spool_stats, sync_pending_spool,
 };
 
 const BRIDGE_STATUS_SCHEMA_V1: &str = "nando.opportunity-process-bridge-status.v1";
 const PRODUCER_DURABILITY_INTERVAL: Duration = Duration::from_millis(10);
 const SPOOL_RECONCILE_INTERVAL: Duration = Duration::from_secs(15);
 const MAX_CONSUMER_INFLIGHT_EVENTS: usize = 256;
+// Preserve durable apply and spool acknowledgement order until the bridge
+// protocol carries an explicit persisted batch sequence.
+const MAX_CONSUMER_INFLIGHT_BATCHES: usize = 1;
 
 #[derive(Default)]
 struct BridgeEndpointCounters {
@@ -37,6 +40,7 @@ struct BridgeEndpointCounters {
     total_micros: AtomicU64,
     durable_sequence: AtomicU64,
     durability_syncs: AtomicU64,
+    counter_started_after_sequence: AtomicU64,
     last_error: RwLock<String>,
 }
 
@@ -56,6 +60,7 @@ pub struct OpportunityBridgeEndpointStatusV1 {
     pub total_micros: u64,
     pub durable_sequence: u64,
     pub durability_syncs: u64,
+    pub counter_started_after_sequence: u64,
     pub last_error: String,
 }
 
@@ -97,8 +102,8 @@ struct BridgeInner {
     producer_sync_requested: AtomicBool,
 }
 
-struct InflightOpportunity {
-    pending: PendingBridgeEvent,
+struct InflightOpportunityBatch {
+    pending: Vec<PendingBridgeEvent>,
     ack: Receiver<Result<(), String>>,
     started: Instant,
 }
@@ -128,10 +133,22 @@ impl OpportunityBridgeRuntime {
         let (spool_files, spool_bytes) = spool_stats(&[&staging_dir, &pending_dir, &rejected_dir])?;
         let (pending_events, pending_bytes) = pending_stats(&pending_dir);
         let next_sequence = next_pending_sequence(&[&pending_dir, &staging_dir])?;
+        let producer_counter_started_after_sequence = next_sequence.saturating_sub(1);
+        let consumer_counter_started_after_sequence = first_pending_sequence(&pending_dir)?
+            .map_or(producer_counter_started_after_sequence, |sequence| {
+                sequence.saturating_sub(1)
+            });
         let producer = BridgeEndpointCounters::default();
         producer
             .last_sequence
-            .store(next_sequence.saturating_sub(1), Ordering::Release);
+            .store(producer_counter_started_after_sequence, Ordering::Release);
+        producer
+            .counter_started_after_sequence
+            .store(producer_counter_started_after_sequence, Ordering::Release);
+        let consumer = BridgeEndpointCounters::default();
+        consumer
+            .counter_started_after_sequence
+            .store(consumer_counter_started_after_sequence, Ordering::Release);
         let runtime = Self {
             inner: Arc::new(BridgeInner {
                 root,
@@ -148,7 +165,7 @@ impl OpportunityBridgeRuntime {
                 pending_events: AtomicU64::new(pending_events),
                 pending_bytes: AtomicU64::new(pending_bytes),
                 producer,
-                consumer: BridgeEndpointCounters::default(),
+                consumer,
                 consumer_started: AtomicBool::new(false),
                 consumer_inflight: AtomicU64::new(0),
                 producer_sync_requested: AtomicBool::new(next_sequence > 1),
@@ -207,7 +224,10 @@ impl OpportunityBridgeRuntime {
                         last_spool_reconcile = Instant::now();
                     }
                     inner.consumer_inflight.store(
-                        u64::try_from(inflight.len()).unwrap_or(u64::MAX),
+                        inflight
+                            .iter()
+                            .map(|batch| u64::try_from(batch.pending.len()).unwrap_or(u64::MAX))
+                            .fold(0_u64, u64::saturating_add),
                         Ordering::Release,
                     );
                     let poll = inner.consumer_poll;
@@ -286,7 +306,7 @@ impl OpportunityBridgeRuntime {
 fn advance_consumer_pipeline(
     inner: &BridgeInner,
     worker: &MinerWorkerHandle,
-    inflight: &mut VecDeque<InflightOpportunity>,
+    inflight: &mut VecDeque<InflightOpportunityBatch>,
 ) -> Result<(), String> {
     while let Some(front) = inflight.front() {
         match front.ack.try_recv() {
@@ -294,7 +314,7 @@ fn advance_consumer_pipeline(
                 let acknowledged = inflight
                     .pop_front()
                     .ok_or_else(|| "opportunity_bridge_inflight_underflow".to_owned())?;
-                acknowledge_pending(inner, acknowledged.pending, acknowledged.started)?;
+                acknowledge_pending_batch(inner, acknowledged.pending, acknowledged.started)?;
             }
             Ok(Err(error)) => return Err(format!("opportunity_bridge_worker_ack:{error}")),
             Err(TryRecvError::Empty) => break,
@@ -306,20 +326,23 @@ fn advance_consumer_pipeline(
 
     let submitted_paths = inflight
         .iter()
-        .map(|entry| entry.pending.path.clone())
+        .flat_map(|entry| entry.pending.iter().map(|pending| pending.path.clone()))
         .collect::<BTreeSet<_>>();
-    let available = MAX_CONSUMER_INFLIGHT_EVENTS.saturating_sub(inflight.len());
-    for pending in pending_batch(inner, available, &submitted_paths)? {
-        let ack = match worker.submit_opportunity_durable_async(pending.event.clone()) {
-            Ok(ack) => ack,
-            Err(error) if error == "miner_worker_queue_full" => break,
-            Err(error) => return Err(format!("opportunity_bridge_submit:{error}")),
-        };
-        inflight.push_back(InflightOpportunity {
-            pending,
-            ack,
-            started: Instant::now(),
-        });
+    if inflight.len() < MAX_CONSUMER_INFLIGHT_BATCHES {
+        let pending = pending_batch(inner, MAX_CONSUMER_INFLIGHT_EVENTS, &submitted_paths)?;
+        if !pending.is_empty() {
+            let events = pending.iter().map(|row| row.event.clone()).collect();
+            let ack = match worker.submit_opportunity_durable_batch_async(events) {
+                Ok(ack) => ack,
+                Err(error) if error == "miner_worker_queue_full" => return Ok(()),
+                Err(error) => return Err(format!("opportunity_bridge_submit:{error}")),
+            };
+            inflight.push_back(InflightOpportunityBatch {
+                pending,
+                ack,
+                started: Instant::now(),
+            });
+        }
     }
     Ok(())
 }
@@ -381,6 +404,9 @@ fn endpoint_status(
         total_micros: counters.total_micros.load(Ordering::Relaxed),
         durable_sequence: counters.durable_sequence.load(Ordering::Acquire),
         durability_syncs: counters.durability_syncs.load(Ordering::Relaxed),
+        counter_started_after_sequence: counters
+            .counter_started_after_sequence
+            .load(Ordering::Acquire),
         last_error: counters
             .last_error
             .read()
