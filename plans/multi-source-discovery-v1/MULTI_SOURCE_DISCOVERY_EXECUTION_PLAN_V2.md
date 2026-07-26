@@ -1,6 +1,6 @@
 # Nando Multi-Source Discovery Execution Plan V2
 
-Status: `MS2_COMPLETE / MS3_LIVE_REPRESENTATION_GAP / MS4_BLOCKED`
+Status: `MS2_COMPLETE / MS3_DURABLE_EVIDENCE_LIVE / NATURAL_GAP_PENDING / MS4_BLOCKED`
 
 Date: 2026-07-26 Europe/Tallinn.
 
@@ -29,14 +29,16 @@ MS3 all-observation role version space         LIVE PASS
 MS3 disagreement-derived passive probes        CODE PASS
 MS3 sealed minimal proof basis                 CODE PASS
 MS3 existing crystallizer/admission binding    CODE PASS
-MS3 natural completed RelationFrame            1 JOINED
-MS3 natural selected role witness              REPRESENTATION GAP
+MS3 representation-gap adjudicator             DEPLOYED / AUTHORITY FALSE
+MS3 topology/frame/terminal archives            LIVE / RESTART EXACT
+MS3 current durable natural joined frame        0
+MS3 historical 78,598-token gap row             LEGACY EVICTED / NOT REUSED
 MS3 runtime actor/verifier parity               NOT_EVALUATED
 MS4 natural package admission                   BLOCKED
 ```
 
 Live receipt:
-`STOP_MS3_SOURCE_NEUTRAL_VERSION_SPACE_ROLLOUT.md`.
+`STOP_MS3_REPRESENTATION_GAP_ADJUDICATION.md`.
 
 Stage closure is live-result-only:
 

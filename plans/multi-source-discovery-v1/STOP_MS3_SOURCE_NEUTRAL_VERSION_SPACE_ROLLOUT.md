@@ -1,5 +1,11 @@
 # STOP-MS3 Source-Neutral Version Space Rollout
 
+Historical receipt. Its `1 JOINED` and `78,598` opportunity-token row were
+observed before generation-owned topology, relation-frame and terminal
+archives existed. That row was later evicted by the proof reservoir and is not
+current MS3 evidence. The live successor is
+`STOP_MS3_REPRESENTATION_GAP_ADJUDICATION.md`.
+
 Date: 2026-07-26 Europe/Tallinn.
 
 ## Verdict
