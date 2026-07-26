@@ -224,7 +224,10 @@ fn symmetric_partial_waves_select_only_with_full_phase_and_require_observed_runt
         &receipts,
     );
     assert!(
-        matches!(result, Err(CrystallizedOperatorError::MissingRuntimeAnchor)),
+        matches!(
+            result,
+            Err(CrystallizedOperatorError::RuntimeRelationMismatch)
+        ),
         "unexpected crystallization result: {result:?}"
     );
 }
