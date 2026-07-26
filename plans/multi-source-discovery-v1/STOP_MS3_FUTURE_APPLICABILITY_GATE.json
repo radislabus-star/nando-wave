@@ -1,0 +1,33 @@
+{
+  "schema": "nando.stop-ms3-future-applicability-gate.v1",
+  "recorded_date": "2026-07-26",
+  "frozen_law_contract_root_sha256": "23f002035fb5090827a7815fc24d2fdc633df2126a32c978b5347ae69410ba81",
+  "gate_contract_root_sha256": "781b6b6018ee54e83f1fe97222a40f98e060ca1bb083d397555f065a2f5dfedd",
+  "ledger_root_sha256": "58d393e3a2941c0578baedb2b9199439e73a9e76edc67acb1720e4ad13319823",
+  "opened_at_sequence": 13611,
+  "prediction_min_sequence": 13612,
+  "opened_at_unix": 1785096275,
+  "deadline_unix": 1785182675,
+  "max_independent_topologies": 256,
+  "live": {
+    "verdict": "collecting",
+    "blocker": "applicable_independent_topology_pending",
+    "independent_topologies": 1,
+    "independent_lineages": 1,
+    "structurally_not_applicable": 1,
+    "predictions_committed": 0,
+    "active_predictions": 0,
+    "precommitted_prediction_missing": 0
+  },
+  "restart_sha256": {
+    "frozen_version_space_cbor": "cfeade1afa5c82c03765b917b05399493e11a7dfa03a4bfe0edab5efe62733c1",
+    "future_predictions_cbor": "addaef06dcee22405b48bdb0707406c2bff627368a23d34fc634f815ba3dc292",
+    "future_applicability_cbor": "bcd49c266489dd1095431a2435ee14507ff156874f5009ef66017b5e50f1031c"
+  },
+  "deployed_binary_sha256": "e9d7d43c3ed0ef03a65d2bf7bc418d3062c9b04e41906203321165bbd39dacf5",
+  "hot_serving_invocation_id": "aec3a81260c648ed84538066131715c6",
+  "authority_ready": false,
+  "phase_mutation_allowed": false,
+  "independent_future": "not_evaluated",
+  "next_unlocked_step": "fresh_applicable_topology_then_durable_prediction_then_terminal_verification"
+}

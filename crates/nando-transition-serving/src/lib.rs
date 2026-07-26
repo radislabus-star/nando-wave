@@ -889,11 +889,29 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
                     .ms3_linked_frame_acquisition_path
                     .join("version-space-v1"),
                 current_capture_sequence,
+                unix_now(),
             )?,
         )))
     } else {
         None
     };
+    if let (Some(runtime), Some(archive)) = (
+        ms3_frozen_version_space.as_ref(),
+        multi_source_topology_archive.as_ref(),
+    ) {
+        let mut rows = archive
+            .lock()
+            .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+            .rows();
+        rows.sort_by_key(|row| row.bridge_sequence);
+        let observed_at = unix_now().saturating_mul(1_000_000_000);
+        let mut runtime = runtime
+            .lock()
+            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+        for row in rows {
+            runtime.observe_historical_topology(&row, observed_at)?;
+        }
+    }
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -959,6 +977,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/ms3-independent-future",
             get(ms3_independent_future_report),
+        )
+        .route(
+            "/v2/multi-source/ms3-future-applicability",
+            get(ms3_future_applicability_report),
         )
         .route(
             "/v2/multi-source/ms3-capture-health",
@@ -1961,6 +1983,42 @@ async fn ms3_independent_future_report(State(state): State<AppState>) -> Respons
     }
 }
 
+async fn ms3_future_applicability_report(State(state): State<AppState>) -> Response {
+    let report = state
+        .ms3_frozen_version_space
+        .as_ref()
+        .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())
+        .and_then(|runtime| {
+            runtime
+                .lock()
+                .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+                .applicability_report(unix_now())
+                .and_then(|report| {
+                    report.ok_or_else(|| "ms3_future_applicability_not_open".to_owned())
+                })
+        });
+    match report {
+        Ok(report) => json_response(
+            StatusCode::OK,
+            serde_json::to_value(report).unwrap_or_else(|_| {
+                json!({
+                    "schema": "nando.ms3-future-applicability-error.v1",
+                    "error": "report_encode"
+                })
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-future-applicability-error.v1",
+                "error": error,
+                "authority_ready": false,
+                "phase_mutation_allowed": false
+            }),
+        ),
+    }
+}
+
 fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> {
     let (frozen, prediction_min_sequence, committed_topologies) = {
         let runtime = state
@@ -2351,6 +2409,7 @@ fn evaluate_ms3_frozen_version_space(
                     .to_owned(),
                 vm_abi: nando_operator_persistence::CRYSTALLIZED_OPERATOR_VM_ABI_V1.to_owned(),
             },
+            unix_now(),
         )
 }
 
@@ -2370,14 +2429,25 @@ fn evaluate_ms3_independent_future(
                 .envelope()
                 .cloned()
                 .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())?,
-            runtime.predictions(),
+            runtime
+                .predictions()
+                .into_iter()
+                .filter_map(|prediction| {
+                    (!runtime.prediction_is_disqualified(&prediction.prediction_root_sha256))
+                        .then(|| {
+                            runtime
+                                .prediction_durable_at(&prediction.prediction_root_sha256)
+                                .map(|durable_at| (prediction, durable_at))
+                        })
+                        .flatten()
+                })
+                .collect::<Vec<_>>(),
             runtime.independent_future().cloned(),
         )
     };
     if existing.is_some() || predictions.is_empty() {
         return Ok(existing);
     }
-    let prediction = &predictions[0];
     let future_topologies = state
         .multi_source_topology_archive
         .as_ref()
@@ -2418,35 +2488,52 @@ fn evaluate_ms3_independent_future(
         &frames,
         &terminals,
     );
-    let Some(bound) = ledger
-        .bound_for_topology(&prediction.topology_root_sha256)
-        .iter()
-        .find(|bound| {
-            bound.binding.request_event_id_sha256 == prediction.request_event_id_sha256
-                && bound.binding.turn_intent_id_sha256 == prediction.turn_intent_id_sha256
-                && bound.binding.session_lineage_sha256 == prediction.session_lineage_sha256
-        })
-        .cloned()
-    else {
-        return Ok(None);
-    };
-    let frame = frames
-        .iter()
-        .find(|frame| {
-            nando_operator_kernel::canonical_json_sha256(*frame)
-                .is_ok_and(|root| root == bound.binding.completed_frame_root_sha256)
-        })
-        .cloned()
-        .ok_or_else(|| "ms3_future_frame_missing".to_owned())?;
-    let future = nando_operator_learning::multi_source::seal_ms3_independent_future_v1(
-        &frozen, prediction, &bound, &frame,
-    )
-    .map_err(|error| format!("ms3_independent_future_seal:{error}"))?;
-    runtime
-        .lock()
-        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
-        .seal_independent_future(future.clone())?;
-    Ok(Some(future))
+    for (prediction, durable_at) in predictions {
+        let Some(bound) = ledger
+            .bound_for_topology(&prediction.topology_root_sha256)
+            .iter()
+            .find(|bound| {
+                bound.binding.request_event_id_sha256 == prediction.request_event_id_sha256
+                    && bound.binding.turn_intent_id_sha256 == prediction.turn_intent_id_sha256
+                    && bound.binding.session_lineage_sha256 == prediction.session_lineage_sha256
+            })
+            .cloned()
+        else {
+            continue;
+        };
+        if bound.binding.request_completed_at_unix_nanos <= durable_at {
+            runtime
+                .lock()
+                .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+                .record_precommitted_prediction_missing(
+                    &prediction,
+                    &bound.binding.terminal_receipt_root_sha256,
+                    bound.binding.request_completed_at_unix_nanos,
+                )?;
+            continue;
+        }
+        let frame = frames
+            .iter()
+            .find(|frame| {
+                nando_operator_kernel::canonical_json_sha256(*frame)
+                    .is_ok_and(|root| root == bound.binding.completed_frame_root_sha256)
+            })
+            .cloned()
+            .ok_or_else(|| "ms3_future_frame_missing".to_owned())?;
+        let future = nando_operator_learning::multi_source::seal_ms3_independent_future_v1(
+            &frozen,
+            &prediction,
+            &bound,
+            &frame,
+        )
+        .map_err(|error| format!("ms3_independent_future_seal:{error}"))?;
+        runtime
+            .lock()
+            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+            .seal_independent_future(future.clone())?;
+        return Ok(Some(future));
+    }
+    Ok(None)
 }
 
 fn evaluate_ms3_capture_health(

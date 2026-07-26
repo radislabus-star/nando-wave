@@ -1641,3 +1641,60 @@ proof mode                            STRUCTURAL_ONLY
 
 This review proves route coherence only. It grants no evidence, package,
 deployment or CPU authority.
+
+## 26. Live MS3 Future-Applicability Gate
+
+The first frozen natural-law candidate has one complete semantic class, but it
+does not yet have an independent applicable future. Readiness is now owned by
+one bounded, immutable gate:
+
+```text
+UniqueLawFrozen
+  -> independent pre-action topology
+  -> applicability classification
+     |-- structurally not applicable
+     |     -> count in acquisition denominator only
+     |-- applicable
+           -> persist prediction and fsync
+           -> record durable prediction receipt
+           -> only then join a terminal outcome
+  -> independent verifier
+     |-- exact match      -> FUTURE_PASS
+     |-- mismatch         -> CONTRADICTION in a new generation
+     |-- outcome preceded durable prediction
+                           -> PRECOMMITTED_PREDICTION_MISSING
+```
+
+The frozen acquisition contract is:
+
+```text
+max independent topologies  256
+deadline                    24 hours after gate open
+authority_ready             false
+phase_mutation_allowed      false
+```
+
+Terminal outcomes never create predictions retroactively. A topology that is
+present after restart remains usable only when its terminal outcome has not
+already completed; the durable prediction and terminal receipt timestamps
+decide this, not process age.
+
+Exhaustion without one applicable topology produces exactly:
+
+```text
+MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL
+```
+
+This verdict does not reject the frozen law, widen its applicability guard,
+create anti-evidence or permit threshold changes. It says only that the frozen
+law was not independently applicable in the preregistered live window.
+
+Current live checkpoint is recorded in
+`STOP_MS3_FUTURE_APPLICABILITY_GATE.md`. The only unlocked transition is:
+
+```text
+first fresh applicable topology
+-> durable prediction
+-> later terminal outcome
+-> independent verifier
+```

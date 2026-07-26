@@ -998,6 +998,36 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
     let prediction = predict_ms3_unique_law_v1(&frozen, &future_topology, 2_050_000_000)
         .expect("pre-action prediction")
         .expect("applicable future");
+    let applicability_contract = Ms3FutureApplicabilityContractV1::seal(
+        frozen.contract.contract_root_sha256.clone(),
+        7,
+        8,
+        1,
+    )
+    .expect("applicability contract");
+    let mut applicability =
+        Ms3FutureApplicabilityLedgerV1::new(applicability_contract.clone()).expect("ledger");
+    let committed = Ms3FutureApplicabilityEventV1::seal(
+        &applicability_contract,
+        8,
+        future_topology.commit.commitment_root_sha256.clone(),
+        future_topology
+            .session_lineage_sha256
+            .clone()
+            .expect("lineage"),
+        Ms3FutureApplicabilityDispositionV1::PredictionCommitted,
+        String::new(),
+        Some(&prediction),
+        Some(2_060_000_000),
+        None,
+        2_060_000_000,
+    )
+    .expect("durable prediction event");
+    assert!(applicability.append(committed).expect("append"));
+    assert_eq!(
+        applicability.report(101).verdict,
+        Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending
+    );
     let future_frame = t1_completed_frame("future", "action-future", "future-lineage", 2_500);
     let future_terminal = terminal("request-future", 1_990, 2_100);
     let future_ledger = TransportBindingLedgerV1::build(
@@ -1025,6 +1055,112 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
             .expect("restored future bytes"),
         bytes
     );
+
+    let missing = Ms3FutureApplicabilityEventV1::seal(
+        &applicability_contract,
+        8,
+        future_topology.commit.commitment_root_sha256.clone(),
+        future_topology
+            .session_lineage_sha256
+            .clone()
+            .expect("lineage"),
+        Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing,
+        "PRECOMMITTED_PREDICTION_MISSING".to_owned(),
+        Some(&prediction),
+        Some(2_060_000_000),
+        Some((&future_terminal.receipt_root_sha256, 2_050_000_000)),
+        2_070_000_000,
+    )
+    .expect("precommitted exclusion");
+    assert!(applicability.append(missing).expect("append exclusion"));
+    let report = applicability.report(101);
+    assert_eq!(report.independent_topologies, 1);
+    assert_eq!(report.precommitted_prediction_missing, 1);
+    assert_eq!(report.active_predictions, 0);
+    assert_eq!(report.verdict, Ms3FutureApplicabilityVerdictV1::Collecting);
+    let gate_bytes = applicability.canonical_bytes().expect("gate bytes");
+    assert_eq!(
+        Ms3FutureApplicabilityLedgerV1::from_canonical_bytes(&gate_bytes)
+            .expect("gate restart")
+            .canonical_bytes()
+            .expect("restored gate bytes"),
+        gate_bytes
+    );
+}
+
+#[test]
+fn future_applicability_gate_fails_only_after_its_frozen_deadline() {
+    let contract =
+        Ms3FutureApplicabilityContractV1::seal(root("law"), 7, 8, 100).expect("contract");
+    let mut ledger = Ms3FutureApplicabilityLedgerV1::new(contract.clone()).expect("ledger");
+    let event = Ms3FutureApplicabilityEventV1::seal(
+        &contract,
+        8,
+        root("topology"),
+        root("independent-lineage"),
+        Ms3FutureApplicabilityDispositionV1::StructurallyNotApplicable,
+        "structural_role_missing_or_ambiguous".to_owned(),
+        None,
+        None,
+        None,
+        101_000_000_000,
+    )
+    .expect("event");
+    assert!(ledger.append(event).expect("append"));
+    let collecting = ledger.report(contract.deadline_unix - 1);
+    assert_eq!(
+        collecting.verdict,
+        Ms3FutureApplicabilityVerdictV1::Collecting
+    );
+    assert_eq!(collecting.independent_topologies, 1);
+    assert_eq!(collecting.structurally_not_applicable, 1);
+    let failed = ledger.report(contract.deadline_unix);
+    assert_eq!(
+        failed.verdict,
+        Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+    );
+    assert_eq!(failed.blocker, MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL);
+    assert!(!failed.authority_ready);
+    assert!(!failed.phase_mutation_allowed);
+}
+
+#[test]
+fn future_applicability_gate_fails_at_its_frozen_topology_budget() {
+    let contract =
+        Ms3FutureApplicabilityContractV1::seal(root("law"), 7, 8, 100).expect("contract");
+    let mut ledger = Ms3FutureApplicabilityLedgerV1::new(contract.clone()).expect("ledger");
+    for index in 0..contract.max_independent_topologies {
+        let event = Ms3FutureApplicabilityEventV1::seal(
+            &contract,
+            8 + index,
+            root(&format!("topology-{index}")),
+            root(&format!("independent-lineage-{index}")),
+            Ms3FutureApplicabilityDispositionV1::StructurallyNotApplicable,
+            "structural_role_missing_or_ambiguous".to_owned(),
+            None,
+            None,
+            None,
+            101_000_000_000 + index,
+        )
+        .expect("event");
+        assert!(ledger.append(event).expect("append"));
+    }
+
+    let report = ledger.report(contract.opened_at_unix + 1);
+    assert!(report.validate());
+    assert_eq!(
+        report.independent_topologies,
+        contract.max_independent_topologies
+    );
+    assert_eq!(
+        report.verdict,
+        Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+    );
+    assert_eq!(report.blocker, MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL);
+
+    let mut tampered = report;
+    tampered.independent_topologies -= 1;
+    assert!(!tampered.validate());
 }
 
 #[test]

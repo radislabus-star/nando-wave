@@ -10,6 +10,18 @@ use crate::multi_source::{
 
 pub const MS3_FUTURE_PREDICTION_SCHEMA_V1: &str = "nando.ms3-future-prediction.v1";
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Ms3FutureApplicabilityV1 {
+    BeforeFutureWindow,
+    SupportLineageReuse,
+    StructurallyNotApplicable {
+        blocker: &'static str,
+    },
+    Applicable {
+        prediction: Box<Ms3FuturePredictionV1>,
+    },
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ms3FuturePredictionV1 {
@@ -34,6 +46,19 @@ pub fn predict_ms3_unique_law_v1(
     topology: &PreActionTopologyAuditRowV1,
     predicted_at_unix_nanos: u64,
 ) -> Result<Option<Ms3FuturePredictionV1>, &'static str> {
+    Ok(
+        match classify_ms3_unique_law_v1(frozen, topology, predicted_at_unix_nanos)? {
+            Ms3FutureApplicabilityV1::Applicable { prediction } => Some(*prediction),
+            _ => None,
+        },
+    )
+}
+
+pub fn classify_ms3_unique_law_v1(
+    frozen: &FrozenVersionSpaceEnvelopeV1,
+    topology: &PreActionTopologyAuditRowV1,
+    predicted_at_unix_nanos: u64,
+) -> Result<Ms3FutureApplicabilityV1, &'static str> {
     frozen
         .validate()
         .map_err(|_| "future_frozen_contract_invalid")?;
@@ -42,7 +67,9 @@ pub fn predict_ms3_unique_law_v1(
         ..
     } = &frozen.contract.state
     else {
-        return Ok(None);
+        return Ok(Ms3FutureApplicabilityV1::StructurallyNotApplicable {
+            blocker: "future_unique_law_missing",
+        });
     };
     let capture_sequence = topology
         .bridge_sequence
@@ -51,10 +78,11 @@ pub fn predict_ms3_unique_law_v1(
         .session_lineage_sha256
         .as_ref()
         .ok_or("future_lineage_missing")?;
-    if capture_sequence < frozen.contract.future_min_sequence
-        || lineage == &frozen.contract.session_lineage_sha256
-    {
-        return Ok(None);
+    if capture_sequence < frozen.contract.future_min_sequence {
+        return Ok(Ms3FutureApplicabilityV1::BeforeFutureWindow);
+    }
+    if lineage == &frozen.contract.session_lineage_sha256 {
+        return Ok(Ms3FutureApplicabilityV1::SupportLineageReuse);
     }
     let machine =
         OperatorIdentificationMachineV1::from_checkpoint_bytes(frozen.machine_checkpoint())
@@ -68,11 +96,13 @@ pub fn predict_ms3_unique_law_v1(
     let program = programs
         .get(&canonical_program_root_sha256)
         .ok_or("future_canonical_program_missing")?;
-    let Ok(pre_action_binding_root_sha256) =
-        pre_action_t1_binding_root(program, &topology.structure.topology)
-    else {
-        return Ok(None);
-    };
+    let pre_action_binding_root_sha256 =
+        match pre_action_t1_binding_root(program, &topology.structure.topology) {
+            Ok(root) => root,
+            Err(blocker) => {
+                return Ok(Ms3FutureApplicabilityV1::StructurallyNotApplicable { blocker });
+            }
+        };
     let mut prediction = Ms3FuturePredictionV1 {
         schema: MS3_FUTURE_PREDICTION_SCHEMA_V1.to_owned(),
         prediction_root_sha256: String::new(),
@@ -91,7 +121,9 @@ pub fn predict_ms3_unique_law_v1(
     };
     prediction.prediction_root_sha256 = prediction.expected_root()?;
     prediction.validate(frozen)?;
-    Ok(Some(prediction))
+    Ok(Ms3FutureApplicabilityV1::Applicable {
+        prediction: Box::new(prediction),
+    })
 }
 
 impl Ms3FuturePredictionV1 {
