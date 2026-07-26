@@ -819,6 +819,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
             "/v2/multi-source/ms3-failure-corpus",
             get(ms3_failure_corpus_report),
         )
+        .route(
+            "/v2/multi-source/ms3-representation-gaps",
+            get(ms3_representation_gap_report),
+        )
         .route("/v1/transitions/execute", post(execute_transition))
         .route("/v2/transitions/execute", post(execute_transition))
         .route("/v1/transitions/observe", post(observe_transition))
@@ -1656,6 +1660,59 @@ async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
             StatusCode::SERVICE_UNAVAILABLE,
             json!({
                 "schema": "nando.ms3-failure-corpus-error.v1",
+                "error": "evidence_inputs_pending"
+            }),
+        ),
+    }
+}
+
+async fn ms3_representation_gap_report(State(state): State<AppState>) -> Response {
+    let evidence = current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
+    let requests = state.request_learning.audit_snapshot_v1();
+    let terminals = state
+        .config
+        .nginx_terminal_path
+        .as_deref()
+        .ok_or_else(|| "nginx_terminal_path_not_configured".to_owned())
+        .and_then(nginx_terminal::load_transport_terminal_receipts_v1);
+    match (evidence, requests, terminals) {
+        (Some(evidence), Ok(requests), Ok(terminals)) => {
+            let report =
+                nando_operator_learning::multi_source::build_representation_gap_adjudication_report_v1(
+                    requests,
+                    evidence.frames,
+                    terminals,
+                );
+            if !report.validate() {
+                return json_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    json!({
+                        "schema": "nando.representation-gap-adjudication-error.v1",
+                        "error": "report_invalid"
+                    }),
+                );
+            }
+            json_response(
+                StatusCode::OK,
+                serde_json::to_value(report).unwrap_or_else(|_| {
+                    json!({
+                        "schema": "nando.representation-gap-adjudication-error.v1",
+                        "error": "report_encode"
+                    })
+                }),
+            )
+        }
+        (_, _, Err(error)) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.representation-gap-adjudication-error.v1",
+                "error": error
+            }),
+        ),
+        _ => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.representation-gap-adjudication-error.v1",
                 "error": "evidence_inputs_pending"
             }),
         ),

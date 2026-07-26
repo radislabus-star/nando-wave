@@ -7,6 +7,7 @@ mod identification;
 mod join;
 mod live_snapshot;
 mod marginal;
+mod representation_gap;
 mod source_neutral_t1;
 mod transport_binding;
 
@@ -45,6 +46,11 @@ pub use marginal::{
     COVERAGE_OPPORTUNITY_MAX_ROWS_V1, COVERAGE_OPPORTUNITY_SNAPSHOT_SCHEMA_V1,
     CoverageOpportunitySnapshotV1, MarginalShapeOpportunityV1,
     build_coverage_opportunity_snapshot_v1,
+};
+pub use representation_gap::{
+    REPRESENTATION_GAP_ADJUDICATION_SCHEMA_V1, REPRESENTATION_GAP_REPORT_SCHEMA_V1,
+    RepresentationGapAdjudicationReportV1, RepresentationGapAdjudicationV1,
+    RepresentationGapClassV1, build_representation_gap_adjudication_report_v1,
 };
 pub use transport_binding::{
     REQUEST_ACTION_BINDING_SCHEMA_V1, RequestActionBindingV1, TRANSPORT_BOUND_JOIN_MAX_ROWS_V1,
