@@ -1,6 +1,7 @@
 mod artifact;
 mod canonical_operator_ir;
 mod capability_grounding_v3;
+mod composition_shadow_v1;
 mod crystallized_binding;
 mod generation_persistence_v3;
 mod mode_to_role_v3;
@@ -17,6 +18,7 @@ mod traffic_shadow_v3;
 pub use artifact::*;
 pub use canonical_operator_ir::*;
 pub use capability_grounding_v3::*;
+pub use composition_shadow_v1::*;
 pub use crystallized_binding::*;
 pub use generation_persistence_v3::*;
 pub use mode_to_role_v3::*;

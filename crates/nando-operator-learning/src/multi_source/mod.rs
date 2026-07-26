@@ -1,6 +1,7 @@
 //! Source-neutral multi-source discovery contracts.
 
 mod audit;
+mod coverage_portfolio_shadow_v1;
 mod factorizer;
 mod failure_corpus;
 mod frozen_version_space;
@@ -18,6 +19,13 @@ pub use audit::{
     MultiSourceEvidenceAuditV1, MultiSourceShapeAuditV1, PreActionTopologyAuditRowV1,
     RelationEvidenceAuditV1, RequestStructureAuditRowV1, RequestStructureAuditSnapshotV1,
     build_multi_source_evidence_audit_v1,
+};
+pub use coverage_portfolio_shadow_v1::{
+    COVERAGE_PORTFOLIO_SHADOW_SCHEMA_V1, CoverageCandidateCostV1, CoverageCandidateSafetyV1,
+    CoverageIntentReceiptV1, CoveragePackageCandidateV1, CoveragePackageShadowV1,
+    CoveragePortfolioConservationV1, CoveragePortfolioShadowErrorV1, CoveragePortfolioShadowV1,
+    CoverageReceiptKindV1, CoverageSafetyVetoV1, FrozenCoverageDenominatorV1,
+    SelectedCoveragePackageV1, build_coverage_portfolio_shadow_v1,
 };
 pub use factorizer::{
     CompletedEffectFormV1, FactorizedMultiSourceRowV1, MULTI_SOURCE_FACTORIZED_ROW_SCHEMA_V1,

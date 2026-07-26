@@ -24,6 +24,7 @@ mod executable_protocol_mode;
 mod family_discovery;
 mod grounding;
 mod lifecycle;
+mod ms4_frozen_future;
 mod online;
 mod online_admission;
 mod online_checkpoint;
@@ -281,6 +282,10 @@ pub use lifecycle::{
     frame_representation_matches_support, freeze_source_neutral_support,
     freeze_source_neutral_support_with_policy, grounded_response_package_id,
     response_package_lineage_id, response_support_manifest_digest,
+};
+pub use ms4_frozen_future::{
+    MS4_FROZEN_FUTURE_SHADOW_CANDIDATE_SCHEMA_V1, Ms4FrozenFutureShadowCandidateV1,
+    Ms4RuntimeEvidenceV1, crystallize_ms4_frozen_future_shadow_v1,
 };
 pub use online::{
     OnlineResponseActionFamilyReport, OnlineResponseAdmissionCandidate, OnlineResponseBucketReport,
