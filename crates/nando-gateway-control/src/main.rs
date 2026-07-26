@@ -1143,6 +1143,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                 "input_tokens": current_epoch_total_input_tokens,
                 "cpu_verified_input_tokens": current_epoch_cpu_input_tokens,
                 "actual_local_accepts": metric_u64(economics, "actual_local_accepts"),
+                "terminal_request_events": metric_u64(economics, "terminal_request_events"),
+                "in_flight_local_outcomes": metric_u64(economics, "in_flight_local_outcomes"),
                 "input_token_saving_share_milli": metric_u64(economics, "input_token_saving_share_milli"),
                 "completed_m3_windows": economics
                     .get("completed_m3_windows")

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.26-b012";
+const DASHBOARD_BUILD: &str = "2026.07.26-b013";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -437,7 +437,7 @@ const TEMPLATE: &str = r#"
 <main class="nando-live" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live traffic control">
   <header class="live-head"><div class="live-inner">
     <h1 class="live-title">NANDO / LIVE TRAFFIC CONTROL</h1>
-    <div class="live-clock"><b>LIVE</b> · обновлено <span id="live-age">0</span> с назад · SERVICES <span id="services-count">—/3</span></div>
+    <div class="live-clock"><b>LIVE</b> · API <span id="live-age">0</span> с · SOURCE <span id="source-age">—</span> с · SERVICES <span id="services-count">—/3</span></div>
   </div></header>
   <section class="live-band"><div class="live-inner">
     <h2 class="band-title">РЕАЛЬНАЯ ОБРАБОТКА · ТЕКУЩАЯ ТОЧНАЯ V4-ЭПОХА</h2>
@@ -500,6 +500,8 @@ const TEMPLATE: &str = r#"
   const samples = [];
   let previousRequests = null;
   let lastSuccess = Date.now();
+  let sourceGeneratedAt = 0;
+  let epochBaseline = null;
   const node = (id) => document.getElementById(id);
   const text = (id, value) => { const target = node(id); if (target) target.textContent = value; };
   const stateClass = (id, value) => { const target = node(id); if (target) target.className = value; };
@@ -536,11 +538,14 @@ const TEMPLATE: &str = r#"
     const accounting = snapshot.accounting || {};
     const epochTotal = accounting.input_tokens ?? snapshot.current_epoch_total_input_tokens ?? 0;
     const epochCpu = accounting.cpu_verified_input_tokens ?? snapshot.current_epoch_cpu_input_tokens ?? 0;
+    if (epochBaseline === null) epochBaseline = epochTotal;
+    sourceGeneratedAt = accounting.generated_at_unix || 0;
     text("epoch-total-token-count", number.format(epochTotal));
     text("epoch-cpu-token-count", number.format(epochCpu));
     text("epoch-cpu-token-share", ratio(epochCpu, epochTotal, 1));
     text("epoch-share-large", ratio(epochCpu, epochTotal, 1));
-    text("epoch-accounting-note", `${String(accounting.identity_domain || "UNKNOWN").toUpperCase()} · ${accounting.provider_billed_tokens_available ? "PROVIDER TOKENS" : "LOCAL O200K TOKENS"}`);
+    const epochDelta = Math.max(0, epochTotal - epochBaseline);
+    text("epoch-accounting-note", `${String(accounting.identity_domain || "UNKNOWN").toUpperCase()} · EVENTS ${number.format(accounting.terminal_request_events || 0)} · Δ +${number.format(epochDelta)} С ОТКРЫТИЯ`);
     const completedWindows = Array.isArray(accounting.completed_m3_windows) ? accounting.completed_m3_windows : [];
     let m3Streak = 0;
     for (let index = completedWindows.length - 1; index >= 0 && completedWindows[index]?.pass === true; index -= 1) m3Streak += 1;
@@ -610,7 +615,10 @@ const TEMPLATE: &str = r#"
       if (current && current !== dashboardBuild) window.location.reload();
     } catch (_) {}
   };
-  window.setInterval(() => text("live-age", Math.floor((Date.now() - lastSuccess) / 1000)), 1000);
+  window.setInterval(() => {
+    text("live-age", Math.floor((Date.now() - lastSuccess) / 1000));
+    text("source-age", sourceGeneratedAt > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - sourceGeneratedAt) : "—");
+  }, 1000);
   refresh(); window.setInterval(refresh, 2000); window.setInterval(refreshDocumentVersion, 15000);
 })();
 </script>
