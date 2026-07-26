@@ -15,6 +15,7 @@ mod live_economics;
 mod miner_worker;
 mod ms3_capture_health;
 mod ms3_linked_frame_acquisition;
+mod ms3_receipt_health;
 pub mod multi_source_audit;
 mod multi_source_capture;
 mod multi_source_frame_archive;
@@ -2040,13 +2041,54 @@ fn evaluate_ms3_capture_health(
             .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?;
         (runtime.contract().clone(), runtime.is_terminal())
     };
-    let current_topology_rows = state
-        .multi_source_topology_archive
+    let (current_topology_rows, new_topologies) = {
+        let archive = state
+            .multi_source_topology_archive
+            .as_ref()
+            .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+            .lock()
+            .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
+        let watermark = usize::try_from(contract.topology_watermark_rows)
+            .map_err(|_| "ms3_capture_health_watermark_range".to_owned())?;
+        let mut new_topologies = archive.rows_after(watermark)?;
+        new_topologies
+            .truncate(usize::try_from(contract.max_new_topology_rows).unwrap_or(usize::MAX));
+        (archive.len(), new_topologies)
+    };
+    let request_ids = new_topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let terminal_request_ids = state
+        .terminal_receipt_archive
         .as_ref()
-        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
         .lock()
-        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
-        .len();
+        .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
+        .receipts_for_requests(&request_ids)
+        .into_iter()
+        .filter(|receipt| {
+            receipt.validate()
+                && receipt.completed_at_unix_nanos
+                    <= contract.deadline_unix.saturating_mul(1_000_000_000)
+        })
+        .map(|receipt| receipt.request_event_id_sha256)
+        .collect::<BTreeSet<_>>();
+    let receipt_observations = new_topologies
+        .iter()
+        .map(|row| ms3_receipt_health::Ms3ReceiptTopologyObservationV1 {
+            topology_root_sha256: row.commit.commitment_root_sha256.clone(),
+            request_event_id_sha256: row.structure.request_event_id_sha256.clone(),
+            captured_at_unix_ms: row.captured_at_unix_ms,
+        })
+        .collect::<Vec<_>>();
+    let sampled_at_unix = unix_now();
+    let receipt = ms3_receipt_health::build_ms3_receipt_health_report_v1(
+        sampled_at_unix,
+        acquisition_closed,
+        &receipt_observations,
+        &terminal_request_ids,
+    );
     let evidence = current_miner_worker(state).and_then(|worker| worker.multi_source_evidence());
     let structure = state.learning_structure_bridge.status();
     let opportunity = state.opportunity_bridge.status();
@@ -2059,13 +2101,14 @@ fn evaluate_ms3_capture_health(
     };
     Ok(ms3_capture_health::build_ms3_capture_health_report_v1(
         &contract,
-        unix_now(),
+        sampled_at_unix,
         u64::try_from(current_topology_rows).unwrap_or(u64::MAX),
         acquisition_closed,
         evidence
             .as_ref()
             .map(|snapshot| snapshot.opportunities.as_slice()),
         counters,
+        receipt,
     ))
 }
 

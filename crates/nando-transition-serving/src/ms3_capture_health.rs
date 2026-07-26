@@ -5,6 +5,8 @@ use nando_operator_learning::{
 };
 use serde::Serialize;
 
+use crate::ms3_receipt_health::Ms3ReceiptHealthReportV1;
+
 pub(super) const MS3_CAPTURE_STALL_LAG_SECONDS_V1: u64 = 300;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -47,6 +49,7 @@ pub(super) struct Ms3CaptureHealthReportV1 {
     pub(super) structural_sequence_gaps: u64,
     pub(super) opportunity_pending_events: u64,
     pub(super) opportunity_consumer_failures: u64,
+    pub(super) receipt: Ms3ReceiptHealthReportV1,
     pub(super) status: Ms3CaptureHealthStatusV1,
     pub(super) blocker: &'static str,
     pub(super) operational_repair_allowed: bool,
@@ -62,6 +65,7 @@ pub(super) fn build_ms3_capture_health_report_v1(
     acquisition_closed: bool,
     opportunities: Option<&[OpportunityIntentAuditRowV1]>,
     counters: Ms3CaptureOperationalCountersV1,
+    receipt: Ms3ReceiptHealthReportV1,
 ) -> Ms3CaptureHealthReportV1 {
     let rows = opportunities.map(|rows| {
         rows.iter()
@@ -133,6 +137,7 @@ pub(super) fn build_ms3_capture_health_report_v1(
         structural_sequence_gaps: counters.structural_sequence_gaps,
         opportunity_pending_events: counters.opportunity_pending_events,
         opportunity_consumer_failures: counters.opportunity_consumer_failures,
+        receipt,
         status,
         blocker,
         operational_repair_allowed: status == Ms3CaptureHealthStatusV1::CaptureStalled,

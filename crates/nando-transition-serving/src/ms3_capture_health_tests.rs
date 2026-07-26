@@ -1,7 +1,10 @@
+use std::collections::BTreeSet;
+
 use nando_operator_kernel::sha256_bytes;
 use nando_operator_learning::{OpportunityIntentAuditRowV1, ReducibilityClass};
 
 use super::*;
+use crate::ms3_receipt_health::{Ms3ReceiptHealthStatusV1, build_ms3_receipt_health_report_v1};
 
 fn contract() -> Ms3LinkedFrameAcquisitionContractV1 {
     Ms3LinkedFrameAcquisitionContractV1::seal(sha256_bytes(b"prefix"), 10, 1_000, 256, 86_400)
@@ -19,6 +22,10 @@ fn ordinary(observed_at_unix: u64, input_tokens: u64) -> OpportunityIntentAuditR
     }
 }
 
+fn receipt() -> Ms3ReceiptHealthReportV1 {
+    build_ms3_receipt_health_report_v1(1_000, false, &[], &BTreeSet::new())
+}
+
 #[test]
 fn traffic_without_topology_crosses_operational_stall_slo() {
     let report = build_ms3_capture_health_report_v1(
@@ -28,6 +35,7 @@ fn traffic_without_topology_crosses_operational_stall_slo() {
         false,
         Some(&[ordinary(1_010, 7)]),
         Ms3CaptureOperationalCountersV1::default(),
+        receipt(),
     );
 
     assert_eq!(report.status, Ms3CaptureHealthStatusV1::CaptureStalled);
@@ -48,6 +56,7 @@ fn traffic_within_slo_waits_without_declaring_scientific_failure() {
         false,
         Some(&[ordinary(1_010, 11)]),
         Ms3CaptureOperationalCountersV1::default(),
+        receipt(),
     );
 
     assert_eq!(report.status, Ms3CaptureHealthStatusV1::WaitingForTopology);
@@ -64,6 +73,7 @@ fn any_post_watermark_topology_is_capture_progress() {
         false,
         Some(&[ordinary(1_010, 13)]),
         Ms3CaptureOperationalCountersV1::default(),
+        receipt(),
     );
 
     assert_eq!(report.status, Ms3CaptureHealthStatusV1::CaptureProgress);
@@ -82,6 +92,7 @@ fn pre_open_and_non_authoritative_rows_do_not_count_as_ordinary_traffic() {
         false,
         Some(&[ordinary(999, 19), non_authoritative]),
         Ms3CaptureOperationalCountersV1::default(),
+        receipt(),
     );
 
     assert_eq!(
@@ -100,6 +111,7 @@ fn unavailable_evidence_and_closed_acquisition_are_not_capture_stalls() {
         false,
         None,
         Ms3CaptureOperationalCountersV1::default(),
+        receipt(),
     );
     let closed = build_ms3_capture_health_report_v1(
         &contract(),
@@ -108,6 +120,7 @@ fn unavailable_evidence_and_closed_acquisition_are_not_capture_stalls() {
         true,
         Some(&[ordinary(1_010, 23)]),
         Ms3CaptureOperationalCountersV1::default(),
+        receipt(),
     );
 
     assert_eq!(
@@ -117,4 +130,8 @@ fn unavailable_evidence_and_closed_acquisition_are_not_capture_stalls() {
     assert_eq!(closed.status, Ms3CaptureHealthStatusV1::AcquisitionClosed);
     assert!(!unavailable.operational_repair_allowed);
     assert!(!closed.operational_repair_allowed);
+    assert_eq!(
+        unavailable.receipt.status,
+        Ms3ReceiptHealthStatusV1::WaitingForTopology
+    );
 }

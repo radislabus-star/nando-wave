@@ -138,6 +138,24 @@ Operational endpoint:
 http://127.0.0.1:18790/v2/multi-source/ms3-capture-health
 ```
 
+The same endpoint independently watches the next operational edge by exact
+`request_event_id`:
+
+```text
+post-watermark topology without terminal receipt
++ age below 300 seconds
+-> IN_FLIGHT
+
+post-watermark topology without terminal receipt
++ age at least 300 seconds
+-> RECEIPT_STALLED
+```
+
+`RECEIPT_STALLED` preserves the frozen denominator, watermark and deadline. It
+permits repair of topology-to-terminal association only. An uncovered row is
+never converted into negative evidence, and the scientific report remains
+unchanged.
+
 ## Verification
 
 ```text
