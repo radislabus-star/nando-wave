@@ -9,26 +9,61 @@ use nando_operator_kernel::{
 
 use super::BlindThenRevealJoinedTransitionV1;
 
+const T1_MAX_ROLE_BINDING_HYPOTHESES: usize = 64;
+const T1_MAX_PROGRAM_HYPOTHESES: usize = 4_096;
+
+type LocalRoleId = u16;
+type StructuralSelector = ResponseValueSelector;
+type RoleBindingOptions = Vec<(LocalRoleId, StructuralSelector)>;
+type RoleHypothesisMap = BTreeMap<ResponseValueSelector, RoleBindingOptions>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum SelectedObservationEvidenceV1 {
+    Missing,
+    Ambiguous,
+    Present,
+}
+
+pub(super) fn selected_observation_evidence_v1(
+    frame: &RelationFrame,
+) -> SelectedObservationEvidenceV1 {
+    match admissible_observations(frame) {
+        Ok(_) => SelectedObservationEvidenceV1::Present,
+        Err("selected_observation_missing") => SelectedObservationEvidenceV1::Missing,
+        Err(_) => SelectedObservationEvidenceV1::Ambiguous,
+    }
+}
+
 pub(super) fn enumerate_source_neutral_t1_candidates(
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> Result<BTreeMap<String, ResponseProgram>, &'static str> {
-    let physical =
-        crate::synthesis::enumerate_response_program_candidates(std::slice::from_ref(frame));
+    let replay_frame = deduplicated_relation_frame(frame);
+    let observations = admissible_observations(&replay_frame)?;
+    let role_hypotheses = source_neutral_role_hypotheses(joined, &observations)?;
+    let physical = crate::synthesis::enumerate_response_program_candidates(std::slice::from_ref(
+        &replay_frame,
+    ));
     if physical.is_empty() {
         return Err("physical_t1_program_missing");
     }
-    let structurally_valid = physical
-        .into_iter()
-        .filter_map(|program| source_neutralize_t1_program(&program, joined, frame))
-        .filter(|program| program.validate().is_ok())
-        .collect::<Vec<_>>();
+    let mut structurally_valid = Vec::new();
+    for program in physical {
+        structurally_valid.extend(source_neutralize_t1_programs(
+            &program,
+            &observations,
+            &role_hypotheses,
+        )?);
+        if structurally_valid.len() > T1_MAX_PROGRAM_HYPOTHESES {
+            return Err("source_neutral_program_budget_exhausted");
+        }
+    }
     if structurally_valid.is_empty() {
         return Err(source_neutral_t1_blocker(joined, frame));
     }
     let candidates = structurally_valid
         .into_iter()
-        .filter(|program| t1_program_is_consistent(program, joined, frame))
+        .filter(|program| t1_program_is_consistent(program, joined, &replay_frame))
         .filter_map(|program| {
             response_program_version_root_sha256(&program)
                 .ok()
@@ -54,111 +89,166 @@ pub(super) fn t1_program_consistency_blocker(
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> Option<&'static str> {
-    if selected_observations(frame).is_some_and(|observations| observations.len() > 1) {
-        return multi_role_program_consistency_blocker(program, joined, frame);
-    }
-    let Some((_, selected_value_root, _, observed_selector)) = selected_observation(frame) else {
+    let replay_frame = deduplicated_relation_frame(frame);
+    let Ok(observations) = admissible_observations(&replay_frame) else {
         return Some("selected_observation_missing_or_ambiguous");
     };
-    let Some(expected_witness) = witness_for_program(program, joined) else {
-        return Some("structural_role_missing_or_ambiguous");
-    };
-    if expected_witness.value_sha256 != selected_value_root {
-        return Some("structural_role_value_mismatch");
-    }
-    let Some(structural_selector) = primary_t1_selector(program) else {
+    let Some(structural_selectors) = program_role_selectors(program) else {
         return Some("primary_selector_missing");
     };
-    let mut bound = program.clone();
-    if replace_t1_selector(&mut bound, structural_selector, observed_selector).is_none() {
-        return Some("selector_rewrite_failed");
-    }
-    (!crate::synthesis::program_is_consistent(&bound, frame))
-        .then_some("physical_transition_mismatch")
-}
-
-fn multi_role_program_consistency_blocker(
-    program: &ResponseProgram,
-    joined: &BlindThenRevealJoinedTransitionV1,
-    frame: &RelationFrame,
-) -> Option<&'static str> {
-    let Some(observations) = selected_observations(frame) else {
-        return Some("selected_observation_missing_or_ambiguous");
-    };
-    let Some(selectors) = program_role_selectors(program) else {
-        return Some("primary_selector_missing");
-    };
-    if selectors.len() != observations.len() {
-        return Some("structural_role_count_mismatch");
-    }
-    let mut bound = program.clone();
-    let mut used_observations = BTreeMap::<ResponseValueSelector, ()>::new();
-    for selector in selectors {
-        let Some(witness) = witness_for_selector(selector, joined) else {
+    let mut frontier = vec![(program.clone(), BTreeSet::<ResponseValueSelector>::new())];
+    for structural_selector in structural_selectors {
+        let Some(witness) = witness_for_selector(structural_selector, joined) else {
             return Some("structural_role_missing_or_ambiguous");
         };
         let Some(role) = role_for_witness(joined, witness) else {
             return Some("selected_structural_role_missing");
         };
-        let matches = observations
+        let physical_options = observations
             .iter()
             .filter(|observation| {
                 observation.value_root == witness.value_sha256
                     && role_type_matches(role.type_class, observation.value_type)
             })
             .collect::<Vec<_>>();
-        let [observation] = matches.as_slice() else {
+        if physical_options.is_empty() {
             return Some("structural_role_value_mismatch");
-        };
-        if used_observations
-            .insert(observation.selector.clone(), ())
-            .is_some()
-        {
-            return Some("structural_role_binding_ambiguous");
         }
-        if replace_program_selector(&mut bound, selector, observation.selector).is_none() {
+        let mut next = Vec::new();
+        for (bound, used) in frontier {
+            for observation in &physical_options {
+                if used.contains(observation.selector) {
+                    continue;
+                }
+                let mut candidate = bound.clone();
+                if replace_program_selector(
+                    &mut candidate,
+                    structural_selector,
+                    observation.selector,
+                )
+                .is_none()
+                {
+                    continue;
+                }
+                let mut next_used = used.clone();
+                next_used.insert(observation.selector.clone());
+                next.push((candidate, next_used));
+                if next.len() > T1_MAX_ROLE_BINDING_HYPOTHESES {
+                    return Some("role_binding_budget_exhausted");
+                }
+            }
+        }
+        if next.is_empty() {
             return Some("selector_rewrite_failed");
         }
+        frontier = next;
     }
-    if used_observations.len() != observations.len() {
-        return Some("structural_role_coverage_incomplete");
+    if frontier
+        .iter()
+        .any(|(bound, _)| crate::synthesis::program_is_consistent(bound, &replay_frame))
+    {
+        None
+    } else {
+        Some("physical_transition_mismatch")
     }
-    (!crate::synthesis::program_is_consistent(&bound, frame))
-        .then_some("physical_transition_mismatch")
 }
 
-fn source_neutralize_t1_program(
+fn deduplicated_relation_frame(frame: &RelationFrame) -> RelationFrame {
+    let mut deduplicated = frame.clone();
+    deduplicated.atoms.sort();
+    deduplicated.atoms.dedup();
+    deduplicated
+}
+
+fn source_neutralize_t1_programs(
     program: &ResponseProgram,
+    observations: &[SelectedObservation<'_>],
+    role_hypotheses: &RoleHypothesisMap,
+) -> Result<Vec<ResponseProgram>, &'static str> {
+    let Some(physical_selectors) = program_role_selectors(program) else {
+        return Ok(Vec::new());
+    };
+    let mut frontier = vec![(program.clone(), BTreeSet::<u16>::new())];
+    for physical_selector in physical_selectors {
+        let Some(observation) = observations
+            .iter()
+            .find(|observation| observation.selector == physical_selector)
+        else {
+            return Ok(Vec::new());
+        };
+        let role_options = role_hypotheses
+            .get(observation.selector)
+            .cloned()
+            .unwrap_or_default();
+        if role_options.len() > T1_MAX_ROLE_BINDING_HYPOTHESES {
+            return Err("role_binding_budget_exhausted");
+        }
+        let mut next = Vec::new();
+        for (candidate, used_roles) in frontier {
+            for (role_id, structural_selector) in &role_options {
+                if used_roles.contains(role_id) {
+                    continue;
+                }
+                let mut bound = candidate.clone();
+                if replace_program_selector(&mut bound, physical_selector, structural_selector)
+                    .is_none()
+                {
+                    continue;
+                }
+                let mut next_used_roles = used_roles.clone();
+                next_used_roles.insert(*role_id);
+                if bound.validate().is_ok() {
+                    next.push((bound, next_used_roles));
+                }
+                if next.len() > T1_MAX_PROGRAM_HYPOTHESES {
+                    return Err("source_neutral_program_budget_exhausted");
+                }
+            }
+        }
+        if next.is_empty() {
+            return Ok(Vec::new());
+        }
+        frontier = next;
+    }
+    Ok(frontier.into_iter().map(|(program, _)| program).collect())
+}
+
+fn source_neutral_role_hypotheses(
     joined: &BlindThenRevealJoinedTransitionV1,
-    frame: &RelationFrame,
-) -> Option<ResponseProgram> {
-    let observations = selected_observations(frame)?;
-    if observations.len() > 1 {
-        let mut candidate = program.clone();
-        for observation in observations {
-            let witness = selected_witness(joined, observation.value_root, observation.value_type)?;
+    observations: &[SelectedObservation<'_>],
+) -> Result<RoleHypothesisMap, &'static str> {
+    let mut hypotheses = BTreeMap::new();
+    let mut total = 0usize;
+    for observation in observations {
+        let options = role_binding_options(joined, observation);
+        total = total.saturating_add(options.len());
+        if total > T1_MAX_ROLE_BINDING_HYPOTHESES {
+            return Err("role_binding_budget_exhausted");
+        }
+        hypotheses.insert(observation.selector.clone(), options);
+    }
+    Ok(hypotheses)
+}
+
+fn role_binding_options(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    observation: &SelectedObservation<'_>,
+) -> RoleBindingOptions {
+    joined
+        .topology
+        .role_witnesses
+        .iter()
+        .filter(|witness| witness.value_sha256 == observation.value_root)
+        .filter_map(|witness| {
             let role = role_for_witness(joined, witness)?;
+            role_type_matches(role.type_class, observation.value_type).then_some(())?;
             let selector =
                 structural_selector_for_role(joined, role, witness, observation.value_type)?;
-            replace_program_selector(&mut candidate, observation.selector, &selector)?;
-        }
-        return Some(candidate);
-    }
-    let (_, selected_value_root, selected_value_type, observed_selector) =
-        selected_observation(frame)?;
-    let witness = selected_witness(joined, selected_value_root, selected_value_type)?;
-    let role = joined
-        .topology
-        .roles
-        .iter()
-        .find(|role| role.local_role_id == witness.local_role_id)?;
-    if !role_type_matches(role.type_class, selected_value_type) {
-        return None;
-    }
-    let selector = structural_selector_for_role(joined, role, witness, selected_value_type)?;
-    let mut candidate = program.clone();
-    replace_t1_selector(&mut candidate, observed_selector, &selector)?;
-    Some(candidate)
+            Some((role.local_role_id, selector))
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn structural_selector_for_role(
@@ -194,79 +284,26 @@ fn source_neutral_t1_blocker(
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> &'static str {
-    let Some((_, selected_value_root, selected_value_type, _)) = selected_observation(frame) else {
-        return "selected_observation_missing_or_ambiguous";
+    let observations = match admissible_observations(frame) {
+        Ok(observations) => observations,
+        Err(blocker) => return blocker,
     };
-    let Some(witness) = selected_witness(joined, selected_value_root, selected_value_type) else {
-        let matching = joined
-            .topology
-            .role_witnesses
-            .iter()
-            .filter(|witness| {
-                witness.value_sha256 == selected_value_root
-                    && role_for_witness(joined, witness)
-                        .is_some_and(|role| role_type_matches(role.type_class, selected_value_type))
-            })
-            .count();
-        return if matching == 0 {
-            "selected_role_witness_missing"
-        } else {
-            "selected_role_witness_ambiguous"
-        };
-    };
-    let Some(role) = role_for_witness(joined, witness) else {
-        return "selected_structural_role_missing";
-    };
-    if !role_type_matches(role.type_class, selected_value_type) {
-        return "selected_structural_role_type_mismatch";
-    }
-    if witness.request_reference_ordinal.is_none()
-        && joined.topology.roles.len() != 1
-        && role.temporal_class != MultiSourceTemporalClassV1::Latest
+    if observations
+        .iter()
+        .all(|observation| role_binding_options(joined, observation).is_empty())
     {
+        return "selected_role_witness_missing";
+    }
+    if observations.iter().any(|observation| {
+        joined.topology.role_witnesses.iter().any(|witness| {
+            witness.value_sha256 == observation.value_root
+                && role_for_witness(joined, witness)
+                    .is_some_and(|role| role_type_matches(role.type_class, observation.value_type))
+        }) && role_binding_options(joined, observation).is_empty()
+    }) {
         return "selected_structural_selector_missing";
     }
     "physical_program_selector_rewrite_failed"
-}
-
-fn replace_t1_selector(
-    program: &mut ResponseProgram,
-    observed: &ResponseValueSelector,
-    structural: &ResponseValueSelector,
-) -> Option<()> {
-    match &mut program.operation {
-        ResponseOperation::FunctionCallFromRoles { selector, .. }
-        | ResponseOperation::CustomToolCallFromRoles { selector, .. } => {
-            if selector != observed {
-                return None;
-            }
-            *selector = structural.clone();
-        }
-        ResponseOperation::ProjectSelectedValue {
-            selector, renderer, ..
-        } => {
-            if selector != observed {
-                return None;
-            }
-            *selector = structural.clone();
-            if let nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments } =
-                renderer
-            {
-                for segment in segments {
-                    if let ResponseRenderSegment::Selected { selector, .. } = segment
-                        && selector == observed
-                    {
-                        *selector = structural.clone();
-                    }
-                }
-            }
-        }
-        _ => return None,
-    }
-    if matches!(structural, ResponseValueSelector::ContinuationHandle { .. }) {
-        normalize_continuation_argument_roles(program);
-    }
-    Some(())
 }
 
 fn replace_program_selector(
@@ -327,13 +364,6 @@ fn normalize_continuation_argument_roles(program: &mut ResponseProgram) {
             *role = SemanticRole::ContinuationHandle;
         }
     }
-}
-
-fn witness_for_program<'a>(
-    program: &ResponseProgram,
-    joined: &'a BlindThenRevealJoinedTransitionV1,
-) -> Option<&'a MultiSourceRoleWitnessV1> {
-    witness_for_selector(primary_t1_selector(program)?, joined)
 }
 
 fn witness_for_selector<'a>(
@@ -464,113 +494,57 @@ fn role_for_witness<'a>(
         .find(|role| role.local_role_id == witness.local_role_id)
 }
 
-fn selected_witness<'a>(
-    joined: &'a BlindThenRevealJoinedTransitionV1,
-    value_root: &str,
-    value_type: AtomValueType,
-) -> Option<&'a MultiSourceRoleWitnessV1> {
-    let witnesses = joined
-        .topology
-        .role_witnesses
-        .iter()
-        .filter(|witness| {
-            witness.value_sha256 == value_root
-                && role_for_witness(joined, witness)
-                    .is_some_and(|role| role_type_matches(role.type_class, value_type))
-        })
-        .collect::<Vec<_>>();
-    if let [witness] = witnesses.as_slice() {
-        return Some(*witness);
-    }
-    // The completed frame observes the current tool result. A repeated scalar
-    // in historical outputs must not erase an otherwise unique latest role.
-    let latest = witnesses
-        .into_iter()
-        .filter(|witness| {
-            role_for_witness(joined, witness)
-                .is_some_and(|role| role.temporal_class == MultiSourceTemporalClassV1::Latest)
-        })
-        .collect::<Vec<_>>();
-    let [witness] = latest.as_slice() else {
-        return None;
-    };
-    Some(*witness)
-}
-
-fn selected_observation(
-    frame: &RelationFrame,
-) -> Option<(u16, &str, AtomValueType, &ResponseValueSelector)> {
-    let mut selectors = frame.atoms.iter().filter_map(|atom| match atom {
-        RelationAtom::ObservationSelector { slot_id, selector } => Some((*slot_id, selector)),
-        _ => None,
-    });
-    let (slot_id, selector) = selectors.next()?;
-    if selectors.next().is_some() {
-        return None;
-    }
-    let mut slots = frame.atoms.iter().filter_map(|atom| match atom {
-        RelationAtom::TypedSlot {
-            slot_id: candidate,
-            value_type,
-            source: AtomSource::Observation,
-            value_sha256,
-        } if *candidate == slot_id => Some((value_sha256.as_str(), *value_type)),
-        _ => None,
-    });
-    let (value_root, value_type) = slots.next()?;
-    slots
-        .next()
-        .is_none()
-        .then_some((slot_id, value_root, value_type, selector))
-}
-
 struct SelectedObservation<'a> {
     value_root: &'a str,
     value_type: AtomValueType,
     selector: &'a ResponseValueSelector,
 }
 
-fn selected_observations(frame: &RelationFrame) -> Option<Vec<SelectedObservation<'_>>> {
-    let observations = frame
-        .atoms
-        .iter()
-        .filter_map(|atom| match atom {
-            RelationAtom::ObservationSelector { slot_id, selector } => {
-                let slots = frame
-                    .atoms
-                    .iter()
-                    .filter_map(|candidate| match candidate {
-                        RelationAtom::TypedSlot {
-                            slot_id: candidate_slot,
-                            value_type,
-                            source: AtomSource::Observation,
-                            value_sha256,
-                        } if candidate_slot == slot_id => {
-                            Some((value_sha256.as_str(), *value_type))
-                        }
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>();
-                let [(value_root, value_type)] = slots.as_slice() else {
-                    return None;
-                };
-                Some(SelectedObservation {
-                    value_root,
-                    value_type: *value_type,
-                    selector,
-                })
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    if observations.is_empty() {
-        return None;
+fn admissible_observations(
+    frame: &RelationFrame,
+) -> Result<Vec<SelectedObservation<'_>>, &'static str> {
+    let mut by_selector = BTreeMap::<&ResponseValueSelector, (&str, AtomValueType)>::new();
+    for atom in &frame.atoms {
+        let RelationAtom::ObservationSelector { slot_id, selector } = atom else {
+            continue;
+        };
+        let slots = frame
+            .atoms
+            .iter()
+            .filter_map(|candidate| match candidate {
+                RelationAtom::TypedSlot {
+                    slot_id: candidate_slot,
+                    value_type,
+                    source: AtomSource::Observation,
+                    value_sha256,
+                } if candidate_slot == slot_id => Some((value_sha256.as_str(), *value_type)),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        if slots.len() != 1 {
+            return Err("physical_observation_binding_ambiguous");
+        }
+        let (value_root, value_type) = slots
+            .into_iter()
+            .next()
+            .expect("one observation slot remains");
+        if let Some(existing) = by_selector.insert(selector, (value_root, value_type))
+            && existing != (value_root, value_type)
+        {
+            return Err("physical_observation_binding_ambiguous");
+        }
     }
-    let unique_selectors = observations
-        .iter()
-        .map(|observation| observation.selector)
-        .collect::<BTreeSet<_>>();
-    (unique_selectors.len() == observations.len()).then_some(observations)
+    if by_selector.is_empty() {
+        return Err("selected_observation_missing");
+    }
+    Ok(by_selector
+        .into_iter()
+        .map(|(selector, (value_root, value_type))| SelectedObservation {
+            value_root,
+            value_type,
+            selector,
+        })
+        .collect())
 }
 
 fn primary_t1_selector(program: &ResponseProgram) -> Option<&ResponseValueSelector> {

@@ -594,6 +594,120 @@ fn t1_multi_role_projection_frame(
     }
 }
 
+fn t1_competing_role_topology_row(
+    intent: &str,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    captured_at_unix_ms: u64,
+    equal_values: bool,
+) -> PreActionTopologyAuditRowV1 {
+    let mut row = topology_row(
+        intent,
+        request_event,
+        session,
+        capture_sequence,
+        captured_at_unix_ms,
+    );
+    let action_event = request_event.replacen("request", "action", 1);
+    for (ordinal, role) in row.structure.topology.roles.iter_mut().enumerate() {
+        role.type_class = MultiSourceTypeClassV1::String;
+        role.value_ordinal = u16::try_from(ordinal).expect("bounded role ordinal");
+        role.temporal_class = MultiSourceTemporalClassV1::Latest;
+    }
+    let first_root = if equal_values {
+        root(&format!("shared:{action_event}"))
+    } else {
+        root(&format!("first:{action_event}"))
+    };
+    let second_root = if equal_values {
+        first_root.clone()
+    } else {
+        root(&format!("second:{action_event}"))
+    };
+    row.structure.topology.role_witnesses[0].value_sha256 = first_root;
+    row.structure.topology.role_witnesses[0].request_reference_ordinal = Some(0);
+    row.structure.topology.role_witnesses[1].value_sha256 = second_root;
+    row.structure.topology.role_witnesses[1].request_reference_ordinal = Some(1);
+    row.structure
+        .topology
+        .relations
+        .push(MultiSourceRelationEdgeV1 {
+            relation: MultiSourceRelationKindV1::RequestReferencesRole,
+            source_role_id: 1,
+            target_role_id: 1,
+        });
+    row.structure.topology.relations.sort();
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("competing role topology");
+    row
+}
+
+fn t1_competing_role_projection_frame(
+    intent: &str,
+    event: &str,
+    session: &str,
+    observed_at_unix_ms: u64,
+    equal_values: bool,
+) -> RelationFrame {
+    let selected_root = if equal_values {
+        root(&format!("shared:{event}"))
+    } else {
+        root(&format!("first:{event}"))
+    };
+    RelationFrame {
+        schema: RELATION_FRAME_SCHEMA.to_owned(),
+        frame_id_sha256: root(&format!("frame:{event}")),
+        event_id_sha256: root(event),
+        client_intent_id_sha256: root(intent),
+        session_id_sha256: root(session),
+        observed_at_unix_nanos: observed_at_unix_ms.saturating_mul(1_000_000),
+        estimated_input_tokens: 100,
+        extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+        verifier_label: Some(true),
+        atoms: vec![
+            RelationAtom::CompletionState {
+                value: "completed".to_owned(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 7,
+                value_type: AtomValueType::String,
+                source: AtomSource::Observation,
+                value_sha256: selected_root.clone(),
+            },
+            RelationAtom::UniqueSlot { slot_id: 7 },
+            RelationAtom::ObservationSelector {
+                slot_id: 7,
+                selector: ResponseValueSelector::JsonField {
+                    field: "physical_surface".to_owned(),
+                    value_type: AtomValueType::String,
+                },
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 11,
+                value_type: AtomValueType::String,
+                source: AtomSource::Action,
+                value_sha256: selected_root,
+            },
+            RelationAtom::SlotEquality {
+                left_slot: 7,
+                right_slot: 11,
+            },
+            RelationAtom::ActionValueProjection {
+                format: ValueProjectionFormat::PlainText,
+                renderer: nando_operator_kernel::CollectionOutputRenderer::Direct,
+            },
+        ],
+        evidence_ref_sha256: root(&format!("evidence:{event}")),
+    }
+}
+
 fn opportunity(intent: &str, class: ReducibilityClass) -> OpportunityIntentAuditRowV1 {
     OpportunityIntentAuditRowV1 {
         intent_sha256: root(intent),
@@ -617,6 +731,246 @@ fn request_snapshot(
         provider_bound_by_construction: true,
         pre_action_context_persisted: true,
     }
+}
+
+fn terminal(
+    request_event: &str,
+    started_at_unix_ms: u64,
+    completed_at_unix_ms: u64,
+) -> TransportTerminalReceiptV1 {
+    TransportTerminalReceiptV1::seal(
+        root(request_event),
+        started_at_unix_ms.saturating_mul(1_000_000),
+        completed_at_unix_ms.saturating_mul(1_000_000),
+        200,
+    )
+    .expect("terminal")
+}
+
+#[test]
+fn ms3_failure_corpus_accounts_for_every_frozen_topology() {
+    let topologies = vec![
+        t1_topology_row("missing", "request-missing", "session-a", 1, 1_000),
+        t1_topology_row("joined", "request-joined", "session-b", 2, 2_000),
+    ];
+    let frames = vec![t1_completed_frame(
+        "joined",
+        "action-joined",
+        "session-b",
+        2_500,
+    )];
+    let terminals = vec![
+        terminal("request-missing", 990, 1_100),
+        terminal("request-joined", 1_990, 2_100),
+    ];
+    let corpus = build_ms3_failure_corpus_v1(request_snapshot(topologies), frames, terminals);
+
+    assert!(corpus.validate(), "{corpus:#?}");
+    assert_eq!(corpus.topology_denominator, 2);
+    assert_eq!(corpus.completed_frame_denominator, 1);
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::MissingCompletedObservation),
+        Some(&1)
+    );
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::UniqueHypothesis),
+        Some(&1),
+        "{corpus:#?}"
+    );
+    assert!(!corpus.post_hoc_selection_allowed);
+    assert!(!corpus.authority_ready);
+}
+
+#[test]
+fn ms3_failure_corpus_separates_missing_from_ambiguous_observation() {
+    let topologies = vec![
+        t1_topology_row("missing", "request-missing", "session-a", 1, 1_000),
+        t1_topology_row("ambiguous", "request-ambiguous", "session-b", 2, 2_000),
+    ];
+    let mut missing = t1_completed_frame("missing", "action-missing", "session-a", 1_500);
+    missing
+        .atoms
+        .retain(|atom| !matches!(atom, RelationAtom::ObservationSelector { .. }));
+    let mut ambiguous = t1_completed_frame("ambiguous", "action-ambiguous", "session-b", 2_500);
+    let conflicting_selector = ambiguous
+        .atoms
+        .iter()
+        .find_map(|atom| match atom {
+            RelationAtom::ObservationSelector { selector, .. } => Some(selector.clone()),
+            _ => None,
+        })
+        .expect("observation selector");
+    ambiguous.atoms.extend([
+        RelationAtom::TypedSlot {
+            slot_id: 8,
+            value_type: AtomValueType::Integer,
+            source: AtomSource::Observation,
+            value_sha256: root("conflicting-observation-value"),
+        },
+        RelationAtom::ObservationSelector {
+            slot_id: 8,
+            selector: conflicting_selector,
+        },
+    ]);
+
+    let corpus = build_ms3_failure_corpus_v1(
+        request_snapshot(topologies),
+        vec![missing, ambiguous],
+        vec![
+            terminal("request-missing", 990, 1_100),
+            terminal("request-ambiguous", 1_990, 2_100),
+        ],
+    );
+
+    assert!(corpus.validate(), "{corpus:#?}");
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::SelectedObservationMissing),
+        Some(&1)
+    );
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::SelectedObservationAmbiguous),
+        Some(&1)
+    );
+}
+
+#[test]
+fn repeated_identical_observation_does_not_create_fake_ambiguity() {
+    let topology = t1_topology_row("duplicate", "request-duplicate", "session-a", 1, 1_000);
+    let mut frame = t1_completed_frame("duplicate", "action-duplicate", "session-a", 1_500);
+    let duplicate = frame
+        .atoms
+        .iter()
+        .find(|atom| matches!(atom, RelationAtom::ObservationSelector { .. }))
+        .cloned()
+        .expect("observation selector");
+    frame.atoms.push(duplicate);
+    let corpus = build_ms3_failure_corpus_v1(
+        request_snapshot(vec![topology]),
+        vec![frame],
+        vec![terminal("request-duplicate", 990, 1_100)],
+    );
+
+    assert!(corpus.validate(), "{corpus:#?}");
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::UniqueHypothesis),
+        Some(&1),
+        "{corpus:#?}"
+    );
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::SelectedObservationAmbiguous),
+        None
+    );
+}
+
+#[test]
+fn ms3_failure_corpus_is_byte_stable_under_input_reordering() {
+    let topologies = vec![
+        t1_topology_row("a", "request-a", "session-a", 1, 1_000),
+        t1_topology_row("b", "request-b", "session-b", 2, 2_000),
+    ];
+    let frames = vec![
+        t1_completed_frame("a", "action-a", "session-a", 1_500),
+        t1_completed_frame("b", "action-b", "session-b", 2_500),
+    ];
+    let mut reversed_topologies = topologies.clone();
+    let mut reversed_frames = frames.clone();
+    reversed_topologies.reverse();
+    reversed_frames.reverse();
+
+    let terminals = vec![
+        terminal("request-a", 990, 1_100),
+        terminal("request-b", 1_990, 2_100),
+    ];
+    let mut reversed_terminals = terminals.clone();
+    reversed_terminals.reverse();
+    let forward = build_ms3_failure_corpus_v1(request_snapshot(topologies), frames, terminals);
+    let reversed = build_ms3_failure_corpus_v1(
+        request_snapshot(reversed_topologies),
+        reversed_frames,
+        reversed_terminals,
+    );
+
+    assert_eq!(
+        serde_json::to_vec(&forward).expect("forward"),
+        serde_json::to_vec(&reversed).expect("reversed")
+    );
+}
+
+#[test]
+fn transport_binding_does_not_supersede_distinct_requests_in_one_turn() {
+    let topologies = vec![
+        t1_topology_row("turn", "request-a", "session", 1, 1_000),
+        t1_topology_row("turn", "request-b", "session", 2, 2_000),
+    ];
+    let frames = vec![t1_completed_frame("turn", "action-a", "session", 1_500)];
+    let corpus = build_ms3_failure_corpus_v1(
+        request_snapshot(topologies),
+        frames,
+        vec![
+            terminal("request-a", 990, 1_100),
+            terminal("request-b", 1_990, 2_100),
+        ],
+    );
+
+    assert!(corpus.validate(), "{corpus:#?}");
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::MissingCompletedObservation),
+        Some(&1)
+    );
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::UniqueHypothesis),
+        Some(&1)
+    );
+    assert_eq!(
+        corpus
+            .rows
+            .iter()
+            .map(|row| row.request_event_id_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn transport_binding_rejects_overlapping_response_intervals() {
+    let topologies = vec![
+        t1_topology_row("turn", "request-a", "session", 1, 1_000),
+        t1_topology_row("turn", "request-b", "session", 2, 1_050),
+    ];
+    let frame = t1_completed_frame("turn", "action", "session", 1_100);
+    let corpus = build_ms3_failure_corpus_v1(
+        request_snapshot(topologies),
+        vec![frame],
+        vec![
+            terminal("request-a", 990, 1_200),
+            terminal("request-b", 1_040, 1_250),
+        ],
+    );
+
+    assert!(corpus.validate(), "{corpus:#?}");
+    assert_eq!(
+        corpus
+            .disposition_counts
+            .get(&Ms3FailureDispositionV1::TransportBindingUnresolved),
+        Some(&2)
+    );
 }
 
 #[test]
@@ -934,6 +1288,116 @@ fn t1_identification_uses_one_support_and_one_independent_future() {
         serde_json::to_vec(&report).expect("report"),
         serde_json::to_vec(&reversed).expect("reversed report")
     );
+}
+
+#[test]
+fn ambiguous_roles_build_version_space_and_passive_distinguishing_probe() {
+    let topologies = vec![t1_competing_role_topology_row(
+        "ambiguous",
+        "request-ambiguous",
+        "session-a",
+        1,
+        1_000,
+        true,
+    )];
+    let frames = vec![t1_competing_role_projection_frame(
+        "ambiguous",
+        "action-ambiguous",
+        "session-a",
+        1_500,
+        true,
+    )];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("ambiguous role epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.state, MultiSourceT1IdentificationStateV1::Ambiguous);
+    assert_eq!(report.candidate_programs, 2, "{report:#?}");
+    assert_eq!(report.semantic_classes_remaining, 2, "{report:#?}");
+    assert_eq!(report.support_rows, 1, "{report:#?}");
+    let probe = report.passive_probe.as_ref().expect("distinguishing probe");
+    assert_eq!(probe.expected_partition_gain, 1);
+    assert_eq!(probe.estimated_cost_units, 1);
+    assert!(report.candidate_freeze.is_none());
+    assert!(!report.execution_authority);
+}
+
+#[test]
+fn distinguishing_observation_selects_role_then_requires_independent_future() {
+    let topologies = vec![
+        t1_competing_role_topology_row(
+            "support-equal",
+            "request-support-equal",
+            "session-a",
+            1,
+            1_000,
+            true,
+        ),
+        t1_competing_role_topology_row(
+            "support-split",
+            "request-support-split",
+            "session-b",
+            2,
+            2_000,
+            false,
+        ),
+        t1_competing_role_topology_row("future", "request-future", "session-c", 3, 3_000, false),
+    ];
+    let frames = vec![
+        t1_competing_role_projection_frame(
+            "support-equal",
+            "action-support-equal",
+            "session-a",
+            1_500,
+            true,
+        ),
+        t1_competing_role_projection_frame(
+            "support-split",
+            "action-support-split",
+            "session-b",
+            2_500,
+            false,
+        ),
+        t1_competing_role_projection_frame("future", "action-future", "session-c", 3_500, false),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("distinguished role epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady,
+        "{report:#?}"
+    );
+    assert_eq!(report.candidate_programs, 2, "{report:#?}");
+    assert_eq!(report.support_rows, 2, "{report:#?}");
+    assert_eq!(report.support_lineages, 2, "{report:#?}");
+    assert_eq!(report.independent_future_rows, 1, "{report:#?}");
+    assert_eq!(report.independent_future_lineages, 1, "{report:#?}");
+    assert_eq!(report.wrong_role_bindings, 0, "{report:#?}");
+    assert_eq!(report.negative_accepts, 0, "{report:#?}");
+    assert!(report.exact_transfer_parity);
+    assert!(matches!(
+        report
+            .canonical_program
+            .as_ref()
+            .map(|program| &program.operation),
+        Some(ResponseOperation::ProjectSelectedValue {
+            selector: ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal: 0, .. },
+            ..
+        })
+    ));
+    assert!(!report.execution_authority);
 }
 
 #[test]

@@ -27,6 +27,8 @@ pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3: &str =
 pub const MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1: &str = "nando.multi-source-t1-proof-basis.v1";
 const MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS: usize = 64;
 const MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS: usize = 12;
+const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
+    "nando.multi-source-t1.source-neutral-role-version-space.v2";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -756,8 +758,17 @@ fn t1_protocol_mode_root(
 fn t1_protocol_signature(program: &ResponseProgram) -> Result<String, &'static str> {
     let mut normalized = program.clone();
     match &mut normalized.operation {
-        nando_operator_kernel::ResponseOperation::FunctionCallFromRoles { arguments, .. }
-        | nando_operator_kernel::ResponseOperation::CustomToolCallFromRoles { arguments, .. } => {
+        nando_operator_kernel::ResponseOperation::FunctionCallFromRoles {
+            selector,
+            arguments,
+            ..
+        }
+        | nando_operator_kernel::ResponseOperation::CustomToolCallFromRoles {
+            selector,
+            arguments,
+            ..
+        } => {
+            *selector = protocol_role_placeholder(selector)?;
             arguments.retain(|argument| {
                 !matches!(
                     argument,
@@ -766,11 +777,42 @@ fn t1_protocol_signature(program: &ResponseProgram) -> Result<String, &'static s
                 )
             });
         }
-        nando_operator_kernel::ResponseOperation::ProjectSelectedValue { .. } => {}
+        nando_operator_kernel::ResponseOperation::ProjectSelectedValue {
+            selector,
+            renderer,
+            ..
+        } => {
+            *selector = protocol_role_placeholder(selector)?;
+            if let nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments } =
+                renderer
+            {
+                for segment in segments {
+                    if let nando_operator_kernel::ResponseRenderSegment::Selected {
+                        selector, ..
+                    } = segment
+                    {
+                        *selector = protocol_role_placeholder(selector)?;
+                    }
+                }
+            }
+        }
         _ => return Err("unsupported_t1_protocol_mode"),
     }
-    nando_operator_kernel::response_program_version_root_sha256(&normalized)
+    canonical_json_sha256(&("nando.multi-source-t1-protocol-signature.v3", normalized))
         .map_err(|_| "protocol_mode_commitment_failed")
+}
+
+fn protocol_role_placeholder(
+    selector: &ResponseValueSelector,
+) -> Result<ResponseValueSelector, &'static str> {
+    let value_type = match selector {
+        ResponseValueSelector::ContinuationHandle { value_type }
+        | ResponseValueSelector::UniqueScalar { value_type }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { value_type, .. } => *value_type,
+        _ => return Err("unsupported_t1_role_selector"),
+    };
+    Ok(ResponseValueSelector::UniqueScalar { value_type })
 }
 
 fn generation_manifest(
@@ -795,12 +837,14 @@ fn generation_manifest(
         None,
         OperatorGenerationComponentRootsV3 {
             artifact_set_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-candidate-set.v1",
+                "nando.multi-source-t1-candidate-set.v2",
+                MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
                 &candidate_roots,
             ))
             .map_err(|_| "candidate_set_commitment_failed".to_owned())?,
             dispatch_index_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-dispatch.v1",
+                "nando.multi-source-t1-dispatch.v2",
+                MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
                 shape_root,
                 protocol_mode_root,
             ))
@@ -820,7 +864,8 @@ fn generation_manifest(
             ))
             .map_err(|_| "capability_commitment_failed".to_owned())?,
             resource_budget_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-budget.v1",
+                "nando.multi-source-t1-budget.v2",
+                MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
                 programs.len(),
                 VersionSpaceConfig::default(),
             ))
@@ -913,41 +958,66 @@ fn passive_probe(
     let OperatorIdentificationStateV1::Ambiguous { report } = machine.state().ok()? else {
         return None;
     };
-    let mut predictions = Vec::new();
-    for class_id in &report.competing_class_ids {
-        let observable_signatures = class_by_program
-            .iter()
-            .filter(|(_, candidate_class)| *candidate_class == class_id)
-            .filter_map(|(root, _)| programs.get(root))
-            .map(response_program_required_routing_atom_ids)
-            .collect::<BTreeSet<_>>();
-        predictions.push(ProbeClassPredictionV1 {
-            class_id: class_id.clone(),
-            outcome_partition_root_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-passive-observable.v1",
-                &observable_signatures,
-            ))
-            .ok()?,
-        });
-    }
-    let observable_difference_root_sha256 =
-        canonical_json_sha256(&("nando.multi-source-t1-passive-difference.v1", &predictions))
-            .ok()?;
-    let probe = select_distinguishing_probe_v1(
-        &report.competing_class_ids,
-        &[DistinguishingProbeCandidateV1 {
+    let dimensions = [
+        ("role_binding", 1_u64),
+        ("temporal_rule", 2_u64),
+        ("renderer", 2_u64),
+        ("routing_atoms", 3_u64),
+    ];
+    let mut probes = Vec::new();
+    for (dimension, estimated_cost_units) in dimensions {
+        let mut predictions = Vec::new();
+        for class_id in &report.competing_class_ids {
+            let observable_signatures = class_by_program
+                .iter()
+                .filter(|(_, candidate_class)| *candidate_class == class_id)
+                .filter_map(|(root, _)| programs.get(root))
+                .filter_map(|program| t1_probe_dimension_signature(program, dimension))
+                .collect::<BTreeSet<_>>();
+            if observable_signatures.is_empty() {
+                predictions.clear();
+                break;
+            }
+            predictions.push(ProbeClassPredictionV1 {
+                class_id: class_id.clone(),
+                outcome_partition_root_sha256: canonical_json_sha256(&(
+                    "nando.multi-source-t1-passive-outcome-partition.v2",
+                    dimension,
+                    &observable_signatures,
+                ))
+                .ok()?,
+            });
+        }
+        if predictions.len() != report.competing_class_ids.len()
+            || predictions
+                .iter()
+                .map(|prediction| prediction.outcome_partition_root_sha256.as_str())
+                .collect::<BTreeSet<_>>()
+                .len()
+                < 2
+        {
+            continue;
+        }
+        let observable_difference_root_sha256 = canonical_json_sha256(&(
+            "nando.multi-source-t1-passive-difference.v2",
+            dimension,
+            &predictions,
+        ))
+        .ok()?;
+        probes.push(DistinguishingProbeCandidateV1 {
             probe_root_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-passive-probe.v1",
+                "nando.multi-source-t1-passive-probe.v2",
                 shape_root,
+                dimension,
             ))
             .ok()?,
             observable_difference_root_sha256,
             source: EvidenceSourceContractV1::PassiveLiveTraffic,
-            estimated_cost_units: 1,
+            estimated_cost_units,
             predictions,
-        }],
-    )
-    .ok()?;
+        });
+    }
+    let probe = select_distinguishing_probe_v1(&report.competing_class_ids, &probes).ok()?;
     Some(PassiveT1ProbeContractV1 {
         probe_root_sha256: probe.probe_root_sha256().to_owned(),
         observable_difference_root_sha256: probe.observable_difference_root_sha256().to_owned(),
@@ -955,6 +1025,102 @@ fn passive_probe(
         expected_partition_gain: probe.expected_partition_gain(),
         estimated_cost_units: probe.estimated_cost_units(),
     })
+}
+
+fn t1_probe_dimension_signature(program: &ResponseProgram, dimension: &str) -> Option<String> {
+    match dimension {
+        "role_binding" => canonical_json_sha256(&(
+            "nando.multi-source-t1-probe-role-binding.v1",
+            t1_program_selectors(program)?,
+        ))
+        .ok(),
+        "temporal_rule" => {
+            let selectors = t1_program_selectors(program)?;
+            let temporal_rules = selectors
+                .iter()
+                .map(|selector| match selector {
+                    ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. } => "request",
+                    ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. } => "latest",
+                    ResponseValueSelector::ContinuationHandle { .. } => "producer_linked",
+                    ResponseValueSelector::UniqueScalar { .. } => "scope_unique",
+                    _ => "unsupported",
+                })
+                .collect::<Vec<_>>();
+            canonical_json_sha256(&(
+                "nando.multi-source-t1-probe-temporal-rule.v1",
+                temporal_rules,
+            ))
+            .ok()
+        }
+        "renderer" => match &program.operation {
+            ResponseOperation::ProjectSelectedValue {
+                format,
+                renderer,
+                completion_state,
+                ..
+            } => canonical_json_sha256(&(
+                "nando.multi-source-t1-probe-renderer.v1",
+                format,
+                renderer,
+                completion_state,
+            ))
+            .ok(),
+            ResponseOperation::FunctionCallFromRoles {
+                function_name,
+                arguments,
+                ..
+            } => canonical_json_sha256(&(
+                "nando.multi-source-t1-probe-function.v1",
+                function_name,
+                arguments,
+            ))
+            .ok(),
+            ResponseOperation::CustomToolCallFromRoles {
+                custom_tool_name,
+                inner_tool_name,
+                arguments,
+                projection,
+                ..
+            } => canonical_json_sha256(&(
+                "nando.multi-source-t1-probe-custom-tool.v1",
+                custom_tool_name,
+                inner_tool_name,
+                arguments,
+                projection,
+            ))
+            .ok(),
+            _ => None,
+        },
+        "routing_atoms" => canonical_json_sha256(&(
+            "nando.multi-source-t1-probe-routing-atoms.v1",
+            response_program_required_routing_atom_ids(program),
+        ))
+        .ok(),
+        _ => None,
+    }
+}
+
+fn t1_program_selectors(program: &ResponseProgram) -> Option<Vec<ResponseValueSelector>> {
+    let mut selectors = match &program.operation {
+        ResponseOperation::FunctionCallFromRoles { selector, .. }
+        | ResponseOperation::CustomToolCallFromRoles { selector, .. }
+        | ResponseOperation::ProjectSelectedValue { selector, .. } => vec![selector.clone()],
+        _ => return None,
+    };
+    if let ResponseOperation::ProjectSelectedValue {
+        renderer: nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments },
+        ..
+    } = &program.operation
+    {
+        for segment in segments {
+            if let nando_operator_kernel::ResponseRenderSegment::Selected { selector, .. } = segment
+                && !selectors.contains(selector)
+            {
+                selectors.push(selector.clone());
+            }
+        }
+    }
+    Some(selectors)
 }
 
 fn terminal_report(

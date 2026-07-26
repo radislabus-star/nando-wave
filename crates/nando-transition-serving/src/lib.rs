@@ -16,6 +16,7 @@ mod miner_worker;
 pub mod multi_source_audit;
 mod multi_source_capture;
 mod multi_source_live;
+mod nginx_terminal;
 mod opportunity_bridge;
 mod provider_capture;
 mod request_identity;
@@ -124,6 +125,7 @@ pub struct ServingConfig {
     pub metrics_path: PathBuf,
     pub trace_path: PathBuf,
     pub event_path: PathBuf,
+    pub nginx_terminal_path: Option<PathBuf>,
     pub economics_path: PathBuf,
     pub legacy_json_audit_enabled: bool,
     pub kill_switch_path: PathBuf,
@@ -221,6 +223,7 @@ impl ServingConfig {
                 &state_dir,
                 "execution-events.jsonl",
             ),
+            nginx_terminal_path: env::var_os("NANDO_NGINX_TERMINAL_JSONL").map(PathBuf::from),
             economics_path: env_path_join(
                 "NANDO_ECONOMICS_LEDGER_JSONL",
                 &state_dir,
@@ -812,6 +815,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route("/health/bridge", get(bridge_health))
         .route("/v2/miner/report", get(miner_report))
         .route("/v2/multi-source/report", get(multi_source_report))
+        .route(
+            "/v2/multi-source/ms3-failure-corpus",
+            get(ms3_failure_corpus_report),
+        )
         .route("/v1/transitions/execute", post(execute_transition))
         .route("/v2/transitions/execute", post(execute_transition))
         .route("/v1/transitions/observe", post(observe_transition))
@@ -1599,6 +1606,60 @@ async fn multi_source_report(State(state): State<AppState>) -> Response {
             )
         },
     )
+}
+
+async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
+    let evidence = current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
+    let requests = state.request_learning.audit_snapshot_v1();
+    let terminals = state
+        .config
+        .nginx_terminal_path
+        .as_deref()
+        .ok_or_else(|| "nginx_terminal_path_not_configured".to_owned())
+        .and_then(nginx_terminal::load_transport_terminal_receipts_v1);
+    match (evidence, requests, terminals) {
+        (Some(evidence), Ok(requests), Ok(terminals)) => {
+            // This route exposes proof roots and typed dispositions only. It is
+            // read-only and cannot promote, compile, or authorize an operator.
+            let corpus = nando_operator_learning::multi_source::build_ms3_failure_corpus_v1(
+                requests,
+                evidence.frames,
+                terminals,
+            );
+            if !corpus.validate() {
+                return json_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    json!({
+                        "schema": "nando.ms3-failure-corpus-error.v1",
+                        "error": "corpus_invalid"
+                    }),
+                );
+            }
+            json_response(
+                StatusCode::OK,
+                serde_json::to_value(corpus).unwrap_or_else(|_| {
+                    json!({
+                        "schema": "nando.ms3-failure-corpus-error.v1",
+                        "error": "corpus_encode"
+                    })
+                }),
+            )
+        }
+        (_, _, Err(error)) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-failure-corpus-error.v1",
+                "error": error
+            }),
+        ),
+        _ => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-failure-corpus-error.v1",
+                "error": "evidence_inputs_pending"
+            }),
+        ),
+    }
 }
 
 fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
@@ -5569,6 +5630,7 @@ mod tests {
             metrics_path: root.join("metrics.json"),
             trace_path: trace_path.clone(),
             event_path: root.join("events.jsonl"),
+            nginx_terminal_path: None,
             economics_path: root.join("economics.jsonl"),
             legacy_json_audit_enabled: true,
             kill_switch_path: root.join("KILL_SWITCH"),

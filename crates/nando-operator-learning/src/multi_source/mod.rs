@@ -2,11 +2,13 @@
 
 mod audit;
 mod factorizer;
+mod failure_corpus;
 mod identification;
 mod join;
 mod live_snapshot;
 mod marginal;
 mod source_neutral_t1;
+mod transport_binding;
 
 pub use audit::{
     AuditMassV1, MULTI_SOURCE_EVIDENCE_AUDIT_SCHEMA_V1, MissingEvidenceFieldV1,
@@ -17,6 +19,10 @@ pub use audit::{
 pub use factorizer::{
     CompletedEffectFormV1, FactorizedMultiSourceRowV1, MULTI_SOURCE_FACTORIZED_ROW_SCHEMA_V1,
     MultiSourceReasonV1, PreActionShapeClassV1, factor_multi_source_row_v1,
+};
+pub use failure_corpus::{
+    MS3_FAILURE_CORPUS_MAX_ROWS_V1, MS3_FAILURE_CORPUS_SCHEMA_V1, Ms3FailureCorpusRowV1,
+    Ms3FailureCorpusV1, Ms3FailureDispositionV1, build_ms3_failure_corpus_v1,
 };
 pub use identification::{
     MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
@@ -39,6 +45,11 @@ pub use marginal::{
     COVERAGE_OPPORTUNITY_MAX_ROWS_V1, COVERAGE_OPPORTUNITY_SNAPSHOT_SCHEMA_V1,
     CoverageOpportunitySnapshotV1, MarginalShapeOpportunityV1,
     build_coverage_opportunity_snapshot_v1,
+};
+pub use transport_binding::{
+    REQUEST_ACTION_BINDING_SCHEMA_V1, RequestActionBindingV1, TRANSPORT_BOUND_JOIN_MAX_ROWS_V1,
+    TRANSPORT_TERMINAL_RECEIPT_SCHEMA_V1, TransportBindingFailureV1, TransportBindingLedgerV1,
+    TransportBoundJoinedTransitionV1, TransportTerminalReceiptV1,
 };
 
 #[cfg(test)]

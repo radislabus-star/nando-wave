@@ -512,6 +512,18 @@ fn joined_row(
     Ok(joined)
 }
 
+pub(super) fn join_explicit_topology_to_frame(
+    topology: &PreActionTopologyAuditRowV1,
+    frame: &RelationFrame,
+) -> Result<BlindThenRevealJoinedTransitionV1, MultiSourceJoinCensoredReasonV1> {
+    validate_topology_row(topology)?;
+    let (action, outcome) = completed_refs(frame)?;
+    if !topology_matches_frame(topology, &action) {
+        return Err(MultiSourceJoinCensoredReasonV1::IdentityMismatch);
+    }
+    joined_row(topology, &action, &outcome)
+}
+
 fn completed_effect_atoms(
     action_atoms: &[RelationAtom],
     frame_atoms: &[RelationAtom],
