@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use nando_operator_kernel::Sha256CommitmentV3;
 
 use super::{
@@ -96,6 +94,10 @@ impl ProviderCaptureIndexV3 {
         let mut records = self.records.clone();
         records.extend_from_slice(additions);
         records.sort_by_key(ProviderRequestCaptureReceiptV3::capture_sequence);
+        if records.len() > PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3 {
+            let evicted = records.len() - PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3;
+            records.drain(..evicted);
+        }
         Self::build(
             self.next_publish_sequence()?,
             self.reserved_through_sequence,
@@ -116,17 +118,30 @@ impl ProviderCaptureIndexV3 {
         {
             return Err(ProviderCaptureIndexErrorV3::EvidenceRollback);
         }
-        let current = self
+        let first_retained_sequence = self
             .records
-            .iter()
-            .map(|record| (record.capture_sequence(), record.receipt_sha256()))
-            .collect::<BTreeMap<_, _>>();
-        if previous
+            .first()
+            .map_or(0, ProviderRequestCaptureReceiptV3::capture_sequence);
+        let retained_start = previous
             .records
+            .partition_point(|record| record.capture_sequence() < first_retained_sequence);
+        let retained_previous = &previous.records[retained_start..];
+        let retained_current = self.records.get(..retained_previous.len()).unwrap_or(&[]);
+        let evicted = retained_start > 0;
+        let retained_identically = retained_previous == retained_current;
+        let additions = self.records.get(retained_previous.len()..).unwrap_or(&[]);
+        let previous_last = previous
+            .records
+            .last()
+            .map_or(0, ProviderRequestCaptureReceiptV3::capture_sequence);
+        let additions_are_new = additions
             .iter()
-            .any(|record| current.get(&record.capture_sequence()) != Some(&record.receipt_sha256()))
-            || (self.leases.len() == previous.leases.len()
-                && self.records.len() == previous.records.len())
+            .all(|record| record.capture_sequence() > previous_last);
+        let records_changed = evicted || !additions.is_empty();
+        if !retained_identically
+            || !additions_are_new
+            || (evicted && self.records.len() != PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3)
+            || (self.leases.len() == previous.leases.len() && !records_changed)
         {
             return Err(ProviderCaptureIndexErrorV3::EvidenceRollback);
         }
@@ -225,7 +240,7 @@ impl ProviderCaptureIndexV3 {
         false
     }
 
-    fn build(
+    pub(super) fn build(
         publish_sequence: u64,
         reserved_through_sequence: u64,
         leases: Vec<ProviderCaptureSequenceLeaseCommitmentV3>,

@@ -127,3 +127,81 @@ fn maximal_index_fits_the_frozen_eight_mib_budget() {
     assert_eq!(index.records().len(), PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3);
     assert!(bytes.len() <= PROVIDER_CAPTURE_INDEX_MAX_BYTES_V3);
 }
+
+#[test]
+fn full_index_rolls_only_the_oldest_prefix_and_preserves_transition_proof() {
+    let (reserved, lease) = ProviderCaptureIndexV3::empty()
+        .expect("empty")
+        .reserve_next_lease()
+        .expect("reserve");
+    let records = (1..=PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3 as u64)
+        .map(|sequence| {
+            receipt_in_epoch(
+                sequence,
+                &format!("request-{sequence}"),
+                lease.epoch_root_sha256(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let full = reserved.append_batch(&records).expect("full");
+    let (leased, next_lease) = full.reserve_next_lease().expect("next lease");
+    let next_sequence = next_lease.first_sequence();
+    let rolled = leased
+        .append_batch(&[receipt_in_epoch(
+            next_sequence,
+            "request-next",
+            next_lease.epoch_root_sha256(),
+        )])
+        .expect("rolling append");
+
+    rolled
+        .validate_transition_from(&leased)
+        .expect("rolling transition");
+    assert_eq!(
+        rolled.records().len(),
+        PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3
+    );
+    assert_eq!(rolled.records()[0].capture_sequence(), 2);
+    assert_eq!(
+        rolled.records().last().expect("last").capture_sequence(),
+        next_sequence
+    );
+    assert!(!rolled.contains_exact(
+        records[0].capture_sequence(),
+        records[0].event_root_sha256(),
+        records[0].request_root_sha256(),
+        records[0].receipt_sha256(),
+    ));
+}
+
+#[test]
+fn transition_validation_rejects_non_prefix_eviction_and_record_rebinding() {
+    let (reserved, lease) = ProviderCaptureIndexV3::empty()
+        .expect("empty")
+        .reserve_next_lease()
+        .expect("reserve");
+    let records = (1..=PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3 as u64)
+        .map(|sequence| {
+            receipt_in_epoch(
+                sequence,
+                &format!("request-{sequence}"),
+                lease.epoch_root_sha256(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let full = reserved.append_batch(&records).expect("full");
+    let mut invalid_records = full.records().to_vec();
+    invalid_records.remove(1);
+    let invalid = ProviderCaptureIndexV3::build(
+        full.publish_sequence().saturating_add(1),
+        full.reserved_through_sequence(),
+        full.leases().to_vec(),
+        invalid_records,
+    )
+    .expect("internally valid index");
+
+    assert_eq!(
+        invalid.validate_transition_from(&full),
+        Err(ProviderCaptureIndexErrorV3::EvidenceRollback)
+    );
+}

@@ -98,6 +98,46 @@ anti-centers.
 Terminal receipt without a relevant verified frame is censored acquisition
 evidence, not negative operator evidence.
 
+## Operational Capture Guard
+
+The immutable acquisition verdict is separate from transport health. A
+read-only operational monitor compares post-open ordinary opportunity rows with
+the append-only pre-action topology archive:
+
+```text
+ordinary traffic observed
++ topology delta = 0
++ first ordinary row older than 300 seconds
+-> CAPTURE_STALLED
+```
+
+`CAPTURE_STALLED` is not
+`MS3_LINKED_FRAME_ACQUISITION_FAIL`. It permits repair of capture, bridge or
+join reachability only. It cannot change the acquisition contract, classifier,
+row budget, deadline, phase memory or authority.
+
+Live inspection found the first real operational fault:
+
+```text
+ordinary opportunity events continued
+provider capture records              16,384 / 16,384
+provider capture phase                blocked_fail_closed
+provider capture error                provider_capture_append:BudgetExhausted
+new topology rows                     0
+```
+
+The provider capture object was documented as a bounded rolling index, but the
+implementation never evicted its oldest prefix. The repair keeps the same
+`16,384`-record and `8 MiB` budgets, preserves monotonic sequence leases, and
+allows only byte-identical suffix retention plus newly appended sequences.
+Middle deletion, record rebinding and sequence reuse remain rejected.
+
+Operational endpoint:
+
+```text
+http://127.0.0.1:18790/v2/multi-source/ms3-capture-health
+```
+
 ## Verification
 
 ```text

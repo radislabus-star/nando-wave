@@ -91,6 +91,10 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         &self.contract
     }
 
+    pub(super) const fn is_terminal(&self) -> bool {
+        self.terminal_report.is_some()
+    }
+
     pub(super) fn evaluate(
         &mut self,
         generated_at_unix: u64,

@@ -13,6 +13,7 @@ mod learning_evidence_bridge;
 mod learning_structure_bridge;
 mod live_economics;
 mod miner_worker;
+mod ms3_capture_health;
 mod ms3_linked_frame_acquisition;
 pub mod multi_source_audit;
 mod multi_source_capture;
@@ -928,6 +929,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/ms3-linked-frame-acquisition",
             get(ms3_linked_frame_acquisition_report),
+        )
+        .route(
+            "/v2/multi-source/ms3-capture-health",
+            get(ms3_capture_health_report),
         )
         .route("/v1/transitions/execute", post(execute_transition))
         .route("/v2/transitions/execute", post(execute_transition))
@@ -1850,6 +1855,27 @@ async fn ms3_linked_frame_acquisition_report(State(state): State<AppState>) -> R
     }
 }
 
+async fn ms3_capture_health_report(State(state): State<AppState>) -> Response {
+    match evaluate_ms3_capture_health(&state) {
+        Ok(report) => json_response(
+            StatusCode::OK,
+            serde_json::to_value(report).unwrap_or_else(|_| {
+                json!({
+                    "schema": "nando.ms3-capture-health-error.v1",
+                    "error": "report_encode"
+                })
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-capture-health-error.v1",
+                "error": error
+            }),
+        ),
+    }
+}
+
 fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
     std::thread::Builder::new()
         .name("nando-multi-source-snapshot".to_owned())
@@ -2000,6 +2026,47 @@ fn evaluate_ms3_linked_frame_acquisition(
         .lock()
         .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
         .evaluate(unix_now(), new_topologies, frames, terminals)
+}
+
+fn evaluate_ms3_capture_health(
+    state: &AppState,
+) -> Result<ms3_capture_health::Ms3CaptureHealthReportV1, String> {
+    let (contract, acquisition_closed) = {
+        let runtime = state
+            .ms3_linked_frame_acquisition
+            .as_ref()
+            .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?
+            .lock()
+            .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?;
+        (runtime.contract().clone(), runtime.is_terminal())
+    };
+    let current_topology_rows = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+        .len();
+    let evidence = current_miner_worker(state).and_then(|worker| worker.multi_source_evidence());
+    let structure = state.learning_structure_bridge.status();
+    let opportunity = state.opportunity_bridge.status();
+    let counters = ms3_capture_health::Ms3CaptureOperationalCountersV1 {
+        structural_pending_records: structure.pending_records,
+        structural_consumer_failures: structure.consumer.failures,
+        structural_sequence_gaps: structure.sequence_gaps,
+        opportunity_pending_events: opportunity.pending_events,
+        opportunity_consumer_failures: opportunity.consumer.failures,
+    };
+    Ok(ms3_capture_health::build_ms3_capture_health_report_v1(
+        &contract,
+        unix_now(),
+        u64::try_from(current_topology_rows).unwrap_or(u64::MAX),
+        acquisition_closed,
+        evidence
+            .as_ref()
+            .map(|snapshot| snapshot.opportunities.as_slice()),
+        counters,
+    ))
 }
 
 fn archived_relation_frames(

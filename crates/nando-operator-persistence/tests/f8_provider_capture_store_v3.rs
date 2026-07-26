@@ -4,7 +4,10 @@ use std::{fs, path::PathBuf};
 use std::os::unix::fs::PermissionsExt;
 
 use nando_operator_kernel::{RuntimeProjectionV3, Sha256CommitmentV3};
-use nando_operator_learning::{ProviderRequestCaptureInputV3, seal_provider_request_capture_v3};
+use nando_operator_learning::{
+    PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3, ProviderRequestCaptureInputV3,
+    seal_provider_request_capture_v3,
+};
 use nando_operator_persistence::{
     PROVIDER_CAPTURE_STORE_SLOT_A_FILE_V3, PROVIDER_CAPTURE_STORE_SLOT_B_FILE_V3,
     ProviderCaptureStoreErrorV3, ProviderCaptureStoreReaderV3, ProviderCaptureStoreV3,
@@ -153,6 +156,58 @@ fn live_reader_never_quarantines_an_inflight_writer_temporary() {
     let restored = reader.restore().expect("live restore");
     assert!(restored.quarantined_files().is_empty());
     assert!(temporary.exists());
+}
+
+#[test]
+fn full_capture_store_rolls_and_restores_without_reusing_sequences() {
+    let fixture = Fixture::new("rolling");
+    let store = ProviderCaptureStoreV3::open(&fixture.directory).expect("store");
+    let first_lease = store.reserve_sequence_lease().expect("first lease");
+    let records = (first_lease.first_sequence()..=first_lease.last_sequence())
+        .map(|sequence| {
+            receipt(
+                sequence,
+                first_lease.epoch_root_sha256(),
+                &format!("rolling-{sequence}"),
+            )
+        })
+        .collect::<Vec<_>>();
+    let full = store
+        .restore()
+        .expect("restore reserved")
+        .index()
+        .expect("reserved index")
+        .append_batch(&records)
+        .expect("fill index");
+    store.publish_index(&full).expect("publish full index");
+    let next_lease = store.reserve_sequence_lease().expect("next lease");
+    let newest = receipt(
+        next_lease.first_sequence(),
+        next_lease.epoch_root_sha256(),
+        "rolling-newest",
+    );
+    let rolled = store
+        .restore()
+        .expect("restore leased")
+        .index()
+        .expect("leased index")
+        .append_batch(std::slice::from_ref(&newest))
+        .expect("roll index");
+    store.publish_index(&rolled).expect("publish rolled index");
+
+    let restarted = ProviderCaptureStoreReaderV3::open(&fixture.directory)
+        .expect("reader")
+        .restore()
+        .expect("restore rolled");
+    let index = restarted.index().expect("rolled index");
+    assert_eq!(index.records().len(), PROVIDER_CAPTURE_INDEX_MAX_RECORDS_V3);
+    assert_eq!(index.records()[0].capture_sequence(), 2);
+    assert!(index.contains_exact(
+        newest.capture_sequence(),
+        newest.event_root_sha256(),
+        newest.request_root_sha256(),
+        newest.receipt_sha256(),
+    ));
 }
 
 fn receipt(
