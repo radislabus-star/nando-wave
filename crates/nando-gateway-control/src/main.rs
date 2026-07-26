@@ -598,9 +598,13 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let research_architecture = f5_runtime_status::panel_html();
     let live_dashboard = live_dashboard::render(live_dashboard::InitialMetrics {
         epoch_total_tokens: current_epoch_total_tokens,
+        epoch_total_events: metric_u64(&economics, "terminal_request_events"),
         epoch_cpu_tokens: current_epoch_cpu_tokens,
+        epoch_cpu_accepts: metric_u64(&economics, "actual_local_accepts"),
         miner_window_total_tokens: visible_miner_tokens,
+        miner_window_total_intents: metric_u64(online_opportunity, "ordinary_intents"),
         miner_window_cpu_tokens: metric_u64(online_opportunity, "verified_tokens"),
+        miner_window_cpu_intents: metric_u64(online_opportunity, "verified_intents"),
         miner_window_unresolved_tokens: metric_u64(online_opportunity, "unresolved_tokens"),
         optimistic_upper_bound_tokens: metric_u64(
             online_opportunity,
@@ -1078,7 +1082,9 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             .into_response();
     };
     let miner_input_tokens = metric_u64(miner_opportunity, "ordinary_tokens");
+    let miner_intents = metric_u64(miner_opportunity, "ordinary_intents");
     let miner_verified_tokens = metric_u64(miner_opportunity, "verified_tokens");
+    let miner_verified_intents = metric_u64(miner_opportunity, "verified_intents");
     let miner_unresolved_tokens = metric_u64(miner_opportunity, "unresolved_tokens");
     let miner_optimistic_tokens = metric_u64(
         miner_opportunity,
@@ -1122,6 +1128,38 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         "blocker",
         "controller_report_missing",
     );
+    let traffic_overview = json!({
+        "schema": "nando.traffic-overview.v1",
+        "cross_scope_ratio_allowed": false,
+        "execution": {
+            "scope": "current_v4_accounting_epoch",
+            "started_at_unix": metric_u64(economics, "accounting_epoch_started_at_unix"),
+            "total": {
+                "input_tokens": current_epoch_total_input_tokens,
+                "requests": metric_u64(economics, "terminal_request_events"),
+            },
+            "cpu": {
+                "input_tokens": current_epoch_cpu_input_tokens,
+                "verified_accepts": metric_u64(economics, "actual_local_accepts"),
+            },
+        },
+        "miner": {
+            "scope": "miner_opportunity_window",
+            "started_at_unix": metric_u64(online_opportunity, "window_started_at_unix"),
+            "seen": {
+                "input_tokens": miner_input_tokens,
+                "intents": miner_intents,
+            },
+            "recognized": {
+                "input_tokens": miner_verified_tokens,
+                "intents": miner_verified_intents,
+                "class": "CPU_VERIFIED",
+            },
+            "unresolved": {
+                "input_tokens": miner_unresolved_tokens,
+            },
+        },
+    });
     (
         [(header::CACHE_CONTROL, "no-store")],
         Json(json!({
@@ -1134,6 +1172,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "verified_window_total_input_tokens": miner_input_tokens,
             "verified_window_cpu_input_tokens": miner_verified_tokens,
             "optimistic_upper_bound_tokens": miner_optimistic_tokens,
+            "overview": traffic_overview,
             "accounting": {
                 "schema": economics.get("schema").and_then(Value::as_str).unwrap_or(""),
                 "identity_domain": economics.get("identity_domain").and_then(Value::as_str).unwrap_or(""),
@@ -1178,7 +1217,9 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                 "schema": online_opportunity.get("schema").and_then(Value::as_str).unwrap_or(""),
                 "started_at_unix": metric_u64(online_opportunity, "window_started_at_unix"),
                 "ordinary_tokens": miner_input_tokens,
+                "ordinary_intents": miner_intents,
                 "cpu_verified_tokens": miner_verified_tokens,
+                "cpu_verified_intents": miner_verified_intents,
                 "verified_share_milli": metric_u64(online_opportunity, "verified_token_share_milli"),
                 "unresolved_tokens": miner_unresolved_tokens,
                 "optimistic_upper_bound_tokens": miner_optimistic_tokens,
