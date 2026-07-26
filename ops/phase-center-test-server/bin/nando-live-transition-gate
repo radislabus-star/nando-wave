@@ -15,7 +15,7 @@ find_project_root() {
   for candidate in \
     "${PWD}" \
     "${OPS_DIR}/../.." \
-    "${HOME}/projects/nando-wave"
+    "${HOME:-/home/ubu}/projects/nando-wave"
   do
     current="$(cd -- "${candidate}" 2>/dev/null && pwd)" || continue
     while [[ "${current}" != "/" ]]; do
