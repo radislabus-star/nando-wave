@@ -162,10 +162,10 @@ closed denominator.
 
 ```text
 nando-operator-learning                 281 / 281 PASS
-nando-transition-serving                127 / 127 PASS, 1 perf ignored
+nando-transition-serving                133 / 133 PASS, 1 perf ignored
 provider capture index                     7 / 7 PASS
 provider capture persistence               5 / 5 PASS
-capture health + acquisition               7 / 7 PASS
+capture/receipt health + acquisition      13 / 13 PASS
 Clippy -D warnings                            PASS
 rustfmt / diff check                          PASS
 NANDA composite                               PASS
@@ -174,9 +174,9 @@ NANDA composite                               PASS
 Deployment:
 
 ```text
-source commit             a579628
-deployed binary SHA-256   b463e0fc11fe0ee0364ece99a4428e7179f4cdf7a04e1fac228ddaf78789fb31
-cold invocation           d6b258e9dfa74ce084220768b956f796
+source commit             95592ae
+deployed binary SHA-256   7c3781be73a226a55bf11f32dba67607f75e8999982d71c7aa37cedc6d41b945
+cold invocation           0b5bdea2a1ce4734adcd5224b26a81eb
 hot invocation            aec3a81260c648ed84538066131715c6
 ACTIVE packages           2
 false accepts             0
@@ -188,13 +188,14 @@ Live post-repair receipt:
 ```text
 provider capture phase       ready_hash_only
 provider capture records     16,384
-captured / censored          2 / 0
+captured / censored          131 / 0
 persistence failures         0
-topology rows                1,832 -> 1,834
-terminal receipts            2
-capture health               CAPTURE_PROGRESS
-scientific verdict           collecting
-linked frames                0
+frozen topology rows         28
+terminal receipts            28
+receipt health               ACQUISITION_CLOSED, complete
+scientific verdict           linked_frame_observed
+linked / NO_GAP              1 / 1
+scientific report root       67b9b4dc5c17570b9203d2db4400afbaba17610e6d59ee56b4d7f575e8c7982f
 authority / phase mutation   false / false
 ```
 
