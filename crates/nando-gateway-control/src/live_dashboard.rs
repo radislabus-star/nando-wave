@@ -1,10 +1,12 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.27-b014";
+const DASHBOARD_BUILD: &str = "2026.07.27-b015";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
+    pub(crate) server_total_tokens: u64,
+    pub(crate) server_cpu_tokens: u64,
     pub(crate) epoch_total_tokens: u64,
     pub(crate) epoch_total_events: u64,
     pub(crate) epoch_cpu_tokens: u64,
@@ -126,11 +128,6 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
 }
 
 pub(crate) fn render(initial: InitialMetrics) -> String {
-    let cpu_metric_class = if initial.epoch_cpu_accepts > 0 {
-        "good"
-    } else {
-        "locked"
-    };
     let (
         pipeline_title,
         admission_step_class,
@@ -162,6 +159,11 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
     };
     TEMPLATE
         .replace("__DASHBOARD_BUILD__", DASHBOARD_BUILD)
+        .replace(
+            "__SERVER_TOTAL__",
+            &format_number(initial.server_total_tokens),
+        )
+        .replace("__SERVER_CPU__", &format_number(initial.server_cpu_tokens))
         .replace(
             "__EPOCH_TOTAL__",
             &format_number(initial.epoch_total_tokens),
@@ -195,6 +197,11 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
             "__MINER_CPU_INTENTS__",
             &format_number(initial.miner_window_cpu_intents),
         )
+        .replace(
+            "__LEGACY_TOTAL__",
+            &format_number(initial.legacy_total_tokens),
+        )
+        .replace("__LEGACY_CPU__", &format_number(initial.legacy_cpu_tokens))
         .replace(
             "__MINER_CPU_SHARE__",
             &format_percent(
@@ -240,7 +247,6 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
             ),
         )
         .replace("__PIPELINE_TITLE__", pipeline_title)
-        .replace("__CPU_METRIC_CLASS__", cpu_metric_class)
         .replace("__ADMISSION_STEP_CLASS__", admission_step_class)
         .replace("__ADMISSION_STATE__", admission_state)
         .replace("__CPU_STEP_CLASS__", cpu_step_class)
@@ -302,30 +308,23 @@ const TEMPLATE: &str = r#"
 .overview-head { display:flex; justify-content:space-between; align-items:baseline; gap:18px; margin-bottom:15px; }
 .overview-head .band-title { margin:0; }
 .overview-rule { color:var(--amber); font-size:12px; font-weight:800; text-align:right; }
-.overview-lanes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border:1px solid var(--line); }
-.overview-lane { min-width:0; padding:18px 20px; }
-.overview-lane + .overview-lane { border-left:1px solid var(--line); }
-.lane-kicker { color:var(--muted); font-size:11px; font-weight:800; }
-.lane-title { margin-top:6px; color:#dce2e6; font-size:14px; font-weight:800; }
-.lane-flow { display:grid; grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr); align-items:stretch; margin-top:15px; }
-.lane-metric { min-width:0; padding:14px 15px; background:#15191c; border-top:2px solid #59636a; }
-.lane-metric.miner { border-top-color:var(--cyan); }
-.lane-metric.good { border-top-color:var(--green); }
-.lane-metric.locked { border-top-color:var(--red); }
-.lane-label { min-height:34px; color:#bfc7cc; font-size:11px; font-weight:800; line-height:1.45; }
-.lane-value-row { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 10px; margin-top:8px; }
-.lane-value { min-width:0; max-width:100%; color:#eef1f3; font-size:27px; font-weight:800; white-space:nowrap; }
-.lane-metric.miner .lane-value,.lane-metric.miner .lane-share { color:var(--cyan); }
-.lane-metric.good .lane-value,.lane-metric.good .lane-share { color:var(--green); }
-.lane-metric.locked .lane-value,.lane-metric.locked .lane-share { color:var(--red); }
-.lane-share { flex:0 0 auto; color:var(--muted); font-size:16px; font-weight:800; }
-.lane-unit { margin-top:4px; color:var(--muted); font-size:11px; font-weight:800; }
-.lane-meta { margin-top:11px; color:#c6cdd1; font-size:12px; font-weight:700; }
-.lane-arrow { display:flex; align-items:center; justify-content:center; color:#d3dade; font-size:21px; font-weight:800; }
-.lane-rail { height:8px; margin-top:13px; background:#282e32; overflow:hidden; }
-.lane-fill { width:0; height:100%; min-width:2px; background:var(--green); transition:width .25s ease; }
-.lane-fill.miner { background:var(--cyan); }
-.lane-window { margin-top:13px; color:var(--muted); font-size:11px; font-weight:700; line-height:1.45; }
+.traffic-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--line); }
+.traffic-stage { min-width:0; min-height:230px; padding:18px 20px; border-right:1px solid var(--line); border-top:3px solid #59636a; background:#111518; }
+.traffic-stage:last-child { border-right:0; }
+.traffic-stage.miner { border-top-color:var(--cyan); }
+.traffic-stage.recognized,.traffic-stage.cpu { border-top-color:var(--green); }
+.stage-index { color:var(--muted); font-size:11px; font-weight:800; }
+.stage-label { min-height:38px; margin-top:9px; color:#dce2e6; font-size:13px; font-weight:800; line-height:1.45; }
+.stage-value-row { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 10px; margin-top:14px; }
+.stage-value { min-width:0; max-width:100%; color:#eef1f3; font-size:27px; font-weight:800; white-space:nowrap; }
+.traffic-stage.miner .stage-value,.traffic-stage.miner .stage-share { color:var(--cyan); }
+.traffic-stage.recognized .stage-value,.traffic-stage.recognized .stage-share,.traffic-stage.cpu .stage-value,.traffic-stage.cpu .stage-share { color:var(--green); }
+.stage-share { flex:0 0 auto; color:var(--muted); font-size:15px; font-weight:800; }
+.stage-unit { margin-top:5px; color:var(--muted); font-size:11px; font-weight:800; }
+.stage-meta { margin-top:15px; color:#c6cdd1; font-size:12px; font-weight:700; line-height:1.45; }
+.stage-scope { margin-top:9px; color:var(--muted); font-size:10px; font-weight:700; line-height:1.4; }
+.stage-rail { height:8px; margin-top:13px; background:#282e32; overflow:hidden; }
+.stage-fill { width:0; height:100%; min-width:2px; background:var(--green); transition:width .25s ease; }
 .scope-alert { margin-top:14px; padding:11px 14px; color:#ced5d9; background:#171b1e; border-left:3px solid var(--amber); font-size:12px; font-weight:700; line-height:1.45; }
 .scope-alert strong { color:var(--amber); }
 .scope-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid var(--line); }
@@ -386,8 +385,8 @@ const TEMPLATE: &str = r#"
 .live-foot .live-inner { display:flex; justify-content:space-between; gap:20px; color:var(--muted); font-size:12px; }
 .next-route { color:var(--cyan); }
 @media (max-width:1200px) {
-  .lane-value { font-size:23px; }
-  .lane-share { font-size:13px; }
+  .stage-value { font-size:23px; }
+  .stage-share { font-size:13px; }
   .pipeline-scroll { overflow-x:visible; }
   .pipeline { grid-template-columns:repeat(3,minmax(0,1fr)); min-width:0; }
   .pipe-step { min-height:88px; border-bottom:1px solid var(--line); }
@@ -406,8 +405,10 @@ const TEMPLATE: &str = r#"
 @media (max-width:900px) {
   .overview-head { align-items:flex-start; flex-direction:column; gap:7px; }
   .overview-rule { text-align:left; }
-  .overview-lanes { grid-template-columns:1fr; }
-  .overview-lane + .overview-lane { border-left:0; border-top:1px solid var(--line); }
+  .traffic-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .traffic-stage { border-bottom:1px solid var(--line); }
+  .traffic-stage:nth-child(2n) { border-right:0; }
+  .traffic-stage:nth-last-child(-n+2) { border-bottom:0; }
   .scope-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .scope-metric:nth-child(2) { border-right:0; }
   .scope-metric:nth-child(-n+2) { border-bottom:1px solid var(--line); }
@@ -421,13 +422,13 @@ const TEMPLATE: &str = r#"
   .nando-live { overflow-x:hidden; }
   .live-inner { padding:16px 12px; }
   .live-head .live-inner { align-items:flex-start; flex-direction:column; gap:7px; }
-  .overview-lane { padding:15px 12px; }
-  .lane-flow { grid-template-columns:1fr; gap:0; }
-  .lane-metric { padding:13px 12px; }
-  .lane-label { min-height:0; }
-  .lane-value { font-size:24px; }
-  .lane-share { font-size:14px; }
-  .lane-arrow { min-height:34px; transform:rotate(90deg); }
+  .traffic-grid { grid-template-columns:1fr; }
+  .traffic-stage { min-height:0; padding:15px 12px; border-right:0; border-bottom:1px solid var(--line); }
+  .traffic-stage:nth-last-child(-n+2) { border-bottom:1px solid var(--line); }
+  .traffic-stage:last-child { border-bottom:0; }
+  .stage-label { min-height:0; }
+  .stage-value { font-size:24px; }
+  .stage-share { font-size:14px; }
   .scope-grid { grid-template-columns:1fr; }
   .scope-metric,.scope-metric:first-child,.scope-metric:last-child { padding:13px 0; border-right:0; border-bottom:1px solid var(--line); }
   .scope-metric:last-child { border-bottom:0; }
@@ -467,53 +468,43 @@ const TEMPLATE: &str = r#"
   <section class="live-band"><div class="live-inner">
     <div class="overview-head">
       <h2 class="band-title">ЧЕТЫРЕ ГЛАВНЫЕ ЦИФРЫ</h2>
-      <div class="overview-rule">СРАВНИВАТЬ ТОЛЬКО ВНУТРИ КАЖДОЙ ЛИНИИ</div>
+      <div class="overview-rule">ВЕСЬ СЕРВЕР → МАЙНЕР → РАСПОЗНАНО → CPU</div>
     </div>
-    <div class="overview-lanes">
-      <article class="overview-lane">
-        <div class="lane-kicker">ЛИНИЯ 1 · LIVE EXECUTION · ТЕКУЩАЯ V4-ЭПОХА</div>
-        <div class="lane-title">Сколько реально прошло через Nando и сколько реально исполнил CPU</div>
-        <div class="lane-flow">
-          <div class="lane-metric">
-            <div class="lane-label">ВСЕГО ТРАФИКА ЧЕРЕЗ NANDO</div>
-            <div class="lane-value-row"><output id="epoch-total-token-count" class="lane-value">__EPOCH_TOTAL__</output><span class="lane-share">100%</span></div>
-            <div class="lane-unit">ВХОДНЫХ ТОКЕНОВ</div>
-            <div id="epoch-total-events" class="lane-meta">__EPOCH_EVENTS__ provider-запросов</div>
-          </div>
-          <div class="lane-arrow" aria-hidden="true">→</div>
-          <div id="execution-cpu-metric" class="lane-metric __CPU_METRIC_CLASS__">
-            <div class="lane-label">ВОСПРОИЗВЕДЕНО И ПРОВЕРЕНО НА CPU</div>
-            <div class="lane-value-row"><output id="epoch-cpu-token-count" class="lane-value">__EPOCH_CPU__</output><output id="epoch-cpu-token-share" class="lane-share">__EPOCH_CPU_SHARE__</output></div>
-            <div class="lane-unit">ВХОДНЫХ ТОКЕНОВ БЕЗ LLM</div>
-            <div id="epoch-cpu-accepts" class="lane-meta">__EPOCH_CPU_ACCEPTS__ verified local accepts</div>
-            <div class="lane-rail"><div id="execution-cpu-bar" class="lane-fill"></div></div>
-          </div>
-        </div>
-        <div id="execution-window" class="lane-window">ОДИН ЗНАМЕНАТЕЛЬ · ОДНА IDENTITY DOMAIN</div>
+    <div class="traffic-grid">
+      <article class="traffic-stage">
+        <div class="stage-index">1 · SERVER ACCOUNTING</div>
+        <div class="stage-label">ВЕСЬ ТРАФИК СЕРВЕРА</div>
+        <div class="stage-value-row"><output id="server-total-token-count" class="stage-value">__SERVER_TOTAL__</output></div>
+        <div class="stage-unit">НАКОПЛЕННЫХ ВХОДНЫХ ТОКЕНОВ</div>
+        <div id="server-total-breakdown" class="stage-meta">V3 __LEGACY_TOTAL__ + V4 __EPOCH_TOTAL__</div>
+        <div id="server-total-scope" class="stage-scope">ВСЯ СОХРАНЁННАЯ ИСТОРИЯ УЧЁТА · ТЕКУЩАЯ V4: __EPOCH_EVENTS__ ЗАПРОСОВ</div>
       </article>
-      <article class="overview-lane">
-        <div class="lane-kicker">ЛИНИЯ 2 · MINER OPPORTUNITY WINDOW</div>
-        <div class="lane-title">Сколько опыта увидел майнер и сколько распознал как CPU-исполняемое</div>
-        <div class="lane-flow">
-          <div class="lane-metric miner">
-            <div class="lane-label">МАЙНЕР УВИДЕЛ</div>
-            <div class="lane-value-row"><output id="miner-window-total" class="lane-value">__MINER_TOTAL__</output><span class="lane-share">100%</span></div>
-            <div class="lane-unit">ВХОДНЫХ ТОКЕНОВ В КОРПУСЕ</div>
-            <div id="miner-window-intents" class="lane-meta">__MINER_INTENTS__ intents</div>
-          </div>
-          <div class="lane-arrow" aria-hidden="true">→</div>
-          <div class="lane-metric good">
-            <div class="lane-label">МАЙНЕР РАСПОЗНАЛ · CPU_VERIFIED</div>
-            <div class="lane-value-row"><output id="miner-window-cpu-token-count" class="lane-value">__MINER_CPU__</output><output id="miner-window-cpu-share" class="lane-share">__MINER_CPU_SHARE__</output></div>
-            <div class="lane-unit">ТОКЕНОВ С ДОКАЗАННЫМ CPU-КЛАССОМ</div>
-            <div id="miner-window-cpu-intents" class="lane-meta">__MINER_CPU_INTENTS__ verified intents</div>
-            <div class="lane-rail"><div id="miner-recognized-bar" class="lane-fill miner"></div></div>
-          </div>
-        </div>
-        <div id="miner-window-start" class="lane-window">СВОЙ WATERMARK И ПЕРИОД</div>
+      <article class="traffic-stage miner">
+        <div class="stage-index">2 · MINER WINDOW</div>
+        <div class="stage-label">МАЙНЕР УВИДЕЛ</div>
+        <div class="stage-value-row"><output id="miner-window-total" class="stage-value">__MINER_TOTAL__</output></div>
+        <div class="stage-unit">ВХОДНЫХ ТОКЕНОВ В КОРПУСЕ</div>
+        <div id="miner-window-intents" class="stage-meta">__MINER_INTENTS__ intents</div>
+        <div id="miner-window-start" class="stage-scope">СВОЙ WATERMARK И ПЕРИОД</div>
+      </article>
+      <article class="traffic-stage recognized">
+        <div class="stage-index">3 · CPU_VERIFIED CLASS</div>
+        <div class="stage-label">МАЙНЕР РАСПОЗНАЛ</div>
+        <div class="stage-value-row"><output id="miner-window-cpu-token-count" class="stage-value">__MINER_CPU__</output><output id="miner-window-cpu-share" class="stage-share">__MINER_CPU_SHARE__</output></div>
+        <div class="stage-unit">ТОКЕНОВ С ДОКАЗАННЫМ CPU-КЛАССОМ</div>
+        <div id="miner-window-cpu-intents" class="stage-meta">__MINER_CPU_INTENTS__ verified intents</div>
+        <div class="stage-rail"><div id="miner-recognized-bar" class="stage-fill"></div></div>
+      </article>
+      <article class="traffic-stage cpu">
+        <div class="stage-index">4 · EXECUTION RECEIPTS</div>
+        <div class="stage-label">РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU</div>
+        <div class="stage-value-row"><output id="server-cpu-token-count" class="stage-value">__SERVER_CPU__</output></div>
+        <div class="stage-unit">НАКОПЛЕННЫХ ВХОДНЫХ ТОКЕНОВ БЕЗ LLM</div>
+        <div id="server-cpu-breakdown" class="stage-meta">V3 __LEGACY_CPU__ + V4 __EPOCH_CPU__</div>
+        <div id="current-v4-execution" class="stage-scope">V4 __EPOCH_CPU__ / __EPOCH_TOTAL__ · __EPOCH_CPU_SHARE__ · __EPOCH_CPU_ACCEPTS__ accepts</div>
       </article>
     </div>
-    <div class="scope-alert"><strong>ВАЖНО: ЭТО ДВА РАЗНЫХ ОКНА.</strong> V4 execution и корпус майнера начинаются с разных watermark. Процент между линиями не считается.</div>
+    <div class="scope-alert"><strong>ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА.</strong> Майнер имеет отдельное более позднее окно. Процент распознавания считается только внутри окна майнера; точная CPU-доля V4 показана в четвёртом блоке.</div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <h2 class="band-title">ЧТО МАЙНЕР ЕЩЁ НЕ РАСПОЗНАЛ</h2>
@@ -522,7 +513,7 @@ const TEMPLATE: &str = r#"
       <div class="scope-metric ceiling"><div class="scope-label">ТЕОРЕТИЧЕСКИЙ ПОТОЛОК</div><div id="scope-ceiling-values" class="scope-value">__CEILING_VALUES__</div><output id="scope-ceiling-share" class="scope-share">__CEILING_SHARE__</output><div class="scope-note">ordinary минус доказанно irreducible; не CPU и не authority</div></div>
     </div>
     <div id="miner-class-ledger" class="ms3-note">Загрузка классов opportunity…</div>
-    <div class="legacy-strip"><span>АРХИВ V3: <b id="legacy-values">__LEGACY_VALUES__</b></span><span class="legacy-warning">ДРУГАЯ IDENTITY DOMAIN · С V4 НЕ СУММИРУЕТСЯ</span></div>
+    <div class="legacy-strip"><span>АРХИВ V3: <b id="legacy-values">__LEGACY_VALUES__</b></span><span class="legacy-warning">ОТДЕЛЬНАЯ ACCOUNTING PARTITION · ВХОДИТ В SERVER TOTAL · EXACT SHARE СЧИТАЕТСЯ В V4</span></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <h2 class="band-title">ЕСТЕСТВЕННЫЙ ОПЕРАТОР · MS3</h2>
@@ -602,6 +593,9 @@ const TEMPLATE: &str = r#"
   const renderTokens = (snapshot) => {
     const accounting = snapshot.accounting || {};
     const overview = snapshot.overview || {};
+    const server = overview.server || {};
+    const serverPrior = server.prior_epoch || {};
+    const legacy = snapshot.legacy_v3 || {};
     const execution = overview.execution || {};
     const executionTotal = execution.total || {};
     const executionCpu = execution.cpu || {};
@@ -609,18 +603,20 @@ const TEMPLATE: &str = r#"
     const epochEvents = executionTotal.requests ?? accounting.terminal_request_events ?? 0;
     const epochCpu = executionCpu.input_tokens ?? accounting.cpu_verified_input_tokens ?? snapshot.current_epoch_cpu_input_tokens ?? 0;
     const epochAccepts = executionCpu.verified_accepts ?? accounting.actual_local_accepts ?? 0;
+    const serverTotal = server.input_tokens ?? snapshot.server_recorded_total_input_tokens ?? ((legacy.input_tokens || 0) + epochTotal);
+    const serverCpu = server.cpu_verified_input_tokens ?? snapshot.server_recorded_cpu_input_tokens ?? ((legacy.cpu_tokens || 0) + epochCpu);
+    const priorTotal = serverPrior.input_tokens ?? legacy.input_tokens ?? Math.max(0, serverTotal - epochTotal);
+    const priorCpu = serverPrior.cpu_verified_input_tokens ?? legacy.cpu_tokens ?? Math.max(0, serverCpu - epochCpu);
     sourceGeneratedAt = accounting.generated_at_unix || 0;
-    text("epoch-total-token-count", number.format(epochTotal));
-    text("epoch-total-events", `${number.format(epochEvents)} provider-запросов`);
-    text("epoch-cpu-token-count", number.format(epochCpu));
-    text("epoch-cpu-token-share", ratio(epochCpu, epochTotal, 1));
-    text("epoch-cpu-accepts", `${number.format(epochAccepts)} verified local accepts`);
+    text("server-total-token-count", number.format(serverTotal));
+    text("server-total-breakdown", `V3 ${number.format(priorTotal)} + V4 ${number.format(epochTotal)}`);
+    text("server-total-scope", `ВСЯ СОХРАНЁННАЯ ИСТОРИЯ УЧЁТА · ТЕКУЩАЯ V4: ${number.format(epochEvents)} ЗАПРОСОВ`);
+    text("server-cpu-token-count", number.format(serverCpu));
+    text("server-cpu-breakdown", `V3 ${number.format(priorCpu)} + V4 ${number.format(epochCpu)}`);
     const completedWindows = Array.isArray(accounting.completed_m3_windows) ? accounting.completed_m3_windows : [];
     let m3Streak = 0;
     for (let index = completedWindows.length - 1; index >= 0 && completedWindows[index]?.pass === true; index -= 1) m3Streak += 1;
-    text("execution-window", `V4 EPOCH С ${localTime(execution.started_at_unix ?? accounting.epoch_started_at_unix ?? 0)} · ${String(accounting.identity_domain || "UNKNOWN").toUpperCase()} · ROUTE ${snapshot.cpu_allowed ? "OPEN" : "LOCKED"} · M3 ${m3Streak}/${accounting.m3_required_consecutive_windows || 3}`);
-    width("execution-cpu-bar", epochCpu, epochTotal);
-    stateClass("execution-cpu-metric", `lane-metric ${epochAccepts > 0 || snapshot.cpu_allowed ? "good" : "locked"}`);
+    text("current-v4-execution", `ТЕКУЩАЯ V4: ${number.format(epochCpu)} / ${number.format(epochTotal)} · ${ratio(epochCpu, epochTotal, 1)} · ${number.format(epochAccepts)} ACCEPTS · M3 ${m3Streak}/${accounting.m3_required_consecutive_windows || 3}`);
 
     const miner = snapshot.miner_window || {};
     const minerOverview = overview.miner || {};
@@ -650,7 +646,6 @@ const TEMPLATE: &str = r#"
       .map(([name, row]) => `${name} ${number.format(row?.input_tokens || 0)}`);
     text("miner-class-ledger", classRows.length > 0 ? `НЕЗАКРЫТЫЕ КЛАССЫ: ${classRows.join(" · ")}` : "НЕЗАКРЫТЫЕ КЛАССЫ: НЕТ ДАННЫХ");
 
-    const legacy = snapshot.legacy_v3 || {};
     text("legacy-values", `${number.format(legacy.input_tokens || 0)} вход / ${number.format(legacy.cpu_tokens || 0)} CPU`);
 
     const ms3 = snapshot.ms3 || {};
@@ -758,8 +753,10 @@ mod tests {
     }
 
     #[test]
-    fn render_leads_with_four_metrics_in_two_non_composable_scopes() {
+    fn render_leads_with_total_server_miner_recognition_and_cpu() {
         let html = render(InitialMetrics {
+            server_total_tokens: 5_948_645_890,
+            server_cpu_tokens: 90_515_297,
             epoch_total_tokens: 200_000_000,
             epoch_total_events: 2_400,
             epoch_cpu_tokens: 48_000_000,
@@ -775,12 +772,12 @@ mod tests {
             cpu_allowed: false,
         });
         assert!(html.contains("ЧЕТЫРЕ ГЛАВНЫЕ ЦИФРЫ"));
-        assert!(html.contains("ВСЕГО ТРАФИКА ЧЕРЕЗ NANDO"));
-        assert!(html.contains("ВОСПРОИЗВЕДЕНО И ПРОВЕРЕНО НА CPU"));
+        assert!(html.contains("ВЕСЬ ТРАФИК СЕРВЕРА"));
+        assert!(html.contains("РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU"));
         assert!(html.contains("МАЙНЕР УВИДЕЛ"));
-        assert!(html.contains("МАЙНЕР РАСПОЗНАЛ · CPU_VERIFIED"));
-        assert!(html.contains("СРАВНИВАТЬ ТОЛЬКО ВНУТРИ КАЖДОЙ ЛИНИИ"));
-        assert!(html.contains("Процент между линиями не считается"));
+        assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
+        assert!(html.contains("ВЕСЬ СЕРВЕР → МАЙНЕР → РАСПОЗНАНО → CPU"));
+        assert!(html.contains("ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА"));
         assert!(html.contains("ЕСТЕСТВЕННЫЙ ОПЕРАТОР · MS3"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));
         assert!(html.contains("CANDIDATE INPUT"));
@@ -789,14 +786,18 @@ mod tests {
         assert!(html.contains("DELTA 0 · ACTIVE 0"));
         assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
         assert!(html.contains("ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С"));
+        assert!(html.contains("5 948 645 890"));
+        assert!(html.contains("V3 5 748 645 890 + V4 200 000 000"));
+        assert!(html.contains("90 515 297"));
+        assert!(html.contains("V3 42 515 297 + V4 48 000 000"));
         assert!(html.contains("200 000 000"));
-        assert!(html.contains("2 400 provider-запросов"));
-        assert!(html.contains("720 verified local accepts"));
+        assert!(html.contains("2 400 ЗАПРОСОВ"));
+        assert!(html.contains("720 accepts"));
         assert!(html.contains("1 300 intents"));
         assert!(html.contains("940 verified intents"));
         assert!(html.contains("24,0%"));
         assert!(html.contains("5 748 645 890 вход / 42 515 297 CPU"));
-        assert!(html.contains("С V4 НЕ СУММИРУЕТСЯ"));
+        assert!(html.contains("ВХОДИТ В SERVER TOTAL"));
         assert!(
             html.find("ПОЧЕМУ CPU НЕ РАСТЁТ").unwrap_or(usize::MAX)
                 < html.find("ЖИВЫЕ ОКНА").unwrap_or(usize::MAX)
@@ -809,6 +810,8 @@ mod tests {
     #[test]
     fn admitted_cpu_route_is_rendered_open_before_the_first_refresh() {
         let html = render(InitialMetrics {
+            server_total_tokens: 10_000,
+            server_cpu_tokens: 340,
             epoch_total_tokens: 1_000,
             epoch_total_events: 10,
             epoch_cpu_tokens: 240,
@@ -824,13 +827,14 @@ mod tests {
             cpu_allowed: true,
         });
         assert!(html.contains("МАРШРУТ ДО CPU"));
-        assert!(html.contains("id=\"execution-cpu-metric\" class=\"lane-metric good\""));
-        assert!(html.contains("id=\"epoch-cpu-token-share\" class=\"lane-share\">24,0%"));
-        assert!(html.contains("id=\"miner-window-cpu-share\" class=\"lane-share\">75,0%"));
+        assert!(html.contains("id=\"server-total-token-count\" class=\"stage-value\">10 000"));
+        assert!(html.contains("id=\"server-cpu-token-count\" class=\"stage-value\">340"));
+        assert!(html.contains("id=\"miner-window-cpu-share\" class=\"stage-share\">75,0%"));
+        assert!(html.contains("V4 240 / 1 000 · 24,0% · 3 accepts"));
         assert!(html.contains("id=\"scope-ceiling-share\" class=\"scope-share\">90,0%"));
         assert!(html.contains("class=\"pipe-step good\"><div class=\"pipe-name\">ADMISSION"));
         assert!(html.contains("class=\"pipe-state\">OPEN"));
         assert!(html.contains("маршрут до CPU открыт"));
-        assert!(!html.contains("__CPU_METRIC_CLASS__"));
+        assert!(!html.contains("__SERVER_TOTAL__"));
     }
 }

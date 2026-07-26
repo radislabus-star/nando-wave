@@ -127,6 +127,8 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         .unwrap_or(&economics);
     let (current_epoch_total_tokens, current_epoch_cpu_tokens) =
         exact_current_epoch_token_totals(live_economics).unwrap_or((0, 0));
+    let (server_total_tokens, server_cpu_tokens) =
+        exact_token_totals(live_economics).unwrap_or((0, 0));
     let (legacy_total_tokens, legacy_cpu_tokens) =
         legacy_prior_epoch_token_totals(live_economics).unwrap_or((0, 0));
     let build_manifest = read_json(&state.config.build_manifest_path);
@@ -597,6 +599,8 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     );
     let research_architecture = f5_runtime_status::panel_html();
     let live_dashboard = live_dashboard::render(live_dashboard::InitialMetrics {
+        server_total_tokens,
+        server_cpu_tokens,
         epoch_total_tokens: current_epoch_total_tokens,
         epoch_total_events: metric_u64(&economics, "terminal_request_events"),
         epoch_cpu_tokens: current_epoch_cpu_tokens,
@@ -1063,6 +1067,15 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         .get("economics")
         .filter(|value| value.is_object())
         .unwrap_or(&fallback);
+    let Some((server_total_input_tokens, server_cpu_input_tokens)) = exact_token_totals(economics)
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(json!({"available":false})),
+        )
+            .into_response();
+    };
     let Some((current_epoch_total_input_tokens, current_epoch_cpu_input_tokens)) =
         exact_current_epoch_token_totals(economics)
     else {
@@ -1131,6 +1144,25 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let traffic_overview = json!({
         "schema": "nando.traffic-overview.v1",
         "cross_scope_ratio_allowed": false,
+        "server": {
+            "scope": "all_recorded_accounting_partitions",
+            "input_tokens": server_total_input_tokens,
+            "cpu_verified_input_tokens": server_cpu_input_tokens,
+            "partitioned": economics
+                .get("display_input_token_accounting_partitioned")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            "prior_epoch": {
+                "input_tokens": legacy_total_input_tokens,
+                "cpu_verified_input_tokens": legacy_cpu_input_tokens,
+            },
+            "current_v4_epoch": {
+                "input_tokens": current_epoch_total_input_tokens,
+                "cpu_verified_input_tokens": current_epoch_cpu_input_tokens,
+                "requests": metric_u64(economics, "terminal_request_events"),
+                "verified_accepts": metric_u64(economics, "actual_local_accepts"),
+            },
+        },
         "execution": {
             "scope": "current_v4_accounting_epoch",
             "started_at_unix": metric_u64(economics, "accounting_epoch_started_at_unix"),
@@ -1164,6 +1196,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         [(header::CACHE_CONTROL, "no-store")],
         Json(json!({
             "available": true,
+            "server_recorded_total_input_tokens": server_total_input_tokens,
+            "server_recorded_cpu_input_tokens": server_cpu_input_tokens,
             "total_input_tokens": current_epoch_total_input_tokens,
             "miner_input_tokens": miner_input_tokens,
             "cpu_input_tokens": current_epoch_cpu_input_tokens,
