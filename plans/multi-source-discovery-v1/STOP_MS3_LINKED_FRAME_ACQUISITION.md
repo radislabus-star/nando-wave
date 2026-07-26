@@ -141,11 +141,11 @@ http://127.0.0.1:18790/v2/multi-source/ms3-capture-health
 ## Verification
 
 ```text
-nando-operator-learning                 279 / 279 PASS
-nando-transition-serving                122 / 122 PASS, 1 perf ignored
-F7 generation shadow                      7 / 7 PASS, 1 perf ignored
-acquisition causal tests                  3 / 3 PASS
-acquisition persistence tests             2 / 2 PASS
+nando-operator-learning                 281 / 281 PASS
+nando-transition-serving                127 / 127 PASS, 1 perf ignored
+provider capture index                     7 / 7 PASS
+provider capture persistence               5 / 5 PASS
+capture health + acquisition               7 / 7 PASS
 Clippy -D warnings                            PASS
 rustfmt / diff check                          PASS
 NANDA composite                               PASS
@@ -154,15 +154,28 @@ NANDA composite                               PASS
 Deployment:
 
 ```text
-source commit             2e718a4
-cold binary SHA-256       e12c06a79e1f4cdd3891725fcd948e830e462de64b7afe902ec7677388c4d8a4
-cold invocation           d8292912724441c5aa7e056ff439bb38
-cold NRestarts            0
-hot serving PID           3061210
-hot serving restarted     no
+source commit             a579628
+deployed binary SHA-256   b463e0fc11fe0ee0364ece99a4428e7179f4cdf7a04e1fac228ddaf78789fb31
+cold invocation           d6b258e9dfa74ce084220768b956f796
+hot invocation            aec3a81260c648ed84538066131715c6
 ACTIVE packages           2
 false accepts             0
 runtime parity failures   0
+```
+
+Live post-repair receipt:
+
+```text
+provider capture phase       ready_hash_only
+provider capture records     16,384
+captured / censored          2 / 0
+persistence failures         0
+topology rows                1,832 -> 1,834
+terminal receipts            2
+capture health               CAPTURE_PROGRESS
+scientific verdict           collecting
+linked frames                0
+authority / phase mutation   false / false
 ```
 
 Read-only live endpoint:
