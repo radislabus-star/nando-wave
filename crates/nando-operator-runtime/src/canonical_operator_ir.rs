@@ -29,6 +29,7 @@ pub enum CanonicalOperatorIrCompileErrorV1 {
     InvalidRoleGraph,
     InvalidCircuit,
     InvalidRelationState,
+    InvalidTransformOrder,
 }
 
 impl CompiledCanonicalOperatorIrV1 {
@@ -231,7 +232,9 @@ fn canonical_operator_ir_from_parts_v1(
             phase_im_bits: relation.phase_anchor.im.to_bits(),
         })
         .collect();
-    let transforms = transform_program
+    let ordered_transforms = crate::ordered_role_transforms(transform_program)
+        .map_err(|_| CanonicalOperatorIrCompileErrorV1::InvalidTransformOrder)?;
+    let transforms = ordered_transforms
         .iter()
         .map(|transform| CanonicalOperatorTransformV1 {
             opcode: transform.opcode,

@@ -363,9 +363,7 @@ fn compile_collection_operator(
     )
     .map_err(crystallization_error)?;
     let bundle = operator.restart_bundle().map_err(crystallization_error)?;
-    let restored =
-        VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
-            .map_err(crystallization_error)?;
+    let restored = bundle.restore_verified().map_err(crystallization_error)?;
     if !operator.execution_equivalent(&restored)
         || operator.actor_sha256() != restored.actor_sha256()
         || operator.verifier_sha256() != restored.verifier_sha256()

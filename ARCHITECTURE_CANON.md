@@ -265,6 +265,13 @@ self-authority. Restart requires an externally expected `bundle_id`, validates
 every image digest, reconstructs the runtime artifact, independently rebuilds
 the verifier, and reproduces byte-identical bundle bytes.
 
+New crystallized response packages use `bundle_id` as their canonical operator
+identity. The old `page_bytes` and `registry_cbor` fields remain decode-only
+compatibility aliases and must reconstruct an execution-equivalent operator.
+External admission rejects a newly reconstructed candidate that lacks V4.
+Already active legacy packages remain readable but cannot manufacture V4
+authority from their compatibility fields.
+
 Recursive growth is ordered as follows:
 
 ```text

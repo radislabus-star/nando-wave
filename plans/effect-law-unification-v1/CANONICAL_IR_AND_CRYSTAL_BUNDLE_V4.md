@@ -1,6 +1,7 @@
 # Canonical IR And Crystal Bundle V4
 
-Status: implemented candidate, authority unchanged.
+Status: implemented; canonical for newly crystallized packages, live authority
+unchanged until a separately gated generation rollout.
 
 ## Route
 
@@ -76,7 +77,10 @@ serialized bundle contains no authority or lease field
 legacy restart golden hashes remain unchanged
 ```
 
-Production package serialization and admission ownership are deliberately not
-switched by this change. The V4 bundle remains a sealed candidate until a
-separate compatibility migration proves old checkpoint decode, package byte
-parity, and external admission reconstruction.
+Newly crystallized packages serialize V4 bytes and `bundle_id`. Their legacy
+`page_bytes` and `registry_cbor` remain compatibility aliases and must restore
+an execution-equivalent operator with the same parity seal. Old packages decode
+without V4, but new external admission reconstruction requires V4 and rejects a
+missing or mismatched ID. Existing live authority is not rewritten by this
+source migration; a new immutable generation still requires the normal
+composite deployment gate.

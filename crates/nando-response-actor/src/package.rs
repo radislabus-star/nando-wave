@@ -89,9 +89,9 @@ impl ResponsePackage {
         }
         self.program.validate()?;
         if let Some(bundle) = &self.crystallized_operator {
-            let operator =
-                VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
-                    .map_err(|_| "crystallized_operator_restore_failed")?;
+            let operator = bundle
+                .restore_verified()
+                .map_err(|_| "crystallized_operator_restore_failed")?;
             let actor_sha256 = crate::response_actor_program_digest(&self.program)
                 .map_err(|_| "crystallized_actor_digest_failed")?;
             if actor_sha256 != operator.actor_sha256() {
@@ -247,8 +247,7 @@ impl ResponsePackage {
             // Runtime always takes the crystallized branch first. Legacy phase
             // atoms may remain as frozen learning evidence, but they cannot
             // route around the sealed RoleGraph and RelationProgram.
-            VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
-                .is_ok()
+            bundle.restore_verified().is_ok()
         } else {
             !required_atoms.is_empty()
                 && required_atoms
@@ -1084,9 +1083,9 @@ fn restore_crystallized_operators(
         let Some(bundle) = &package.crystallized_operator else {
             continue;
         };
-        let operator =
-            VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
-                .map_err(|_| "crystallized_operator_restore_failed")?;
+        let operator = bundle
+            .restore_verified()
+            .map_err(|_| "crystallized_operator_restore_failed")?;
         if operators
             .insert(package.package_id.clone(), operator)
             .is_some()

@@ -75,6 +75,10 @@ pub struct VerifiedCrystallizedOperator {
 pub struct VerifiedOperatorRestartBundle {
     page_bytes: Box<[u8]>,
     registry_cbor: Box<[u8]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    crystallized_bundle_v4_cbor: Option<Box<[u8]>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    canonical_bundle_id: Option<nando_operator_persistence::ContentIdV4>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -701,9 +705,16 @@ impl VerifiedCrystallizedOperator {
             &self.operator.runtime_artifact,
             &metadata,
         )?;
+        let crystallized_bundle_v4 = self.crystallized_bundle_v4()?;
+        let canonical_bundle_id = *crystallized_bundle_v4.manifest().bundle_id();
+        let crystallized_bundle_v4_cbor = crystallized_bundle_v4
+            .canonical_bytes()
+            .map_err(|_| CrystallizedOperatorError::RestartEncode)?;
         Ok(VerifiedOperatorRestartBundle {
             page_bytes: self.page().as_bytes().to_vec().into_boxed_slice(),
             registry_cbor,
+            crystallized_bundle_v4_cbor: Some(crystallized_bundle_v4_cbor),
+            canonical_bundle_id: Some(canonical_bundle_id),
         })
     }
 
@@ -804,6 +815,47 @@ fn bind_raw_pre_action_components(
 }
 
 impl VerifiedOperatorRestartBundle {
+    pub fn restore_verified(
+        &self,
+    ) -> Result<VerifiedCrystallizedOperator, CrystallizedOperatorError> {
+        let legacy =
+            VerifiedCrystallizedOperator::restore(self.page_bytes(), self.registry_cbor())?;
+        match (
+            self.crystallized_bundle_v4_cbor.as_deref(),
+            self.canonical_bundle_id.as_ref(),
+        ) {
+            (None, None) => Ok(legacy),
+            (Some(bytes), Some(expected_bundle_id)) => {
+                let bundle =
+                    nando_operator_persistence::CrystallizedOperatorBundleV4::from_canonical_bytes(
+                        bytes,
+                    )
+                    .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+                let canonical = VerifiedCrystallizedOperator::restore_crystallized_bundle_v4(
+                    &bundle,
+                    expected_bundle_id,
+                )?;
+                if !canonical.execution_equivalent(&legacy)
+                    || canonical.parity_seal() != legacy.parity_seal()
+                {
+                    return Err(CrystallizedOperatorError::RestartDigestMismatch);
+                }
+                Ok(canonical)
+            }
+            _ => Err(CrystallizedOperatorError::RestartDigestMismatch),
+        }
+    }
+
+    #[must_use]
+    pub const fn canonical_bundle_id(&self) -> Option<&nando_operator_persistence::ContentIdV4> {
+        self.canonical_bundle_id.as_ref()
+    }
+
+    #[must_use]
+    pub const fn has_canonical_bundle_v4(&self) -> bool {
+        self.crystallized_bundle_v4_cbor.is_some() && self.canonical_bundle_id.is_some()
+    }
+
     #[must_use]
     pub fn page_bytes(&self) -> &[u8] {
         &self.page_bytes
@@ -1945,13 +1997,37 @@ mod tests {
             restart_bundle.registry_cbor().len()
                 < nando_operator_runtime::CRYSTALLIZED_REGISTRY_MAX_BYTES
         );
-        let restored = VerifiedCrystallizedOperator::restore(
-            restart_bundle.page_bytes(),
-            restart_bundle.registry_cbor(),
-        )
-        .expect("verified operator restart");
+        assert!(restart_bundle.has_canonical_bundle_v4());
+        assert!(restart_bundle.canonical_bundle_id().is_some());
+        let restored = restart_bundle
+            .restore_verified()
+            .expect("verified operator restart");
         assert_eq!(restored.page().as_bytes(), operator.page().as_bytes());
         assert_eq!(restored.parity_seal(), operator.parity_seal());
+        let legacy_bundle = VerifiedOperatorRestartBundle {
+            page_bytes: restart_bundle.page_bytes.clone(),
+            registry_cbor: restart_bundle.registry_cbor.clone(),
+            crystallized_bundle_v4_cbor: None,
+            canonical_bundle_id: None,
+        };
+        assert!(
+            legacy_bundle.restore_verified().is_ok(),
+            "old packages remain decode-compatible without gaining V4 authority"
+        );
+        let mut legacy_json = serde_json::to_value(&restart_bundle).expect("restart JSON");
+        let legacy_object = legacy_json.as_object_mut().expect("restart object");
+        legacy_object.remove("crystallized_bundle_v4_cbor");
+        legacy_object.remove("canonical_bundle_id");
+        let decoded_legacy: VerifiedOperatorRestartBundle =
+            serde_json::from_value(legacy_json).expect("legacy decode");
+        assert!(decoded_legacy.restore_verified().is_ok());
+        assert!(!decoded_legacy.has_canonical_bundle_v4());
+        let mut wrong_identity = restart_bundle.clone();
+        wrong_identity.canonical_bundle_id = Some([0; 32]);
+        assert_eq!(
+            wrong_identity.restore_verified(),
+            Err(CrystallizedOperatorError::RestartDigestMismatch)
+        );
         let crystal = operator
             .crystallized_bundle_v4()
             .expect("content-addressed crystal");

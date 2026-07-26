@@ -16,15 +16,15 @@ use crate::{
     RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
     RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseExecutionStatus, ResponseExecutor,
     ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram,
-    ResponseRegistry, VerifiedCrystallizedOperator, canonical_json_sha256,
-    compile_source_neutral_quarantine_packages, evaluate_grounded_wave_causality, execute_response,
-    frame_matches_program_action_contract, online_collection_adaptive_transfer_proof_digest,
-    online_collection_candidate_freeze, online_collection_future_manifest_digest,
-    online_collection_support_manifest_digest, relation_frame_routes_to_package,
-    relation_frame_structural_family_id, response_execution_payload_digest,
-    response_program_authority_matches_example, response_program_required_routing_atom_ids,
-    response_proof_receipts_digest, response_registry_digest, sha256_bytes,
-    source_neutral_verifier_for_program, valid_nonzero_sha256, verify_response_independently,
+    ResponseRegistry, canonical_json_sha256, compile_source_neutral_quarantine_packages,
+    evaluate_grounded_wave_causality, execute_response, frame_matches_program_action_contract,
+    online_collection_adaptive_transfer_proof_digest, online_collection_candidate_freeze,
+    online_collection_future_manifest_digest, online_collection_support_manifest_digest,
+    relation_frame_routes_to_package, relation_frame_structural_family_id,
+    response_execution_payload_digest, response_program_authority_matches_example,
+    response_program_required_routing_atom_ids, response_proof_receipts_digest,
+    response_registry_digest, sha256_bytes, source_neutral_verifier_for_program,
+    valid_nonzero_sha256, verify_response_independently,
 };
 
 use crate::{LiveScalarAdmissionCandidate, LiveScalarShadowState};
@@ -138,9 +138,12 @@ pub fn build_crystallized_admission_snapshot(
         let Some(bundle) = &package.crystallized_operator else {
             return Err("crystallized_admission_bundle_missing");
         };
-        let operator =
-            VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
-                .map_err(|_| "crystallized_admission_restore_failed")?;
+        if !bundle.has_canonical_bundle_v4() {
+            return Err("crystallized_admission_canonical_bundle_missing");
+        }
+        let operator = bundle
+            .restore_verified()
+            .map_err(|_| "crystallized_admission_restore_failed")?;
         let support_sessions = candidate
             .support
             .iter()
@@ -736,14 +739,12 @@ fn packages_have_same_execution_identity(
     ) {
         (None, None) => Ok(true),
         (Some(active), Some(candidate)) => {
-            let active =
-                VerifiedCrystallizedOperator::restore(active.page_bytes(), active.registry_cbor())
-                    .map_err(|_| "active_generation_crystallized_restore_failed")?;
-            let candidate = VerifiedCrystallizedOperator::restore(
-                candidate.page_bytes(),
-                candidate.registry_cbor(),
-            )
-            .map_err(|_| "candidate_generation_crystallized_restore_failed")?;
+            let active = active
+                .restore_verified()
+                .map_err(|_| "active_generation_crystallized_restore_failed")?;
+            let candidate = candidate
+                .restore_verified()
+                .map_err(|_| "candidate_generation_crystallized_restore_failed")?;
             Ok(active.execution_equivalent(&candidate))
         }
         _ => Ok(false),
