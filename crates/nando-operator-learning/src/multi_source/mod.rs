@@ -5,6 +5,7 @@ mod factorizer;
 mod failure_corpus;
 mod identification;
 mod join;
+mod linked_frame_acquisition;
 mod live_snapshot;
 mod marginal;
 mod representation_gap;
@@ -36,6 +37,13 @@ pub use join::{
     BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1,
     MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, ObservedTeacherActionRefV1, VerifiedOutcomeReceiptRefV1,
+};
+pub use linked_frame_acquisition::{
+    MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V1, MS3_LINKED_FRAME_ACQUISITION_FAIL,
+    MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1, MS3_LINKED_FRAME_RECEIPT_SCHEMA_V1,
+    Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
+    Ms3LinkedFrameAcquisitionVerdictV1, Ms3LinkedFrameReceiptV1,
+    REPRESENTATION_GAP_CLASSIFIER_VERSION_V1, build_ms3_linked_frame_acquisition_report_v1,
 };
 pub use live_snapshot::{
     LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3, LiveMultiSourceDiscoveryBlockerV1,

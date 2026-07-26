@@ -11,7 +11,7 @@ use nando_operator_kernel::{
     MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
     PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA, RelationAtom,
     RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram, ResponseRenderSegment,
-    ResponseValueSelector, SemanticRole, ValueProjectionFormat, sha256_bytes,
+    ResponseValueSelector, SemanticRole, ValueProjectionFormat, sha256_bytes, valid_nonzero_sha256,
 };
 
 use super::*;
@@ -745,6 +745,137 @@ fn terminal(
         200,
     )
     .expect("terminal")
+}
+
+fn acquisition_contract(
+    max_new_topology_rows: u64,
+    max_elapsed_seconds: u64,
+) -> Ms3LinkedFrameAcquisitionContractV1 {
+    Ms3LinkedFrameAcquisitionContractV1::seal(
+        root("topology-prefix"),
+        1_832,
+        1,
+        max_new_topology_rows,
+        max_elapsed_seconds,
+    )
+    .expect("acquisition contract")
+}
+
+#[test]
+fn linked_frame_acquisition_collects_then_fails_at_the_sealed_row_budget() {
+    let collecting = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(2, 60),
+        2,
+        vec![t1_topology_row(
+            "pending",
+            "request-pending",
+            "session",
+            1,
+            1_000,
+        )],
+        Vec::new(),
+        vec![terminal("request-pending", 990, 1_100)],
+    );
+    assert!(collecting.validate(), "{collecting:#?}");
+    assert_eq!(
+        collecting.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::Collecting
+    );
+
+    let in_flight = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(2, 60),
+        2,
+        vec![
+            t1_topology_row("a", "request-a", "session-a", 1, 1_000),
+            t1_topology_row("b", "request-b", "session-b", 2, 2_000),
+        ],
+        Vec::new(),
+        vec![terminal("request-a", 990, 1_100)],
+    );
+    assert!(in_flight.validate(), "{in_flight:#?}");
+    assert_eq!(
+        in_flight.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::Collecting
+    );
+
+    let failed = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(2, 60),
+        2,
+        vec![
+            t1_topology_row("a", "request-a", "session-a", 1, 1_000),
+            t1_topology_row("b", "request-b", "session-b", 2, 2_000),
+        ],
+        Vec::new(),
+        vec![
+            terminal("request-a", 990, 1_100),
+            terminal("request-b", 1_990, 2_100),
+        ],
+    );
+    assert!(failed.validate(), "{failed:#?}");
+    assert_eq!(
+        failed.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+    );
+    assert_eq!(failed.blocker, MS3_LINKED_FRAME_ACQUISITION_FAIL);
+    assert!(!failed.phase_update_allowed);
+    assert!(!failed.authority_ready);
+}
+
+#[test]
+fn linked_frame_receipt_binds_topology_frame_terminal_and_identity() {
+    let topology = t1_topology_row("linked", "request-linked", "session", 1, 1_000);
+    let frame = t1_completed_frame("linked", "action-linked", "session", 1_500);
+    let terminal = terminal("request-linked", 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![topology.clone()],
+        vec![frame],
+        vec![terminal.clone()],
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+    );
+    assert_eq!(report.linked_frame_rows, 1);
+    let receipt = &report.receipts[0];
+    assert_eq!(
+        receipt.topology_commitment_root_sha256,
+        topology.commit.commitment_root_sha256
+    );
+    assert_eq!(
+        receipt.terminal_receipt_root_sha256,
+        terminal.receipt_root_sha256
+    );
+    assert!(valid_nonzero_sha256(&receipt.completed_frame_root_sha256));
+    assert!(valid_nonzero_sha256(&receipt.session_lineage_sha256));
+    assert!(valid_nonzero_sha256(&receipt.request_event_id_sha256));
+    assert!(valid_nonzero_sha256(&receipt.action_event_id_sha256));
+    assert!(!receipt.phase_update_allowed);
+    assert!(!receipt.authority_ready);
+}
+
+#[test]
+fn linked_frame_acquisition_excludes_outcomes_after_the_frozen_deadline() {
+    let topology = t1_topology_row("late", "request-late", "session", 1, 1_000);
+    let mut frame = t1_completed_frame("late", "action-late", "session", 1_500);
+    frame.observed_at_unix_nanos = 62_000_000_000;
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        61,
+        vec![topology],
+        vec![frame],
+        vec![terminal("request-late", 990, 1_100)],
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+    );
+    assert_eq!(report.linked_frame_rows, 0);
 }
 
 #[test]

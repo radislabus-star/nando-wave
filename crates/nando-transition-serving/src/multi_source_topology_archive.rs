@@ -16,6 +16,7 @@ const MAX_ARCHIVE_ROWS: usize = 262_144;
 pub(super) struct MultiSourceTopologyArchive {
     ledger: FramedCborLedger,
     by_commitment: BTreeMap<String, PreActionTopologyAuditRowV1>,
+    append_order: Vec<String>,
     payload_bytes: u64,
 }
 
@@ -26,6 +27,7 @@ impl MultiSourceTopologyArchive {
         let ledger = FramedCborLedger::open(directory, LEDGER_PREFIX)?;
         let rows = read_framed_cbor::<PreActionTopologyAuditRowV1>(directory, LEDGER_PREFIX)?;
         let mut by_commitment = BTreeMap::new();
+        let mut append_order = Vec::new();
         let mut payload_bytes = 0_u64;
         for row in rows {
             validate_row(&row)?;
@@ -40,11 +42,13 @@ impl MultiSourceTopologyArchive {
             if payload_bytes > MAX_ARCHIVE_BYTES || by_commitment.len() >= MAX_ARCHIVE_ROWS {
                 return Err("multi_source_topology_archive_budget".to_owned());
             }
+            append_order.push(root.clone());
             by_commitment.insert(root, row);
         }
         Ok(Self {
             ledger,
             by_commitment,
+            append_order,
             payload_bytes,
         })
     }
@@ -82,6 +86,7 @@ impl MultiSourceTopologyArchive {
         }
         self.ledger.append(row)?;
         self.payload_bytes = self.payload_bytes.saturating_add(bytes);
+        self.append_order.push(root.clone());
         self.by_commitment.insert(root.clone(), row.clone());
         Ok(())
     }
@@ -90,9 +95,40 @@ impl MultiSourceTopologyArchive {
         self.by_commitment.values().cloned().collect()
     }
 
-    #[cfg(test)]
-    fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         self.by_commitment.len()
+    }
+
+    pub(super) fn prefix_root(&self, rows: usize) -> Result<String, String> {
+        if rows > self.append_order.len() {
+            return Err("multi_source_topology_archive_prefix_out_of_range".to_owned());
+        }
+        canonical_json_sha256(&(
+            "nando.multi-source-topology-archive-prefix.v1",
+            self.append_order[..rows]
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        ))
+        .map_err(|error| format!("multi_source_topology_archive_prefix:{error}"))
+    }
+
+    pub(super) fn rows_after(
+        &self,
+        watermark_rows: usize,
+    ) -> Result<Vec<PreActionTopologyAuditRowV1>, String> {
+        if watermark_rows > self.append_order.len() {
+            return Err("multi_source_topology_archive_watermark_out_of_range".to_owned());
+        }
+        self.append_order[watermark_rows..]
+            .iter()
+            .map(|root| {
+                self.by_commitment
+                    .get(root)
+                    .cloned()
+                    .ok_or_else(|| "multi_source_topology_archive_index_invalid".to_owned())
+            })
+            .collect()
     }
 }
 

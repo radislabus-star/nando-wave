@@ -65,10 +65,13 @@ fn archive_retains_rows_across_restart() {
         archive.append(&row(index)).expect("append");
     }
     assert_eq!(archive.len(), 40);
+    let prefix = archive.prefix_root(40).expect("prefix");
     drop(archive);
 
     let restored = MultiSourceTopologyArchive::open(&root).expect("restore");
     assert_eq!(restored.rows().len(), 40);
+    assert_eq!(restored.prefix_root(40).expect("restored prefix"), prefix);
+    assert!(restored.rows_after(40).expect("tail").is_empty());
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 

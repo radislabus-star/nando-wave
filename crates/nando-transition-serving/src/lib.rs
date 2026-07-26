@@ -13,6 +13,7 @@ mod learning_evidence_bridge;
 mod learning_structure_bridge;
 mod live_economics;
 mod miner_worker;
+mod ms3_linked_frame_acquisition;
 pub mod multi_source_audit;
 mod multi_source_capture;
 mod multi_source_frame_archive;
@@ -175,6 +176,9 @@ pub struct ServingConfig {
     pub terminal_receipt_archive_path: PathBuf,
     pub multi_source_frame_archive_path: PathBuf,
     pub multi_source_topology_archive_path: PathBuf,
+    pub ms3_linked_frame_acquisition_path: PathBuf,
+    pub ms3_linked_frame_acquisition_max_topologies: u64,
+    pub ms3_linked_frame_acquisition_max_seconds: u64,
 }
 
 impl ServingConfig {
@@ -387,6 +391,21 @@ impl ServingConfig {
                 &state_dir,
                 "multi-source-live-v2/pre-action-topology-archive-v1",
             ),
+            ms3_linked_frame_acquisition_path: env_path_join(
+                "NANDO_MS3_LINKED_FRAME_ACQUISITION",
+                &state_dir,
+                "multi-source-live-v2/linked-frame-acquisition-v1",
+            ),
+            ms3_linked_frame_acquisition_max_topologies: env_u64(
+                "NANDO_MS3_LINKED_FRAME_MAX_TOPOLOGIES",
+                256,
+            )
+            .clamp(1, 4_096),
+            ms3_linked_frame_acquisition_max_seconds: env_u64(
+                "NANDO_MS3_LINKED_FRAME_MAX_SECONDS",
+                86_400,
+            )
+            .clamp(60, 7 * 24 * 60 * 60),
         })
     }
 }
@@ -658,6 +677,8 @@ struct AppState {
         Option<Arc<Mutex<multi_source_frame_archive::MultiSourceFrameArchive>>>,
     multi_source_topology_archive:
         Option<Arc<Mutex<multi_source_topology_archive::MultiSourceTopologyArchive>>>,
+    ms3_linked_frame_acquisition:
+        Option<Arc<Mutex<ms3_linked_frame_acquisition::Ms3LinkedFrameAcquisitionRuntime>>>,
 }
 
 #[derive(Default)]
@@ -835,6 +856,22 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     } else {
         None
     };
+    let ms3_linked_frame_acquisition = match multi_source_topology_archive.as_ref() {
+        Some(archive) => {
+            let archive = archive
+                .lock()
+                .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
+            let runtime = ms3_linked_frame_acquisition::Ms3LinkedFrameAcquisitionRuntime::open(
+                &config.ms3_linked_frame_acquisition_path,
+                &archive,
+                unix_now(),
+                config.ms3_linked_frame_acquisition_max_topologies,
+                config.ms3_linked_frame_acquisition_max_seconds,
+            )?;
+            Some(Arc::new(Mutex::new(runtime)))
+        }
+        None => None,
+    };
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -864,6 +901,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         terminal_receipt_archive,
         multi_source_frame_archive,
         multi_source_topology_archive,
+        ms3_linked_frame_acquisition,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -886,6 +924,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/ms3-representation-gaps",
             get(ms3_representation_gap_report),
+        )
+        .route(
+            "/v2/multi-source/ms3-linked-frame-acquisition",
+            get(ms3_linked_frame_acquisition_report),
         )
         .route("/v1/transitions/execute", post(execute_transition))
         .route("/v2/transitions/execute", post(execute_transition))
@@ -1787,6 +1829,27 @@ async fn ms3_representation_gap_report(State(state): State<AppState>) -> Respons
     }
 }
 
+async fn ms3_linked_frame_acquisition_report(State(state): State<AppState>) -> Response {
+    match evaluate_ms3_linked_frame_acquisition(&state) {
+        Ok(report) => json_response(
+            StatusCode::OK,
+            serde_json::to_value(report).unwrap_or_else(|_| {
+                json!({
+                    "schema": "nando.ms3-linked-frame-acquisition-error.v1",
+                    "error": "report_encode"
+                })
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-linked-frame-acquisition-error.v1",
+                "error": error
+            }),
+        ),
+    }
+}
+
 fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
     std::thread::Builder::new()
         .name("nando-multi-source-snapshot".to_owned())
@@ -1802,6 +1865,9 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                     .and_then(|mut archive| archive.sync_source(source_path))
                 {
                     eprintln!("nando-terminal-receipt-archive: {error}");
+                }
+                if let Err(error) = evaluate_ms3_linked_frame_acquisition(&state) {
+                    eprintln!("nando-ms3-linked-frame-acquisition: {error}");
                 }
                 let snapshot = if state.config.embedded_response_miner_enabled {
                     let evidence = current_miner_worker(&state)
@@ -1884,6 +1950,56 @@ fn archived_request_snapshot(
     snapshot.pre_action_context_persisted = !rows.is_empty();
     snapshot.topologies = rows;
     Ok(snapshot)
+}
+
+fn evaluate_ms3_linked_frame_acquisition(
+    state: &AppState,
+) -> Result<nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionReportV1, String> {
+    let runtime = state
+        .ms3_linked_frame_acquisition
+        .as_ref()
+        .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?;
+    let watermark_rows = runtime
+        .lock()
+        .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
+        .contract()
+        .topology_watermark_rows;
+    let new_topologies = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+        .rows_after(
+            usize::try_from(watermark_rows)
+                .map_err(|_| "ms3_linked_frame_watermark_range".to_owned())?,
+        )?;
+    let request_ids = new_topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let intent_ids = new_topologies
+        .iter()
+        .map(|row| row.structure.turn_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let terminals = state
+        .terminal_receipt_archive
+        .as_ref()
+        .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
+        .receipts_for_requests(&request_ids);
+    let frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
+        .frames_for_intents(&intent_ids);
+    runtime
+        .lock()
+        .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
+        .evaluate(unix_now(), new_topologies, frames, terminals)
 }
 
 fn archived_relation_frames(
@@ -5873,6 +5989,10 @@ mod tests {
                 .join("multi-source-live-v2/relation-frame-archive-v1"),
             multi_source_topology_archive_path: root
                 .join("multi-source-live-v2/pre-action-topology-archive-v1"),
+            ms3_linked_frame_acquisition_path: root
+                .join("multi-source-live-v2/linked-frame-acquisition-v1"),
+            ms3_linked_frame_acquisition_max_topologies: 256,
+            ms3_linked_frame_acquisition_max_seconds: 86_400,
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -5936,6 +6056,7 @@ mod tests {
             terminal_receipt_archive: None,
             multi_source_frame_archive: None,
             multi_source_topology_archive: None,
+            ms3_linked_frame_acquisition: None,
         };
         refresh_response_executor(&state);
         state
