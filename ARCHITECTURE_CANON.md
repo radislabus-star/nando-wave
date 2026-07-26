@@ -252,7 +252,7 @@ CrystallizedOperatorBundleV4
 ├─ RoutingImage
 │  └─ canonical roles, relation state, phase circuit, grounding contract
 ├─ ExecutionImage
-│  └─ OperatorPage32 entry page and versioned VM ABI
+│  └─ OperatorPage32 entry page and 1..8 canonical VM program pages
 ├─ VerifierImage
 │  └─ independently compiled verifier program
 └─ ProofEnvelope
@@ -271,6 +271,11 @@ compatibility aliases and must reconstruct an execution-equivalent operator.
 External admission rejects a newly reconstructed candidate that lacks V4.
 Already active legacy packages remain readable but cannot manufacture V4
 authority from their compatibility fields.
+
+The image layout is ownership-separated: `RoutingImage` cannot contain the
+actor template or entry page. Restart rebuilds the complete IR from routing
+roles/relations plus bounded execution program pages, then must reproduce the
+same byte-identical bundle.
 
 Recursive growth is ordered as follows:
 

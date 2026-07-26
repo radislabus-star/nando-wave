@@ -3,6 +3,42 @@ use serde::{Deserialize, Serialize};
 use super::*;
 
 const CRYSTALLIZED_PROOF_ENVELOPE_V4_SCHEMA: &str = "nando.crystallized-proof-envelope.v4";
+const CRYSTALLIZED_ROUTING_IMAGE_V4_SCHEMA: &str = "nando.crystallized-routing-image.v4";
+const CRYSTALLIZED_EXECUTION_IMAGE_V4_SCHEMA: &str = "nando.crystallized-execution-image.v4";
+const CRYSTALLIZED_EXECUTION_PROGRAM_V4_SCHEMA: &str = "nando.crystallized-execution-program.v4";
+const CRYSTALLIZED_EXECUTION_PAGE_BYTES: usize = 4_032;
+const CRYSTALLIZED_EXECUTION_MAX_EXTENSION_PAGES: usize = 8;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct CrystallizedRoutingImageV4 {
+    schema: String,
+    roles: Vec<nando_operator_kernel::CanonicalOperatorRoleV1>,
+    relations: Vec<nando_operator_kernel::CanonicalOperatorRelationV1>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct CrystallizedExecutionProgramV4 {
+    schema: String,
+    transforms: Vec<nando_operator_kernel::CanonicalOperatorTransformV1>,
+    composition_edges: Vec<nando_operator_kernel::CanonicalOperatorCompositionEdgeV1>,
+    renderer: crate::CollectionOutputRenderer,
+    actor_template: ResponseProgram,
+    verifier_contract_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct CrystallizedExecutionExtensionPageV4 {
+    #[serde(with = "serde_bytes")]
+    bytes: Box<[u8]>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct CrystallizedExecutionImageV4 {
+    schema: String,
+    #[serde(with = "serde_bytes")]
+    entry_page: Box<[u8]>,
+    extension_pages: Vec<CrystallizedExecutionExtensionPageV4>,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct CrystallizedProofEnvelopeV4 {
@@ -41,6 +77,41 @@ impl VerifiedCrystallizedOperator {
             &ir.executable_sha256()
                 .map_err(|_| CrystallizedOperatorError::DigestFailure)?,
         )?;
+        let routing_image =
+            nando_operator_kernel::canonical_json_bytes(&CrystallizedRoutingImageV4 {
+                schema: CRYSTALLIZED_ROUTING_IMAGE_V4_SCHEMA.to_owned(),
+                roles: ir.roles().to_vec(),
+                relations: ir.relations().to_vec(),
+            })
+            .map_err(|_| CrystallizedOperatorError::RestartEncode)?;
+        let execution_program =
+            nando_operator_kernel::canonical_json_bytes(&CrystallizedExecutionProgramV4 {
+                schema: CRYSTALLIZED_EXECUTION_PROGRAM_V4_SCHEMA.to_owned(),
+                transforms: ir.transforms().to_vec(),
+                composition_edges: ir.composition_edges().to_vec(),
+                renderer: ir.renderer().clone(),
+                actor_template: ir.actor_template().clone(),
+                verifier_contract_sha256: ir.verifier_contract_sha256().to_owned(),
+            })
+            .map_err(|_| CrystallizedOperatorError::RestartEncode)?;
+        let extension_pages = execution_program
+            .chunks(CRYSTALLIZED_EXECUTION_PAGE_BYTES)
+            .map(|bytes| CrystallizedExecutionExtensionPageV4 {
+                bytes: bytes.to_vec().into_boxed_slice(),
+            })
+            .collect::<Vec<_>>();
+        if extension_pages.is_empty()
+            || extension_pages.len() > CRYSTALLIZED_EXECUTION_MAX_EXTENSION_PAGES
+        {
+            return Err(CrystallizedOperatorError::RestartEncode);
+        }
+        let execution_image =
+            nando_operator_kernel::canonical_json_bytes(&CrystallizedExecutionImageV4 {
+                schema: CRYSTALLIZED_EXECUTION_IMAGE_V4_SCHEMA.to_owned(),
+                entry_page: self.page().as_bytes().to_vec().into_boxed_slice(),
+                extension_pages,
+            })
+            .map_err(|_| CrystallizedOperatorError::RestartEncode)?;
         let verifier = self.routing_verifier()?;
         let verifier_image = nando_operator_kernel::canonical_json_bytes(&verifier)
             .map_err(|_| CrystallizedOperatorError::RestartEncode)?;
@@ -49,10 +120,8 @@ impl VerifiedCrystallizedOperator {
                 .map_err(|_| CrystallizedOperatorError::RestartEncode)?;
         nando_operator_persistence::CrystallizedOperatorBundleV4::seal(
             law_id,
-            ir.canonical_bytes()
-                .map_err(|_| CrystallizedOperatorError::RestartEncode)?
-                .into_boxed_slice(),
-            self.page().as_bytes().to_vec().into_boxed_slice(),
+            routing_image.into_boxed_slice(),
+            execution_image.into_boxed_slice(),
             verifier_image.into_boxed_slice(),
             proof_image.into_boxed_slice(),
         )
@@ -69,8 +138,55 @@ impl VerifiedCrystallizedOperator {
         if bundle.manifest().bundle_id() != expected_bundle_id {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
         }
-        let ir = nando_operator_kernel::CanonicalOperatorIrV1::from_canonical_bytes(
-            bundle.routing_image(),
+        let routing: CrystallizedRoutingImageV4 = serde_json::from_slice(bundle.routing_image())
+            .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        let canonical_routing = nando_operator_kernel::canonical_json_bytes(&routing)
+            .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        if routing.schema != CRYSTALLIZED_ROUTING_IMAGE_V4_SCHEMA
+            || canonical_routing.as_slice() != bundle.routing_image()
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        let execution: CrystallizedExecutionImageV4 =
+            serde_json::from_slice(bundle.execution_image())
+                .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        let canonical_execution = nando_operator_kernel::canonical_json_bytes(&execution)
+            .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        if execution.schema != CRYSTALLIZED_EXECUTION_IMAGE_V4_SCHEMA
+            || canonical_execution.as_slice() != bundle.execution_image()
+            || execution.entry_page.len() != nando_core::wave::OPERATOR_PAGE32_BYTES
+            || execution.extension_pages.is_empty()
+            || execution.extension_pages.len() > CRYSTALLIZED_EXECUTION_MAX_EXTENSION_PAGES
+            || execution.extension_pages.iter().any(|page| {
+                page.bytes.is_empty() || page.bytes.len() > CRYSTALLIZED_EXECUTION_PAGE_BYTES
+            })
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        let mut execution_program_bytes =
+            Vec::with_capacity(execution.extension_pages.len() * CRYSTALLIZED_EXECUTION_PAGE_BYTES);
+        for page in &execution.extension_pages {
+            execution_program_bytes.extend_from_slice(&page.bytes);
+        }
+        let execution_program: CrystallizedExecutionProgramV4 =
+            serde_json::from_slice(&execution_program_bytes)
+                .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        let canonical_execution_program =
+            nando_operator_kernel::canonical_json_bytes(&execution_program)
+                .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        if execution_program.schema != CRYSTALLIZED_EXECUTION_PROGRAM_V4_SCHEMA
+            || canonical_execution_program != execution_program_bytes
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        let ir = nando_operator_kernel::CanonicalOperatorIrV1::new(
+            routing.roles,
+            routing.relations,
+            execution_program.transforms,
+            execution_program.composition_edges,
+            execution_program.renderer,
+            execution_program.actor_template,
+            execution_program.verifier_contract_sha256,
         )
         .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
         let law_id = decode_sha256(
@@ -82,7 +198,7 @@ impl VerifiedCrystallizedOperator {
         }
         let compiled = nando_operator_runtime::compile_canonical_operator_ir_v1(&ir)
             .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
-        let page = OperatorPage32::from_bytes(bundle.execution_image())
+        let page = OperatorPage32::from_bytes(&execution.entry_page)
             .map_err(CrystallizedOperatorError::InvalidPage)?;
         let verifier: VerifierProgram = serde_json::from_slice(bundle.verifier_image())
             .map_err(|_| CrystallizedOperatorError::RestartDecode)?;

@@ -2037,6 +2037,16 @@ mod tests {
                 &crystal_bytes,
             )
             .expect("decoded crystal");
+        let routing_image =
+            std::str::from_utf8(decoded_crystal.routing_image()).expect("routing JSON");
+        let execution_image =
+            std::str::from_utf8(decoded_crystal.execution_image()).expect("execution JSON");
+        assert!(routing_image.contains("nando.crystallized-routing-image.v4"));
+        assert!(!routing_image.contains("actor_template"));
+        assert!(!routing_image.contains("entry_page"));
+        assert!(execution_image.contains("nando.crystallized-execution-image.v4"));
+        assert!(execution_image.contains("entry_page"));
+        assert!(execution_image.contains("extension_pages"));
         let crystal_restored = VerifiedCrystallizedOperator::restore_crystallized_bundle_v4(
             &decoded_crystal,
             decoded_crystal.manifest().bundle_id(),

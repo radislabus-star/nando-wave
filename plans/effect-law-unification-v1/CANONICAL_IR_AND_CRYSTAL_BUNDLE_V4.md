@@ -17,8 +17,8 @@ CandidateOperatorBlueprint ----------/
                                            |
                                            v
                          CrystallizedOperatorBundleV4
-                         ├─ RoutingImage
-                         ├─ ExecutionImage
+                         ├─ RoutingImage: roles + signed phase relations
+                         ├─ ExecutionImage: Page32 + bounded VM program pages
                          ├─ VerifierImage
                          └─ ProofEnvelope
                                            |
@@ -84,3 +84,10 @@ without V4, but new external admission reconstruction requires V4 and rejects a
 missing or mismatched ID. Existing live authority is not rewritten by this
 source migration; a new immutable generation still requires the normal
 composite deployment gate.
+
+The V4 compiler owns the image split. `RoutingImage` cannot contain the actor
+template or entry page. `ExecutionImage` contains the exact 4,032-byte entry
+page plus one to eight canonical program pages; restart concatenates those
+pages, reconstructs the IR with the routing image, and rejects non-canonical,
+missing, or oversized page layouts. This keeps `OperatorPage32` hot while the
+complete VM program remains portable data.

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub const CRYSTALLIZED_OPERATOR_BUNDLE_V4_SCHEMA: &str = "nando.crystallized-operator-bundle.v4";
-pub const CRYSTALLIZED_OPERATOR_COMPILER_V1: &str = "nando.canonical-operator-compiler.v1";
+pub const CRYSTALLIZED_OPERATOR_COMPILER_V2: &str = "nando.canonical-operator-compiler.v2";
 pub const CRYSTALLIZED_OPERATOR_VM_ABI_V1: &str = "nando.operator-vm.v1";
 pub const CRYSTALLIZED_OPERATOR_BUNDLE_V4_MAX_BYTES: usize = 256 * 1024;
 pub const CRYSTALLIZED_OPERATOR_IMAGE_V4_MAX_BYTES: usize = 128 * 1024;
@@ -66,7 +66,7 @@ impl CrystallizedOperatorBundleV4 {
         let routing_id = image_id(b"nando.bundle-v4.routing", &routing_image);
         let artifact_id = digest_parts(&[
             b"nando.bundle-v4.artifact",
-            CRYSTALLIZED_OPERATOR_COMPILER_V1.as_bytes(),
+            CRYSTALLIZED_OPERATOR_COMPILER_V2.as_bytes(),
             CRYSTALLIZED_OPERATOR_VM_ABI_V1.as_bytes(),
             &law_id,
             &execution_image,
@@ -88,7 +88,7 @@ impl CrystallizedOperatorBundleV4 {
         Ok(Self {
             manifest: CrystallizedOperatorManifestV4 {
                 schema: CRYSTALLIZED_OPERATOR_BUNDLE_V4_SCHEMA.to_owned(),
-                compiler_version: CRYSTALLIZED_OPERATOR_COMPILER_V1.to_owned(),
+                compiler_version: CRYSTALLIZED_OPERATOR_COMPILER_V2.to_owned(),
                 vm_abi: CRYSTALLIZED_OPERATOR_VM_ABI_V1.to_owned(),
                 law_id,
                 routing_id,
@@ -112,7 +112,7 @@ impl CrystallizedOperatorBundleV4 {
             self.proof_envelope.as_ref(),
         ])?;
         if self.manifest.schema != CRYSTALLIZED_OPERATOR_BUNDLE_V4_SCHEMA
-            || self.manifest.compiler_version != CRYSTALLIZED_OPERATOR_COMPILER_V1
+            || self.manifest.compiler_version != CRYSTALLIZED_OPERATOR_COMPILER_V2
             || self.manifest.vm_abi != CRYSTALLIZED_OPERATOR_VM_ABI_V1
             || self.manifest.law_id == [0; 32]
         {
