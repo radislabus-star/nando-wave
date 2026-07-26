@@ -1023,6 +1023,7 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
         2_060_000_000,
     )
     .expect("durable prediction event");
+    let committed_root = committed.event_root_sha256.clone();
     assert!(applicability.append(committed).expect("append"));
     assert_eq!(
         applicability.report(101).verdict,
@@ -1037,8 +1038,15 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
     );
     let future_bound =
         &future_ledger.bound_for_topology(&future_topology.commit.commitment_root_sha256)[0];
-    let future = seal_ms3_independent_future_v1(&frozen, &prediction, future_bound, &future_frame)
-        .expect("independent future");
+    let future = seal_ms3_independent_future_v1(
+        &frozen,
+        &prediction,
+        &committed_root,
+        2_060_000_000,
+        future_bound,
+        &future_frame,
+    )
+    .expect("independent future");
 
     assert_eq!(future.receipt.verdict, Ms3IndependentFutureVerdictV1::Pass);
     assert!(future.receipt.exact_transfer_parity);
@@ -1068,7 +1076,11 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
         "PRECOMMITTED_PREDICTION_MISSING".to_owned(),
         Some(&prediction),
         Some(2_060_000_000),
-        Some((&future_terminal.receipt_root_sha256, 2_050_000_000)),
+        Some((
+            &future_terminal.receipt_root_sha256,
+            2_050_000_000,
+            future_bound.binding.action_observed_at_unix_nanos,
+        )),
         2_070_000_000,
     )
     .expect("precommitted exclusion");
@@ -1085,6 +1097,84 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
             .canonical_bytes()
             .expect("restored gate bytes"),
         gate_bytes
+    );
+}
+
+#[test]
+fn independent_future_rejects_prediction_durable_after_action_observation() {
+    let support_topology = t1_topology_row(
+        "support-delay",
+        "request-support-delay",
+        "support-lineage",
+        1,
+        1_000,
+    );
+    let support_frame = t1_completed_frame(
+        "support-delay",
+        "action-support-delay",
+        "support-lineage",
+        1_500,
+    );
+    let support_terminal = terminal("request-support-delay", 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![support_topology.clone()],
+        vec![support_frame.clone()],
+        vec![support_terminal.clone()],
+    );
+    let support_ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&support_topology),
+        std::slice::from_ref(&support_frame),
+        std::slice::from_ref(&support_terminal),
+    );
+    let support_bound =
+        &support_ledger.bound_for_topology(&support_topology.commit.commitment_root_sha256)[0];
+    let frozen = prepare_ms3_frozen_version_space_v1(&report, support_bound, &support_frame)
+        .expect("prepared version space")
+        .seal(
+            7,
+            Ms3VersionSpaceVersionsV1 {
+                compiler_version: "test-compiler.v1".to_owned(),
+                vm_abi: "test-vm.v1".to_owned(),
+            },
+        )
+        .expect("frozen version space");
+    let future_topology = t1_topology_row(
+        "future-delay",
+        "request-future-delay",
+        "future-lineage",
+        8,
+        2_000,
+    );
+    let prediction = predict_ms3_unique_law_v1(&frozen, &future_topology, 2_050_000_000)
+        .expect("prediction")
+        .expect("applicable");
+    let future_frame = t1_completed_frame(
+        "future-delay",
+        "action-future-delay",
+        "future-lineage",
+        2_500,
+    );
+    let future_terminal = terminal("request-future-delay", 1_990, 2_700);
+    let future_ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&future_topology),
+        std::slice::from_ref(&future_frame),
+        std::slice::from_ref(&future_terminal),
+    );
+    let future_bound =
+        &future_ledger.bound_for_topology(&future_topology.commit.commitment_root_sha256)[0];
+
+    assert_eq!(
+        seal_ms3_independent_future_v1(
+            &frozen,
+            &prediction,
+            &root("durable-applicability-event"),
+            2_600_000_000,
+            future_bound,
+            &future_frame,
+        ),
+        Err("future_prediction_binding_mismatch")
     );
 }
 
@@ -1122,6 +1212,186 @@ fn future_applicability_gate_fails_only_after_its_frozen_deadline() {
     assert_eq!(failed.blocker, MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL);
     assert!(!failed.authority_ready);
     assert!(!failed.phase_mutation_allowed);
+}
+
+#[test]
+fn future_applicability_deadline_expires_active_prediction() {
+    let support_topology = t1_topology_row(
+        "support-active",
+        "request-support-active",
+        "support-lineage",
+        1,
+        1_000,
+    );
+    let support_frame = t1_completed_frame(
+        "support-active",
+        "action-support-active",
+        "support-lineage",
+        1_500,
+    );
+    let support_terminal = terminal("request-support-active", 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![support_topology.clone()],
+        vec![support_frame.clone()],
+        vec![support_terminal.clone()],
+    );
+    let support_ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&support_topology),
+        std::slice::from_ref(&support_frame),
+        std::slice::from_ref(&support_terminal),
+    );
+    let support_bound =
+        &support_ledger.bound_for_topology(&support_topology.commit.commitment_root_sha256)[0];
+    let frozen = prepare_ms3_frozen_version_space_v1(&report, support_bound, &support_frame)
+        .expect("prepared")
+        .seal(
+            7,
+            Ms3VersionSpaceVersionsV1 {
+                compiler_version: "test-compiler.v1".to_owned(),
+                vm_abi: "test-vm.v1".to_owned(),
+            },
+        )
+        .expect("frozen");
+    let topology = t1_topology_row(
+        "future-active",
+        "request-future-active",
+        "future-lineage",
+        8,
+        2_000,
+    );
+    let prediction = predict_ms3_unique_law_v1(&frozen, &topology, 2_050_000_000)
+        .expect("prediction")
+        .expect("applicable");
+    let contract =
+        Ms3FutureApplicabilityContractV1::seal(root("law-active"), 7, 8, 100).expect("contract");
+    let mut ledger = Ms3FutureApplicabilityLedgerV1::new(contract.clone()).expect("ledger");
+    let event = Ms3FutureApplicabilityEventV1::seal(
+        &contract,
+        8,
+        topology.commit.commitment_root_sha256,
+        topology.session_lineage_sha256.expect("lineage"),
+        Ms3FutureApplicabilityDispositionV1::PredictionCommitted,
+        String::new(),
+        Some(&prediction),
+        Some(101_000_000_000),
+        None,
+        101_000_000_000,
+    )
+    .expect("event");
+    assert!(ledger.append(event).expect("append"));
+    assert_eq!(
+        ledger.report(contract.deadline_unix - 1).verdict,
+        Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending
+    );
+    let expired = ledger.report(contract.deadline_unix);
+    assert!(expired.validate());
+    assert_eq!(
+        expired.verdict,
+        Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+    );
+}
+
+#[test]
+fn applicability_restore_rejects_duplicate_classification_and_orphan_disqualification() {
+    fn encode_ledger(
+        contract: Ms3FutureApplicabilityContractV1,
+        events: Vec<Ms3FutureApplicabilityEventV1>,
+    ) -> Vec<u8> {
+        let ledger_root_sha256 = nando_operator_kernel::canonical_json_sha256(&(
+            MS3_FUTURE_APPLICABILITY_LEDGER_SCHEMA_V1,
+            contract.contract_root_sha256.as_str(),
+            events
+                .iter()
+                .map(|event| event.event_root_sha256.as_str())
+                .collect::<Vec<_>>(),
+            false,
+            false,
+        ))
+        .expect("ledger root");
+        serde_cbor::to_vec(&Ms3FutureApplicabilityLedgerV1 {
+            schema: MS3_FUTURE_APPLICABILITY_LEDGER_SCHEMA_V1.to_owned(),
+            ledger_root_sha256,
+            contract,
+            events,
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        })
+        .expect("ledger bytes")
+    }
+
+    let contract =
+        Ms3FutureApplicabilityContractV1::seal(root("restore-law"), 7, 8, 100).expect("contract");
+    let first = Ms3FutureApplicabilityEventV1::seal(
+        &contract,
+        8,
+        root("same-topology"),
+        root("lineage-a"),
+        Ms3FutureApplicabilityDispositionV1::StructurallyNotApplicable,
+        "missing-role".to_owned(),
+        None,
+        None,
+        None,
+        101_000_000_000,
+    )
+    .expect("first");
+    let second = Ms3FutureApplicabilityEventV1::seal(
+        &contract,
+        9,
+        root("same-topology"),
+        root("lineage-b"),
+        Ms3FutureApplicabilityDispositionV1::StructurallyNotApplicable,
+        "missing-role".to_owned(),
+        None,
+        None,
+        None,
+        102_000_000_000,
+    )
+    .expect("second");
+    assert!(
+        Ms3FutureApplicabilityLedgerV1::from_canonical_bytes(&encode_ledger(
+            contract.clone(),
+            vec![first, second],
+        ))
+        .is_err()
+    );
+
+    let orphan = Ms3FutureApplicabilityEventV1::seal(
+        &contract,
+        8,
+        root("orphan-topology"),
+        root("orphan-lineage"),
+        Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing,
+        "PRECOMMITTED_PREDICTION_MISSING".to_owned(),
+        Some(&Ms3FuturePredictionV1 {
+            schema: MS3_FUTURE_PREDICTION_SCHEMA_V1.to_owned(),
+            prediction_root_sha256: root("orphan-prediction"),
+            contract_root_sha256: root("orphan-contract"),
+            candidate_freeze_root_sha256: root("orphan-freeze"),
+            canonical_program_root_sha256: root("orphan-program"),
+            capture_sequence: 8,
+            topology_root_sha256: root("orphan-topology"),
+            request_event_id_sha256: root("orphan-request"),
+            turn_intent_id_sha256: root("orphan-intent"),
+            session_lineage_sha256: root("orphan-lineage"),
+            pre_action_binding_root_sha256: root("orphan-binding"),
+            predicted_at_unix_nanos: 100_000_000_001,
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        }),
+        Some(101_000_000_000),
+        Some((&root("terminal"), 100_000_000_000, 102_000_000_000)),
+        102_000_000_000,
+    )
+    .expect("orphan event");
+    assert!(
+        Ms3FutureApplicabilityLedgerV1::from_canonical_bytes(&encode_ledger(
+            contract,
+            vec![orphan],
+        ))
+        .is_err()
+    );
 }
 
 #[test]

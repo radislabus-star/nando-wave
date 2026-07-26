@@ -64,6 +64,8 @@ pub struct Ms3FutureApplicabilityEventV1 {
     pub prediction_durable_at_unix_nanos: Option<u64>,
     pub terminal_receipt_root_sha256: Option<String>,
     pub terminal_completed_at_unix_nanos: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_observed_at_unix_nanos: Option<u64>,
     pub recorded_at_unix_nanos: u64,
     pub authority_ready: bool,
     pub phase_mutation_allowed: bool,
@@ -176,7 +178,7 @@ impl Ms3FutureApplicabilityEventV1 {
         blocker: String,
         prediction: Option<&Ms3FuturePredictionV1>,
         prediction_durable_at_unix_nanos: Option<u64>,
-        terminal: Option<(&str, u64)>,
+        terminal: Option<(&str, u64, u64)>,
         recorded_at_unix_nanos: u64,
     ) -> Result<Self, &'static str> {
         let mut event = Self {
@@ -190,8 +192,9 @@ impl Ms3FutureApplicabilityEventV1 {
             blocker,
             prediction_root_sha256: prediction.map(|row| row.prediction_root_sha256.clone()),
             prediction_durable_at_unix_nanos,
-            terminal_receipt_root_sha256: terminal.map(|(root, _)| root.to_owned()),
-            terminal_completed_at_unix_nanos: terminal.map(|(_, completed)| completed),
+            terminal_receipt_root_sha256: terminal.map(|(root, _, _)| root.to_owned()),
+            terminal_completed_at_unix_nanos: terminal.map(|(_, completed, _)| completed),
+            action_observed_at_unix_nanos: terminal.map(|(_, _, observed)| observed),
             recorded_at_unix_nanos,
             authority_ready: false,
             phase_mutation_allowed: false,
@@ -204,6 +207,25 @@ impl Ms3FutureApplicabilityEventV1 {
     }
 
     fn expected_root(&self) -> Result<String, &'static str> {
+        if self.action_observed_at_unix_nanos.is_none() {
+            return canonical_json_sha256(&(
+                MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1,
+                self.contract_root_sha256.as_str(),
+                self.capture_sequence,
+                self.topology_root_sha256.as_str(),
+                self.session_lineage_sha256.as_str(),
+                self.disposition,
+                self.blocker.as_str(),
+                self.prediction_root_sha256.as_deref(),
+                self.prediction_durable_at_unix_nanos,
+                self.terminal_receipt_root_sha256.as_deref(),
+                self.terminal_completed_at_unix_nanos,
+                self.recorded_at_unix_nanos,
+                false,
+                false,
+            ))
+            .map_err(|_| "future_applicability_event_root_failed");
+        }
         canonical_json_sha256(&(
             MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1,
             self.contract_root_sha256.as_str(),
@@ -216,6 +238,7 @@ impl Ms3FutureApplicabilityEventV1 {
             self.prediction_durable_at_unix_nanos,
             self.terminal_receipt_root_sha256.as_deref(),
             self.terminal_completed_at_unix_nanos,
+            self.action_observed_at_unix_nanos,
             self.recorded_at_unix_nanos,
             false,
             false,
@@ -230,25 +253,26 @@ impl Ms3FutureApplicabilityEventV1 {
                     && self.prediction_root_sha256.is_none()
                     && self.prediction_durable_at_unix_nanos.is_none()
                     && self.terminal_receipt_root_sha256.is_none()
+                    && self.action_observed_at_unix_nanos.is_none()
             }
             Ms3FutureApplicabilityDispositionV1::PredictionCommitted => {
                 self.blocker.is_empty()
                     && self.prediction_root_sha256.is_some()
                     && self.prediction_durable_at_unix_nanos.is_some()
                     && self.terminal_receipt_root_sha256.is_none()
+                    && self.action_observed_at_unix_nanos.is_none()
             }
             Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing => {
                 self.blocker == "PRECOMMITTED_PREDICTION_MISSING"
-                    && ((self.prediction_root_sha256.is_none()
-                        && self.prediction_durable_at_unix_nanos.is_none()
-                        && self.terminal_receipt_root_sha256.is_none()
-                        && self.terminal_completed_at_unix_nanos.is_none())
-                        || (self.prediction_root_sha256.is_some()
-                            && self.prediction_durable_at_unix_nanos.is_some()
-                            && self.terminal_receipt_root_sha256.is_some()
-                            && self.terminal_completed_at_unix_nanos.is_some()
-                            && self.terminal_completed_at_unix_nanos
-                                <= self.prediction_durable_at_unix_nanos))
+                    && self.prediction_root_sha256.is_some()
+                    && self.prediction_durable_at_unix_nanos.is_some()
+                    && self.terminal_receipt_root_sha256.is_some()
+                    && self.terminal_completed_at_unix_nanos.is_some()
+                    && self.action_observed_at_unix_nanos.is_some()
+                    && (self.terminal_completed_at_unix_nanos
+                        <= self.prediction_durable_at_unix_nanos
+                        || self.action_observed_at_unix_nanos
+                            <= self.prediction_durable_at_unix_nanos)
             }
         };
         self.schema == MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1
@@ -351,20 +375,18 @@ impl Ms3FutureApplicabilityLedgerV1 {
             })
             .count();
         let independent_topologies = classifications.len();
-        let exhausted = active_predictions == 0
-            && (generated_at_unix >= self.contract.deadline_unix
-                || independent_topologies
-                    >= usize::try_from(self.contract.max_independent_topologies)
-                        .unwrap_or(usize::MAX));
-        let (verdict, blocker) = if active_predictions > 0 {
-            (
-                Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending,
-                "independent_future_outcome_pending".to_owned(),
-            )
-        } else if exhausted {
+        let exhausted = generated_at_unix >= self.contract.deadline_unix
+            || independent_topologies
+                >= usize::try_from(self.contract.max_independent_topologies).unwrap_or(usize::MAX);
+        let (verdict, blocker) = if exhausted {
             (
                 Ms3FutureApplicabilityVerdictV1::AcquisitionFail,
                 MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL.to_owned(),
+            )
+        } else if active_predictions > 0 {
+            (
+                Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending,
+                "independent_future_outcome_pending".to_owned(),
             )
         } else {
             (
@@ -448,11 +470,50 @@ impl Ms3FutureApplicabilityLedgerV1 {
             .iter()
             .map(|event| event.event_root_sha256.as_str())
             .collect::<BTreeSet<_>>();
+        let canonical_order = self.events.windows(2).all(|pair| {
+            (pair[0].capture_sequence, pair[0].event_root_sha256.as_str())
+                < (pair[1].capture_sequence, pair[1].event_root_sha256.as_str())
+        });
+        let classification_topologies = self
+            .events
+            .iter()
+            .filter(|event| {
+                event.disposition
+                    != Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
+            })
+            .map(|event| event.topology_root_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        let classification_count = self
+            .events
+            .iter()
+            .filter(|event| {
+                event.disposition
+                    != Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
+            })
+            .count();
+        let committed_predictions = self
+            .events
+            .iter()
+            .filter(|event| {
+                event.disposition == Ms3FutureApplicabilityDispositionV1::PredictionCommitted
+            })
+            .filter_map(|event| event.prediction_root_sha256.as_deref())
+            .collect::<BTreeSet<_>>();
+        let disqualifications_linked = self.events.iter().all(|event| {
+            event.disposition != Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
+                || event
+                    .prediction_root_sha256
+                    .as_deref()
+                    .is_some_and(|root| committed_predictions.contains(root))
+        });
         self.schema == MS3_FUTURE_APPLICABILITY_LEDGER_SCHEMA_V1
             && self.contract.validate()
             && self.events.len()
                 <= 2 * MS3_FUTURE_APPLICABILITY_MAX_INDEPENDENT_TOPOLOGIES_V1 as usize
             && event_roots.len() == self.events.len()
+            && canonical_order
+            && classification_topologies.len() == classification_count
+            && disqualifications_linked
             && self
                 .events
                 .iter()
@@ -504,12 +565,14 @@ impl Ms3FutureApplicabilityReportV1 {
                     && self.blocker == "applicable_independent_topology_pending"
             }
             Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending => {
-                self.active_predictions > 0 && self.blocker == "independent_future_outcome_pending"
+                self.active_predictions > 0
+                    && self.generated_at_unix < self.contract.deadline_unix
+                    && self.independent_topologies < self.contract.max_independent_topologies
+                    && self.blocker == "independent_future_outcome_pending"
             }
             Ms3FutureApplicabilityVerdictV1::AcquisitionFail => {
-                self.active_predictions == 0
-                    && (self.generated_at_unix >= self.contract.deadline_unix
-                        || self.independent_topologies >= self.contract.max_independent_topologies)
+                (self.generated_at_unix >= self.contract.deadline_unix
+                    || self.independent_topologies >= self.contract.max_independent_topologies)
                     && self.blocker == MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL
             }
         };

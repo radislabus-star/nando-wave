@@ -1,4 +1,6 @@
-use nando_operator_kernel::{RelationFrame, canonical_json_sha256, sha256_bytes};
+use nando_operator_kernel::{
+    RelationFrame, canonical_json_sha256, sha256_bytes, valid_nonzero_sha256,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{OperatorIdentificationMachineV1, OperatorIdentificationStateV1};
@@ -11,9 +13,9 @@ use crate::multi_source::{
 };
 
 pub const MS3_INDEPENDENT_FUTURE_RECEIPT_SCHEMA_V1: &str =
-    "nando.ms3-independent-future-receipt.v1";
+    "nando.ms3-independent-future-receipt.v2";
 pub const MS3_INDEPENDENT_FUTURE_ENVELOPE_SCHEMA_V1: &str =
-    "nando.ms3-independent-future-envelope.v1";
+    "nando.ms3-independent-future-envelope.v2";
 const MAX_FUTURE_CHECKPOINT_BYTES: usize = 12 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -30,6 +32,7 @@ pub struct Ms3IndependentFutureReceiptV1 {
     pub receipt_root_sha256: String,
     pub contract_root_sha256: String,
     pub prediction_root_sha256: String,
+    pub applicability_event_root_sha256: String,
     pub candidate_freeze_root_sha256: String,
     pub canonical_program_root_sha256: String,
     pub capture_sequence: u64,
@@ -63,6 +66,7 @@ struct FutureReceiptDigestV1<'a> {
     schema: &'a str,
     contract_root_sha256: &'a str,
     prediction_root_sha256: &'a str,
+    applicability_event_root_sha256: &'a str,
     candidate_freeze_root_sha256: &'a str,
     canonical_program_root_sha256: &'a str,
     capture_sequence: u64,
@@ -83,6 +87,8 @@ struct FutureReceiptDigestV1<'a> {
 pub fn seal_ms3_independent_future_v1(
     frozen: &FrozenVersionSpaceEnvelopeV1,
     prediction: &Ms3FuturePredictionV1,
+    applicability_event_root_sha256: &str,
+    prediction_durable_at_unix_nanos: u64,
     bound: &TransportBoundJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> Result<Ms3IndependentFutureEnvelopeV1, &'static str> {
@@ -101,6 +107,9 @@ pub fn seal_ms3_independent_future_v1(
         || prediction.turn_intent_id_sha256 != bound.binding.turn_intent_id_sha256
         || prediction.session_lineage_sha256 != bound.binding.session_lineage_sha256
         || frame_root != bound.binding.completed_frame_root_sha256
+        || !valid_nonzero_sha256(applicability_event_root_sha256)
+        || prediction.predicted_at_unix_nanos >= bound.binding.action_observed_at_unix_nanos
+        || prediction_durable_at_unix_nanos >= bound.binding.action_observed_at_unix_nanos
         || prediction.predicted_at_unix_nanos >= bound.binding.request_completed_at_unix_nanos
     {
         return Err("future_prediction_binding_mismatch");
@@ -133,6 +142,7 @@ pub fn seal_ms3_independent_future_v1(
         receipt_root_sha256: String::new(),
         contract_root_sha256: frozen.contract.contract_root_sha256.clone(),
         prediction_root_sha256: prediction.prediction_root_sha256.clone(),
+        applicability_event_root_sha256: applicability_event_root_sha256.to_owned(),
         candidate_freeze_root_sha256: prediction.candidate_freeze_root_sha256.clone(),
         canonical_program_root_sha256: prediction.canonical_program_root_sha256.clone(),
         capture_sequence: prediction.capture_sequence,
@@ -169,6 +179,7 @@ impl Ms3IndependentFutureReceiptV1 {
             schema: MS3_INDEPENDENT_FUTURE_RECEIPT_SCHEMA_V1,
             contract_root_sha256: &self.contract_root_sha256,
             prediction_root_sha256: &self.prediction_root_sha256,
+            applicability_event_root_sha256: &self.applicability_event_root_sha256,
             candidate_freeze_root_sha256: &self.candidate_freeze_root_sha256,
             canonical_program_root_sha256: &self.canonical_program_root_sha256,
             capture_sequence: self.capture_sequence,
@@ -226,6 +237,7 @@ impl Ms3IndependentFutureEnvelopeV1 {
         if self.schema != MS3_INDEPENDENT_FUTURE_ENVELOPE_SCHEMA_V1
             || self.receipt.schema != MS3_INDEPENDENT_FUTURE_RECEIPT_SCHEMA_V1
             || self.receipt.contract_root_sha256 != frozen.contract.contract_root_sha256
+            || !valid_nonzero_sha256(&self.receipt.applicability_event_root_sha256)
             || self.receipt.exact_transfer_parity != pass
             || self.receipt.runtime_actor_verifier_parity
             || self.receipt.authority_ready

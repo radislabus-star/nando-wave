@@ -67,34 +67,6 @@ impl Ms3FrozenVersionSpaceRuntime {
                     .map_err(|error| format!("ms3_prediction_ledger_decode:{error}"))
             })
             .transpose()?;
-        if prediction_ledger.is_none()
-            && let Some(frozen) = &envelope
-        {
-            let prediction_min_sequence = current_capture_sequence
-                .checked_add(1)
-                .ok_or_else(|| "ms3_prediction_open_watermark_overflow".to_owned())?
-                .max(frozen.contract.future_min_sequence);
-            let mut ledger = PredictionLedgerV1 {
-                schema: PREDICTION_LEDGER_SCHEMA_V1.to_owned(),
-                ledger_root_sha256: String::new(),
-                contract_root_sha256: frozen.contract.contract_root_sha256.clone(),
-                opened_at_sequence: current_capture_sequence,
-                prediction_min_sequence,
-                predictions: Vec::new(),
-            };
-            ledger.ledger_root_sha256 = prediction_ledger_root(&ledger)?;
-            validate_prediction_ledger(&ledger, frozen)?;
-            let bytes = serde_cbor::to_vec(&ledger)
-                .map_err(|error| format!("ms3_prediction_ledger_encode:{error}"))?;
-            write_atomic(&prediction_ledger_path, &bytes)?;
-            prediction_ledger = Some(ledger);
-        }
-        if let Some(ledger) = &prediction_ledger {
-            let frozen = envelope
-                .as_ref()
-                .ok_or_else(|| "ms3_prediction_ledger_without_contract".to_owned())?;
-            validate_prediction_ledger(ledger, frozen)?;
-        }
         let applicability_ledger_path = directory.join(APPLICABILITY_FILE);
         let mut applicability_ledger = read_bounded(&applicability_ledger_path)?
             .map(|bytes| {
@@ -102,22 +74,27 @@ impl Ms3FrozenVersionSpaceRuntime {
                     .map_err(|error| format!("ms3_future_applicability_decode:{error}"))
             })
             .transpose()?;
-        if applicability_ledger.is_none()
-            && let (Some(frozen), Some(predictions)) = (&envelope, &prediction_ledger)
-        {
-            let contract = Ms3FutureApplicabilityContractV1::seal(
-                frozen.contract.contract_root_sha256.clone(),
-                predictions.opened_at_sequence,
-                predictions.prediction_min_sequence,
-                opened_at_unix,
-            )
-            .map_err(str::to_owned)?;
-            let ledger = Ms3FutureApplicabilityLedgerV1::new(contract).map_err(str::to_owned)?;
-            write_atomic(
-                &applicability_ledger_path,
-                &ledger.canonical_bytes().map_err(str::to_owned)?,
-            )?;
-            applicability_ledger = Some(ledger);
+        let _ = (current_capture_sequence, opened_at_unix);
+        validate_committed_state_presence(
+            envelope.is_some(),
+            prediction_ledger.is_some(),
+            applicability_ledger.is_some(),
+        )?;
+        match &envelope {
+            None => {
+                // The envelope is the bootstrap commit marker. Earlier files are staging.
+                prediction_ledger = None;
+                applicability_ledger = None;
+            }
+            Some(frozen) => {
+                let predictions = prediction_ledger
+                    .as_ref()
+                    .ok_or_else(|| "ms3_future_prediction_state_missing".to_owned())?;
+                validate_prediction_ledger(predictions, frozen)?;
+                if applicability_ledger.is_none() {
+                    return Err("ms3_future_applicability_state_missing".to_owned());
+                }
+            }
         }
         validate_applicability_link(
             applicability_ledger.as_ref(),
@@ -135,6 +112,12 @@ impl Ms3FrozenVersionSpaceRuntime {
             }
             (_, None) => None,
         };
+        validate_runtime_links(
+            applicability_ledger.as_ref(),
+            envelope.as_ref(),
+            prediction_ledger.as_ref(),
+            independent_future.as_ref(),
+        )?;
         Ok(Self {
             envelope,
             envelope_path,
@@ -160,12 +143,75 @@ impl Ms3FrozenVersionSpaceRuntime {
         let envelope = prepared
             .seal(contract_watermark, versions)
             .map_err(|error| format!("ms3_version_space_seal:{error}"))?;
-        let bytes = envelope
+        let envelope_bytes = envelope
             .canonical_bytes()
             .map_err(|error| format!("ms3_version_space_encode:{error}"))?;
-        write_atomic(&self.envelope_path, &bytes)?;
+        let prediction_min_sequence = contract_watermark
+            .checked_add(1)
+            .ok_or_else(|| "ms3_prediction_open_watermark_overflow".to_owned())?;
+        let predictions = match read_bounded(&self.prediction_ledger_path)? {
+            Some(bytes) => {
+                let ledger: PredictionLedgerV1 = serde_cbor::from_slice(&bytes)
+                    .map_err(|error| format!("ms3_prediction_ledger_decode:{error}"))?;
+                validate_prediction_ledger(&ledger, &envelope)?;
+                if !ledger.predictions.is_empty()
+                    || ledger.opened_at_sequence != contract_watermark
+                    || ledger.prediction_min_sequence != prediction_min_sequence
+                {
+                    return Err("ms3_prediction_bootstrap_conflict".to_owned());
+                }
+                ledger
+            }
+            None => {
+                let mut ledger = PredictionLedgerV1 {
+                    schema: PREDICTION_LEDGER_SCHEMA_V1.to_owned(),
+                    ledger_root_sha256: String::new(),
+                    contract_root_sha256: envelope.contract.contract_root_sha256.clone(),
+                    opened_at_sequence: contract_watermark,
+                    prediction_min_sequence,
+                    predictions: Vec::new(),
+                };
+                ledger.ledger_root_sha256 = prediction_ledger_root(&ledger)?;
+                validate_prediction_ledger(&ledger, &envelope)?;
+                ledger
+            }
+        };
+        let prediction_bytes = serde_cbor::to_vec(&predictions)
+            .map_err(|error| format!("ms3_prediction_ledger_encode:{error}"))?;
+        let applicability = match read_bounded(&self.applicability_ledger_path)? {
+            Some(bytes) => {
+                let ledger = Ms3FutureApplicabilityLedgerV1::from_canonical_bytes(&bytes)
+                    .map_err(|error| format!("ms3_future_applicability_decode:{error}"))?;
+                if !ledger.events.is_empty()
+                    || ledger.contract.frozen_law_contract_root_sha256
+                        != envelope.contract.contract_root_sha256
+                    || ledger.contract.opened_at_sequence != contract_watermark
+                    || ledger.contract.prediction_min_sequence != prediction_min_sequence
+                {
+                    return Err("ms3_applicability_bootstrap_conflict".to_owned());
+                }
+                ledger
+            }
+            None => {
+                let contract = Ms3FutureApplicabilityContractV1::seal(
+                    envelope.contract.contract_root_sha256.clone(),
+                    contract_watermark,
+                    prediction_min_sequence,
+                    opened_at_unix,
+                )
+                .map_err(str::to_owned)?;
+                Ms3FutureApplicabilityLedgerV1::new(contract).map_err(str::to_owned)?
+            }
+        };
+        let applicability_bytes = applicability.canonical_bytes().map_err(str::to_owned)?;
+
+        // Publish the in-memory experiment only after every durable component exists.
+        write_atomic(&self.applicability_ledger_path, &applicability_bytes)?;
+        write_atomic(&self.prediction_ledger_path, &prediction_bytes)?;
+        write_atomic(&self.envelope_path, &envelope_bytes)?;
+        self.applicability_ledger = Some(applicability);
+        self.prediction_ledger = Some(predictions);
         self.envelope = Some(envelope);
-        self.open_future_gate(contract_watermark, opened_at_unix)?;
         self.contract()
             .cloned()
             .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())
@@ -339,7 +385,7 @@ impl Ms3FrozenVersionSpaceRuntime {
             .transpose()
     }
 
-    pub(super) fn prediction_durable_at(&self, prediction_root: &str) -> Option<u64> {
+    pub(super) fn prediction_commitment(&self, prediction_root: &str) -> Option<(String, u64)> {
         self.applicability_ledger
             .as_ref()?
             .events
@@ -347,7 +393,11 @@ impl Ms3FrozenVersionSpaceRuntime {
             .find_map(|event| {
                 (event.disposition == Ms3FutureApplicabilityDispositionV1::PredictionCommitted
                     && event.prediction_root_sha256.as_deref() == Some(prediction_root))
-                .then_some(event.prediction_durable_at_unix_nanos)
+                .then(|| {
+                    event
+                        .prediction_durable_at_unix_nanos
+                        .map(|durable_at| (event.event_root_sha256.clone(), durable_at))
+                })
                 .flatten()
             })
     }
@@ -367,12 +417,13 @@ impl Ms3FrozenVersionSpaceRuntime {
         prediction: &Ms3FuturePredictionV1,
         terminal_receipt_root_sha256: &str,
         terminal_completed_at_unix_nanos: u64,
+        action_observed_at_unix_nanos: u64,
     ) -> Result<bool, String> {
         if self.prediction_is_disqualified(&prediction.prediction_root_sha256) {
             return Ok(false);
         }
-        let durable_at = self
-            .prediction_durable_at(&prediction.prediction_root_sha256)
+        let (_, durable_at) = self
+            .prediction_commitment(&prediction.prediction_root_sha256)
             .ok_or_else(|| "ms3_prediction_durable_receipt_missing".to_owned())?;
         let gate = self
             .applicability_ledger
@@ -391,6 +442,7 @@ impl Ms3FrozenVersionSpaceRuntime {
             Some((
                 terminal_receipt_root_sha256,
                 terminal_completed_at_unix_nanos,
+                action_observed_at_unix_nanos,
             )),
             now,
         )
@@ -409,9 +461,24 @@ impl Ms3FrozenVersionSpaceRuntime {
             .envelope
             .as_ref()
             .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())?;
+        let gate = self
+            .applicability_ledger
+            .as_ref()
+            .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?;
+        if gate.report(unix_now_nanos() / 1_000_000_000).verdict
+            != nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending
+        {
+            return Err("ms3_future_applicability_gate_closed".to_owned());
+        }
         let bytes = future
             .canonical_bytes(frozen)
             .map_err(|error| format!("ms3_independent_future_encode:{error}"))?;
+        validate_runtime_links(
+            self.applicability_ledger.as_ref(),
+            self.envelope.as_ref(),
+            self.prediction_ledger.as_ref(),
+            Some(&future),
+        )?;
         write_atomic(&self.independent_future_path, &bytes)?;
         self.independent_future = Some(future);
         Ok(())
@@ -429,76 +496,20 @@ impl Ms3FrozenVersionSpaceRuntime {
         self.envelope.as_ref().map(|envelope| &envelope.contract)
     }
 
-    fn open_future_gate(
-        &mut self,
-        contract_watermark: u64,
-        opened_at_unix: u64,
-    ) -> Result<(), String> {
-        if self.prediction_ledger.is_none() {
-            let frozen = self
-                .envelope
-                .as_ref()
-                .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())?;
-            let prediction_min_sequence = contract_watermark
-                .checked_add(1)
-                .ok_or_else(|| "ms3_prediction_open_watermark_overflow".to_owned())?;
-            let mut ledger = PredictionLedgerV1 {
-                schema: PREDICTION_LEDGER_SCHEMA_V1.to_owned(),
-                ledger_root_sha256: String::new(),
-                contract_root_sha256: frozen.contract.contract_root_sha256.clone(),
-                opened_at_sequence: contract_watermark,
-                prediction_min_sequence,
-                predictions: Vec::new(),
-            };
-            ledger.ledger_root_sha256 = prediction_ledger_root(&ledger)?;
-            write_atomic(
-                &self.prediction_ledger_path,
-                &serde_cbor::to_vec(&ledger)
-                    .map_err(|error| format!("ms3_prediction_ledger_encode:{error}"))?,
-            )?;
-            self.prediction_ledger = Some(ledger);
-        }
-        if self.applicability_ledger.is_none() {
-            let frozen = self
-                .envelope
-                .as_ref()
-                .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())?;
-            let predictions = self
-                .prediction_ledger
-                .as_ref()
-                .ok_or_else(|| "ms3_prediction_ledger_missing".to_owned())?;
-            let contract = Ms3FutureApplicabilityContractV1::seal(
-                frozen.contract.contract_root_sha256.clone(),
-                predictions.opened_at_sequence,
-                predictions.prediction_min_sequence,
-                opened_at_unix,
-            )
-            .map_err(str::to_owned)?;
-            let ledger = Ms3FutureApplicabilityLedgerV1::new(contract).map_err(str::to_owned)?;
-            write_atomic(
-                &self.applicability_ledger_path,
-                &ledger.canonical_bytes().map_err(str::to_owned)?,
-            )?;
-            self.applicability_ledger = Some(ledger);
-        }
-        Ok(())
-    }
-
     fn append_applicability_event(
         &mut self,
         event: Ms3FutureApplicabilityEventV1,
     ) -> Result<bool, String> {
-        let ledger = self
+        let mut next = self
             .applicability_ledger
-            .as_mut()
+            .clone()
             .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?;
-        if !ledger.append(event).map_err(str::to_owned)? {
+        if !next.append(event).map_err(str::to_owned)? {
             return Ok(false);
         }
-        write_atomic(
-            &self.applicability_ledger_path,
-            &ledger.canonical_bytes().map_err(str::to_owned)?,
-        )?;
+        let bytes = next.canonical_bytes().map_err(str::to_owned)?;
+        write_atomic(&self.applicability_ledger_path, &bytes)?;
+        self.applicability_ledger = Some(next);
         Ok(true)
     }
 }
@@ -521,6 +532,81 @@ fn validate_applicability_link(
         (None, None, None) => Ok(()),
         _ => Err("ms3_future_applicability_link_invalid".to_owned()),
     }
+}
+
+fn validate_runtime_links(
+    applicability: Option<&Ms3FutureApplicabilityLedgerV1>,
+    frozen: Option<&FrozenVersionSpaceEnvelopeV1>,
+    predictions: Option<&PredictionLedgerV1>,
+    future: Option<&Ms3IndependentFutureEnvelopeV1>,
+) -> Result<(), String> {
+    validate_applicability_link(applicability, frozen, predictions)?;
+    let (Some(applicability), Some(predictions)) = (applicability, predictions) else {
+        return future
+            .is_none()
+            .then_some(())
+            .ok_or_else(|| "ms3_independent_future_without_applicability".to_owned());
+    };
+    validate_prediction_events(applicability, predictions)?;
+    if let Some(future) = future {
+        let receipt = &future.receipt;
+        let event = applicability
+            .events
+            .iter()
+            .find(|event| {
+                event.event_root_sha256 == receipt.applicability_event_root_sha256
+                    && event.disposition == Ms3FutureApplicabilityDispositionV1::PredictionCommitted
+                    && event.prediction_root_sha256.as_deref()
+                        == Some(receipt.prediction_root_sha256.as_str())
+            })
+            .ok_or_else(|| "ms3_future_applicability_event_missing".to_owned())?;
+        if event.capture_sequence != receipt.capture_sequence
+            || event.topology_root_sha256 != receipt.topology_root_sha256
+        {
+            return Err("ms3_future_applicability_event_binding_invalid".to_owned());
+        }
+    }
+    Ok(())
+}
+
+fn validate_committed_state_presence(
+    envelope: bool,
+    predictions: bool,
+    applicability: bool,
+) -> Result<(), String> {
+    if envelope && !predictions {
+        return Err("ms3_future_prediction_state_missing".to_owned());
+    }
+    if envelope && !applicability {
+        return Err("ms3_future_applicability_state_missing".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_prediction_events(
+    applicability: &Ms3FutureApplicabilityLedgerV1,
+    predictions: &PredictionLedgerV1,
+) -> Result<(), String> {
+    for event in &applicability.events {
+        if event.disposition != Ms3FutureApplicabilityDispositionV1::PredictionCommitted {
+            continue;
+        }
+        let prediction = predictions
+            .predictions
+            .iter()
+            .find(|prediction| {
+                event.prediction_root_sha256.as_deref()
+                    == Some(prediction.prediction_root_sha256.as_str())
+            })
+            .ok_or_else(|| "ms3_applicability_prediction_missing".to_owned())?;
+        if event.capture_sequence != prediction.capture_sequence
+            || event.topology_root_sha256 != prediction.topology_root_sha256
+            || event.session_lineage_sha256 != prediction.session_lineage_sha256
+        {
+            return Err("ms3_applicability_prediction_binding_invalid".to_owned());
+        }
+    }
+    Ok(())
 }
 
 fn unix_now_nanos() -> u64 {
@@ -611,4 +697,129 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     )
     .and_then(|directory| directory.sync_all())
     .map_err(|error| format!("ms3_version_space_directory_sync:{error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use nando_operator_kernel::sha256_bytes;
+
+    use super::*;
+
+    static TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    fn test_root(label: &str) -> String {
+        sha256_bytes(label.as_bytes())
+    }
+
+    fn test_directory(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "nando-ms3-{label}-{}-{}",
+            std::process::id(),
+            TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
+    #[test]
+    fn committed_state_loss_is_fail_closed_but_precommit_staging_is_retryable() {
+        assert!(validate_committed_state_presence(false, true, true).is_ok());
+        assert_eq!(
+            validate_committed_state_presence(true, false, true),
+            Err("ms3_future_prediction_state_missing".to_owned())
+        );
+        assert_eq!(
+            validate_committed_state_presence(true, true, false),
+            Err("ms3_future_applicability_state_missing".to_owned())
+        );
+    }
+
+    #[test]
+    fn failed_applicability_write_does_not_mutate_ram_ledger() {
+        let root = test_directory("append-rollback");
+        fs::create_dir_all(&root).expect("test root");
+        let contract =
+            Ms3FutureApplicabilityContractV1::seal(test_root("law"), 7, 8, 100).expect("contract");
+        let ledger = Ms3FutureApplicabilityLedgerV1::new(contract.clone()).expect("ledger");
+        let before = ledger.clone();
+        let event = Ms3FutureApplicabilityEventV1::seal(
+            &contract,
+            8,
+            test_root("topology"),
+            test_root("lineage"),
+            Ms3FutureApplicabilityDispositionV1::StructurallyNotApplicable,
+            "missing-role".to_owned(),
+            None,
+            None,
+            None,
+            101_000_000_000,
+        )
+        .expect("event");
+        let mut runtime = Ms3FrozenVersionSpaceRuntime {
+            envelope: None,
+            envelope_path: root.join(ENVELOPE_FILE),
+            prediction_ledger: None,
+            prediction_ledger_path: root.join(PREDICTIONS_FILE),
+            applicability_ledger: Some(ledger),
+            applicability_ledger_path: root.join("missing-parent").join(APPLICABILITY_FILE),
+            independent_future: None,
+            independent_future_path: root.join(FUTURE_FILE),
+        };
+
+        assert!(runtime.append_applicability_event(event).is_err());
+        assert_eq!(runtime.applicability_ledger.as_ref(), Some(&before));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn committed_applicability_event_without_prediction_row_is_rejected() {
+        let contract =
+            Ms3FutureApplicabilityContractV1::seal(test_root("law"), 7, 8, 100).expect("contract");
+        let prediction = Ms3FuturePredictionV1 {
+            schema: nando_operator_learning::multi_source::MS3_FUTURE_PREDICTION_SCHEMA_V1
+                .to_owned(),
+            prediction_root_sha256: test_root("prediction"),
+            contract_root_sha256: test_root("contract"),
+            candidate_freeze_root_sha256: test_root("freeze"),
+            canonical_program_root_sha256: test_root("program"),
+            capture_sequence: 8,
+            topology_root_sha256: test_root("topology"),
+            request_event_id_sha256: test_root("request"),
+            turn_intent_id_sha256: test_root("intent"),
+            session_lineage_sha256: test_root("lineage"),
+            pre_action_binding_root_sha256: test_root("binding"),
+            predicted_at_unix_nanos: 100_000_000_001,
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        };
+        let event = Ms3FutureApplicabilityEventV1::seal(
+            &contract,
+            8,
+            prediction.topology_root_sha256.clone(),
+            prediction.session_lineage_sha256.clone(),
+            Ms3FutureApplicabilityDispositionV1::PredictionCommitted,
+            String::new(),
+            Some(&prediction),
+            Some(101_000_000_000),
+            None,
+            101_000_000_000,
+        )
+        .expect("event");
+        let mut applicability =
+            Ms3FutureApplicabilityLedgerV1::new(contract).expect("applicability");
+        applicability.append(event).expect("append");
+        let predictions = PredictionLedgerV1 {
+            schema: PREDICTION_LEDGER_SCHEMA_V1.to_owned(),
+            ledger_root_sha256: test_root("ledger"),
+            contract_root_sha256: test_root("contract"),
+            opened_at_sequence: 7,
+            prediction_min_sequence: 8,
+            predictions: Vec::new(),
+        };
+
+        assert_eq!(
+            validate_prediction_events(&applicability, &predictions),
+            Err("ms3_applicability_prediction_missing".to_owned())
+        );
+    }
 }

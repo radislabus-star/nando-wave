@@ -2420,7 +2420,7 @@ fn evaluate_ms3_independent_future(
         .ms3_frozen_version_space
         .as_ref()
         .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?;
-    let (frozen, predictions, existing) = {
+    let (frozen, predictions, existing, gate_verdict) = {
         let runtime = runtime
             .lock()
             .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
@@ -2436,16 +2436,25 @@ fn evaluate_ms3_independent_future(
                     (!runtime.prediction_is_disqualified(&prediction.prediction_root_sha256))
                         .then(|| {
                             runtime
-                                .prediction_durable_at(&prediction.prediction_root_sha256)
-                                .map(|durable_at| (prediction, durable_at))
+                                .prediction_commitment(&prediction.prediction_root_sha256)
+                                .map(|commitment| (prediction, commitment))
                         })
                         .flatten()
                 })
                 .collect::<Vec<_>>(),
             runtime.independent_future().cloned(),
+            runtime
+                .applicability_report(unix_now())?
+                .map(|report| report.verdict),
         )
     };
-    if existing.is_some() || predictions.is_empty() {
+    if existing.is_some()
+        || predictions.is_empty()
+        || gate_verdict
+            == Some(
+                nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail,
+            )
+    {
         return Ok(existing);
     }
     let future_topologies = state
@@ -2488,7 +2497,7 @@ fn evaluate_ms3_independent_future(
         &frames,
         &terminals,
     );
-    for (prediction, durable_at) in predictions {
+    for (prediction, (applicability_event_root, durable_at)) in predictions {
         let Some(bound) = ledger
             .bound_for_topology(&prediction.topology_root_sha256)
             .iter()
@@ -2501,7 +2510,9 @@ fn evaluate_ms3_independent_future(
         else {
             continue;
         };
-        if bound.binding.request_completed_at_unix_nanos <= durable_at {
+        if bound.binding.action_observed_at_unix_nanos <= durable_at
+            || bound.binding.request_completed_at_unix_nanos <= durable_at
+        {
             runtime
                 .lock()
                 .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
@@ -2509,6 +2520,7 @@ fn evaluate_ms3_independent_future(
                     &prediction,
                     &bound.binding.terminal_receipt_root_sha256,
                     bound.binding.request_completed_at_unix_nanos,
+                    bound.binding.action_observed_at_unix_nanos,
                 )?;
             continue;
         }
@@ -2523,6 +2535,8 @@ fn evaluate_ms3_independent_future(
         let future = nando_operator_learning::multi_source::seal_ms3_independent_future_v1(
             &frozen,
             &prediction,
+            &applicability_event_root,
+            durable_at,
             &bound,
             &frame,
         )
