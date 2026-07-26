@@ -16,16 +16,19 @@ fn contract_and_terminal_failure_restart_byte_identically() {
         .evaluate(100, Vec::new(), Vec::new(), Vec::new())
         .expect("collecting");
     assert!(!collecting.is_terminal());
+    assert_eq!(runtime.frozen_evaluated_topology_rows(), None);
     let failed = runtime
         .evaluate(160, Vec::new(), Vec::new(), Vec::new())
         .expect("failed");
     assert!(failed.is_terminal());
+    assert_eq!(runtime.frozen_evaluated_topology_rows(), Some(0));
     drop(runtime);
 
     let mut restarted =
         Ms3LinkedFrameAcquisitionRuntime::open(&root, &topology_archive, 999, 1, 60)
             .expect("restart");
     assert_eq!(restarted.contract(), &contract);
+    assert_eq!(restarted.frozen_evaluated_topology_rows(), Some(0));
     assert_eq!(
         restarted
             .evaluate(999, Vec::new(), Vec::new(), Vec::new())

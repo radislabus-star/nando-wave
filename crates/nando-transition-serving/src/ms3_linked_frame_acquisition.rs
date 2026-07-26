@@ -95,6 +95,12 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         self.terminal_report.is_some()
     }
 
+    pub(super) fn frozen_evaluated_topology_rows(&self) -> Option<u64> {
+        self.terminal_report
+            .as_ref()
+            .map(|report| report.evaluated_topology_rows)
+    }
+
     pub(super) fn evaluate(
         &mut self,
         generated_at_unix: u64,

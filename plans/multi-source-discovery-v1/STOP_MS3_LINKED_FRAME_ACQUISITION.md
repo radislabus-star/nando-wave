@@ -154,7 +154,9 @@ post-watermark topology without terminal receipt
 `RECEIPT_STALLED` preserves the frozen denominator, watermark and deadline. It
 permits repair of topology-to-terminal association only. An uncovered row is
 never converted into negative evidence, and the scientific report remains
-unchanged.
+unchanged. Once acquisition is terminal, the monitor is truncated to the
+terminal report's `evaluated_topology_rows`; later traffic cannot enlarge the
+closed denominator.
 
 ## Verification
 

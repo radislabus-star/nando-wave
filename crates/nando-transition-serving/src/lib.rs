@@ -2032,14 +2032,18 @@ fn evaluate_ms3_linked_frame_acquisition(
 fn evaluate_ms3_capture_health(
     state: &AppState,
 ) -> Result<ms3_capture_health::Ms3CaptureHealthReportV1, String> {
-    let (contract, acquisition_closed) = {
+    let (contract, acquisition_closed, frozen_evaluated_topology_rows) = {
         let runtime = state
             .ms3_linked_frame_acquisition
             .as_ref()
             .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?
             .lock()
             .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?;
-        (runtime.contract().clone(), runtime.is_terminal())
+        (
+            runtime.contract().clone(),
+            runtime.is_terminal(),
+            runtime.frozen_evaluated_topology_rows(),
+        )
     };
     let (current_topology_rows, new_topologies) = {
         let archive = state
@@ -2051,8 +2055,9 @@ fn evaluate_ms3_capture_health(
         let watermark = usize::try_from(contract.topology_watermark_rows)
             .map_err(|_| "ms3_capture_health_watermark_range".to_owned())?;
         let mut new_topologies = archive.rows_after(watermark)?;
-        new_topologies
-            .truncate(usize::try_from(contract.max_new_topology_rows).unwrap_or(usize::MAX));
+        let denominator_rows =
+            frozen_evaluated_topology_rows.unwrap_or(contract.max_new_topology_rows);
+        new_topologies.truncate(usize::try_from(denominator_rows).unwrap_or(usize::MAX));
         (archive.len(), new_topologies)
     };
     let request_ids = new_topologies
