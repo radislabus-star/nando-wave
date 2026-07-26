@@ -15,6 +15,7 @@ mod live_economics;
 mod miner_worker;
 pub mod multi_source_audit;
 mod multi_source_capture;
+mod multi_source_frame_archive;
 mod multi_source_live;
 mod nginx_terminal;
 mod opportunity_bridge;
@@ -171,6 +172,7 @@ pub struct ServingConfig {
     pub multi_source_snapshot_path: PathBuf,
     pub multi_source_snapshot_poll_ms: u64,
     pub terminal_receipt_archive_path: PathBuf,
+    pub multi_source_frame_archive_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -372,6 +374,11 @@ impl ServingConfig {
                 "NANDO_TERMINAL_RECEIPT_ARCHIVE",
                 &state_dir,
                 "multi-source-live-v2/terminal-receipt-archive-v1",
+            ),
+            multi_source_frame_archive_path: env_path_join(
+                "NANDO_MULTI_SOURCE_FRAME_ARCHIVE",
+                &state_dir,
+                "multi-source-live-v2/relation-frame-archive-v1",
             ),
         })
     }
@@ -640,6 +647,8 @@ struct AppState {
         RwLock<Option<nando_operator_learning::multi_source::LiveMultiSourceDiscoverySnapshotV3>>,
     >,
     terminal_receipt_archive: Option<Arc<Mutex<terminal_receipt_archive::TerminalReceiptArchive>>>,
+    multi_source_frame_archive:
+        Option<Arc<Mutex<multi_source_frame_archive::MultiSourceFrameArchive>>>,
 }
 
 #[derive(Default)]
@@ -796,6 +805,15 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     } else {
         None
     };
+    let multi_source_frame_archive = if config.learning_structure_bridge_consumer_enabled {
+        Some(Arc::new(Mutex::new(
+            multi_source_frame_archive::MultiSourceFrameArchive::open(
+                &config.multi_source_frame_archive_path,
+            )?,
+        )))
+    } else {
+        None
+    };
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -823,6 +841,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         opportunity_bridge,
         multi_source_snapshot: Arc::new(RwLock::new(None)),
         terminal_receipt_archive,
+        multi_source_frame_archive,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -967,6 +986,7 @@ fn spawn_miner_warmup(state: AppState) -> Result<(), String> {
                     collection.clone(),
                     state_dir,
                     authority_trigger,
+                    state.multi_source_frame_archive.clone(),
                 ) {
                     Ok(worker) => Some(worker),
                     Err(error) => {
@@ -1642,14 +1662,16 @@ async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
         .as_ref()
         .map_err(|error| (*error).to_owned())
         .and_then(|requests| archived_terminal_receipts(&state, requests));
-    match (evidence, requests, terminals) {
-        (Some(evidence), Ok(requests), Ok(terminals)) => {
+    let frames = requests
+        .as_ref()
+        .map_err(|error| (*error).to_owned())
+        .and_then(|requests| archived_relation_frames(&state, requests));
+    match (evidence, requests, terminals, frames) {
+        (Some(_), Ok(requests), Ok(terminals), Ok(frames)) => {
             // This route exposes proof roots and typed dispositions only. It is
             // read-only and cannot promote, compile, or authorize an operator.
             let corpus = nando_operator_learning::multi_source::build_ms3_failure_corpus_v1(
-                requests,
-                evidence.frames,
-                terminals,
+                requests, frames, terminals,
             );
             if !corpus.validate() {
                 return json_response(
@@ -1670,7 +1692,7 @@ async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
                 }),
             )
         }
-        (_, _, Err(error)) => json_response(
+        (_, _, Err(error), _) | (_, _, _, Err(error)) => json_response(
             StatusCode::SERVICE_UNAVAILABLE,
             json!({
                 "schema": "nando.ms3-failure-corpus-error.v1",
@@ -1694,12 +1716,16 @@ async fn ms3_representation_gap_report(State(state): State<AppState>) -> Respons
         .as_ref()
         .map_err(|error| (*error).to_owned())
         .and_then(|requests| archived_terminal_receipts(&state, requests));
-    match (evidence, requests, terminals) {
-        (Some(evidence), Ok(requests), Ok(terminals)) => {
+    let frames = requests
+        .as_ref()
+        .map_err(|error| (*error).to_owned())
+        .and_then(|requests| archived_relation_frames(&state, requests));
+    match (evidence, requests, terminals, frames) {
+        (Some(_), Ok(requests), Ok(terminals), Ok(frames)) => {
             let report =
                 nando_operator_learning::multi_source::build_representation_gap_adjudication_report_v1(
                     requests,
-                    evidence.frames,
+                    frames,
                     terminals,
                 );
             if !report.validate() {
@@ -1721,7 +1747,7 @@ async fn ms3_representation_gap_report(State(state): State<AppState>) -> Respons
                 }),
             )
         }
-        (_, _, Err(error)) => json_response(
+        (_, _, Err(error), _) | (_, _, _, Err(error)) => json_response(
             StatusCode::SERVICE_UNAVAILABLE,
             json!({
                 "schema": "nando.representation-gap-adjudication-error.v1",
@@ -1763,18 +1789,20 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                     );
                     match (evidence, requests, active_protocols) {
                         (Some(evidence), Ok(requests), Ok(active_protocols)) => {
-                            multi_source_live::build_snapshot(
-                                evidence.opportunities,
-                                requests,
-                                evidence.frames,
-                                &active_protocols,
-                            )
-                            .and_then(|snapshot| {
-                                multi_source_live::write_snapshot(
-                                    &state.config.multi_source_snapshot_path,
-                                    &snapshot,
-                                )?;
-                                Ok(snapshot)
+                            archived_relation_frames(&state, &requests).and_then(|frames| {
+                                multi_source_live::build_snapshot(
+                                    evidence.opportunities,
+                                    requests,
+                                    frames,
+                                    &active_protocols,
+                                )
+                                .and_then(|snapshot| {
+                                    multi_source_live::write_snapshot(
+                                        &state.config.multi_source_snapshot_path,
+                                        &snapshot,
+                                    )?;
+                                    Ok(snapshot)
+                                })
                             })
                         }
                         _ => Err("live_multi_source_snapshot_inputs_pending".to_owned()),
@@ -1816,6 +1844,24 @@ fn archived_terminal_receipts(
         .lock()
         .map_err(|_| "terminal_archive_lock_poisoned".to_owned())
         .map(|archive| archive.receipts_for_requests(&request_ids))
+}
+
+fn archived_relation_frames(
+    state: &AppState,
+    requests: &nando_operator_learning::multi_source::RequestStructureAuditSnapshotV1,
+) -> Result<Vec<RelationFrame>, String> {
+    let intent_ids = requests
+        .topologies
+        .iter()
+        .map(|row| row.structure.turn_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())
+        .map(|archive| archive.frames_for_intents(&intent_ids))
 }
 
 fn streaming_miner_signal_tree(
@@ -5783,6 +5829,8 @@ mod tests {
             multi_source_snapshot_poll_ms: 1_000,
             terminal_receipt_archive_path: root
                 .join("multi-source-live-v2/terminal-receipt-archive-v1"),
+            multi_source_frame_archive_path: root
+                .join("multi-source-live-v2/relation-frame-archive-v1"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -5844,6 +5892,7 @@ mod tests {
             opportunity_bridge,
             multi_source_snapshot: Arc::new(RwLock::new(None)),
             terminal_receipt_archive: None,
+            multi_source_frame_archive: None,
         };
         refresh_response_executor(&state);
         state

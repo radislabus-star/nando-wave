@@ -19,6 +19,8 @@ use nando_response_actor::{
     OnlineResponseMinerReport, OnlineResponseStream, OnlineResponseStreamStatus, ResponsePackage,
 };
 
+use crate::multi_source_frame_archive::MultiSourceFrameArchive;
+
 const QUEUE_CAPACITY: usize = 4_096;
 const INPUTS_PER_SYNTHESIS_SLICE: u64 = 64;
 const MAX_SYNTHESIS_SLICES_PER_BURST: u64 = 8;
@@ -146,7 +148,6 @@ impl CollectionMinerPublishedSnapshot {
 #[derive(Clone)]
 pub(crate) struct MultiSourceMinerEvidenceSnapshotV1 {
     pub(crate) opportunities: Vec<OpportunityIntentAuditRowV1>,
-    pub(crate) frames: Vec<RelationFrame>,
 }
 
 enum MinerCommand {
@@ -448,12 +449,14 @@ pub fn spawn_miner_worker(
     collection_miner: Arc<Mutex<OnlineCollectionMiner>>,
     state_dir: PathBuf,
     authority_trigger: Option<SyncSender<()>>,
+    multi_source_frame_archive: Option<Arc<Mutex<MultiSourceFrameArchive>>>,
 ) -> Result<MinerWorkerHandle, String> {
     spawn_miner_worker_with_report_heartbeat(
         miner,
         collection_miner,
         state_dir,
         authority_trigger,
+        multi_source_frame_archive,
         REPORT_HEARTBEAT_INTERVAL,
     )
 }
@@ -463,6 +466,7 @@ fn spawn_miner_worker_with_report_heartbeat(
     collection_miner: Arc<Mutex<OnlineCollectionMiner>>,
     state_dir: PathBuf,
     authority_trigger: Option<SyncSender<()>>,
+    multi_source_frame_archive: Option<Arc<Mutex<MultiSourceFrameArchive>>>,
     report_heartbeat_interval: Duration,
 ) -> Result<MinerWorkerHandle, String> {
     let startup_started = Instant::now();
@@ -513,17 +517,24 @@ fn spawn_miner_worker_with_report_heartbeat(
         .lock()
         .map_err(|_| "miner_worker_initial_collection_lock_poisoned".to_owned())?
         .has_structural_resynthesis_work();
-    let (initial_status, initial_multi_source_evidence) = {
+    let (initial_status, initial_opportunities, initial_frames) = {
         let stream = miner
             .lock()
             .map_err(|_| "miner_worker_initial_report_lock_poisoned".to_owned())?;
         (
             stream.status(),
-            MultiSourceMinerEvidenceSnapshotV1 {
-                opportunities: stream.opportunity_audit_rows_v1(),
-                frames: stream.retained_relation_frames_v1(),
-            },
+            stream.opportunity_audit_rows_v1(),
+            stream.retained_relation_frames_v1(),
         )
+    };
+    if let Some(archive) = &multi_source_frame_archive {
+        archive
+            .lock()
+            .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
+            .append_batch(&initial_frames)?;
+    }
+    let initial_multi_source_evidence = MultiSourceMinerEvidenceSnapshotV1 {
+        opportunities: initial_opportunities,
     };
     let initial_collection_snapshot = collection_miner
         .lock()
@@ -697,10 +708,27 @@ fn spawn_miner_worker_with_report_heartbeat(
                 match command {
                     Some(MinerCommand::Transition(transition)) => {
                         let started = Instant::now();
+                        let archived_frame = transition
+                            .runtime_parity_case
+                            .as_ref()
+                            .map(|_| transition.as_training_relation_frame());
                         let result = (if command_is_replay {
                             Ok(())
                         } else {
                             teacher_ledger.append(&transition).map(|_| ())
+                        })
+                        .and_then(|()| {
+                            if let (Some(archive), Some(frame)) =
+                                (&multi_source_frame_archive, archived_frame.as_ref())
+                            {
+                                archive
+                                    .lock()
+                                    .map_err(|_| {
+                                        "multi_source_frame_archive_lock_poisoned".to_owned()
+                                    })?
+                                    .append(frame)?;
+                            }
+                            Ok(())
                         })
                         .and_then(|_| {
                             miner
@@ -1059,7 +1087,6 @@ fn publish_multi_source_evidence(
     if let Ok(mut published) = target.write() {
         *published = Some(MultiSourceMinerEvidenceSnapshotV1 {
             opportunities: stream.opportunity_audit_rows_v1(),
-            frames: stream.retained_relation_frames_v1(),
         });
     }
 }
@@ -1138,8 +1165,14 @@ mod tests {
             )
             .expect("collection miner"),
         ));
-        let worker = spawn_miner_worker(response.clone(), collection.clone(), root.clone(), None)
-            .expect("miner worker");
+        let worker = spawn_miner_worker(
+            response.clone(),
+            collection.clone(),
+            root.clone(),
+            None,
+            None,
+        )
+        .expect("miner worker");
         let collection_guard = collection.lock().expect("collection state");
         let published = worker
             .collection_snapshot()
@@ -1218,6 +1251,7 @@ mod tests {
             response,
             collection,
             root.clone(),
+            None,
             None,
             Duration::from_millis(20),
         )
