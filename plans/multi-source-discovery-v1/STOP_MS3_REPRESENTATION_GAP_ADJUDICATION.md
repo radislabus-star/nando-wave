@@ -152,3 +152,6 @@ Only an A or independently repeated B result can open a new representation
 epoch. C and D remain permanent ABSTAIN. MS3 remains open until a fresh natural
 case reaches a unique source-neutral law, independent future, BundleV4,
 external admission and an ordinary CPU receipt.
+
+The bounded successor experiment is frozen in
+`STOP_MS3_LINKED_FRAME_ACQUISITION.md`.
