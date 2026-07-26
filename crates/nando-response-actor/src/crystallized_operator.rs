@@ -20,6 +20,9 @@ use crate::{
     source_neutral_verifier_for_program, verify_response_independently_with_request,
 };
 
+#[path = "crystallized_operator/bundle_v4.rs"]
+mod bundle_v4;
+
 pub use nando_operator_kernel::{
     TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_COUNT_COLLECTION,
     TRANSFORM_OPCODE_FILTER_REQUEST_VALUE, TRANSFORM_OPCODE_PROJECT_STATUS,
@@ -289,16 +292,19 @@ impl CrystallizedOperator {
             crate::ResponseOperation::FunctionCallFromRoles { .. }
                 | crate::ResponseOperation::CustomToolCallFromRoles { .. }
         );
-        let page = build_operator_page(
+        let ir = nando_operator_runtime::canonical_operator_ir_from_blueprint_v1(
             blueprint,
+            renderer,
+            actor,
+            verifier_sha256.clone(),
+        )
+        .map_err(|_| CrystallizedOperatorError::ProgramCompileFailed)?;
+        let (page, compiled) = compile_operator_page_from_ir(
+            &ir,
             frozen.source_generation().saturating_add(1),
-            frozen.candidate_set_sha256(),
             frozen.support_lineages_sha256(),
             &verified_future_lineages,
-            &renderer,
             uses_typed_actor_renderer,
-            &actor_sha256,
-            &verifier_sha256,
         )?;
 
         let parity_seal = build_executable_parity_seal(
@@ -312,11 +318,11 @@ impl CrystallizedOperator {
         let operator = Self {
             runtime_artifact: nando_operator_runtime::RuntimeOperatorArtifact::new(
                 page,
-                blueprint.relation_program().clone(),
-                blueprint.role_graph().clone(),
-                blueprint.transform_program().into(),
-                renderer,
-                actor,
+                compiled.relation_program().clone(),
+                compiled.role_graph().clone(),
+                compiled.transform_program().into(),
+                compiled.renderer().clone(),
+                compiled.actor_template().clone(),
             ),
             blueprint_sha256: winner_sha256,
             candidate_set_sha256: *frozen.candidate_set_sha256(),
@@ -453,27 +459,26 @@ impl VerifiedCrystallizedOperator {
             return Err(CrystallizedOperatorError::DuplicateParityLineage);
         }
 
-        let compiled = nando_operator_runtime::compile_runtime_program(&actor)
-            .map_err(|_| CrystallizedOperatorError::ProgramCompileFailed)?;
         let actor_sha256 = response_actor_program_digest(&actor)
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
         let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        let ir = nando_operator_runtime::canonical_operator_ir_from_response_program_v1(
+            &actor,
+            verifier_sha256.clone(),
+        )
+        .map_err(|_| CrystallizedOperatorError::ProgramCompileFailed)?;
         let uses_typed_actor_renderer = matches!(
             actor.operation,
             crate::ResponseOperation::FunctionCallFromRoles { .. }
                 | crate::ResponseOperation::CustomToolCallFromRoles { .. }
         );
-        let page = build_operator_page_from_parts(
-            compiled.role_graph(),
-            compiled.relation_program(),
-            compiled.transform_program(),
+        let (page, compiled) = compile_operator_page_from_ir(
+            &ir,
             proof.generation,
             &proof.support_lineages,
             &proof.future_lineages,
-            compiled.renderer(),
             uses_typed_actor_renderer,
-            &verifier_sha256,
         )?;
         let parity_seal = build_executable_parity_seal_from_commitment(
             &proof.winner_seal_sha256,
@@ -489,7 +494,7 @@ impl VerifiedCrystallizedOperator {
             compiled.role_graph().clone(),
             compiled.transform_program().to_vec().into_boxed_slice(),
             compiled.renderer().clone(),
-            actor,
+            compiled.actor_template().clone(),
         );
         Ok(Self {
             operator: CrystallizedOperator {
@@ -1500,50 +1505,48 @@ fn composition_is_acyclic(blueprint: &CandidateOperatorBlueprint) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_operator_page(
-    blueprint: &CandidateOperatorBlueprint,
+fn compile_operator_page_from_ir(
+    ir: &nando_operator_kernel::CanonicalOperatorIrV1,
     generation: u64,
-    _candidate_set_sha256: &Commitment256,
     support_lineages: &[Commitment256],
     future_lineages: &[Commitment256],
-    output_renderer: &crate::CollectionOutputRenderer,
     uses_typed_actor_renderer: bool,
-    _actor_sha256: &str,
-    verifier_sha256: &str,
-) -> Result<OperatorPage32, CrystallizedOperatorError> {
-    build_operator_page_from_parts(
-        blueprint.role_graph(),
-        blueprint.relation_program(),
-        blueprint.transform_program(),
+) -> Result<
+    (
+        OperatorPage32,
+        nando_operator_runtime::CompiledCanonicalOperatorIrV1,
+    ),
+    CrystallizedOperatorError,
+> {
+    let compiled = nando_operator_runtime::compile_canonical_operator_ir_v1(ir)
+        .map_err(|_| CrystallizedOperatorError::ProgramCompileFailed)?;
+    let page = encode_operator_page_from_ir(
+        &compiled,
         generation,
         support_lineages,
         future_lineages,
-        output_renderer,
         uses_typed_actor_renderer,
-        verifier_sha256,
-    )
+        ir.verifier_contract_sha256(),
+    )?;
+    Ok((page, compiled))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_operator_page_from_parts(
-    role_graph: &RoleGraph,
-    relation_program: &OperatorCircuit,
-    transform_program: &[TransformOp8],
+fn encode_operator_page_from_ir(
+    compiled: &nando_operator_runtime::CompiledCanonicalOperatorIrV1,
     generation: u64,
     support_lineages: &[Commitment256],
     future_lineages: &[Commitment256],
-    output_renderer: &crate::CollectionOutputRenderer,
     uses_typed_actor_renderer: bool,
     verifier_sha256: &str,
 ) -> Result<OperatorPage32, CrystallizedOperatorError> {
     // Compile every page section from one topological transform order. The
     // renderer stores transform indexes, so reordering only at VM decode time
     // would make an intermediate value look like the final sink after restart.
-    let ordered_transforms = ordered_role_transforms(transform_program)?;
+    let ordered_transforms = ordered_role_transforms(compiled.transform_program())?;
     let mut cube = TernaryOperatorCube32::default();
     let mut phase_profile = [0_u8; OPERATOR_PAGE32_PHASE_BYTES];
     let mut plane_count = 0_u8;
-    for (index, relation) in relation_program.relations().iter().enumerate() {
+    for (index, relation) in compiled.relation_program().relations().iter().enumerate() {
         cube.set(
             relation.cell.plane,
             relation.cell.source_role,
@@ -1559,7 +1562,8 @@ fn build_operator_page_from_parts(
         phase_profile[offset + 2..offset + 4].copy_from_slice(&im);
     }
 
-    let roles = role_graph
+    let roles = compiled
+        .role_graph()
         .canonical_roles()
         .iter()
         .map(|role| {
@@ -1609,7 +1613,7 @@ fn build_operator_page_from_parts(
     let (renderer, renderer_instruction_count) = if uses_typed_actor_renderer {
         crate::operator_vm::encode_typed_actor_renderer_program(&ordered_transforms)?
     } else {
-        crate::operator_vm::encode_renderer_program(output_renderer, &ordered_transforms)?
+        crate::operator_vm::encode_renderer_program(compiled.renderer(), &ordered_transforms)?
     };
 
     let proof_lineage = lineage_commitment(support_lineages, future_lineages);
@@ -1617,7 +1621,7 @@ fn build_operator_page_from_parts(
     OperatorPage32::build(
         OperatorPage32Metadata {
             generation,
-            circuit_fingerprint64: relation_program.fingerprint64(),
+            circuit_fingerprint64: compiled.relation_program().fingerprint64(),
             verifier_binding_fingerprint64: first_u64(&verifier_digest),
             proof_lineage_fingerprint64: first_u64(&proof_lineage),
             role_signature_fingerprint64: first_u64(&role_commitment),
@@ -1786,6 +1790,42 @@ mod tests {
     }
 
     #[test]
+    fn adaptive_and_blueprint_routes_converge_on_canonical_ir() {
+        let (_, synthesis, _) = frozen_blueprints();
+        let blueprint = &synthesis.blueprints[0];
+        let renderer = crate::CollectionOutputRenderer::Direct;
+        let actor = compile_blueprint_actor(blueprint, &renderer).expect("blueprint actor");
+        let verifier = source_neutral_verifier_for_program(&actor).expect("verifier");
+        let verifier_sha256 =
+            response_independent_verifier_program_digest(&verifier).expect("verifier digest");
+
+        let adaptive = nando_operator_runtime::canonical_operator_ir_from_response_program_v1(
+            &actor,
+            verifier_sha256.clone(),
+        )
+        .expect("adaptive IR");
+        let induced = nando_operator_runtime::canonical_operator_ir_from_blueprint_v1(
+            blueprint,
+            renderer,
+            actor,
+            verifier_sha256,
+        )
+        .expect("blueprint IR");
+
+        assert_eq!(
+            adaptive.executable_bytes(),
+            induced.executable_bytes(),
+            "the same executable law must have one precompiler identity"
+        );
+        assert_eq!(adaptive.executable_sha256(), induced.executable_sha256());
+        assert_ne!(
+            adaptive.artifact_sha256(),
+            induced.artifact_sha256(),
+            "routing phase remains independently evidenced"
+        );
+    }
+
+    #[test]
     fn pre_action_rich_surface_contains_observation_not_operator_program() {
         let request = "Return total and failed";
         let payload = json!({
@@ -1912,6 +1952,39 @@ mod tests {
         .expect("verified operator restart");
         assert_eq!(restored.page().as_bytes(), operator.page().as_bytes());
         assert_eq!(restored.parity_seal(), operator.parity_seal());
+        let crystal = operator
+            .crystallized_bundle_v4()
+            .expect("content-addressed crystal");
+        let crystal_bytes = crystal.canonical_bytes().expect("canonical crystal");
+        let decoded_crystal =
+            nando_operator_persistence::CrystallizedOperatorBundleV4::from_canonical_bytes(
+                &crystal_bytes,
+            )
+            .expect("decoded crystal");
+        let crystal_restored = VerifiedCrystallizedOperator::restore_crystallized_bundle_v4(
+            &decoded_crystal,
+            decoded_crystal.manifest().bundle_id(),
+        )
+        .expect("V4 crystal restore");
+        assert!(crystal_restored.execution_equivalent(&operator));
+        assert_eq!(crystal_restored.parity_seal(), operator.parity_seal());
+        assert_eq!(
+            crystal_restored
+                .crystallized_bundle_v4()
+                .expect("recrystallized")
+                .canonical_bytes()
+                .expect("canonical crystal"),
+            crystal_bytes,
+            "restart must reproduce the byte-identical crystal"
+        );
+        let wrong_bundle_id = [0; 32];
+        assert_eq!(
+            VerifiedCrystallizedOperator::restore_crystallized_bundle_v4(
+                &decoded_crystal,
+                &wrong_bundle_id,
+            ),
+            Err(CrystallizedOperatorError::RestartDigestMismatch)
+        );
         let bound = operator
             .bind(RuntimeSurfaceEvidence {
                 bundle: future_bundle.clone(),

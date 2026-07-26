@@ -2,7 +2,7 @@
 
 Status: canonical current-core map.
 
-Current snapshot: 2026-07-24 Europe/Tallinn.
+Current snapshot: 2026-07-26 Europe/Tallinn.
 
 This document answers three questions in one place:
 
@@ -28,9 +28,10 @@ real completed traces
 -> circuit-attractor
 -> causal grokking proof
 -> exact episodic authority cleanup
+-> CanonicalOperatorIrV1
 -> Operator Crystallizer / Compiler
 -> versioned VM bytecode
--> immutable OperatorPackage
+-> CrystallizedOperatorBundleV4
 -> Dynamic Registry
 -> Phase Router
 -> Runtime Role Grounder
@@ -47,6 +48,26 @@ The short formula is:
 
 > Wave discovers and consolidates. The compiler crystallizes. The VM acts.
 > The verifier establishes truth. Admission grants authority.
+
+Both current learner routes now converge through one precompiler boundary:
+
+```text
+ResponseProgram ---------------------\
+                                       +-> CanonicalOperatorIrV1
+CandidateOperatorBlueprint ----------/
+                                           |
+                                           v
+                                  one page compiler
+                                           |
+                          CrystallizedOperatorBundleV4
+```
+
+The IR has two deliberately different identities. `executable_sha256` omits
+routing phase and identifies one VM law across independently induced routes.
+`artifact_sha256` includes routing phase and identifies the complete
+precompiler artifact. The V4 bundle then binds the executable law, routing
+image, 4,032-byte execution page, independent verifier, and proof envelope with
+separate content IDs. It contains no authority lease.
 
 ## 2. Where Grokking Happens
 
@@ -179,19 +200,21 @@ adaptive operator identification                 PASS
 durable capture/provenance                       PASS
 runtime role grounding                           LIVE PASS, narrow scalar law
 crystallized OperatorPage32                      PASS
-response ACTIVE packages                         2
+CanonicalOperatorIrV1 convergence                PASS
+CrystallizedOperatorBundleV4 restart              PASS / NOT YET PACKAGE SCHEMA
+response ACTIVE packages                         3
 real local CPU execution                         PASS
-verified current-epoch input-token CPU share      41.661%
+verified current-epoch input-token CPU share      about 79.6%
 false accepts                                    0
 runtime parity failures                          0
-M3                                               WATCH
+M3                                               WATCH / qualifying streak 1 of 3
 production authority                             true, narrow immutable lease
 multi-source STOP-MS0                            COMPLETE / JOIN_INSUFFICIENT
 multi-source next                                MS0-R archive audit, then MS1
 ```
 
 The live numbers are the read-only composite-gate and economics snapshot taken
-on 2026-07-24. They are not timeless claims and must be refreshed before a
+on 2026-07-26. They are not timeless claims and must be refreshed before a
 product or economics statement. One-shot identification of a narrow package is
 not a scientific circuit-grokking claim.
 
@@ -242,10 +265,10 @@ connectivity:
 adaptive ACTIVE response packages        3
 natural package -> gateway -> CPU         PASS
 additional status/count/filter/compose   NOT YET ACTIVE
-latest cumulative verified token share   about 68%
+current-epoch verified token share       about 79.6%
 historical multi-source opportunity      571.2M tokens, recovery unaudited
 fresh multi-source structural epoch      NEXT
-completed M3 windows                     0 / 3
+qualifying M3 streak                     1 / 3
 M3                                       WATCH
 ```
 

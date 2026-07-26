@@ -1,4 +1,5 @@
 mod artifact;
+mod canonical_operator_ir;
 mod capability_grounding_v3;
 mod crystallized_binding;
 mod generation_persistence_v3;
@@ -14,6 +15,7 @@ mod selector_candidates;
 mod traffic_shadow_v3;
 
 pub use artifact::*;
+pub use canonical_operator_ir::*;
 pub use capability_grounding_v3::*;
 pub use crystallized_binding::*;
 pub use generation_persistence_v3::*;

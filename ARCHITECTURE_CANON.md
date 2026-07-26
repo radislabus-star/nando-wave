@@ -215,6 +215,56 @@ extension pages may carry bytecode or constants. The dynamic field, exact
 episodes, search frontier, and proof corpus remain cold and cannot leak into the
 hot package.
 
+### Canonical IR And Complete Crystal
+
+Both learning routes must converge before any page or runtime artifact is
+created:
+
+```text
+Adaptive Identifier -> ResponseProgram ---------------------\
+                                                              +-> CanonicalOperatorIrV1
+Circuit Inducer -> CandidateOperatorBlueprint ---------------/
+                                                                  |
+                                                                  v
+                                                        one Crystallizer
+```
+
+`CanonicalOperatorIrV1` is origin-neutral and carries roles, signed relations,
+typed transforms, executable composition, renderer, actor program, and verifier
+contract. Learning provenance, evidence counts, generation, rollout state, and
+execution authority are forbidden. Its executable identity excludes routing
+phase, while its complete artifact identity includes it. Therefore two learners
+may discover the same VM law with independently evidenced routing images
+without creating two executable semantic classes.
+
+The complete immutable result is not one `OperatorPage32`. It is a
+content-addressed crystal:
+
+```text
+CrystallizedOperatorBundleV4
+├─ Manifest
+│  ├─ law_id
+│  ├─ routing_id
+│  ├─ artifact_id
+│  ├─ verifier_id
+│  ├─ proof_id
+│  └─ bundle_id
+├─ RoutingImage
+│  └─ canonical roles, relation state, phase circuit, grounding contract
+├─ ExecutionImage
+│  └─ OperatorPage32 entry page and versioned VM ABI
+├─ VerifierImage
+│  └─ independently compiled verifier program
+└─ ProofEnvelope
+   └─ winner, support/future, binding/execution, parity, wrong_accepts = 0
+```
+
+`AuthorityLease`, rollout state, and live metrics are mutable registry state and
+must never serialize into this bundle. The bundle is a sealed candidate, not
+self-authority. Restart requires an externally expected `bundle_id`, validates
+every image digest, reconstructs the runtime artifact, independently rebuilds
+the verifier, and reproduces byte-identical bundle bytes.
+
 Recursive growth is ordered as follows:
 
 ```text
@@ -1309,10 +1359,12 @@ execution, and economics remain BLOCK for this new operator generation.
 ### Canonical route from blueprint to executable operator
 
 ```text
-Blueprint winner
+Adaptive executable class OR Blueprint winner
 -> SearchCompletion::Complete proof
 -> order-independent canonical role orbit
+-> CanonicalOperatorIrV1
 -> CrystallizedOperator
+-> CrystallizedOperatorBundleV4
 -> bind roles on a new surface
 -> existing response actor
 -> independent verifier

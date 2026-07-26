@@ -475,7 +475,17 @@ CircuitAttractor                                GROKKED LAW
 Crystallizer / Operator Compiler
         │
         v
-OperatorPage32 + versioned VM program           HOT SNAPSHOT</pre></div>
+CanonicalOperatorIR                              ONE LAW
+        │
+        v
+CrystallizedOperatorBundleV4                     FULL CRYSTAL
+├─ RoutingImage
+├─ ExecutionImage
+├─ VerifierImage
+└─ ProofEnvelope
+        │
+        v
+OperatorPage32 + versioned VM program           HOT ENTRY PAGE</pre></div>
 
   <h2>Два разных пути, которые нельзя путать</h2>
   <table>
@@ -548,7 +558,8 @@ ACTIVE generation g никогда не мутирует на месте.</pre><
 
   <h1>4 032 байта на оператор</h1>
   <p class="lead">
-    OperatorPage32 — компактная горячая форма уже кристаллизованного закона.
+    OperatorPage32 — компактная горячая входная страница уже
+    кристаллизованного закона, а не весь оператор.
     Она не хранит corpus, search frontier или proof receipts. Каждый из трёх
     текущих ACTIVE response-пакетов содержит ровно одну страницу длиной
     4 032 байта плюс digest-bound registry data.
@@ -569,6 +580,17 @@ ACTIVE generation g никогда не мутирует на месте.</pre><
       <tr><th>Итого</th><th>4 032</th><th>Одна компактная hot page</th></tr>
     </tbody>
   </table>
+
+  <h2>Полный неизменяемый оператор</h2>
+  <div class="tree"><pre>CrystallizedOperatorBundleV4
+├─ Manifest       law / routing / artifact / verifier / proof / bundle IDs
+├─ RoutingImage   phase circuit + structural grounding
+├─ ExecutionImage OperatorPage32 + versioned VM ABI
+├─ VerifierImage  independent verifier program
+└─ ProofEnvelope  frozen roots + parity + wrong_accepts = 0
+
+AuthorityLease / rollout / live metrics
+└─ принадлежат внешнему registry и НЕ входят в bundle</pre></div>
 
   <div class="cols">
     <div class="avoid">

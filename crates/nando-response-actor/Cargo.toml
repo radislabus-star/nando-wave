@@ -11,6 +11,7 @@ nando-core = { path = "../nando-core" }
 nando-operator-admission = { path = "../nando-operator-admission" }
 nando-operator-kernel = { path = "../nando-operator-kernel" }
 nando-operator-learning = { path = "../nando-operator-learning" }
+nando-operator-persistence = { path = "../nando-operator-persistence" }
 nando-operator-proof = { path = "../nando-operator-proof" }
 nando-operator-runtime = { path = "../nando-operator-runtime" }
 serde = { version = "1", features = ["derive"] }
