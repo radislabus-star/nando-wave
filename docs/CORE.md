@@ -203,6 +203,7 @@ crystallized OperatorPage32                      PASS
 CanonicalOperatorIrV1 convergence                PASS
 CrystallizedOperatorBundleV4 restart              PASS / NEW PACKAGE CANONICAL
 V4 routing/execution image ownership              PASS / 1..8 PROGRAM PAGES
+V4 exact Page32 compiler rebuild                  PASS / ADVERSARIAL RESEAL BLOCKED
 legacy page/registry package decode                PASS / COMPATIBILITY ONLY
 response ACTIVE packages                         3
 real local CPU execution                         PASS

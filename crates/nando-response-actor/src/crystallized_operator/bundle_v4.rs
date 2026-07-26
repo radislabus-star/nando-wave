@@ -43,6 +43,9 @@ struct CrystallizedExecutionImageV4 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct CrystallizedProofEnvelopeV4 {
     schema: String,
+    compiler_generation: u64,
+    compiler_support_lineages: Vec<Commitment256>,
+    compiler_uses_typed_actor_renderer: bool,
     blueprint_sha256: Commitment256,
     candidate_set_sha256: Commitment256,
     support_root_sha256: Commitment256,
@@ -68,6 +71,9 @@ impl VerifiedCrystallizedOperator {
         &self,
     ) -> Result<nando_operator_persistence::CrystallizedOperatorBundleV4, CrystallizedOperatorError>
     {
+        if self.operator.support_lineages.is_empty() {
+            return Err(CrystallizedOperatorError::RestartEncode);
+        }
         let ir = nando_operator_runtime::canonical_operator_ir_from_runtime_artifact_v1(
             &self.operator.runtime_artifact,
             self.operator.verifier_sha256.clone(),
@@ -196,19 +202,13 @@ impl VerifiedCrystallizedOperator {
         if &law_id != bundle.manifest().law_id() {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
         }
-        let compiled = nando_operator_runtime::compile_canonical_operator_ir_v1(&ir)
-            .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
         let page = OperatorPage32::from_bytes(&execution.entry_page)
             .map_err(CrystallizedOperatorError::InvalidPage)?;
         let verifier: VerifierProgram = serde_json::from_slice(bundle.verifier_image())
             .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
         let canonical_verifier = nando_operator_kernel::canonical_json_bytes(&verifier)
             .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
-        if canonical_verifier.as_slice() != bundle.verifier_image()
-            || source_neutral_verifier_for_program(compiled.actor_template())
-                .map_err(|_| CrystallizedOperatorError::VerifierBuildFailed)?
-                != verifier
-        {
+        if canonical_verifier.as_slice() != bundle.verifier_image() {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
         }
         let proof: CrystallizedProofEnvelopeV4 = serde_json::from_slice(bundle.proof_envelope())
@@ -217,9 +217,43 @@ impl VerifiedCrystallizedOperator {
             .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
         if canonical_proof.as_slice() != bundle.proof_envelope()
             || proof.schema != CRYSTALLIZED_PROOF_ENVELOPE_V4_SCHEMA
+            || proof.compiler_support_lineages.is_empty()
             || proof.wrong_accepts != 0
             || proof.future_lineage_count as usize != proof.verified_future_lineages.len()
             || proof.future_evidence_count < proof.future_lineage_count
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        let support_lineages = proof
+            .compiler_support_lineages
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let future_lineages = proof
+            .verified_future_lineages
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if support_lineages.len() != proof.compiler_support_lineages.len()
+            || future_lineages.len() != proof.verified_future_lineages.len()
+            || !support_lineages.is_disjoint(&future_lineages)
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        let (rebuilt_page, compiled) = compile_operator_page_from_ir(
+            &ir,
+            proof.compiler_generation,
+            &proof.compiler_support_lineages,
+            &proof.verified_future_lineages,
+            proof.compiler_uses_typed_actor_renderer,
+        )
+        .map_err(|_| CrystallizedOperatorError::RestartDigestMismatch)?;
+        if rebuilt_page.as_bytes() != page.as_bytes() {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        if source_neutral_verifier_for_program(compiled.actor_template())
+            .map_err(|_| CrystallizedOperatorError::VerifierBuildFailed)?
+            != verifier
         {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
         }
@@ -269,6 +303,7 @@ impl VerifiedCrystallizedOperator {
         Ok(Self {
             operator: CrystallizedOperator {
                 runtime_artifact,
+                compiler_generation: proof.compiler_generation,
                 blueprint_sha256: proof.blueprint_sha256,
                 candidate_set_sha256: proof.candidate_set_sha256,
                 support_root_sha256: proof.support_root_sha256,
@@ -277,7 +312,9 @@ impl VerifiedCrystallizedOperator {
                 winner_seal_sha256: proof.winner_seal_sha256,
                 actor_sha256: proof.actor_sha256,
                 verifier_sha256: proof.verifier_sha256,
+                support_lineages: proof.compiler_support_lineages.into_boxed_slice(),
                 verified_future_lineages: proof.verified_future_lineages.into_boxed_slice(),
+                uses_typed_actor_renderer: proof.compiler_uses_typed_actor_renderer,
             },
             parity_seal,
         })
@@ -288,6 +325,9 @@ impl From<&VerifiedCrystallizedOperator> for CrystallizedProofEnvelopeV4 {
     fn from(operator: &VerifiedCrystallizedOperator) -> Self {
         Self {
             schema: CRYSTALLIZED_PROOF_ENVELOPE_V4_SCHEMA.to_owned(),
+            compiler_generation: operator.operator.compiler_generation,
+            compiler_support_lineages: operator.operator.support_lineages.to_vec(),
+            compiler_uses_typed_actor_renderer: operator.operator.uses_typed_actor_renderer,
             blueprint_sha256: operator.operator.blueprint_sha256,
             candidate_set_sha256: operator.operator.candidate_set_sha256,
             support_root_sha256: operator.operator.support_root_sha256,
@@ -308,4 +348,37 @@ impl From<&VerifiedCrystallizedOperator> for CrystallizedProofEnvelopeV4 {
             parity_seal_sha256: operator.parity_seal.seal_sha256,
         }
     }
+}
+
+#[cfg(test)]
+pub(super) fn reseal_with_alternate_compiler_page_for_test(
+    operator: &VerifiedCrystallizedOperator,
+    bundle: &nando_operator_persistence::CrystallizedOperatorBundleV4,
+) -> nando_operator_persistence::CrystallizedOperatorBundleV4 {
+    let ir = nando_operator_runtime::canonical_operator_ir_from_runtime_artifact_v1(
+        &operator.operator.runtime_artifact,
+        operator.operator.verifier_sha256.clone(),
+    )
+    .expect("test IR");
+    let (alternate_page, _) = compile_operator_page_from_ir(
+        &ir,
+        operator.operator.compiler_generation.saturating_add(1),
+        &operator.operator.support_lineages,
+        &operator.operator.verified_future_lineages,
+        operator.operator.uses_typed_actor_renderer,
+    )
+    .expect("alternate compiler page");
+    let mut execution: CrystallizedExecutionImageV4 =
+        serde_json::from_slice(bundle.execution_image()).expect("execution image");
+    execution.entry_page = alternate_page.as_bytes().to_vec().into_boxed_slice();
+    let execution_image =
+        nando_operator_kernel::canonical_json_bytes(&execution).expect("execution bytes");
+    nando_operator_persistence::CrystallizedOperatorBundleV4::seal(
+        *bundle.manifest().law_id(),
+        bundle.routing_image().to_vec().into_boxed_slice(),
+        execution_image.into_boxed_slice(),
+        bundle.verifier_image().to_vec().into_boxed_slice(),
+        bundle.proof_envelope().to_vec().into_boxed_slice(),
+    )
+    .expect("resealed test bundle")
 }

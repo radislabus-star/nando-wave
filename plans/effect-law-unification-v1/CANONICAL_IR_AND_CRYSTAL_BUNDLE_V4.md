@@ -18,7 +18,7 @@ CandidateOperatorBlueprint ----------/
                                            v
                          CrystallizedOperatorBundleV4
                          ├─ RoutingImage: roles + signed phase relations
-                         ├─ ExecutionImage: Page32 + bounded VM program pages
+                         ├─ ExecutionImage: Page32 + bounded canonical program pages
                          ├─ VerifierImage
                          └─ ProofEnvelope
                                            |
@@ -71,6 +71,8 @@ The focused proof requires:
 adaptive IR executable identity == blueprint IR executable identity
 full artifact identity differs when routing phase differs
 bundle encode -> decode -> restore -> encode is byte-identical
+IR + frozen compiler inputs rebuild exact bundled Page32 bytes
+valid resealed Page32 from different compiler inputs is rejected
 wrong externally expected bundle_id is rejected
 tampered image is rejected
 serialized bundle contains no authority or lease field

@@ -84,6 +84,7 @@ pub struct VerifiedOperatorRestartBundle {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CrystallizedOperator {
     runtime_artifact: nando_operator_runtime::RuntimeOperatorArtifact,
+    compiler_generation: u64,
     blueprint_sha256: Commitment256,
     candidate_set_sha256: Commitment256,
     support_root_sha256: Commitment256,
@@ -92,7 +93,9 @@ pub struct CrystallizedOperator {
     winner_seal_sha256: Commitment256,
     actor_sha256: String,
     verifier_sha256: String,
+    support_lineages: Box<[Commitment256]>,
     verified_future_lineages: Box<[Commitment256]>,
+    uses_typed_actor_renderer: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -328,6 +331,7 @@ impl CrystallizedOperator {
                 compiled.renderer().clone(),
                 compiled.actor_template().clone(),
             ),
+            compiler_generation: frozen.source_generation().saturating_add(1),
             blueprint_sha256: winner_sha256,
             candidate_set_sha256: *frozen.candidate_set_sha256(),
             support_root_sha256: *winner_receipt.support_root_sha256(),
@@ -336,7 +340,9 @@ impl CrystallizedOperator {
             winner_seal_sha256: *winner_receipt.seal_sha256(),
             actor_sha256,
             verifier_sha256,
+            support_lineages: frozen.support_lineages_sha256().into(),
             verified_future_lineages: verified_future_lineages.into_boxed_slice(),
+            uses_typed_actor_renderer,
         };
         Ok(VerifiedCrystallizedOperator {
             operator,
@@ -503,6 +509,7 @@ impl VerifiedCrystallizedOperator {
         Ok(Self {
             operator: CrystallizedOperator {
                 runtime_artifact,
+                compiler_generation: proof.generation,
                 blueprint_sha256: proof.blueprint_sha256,
                 candidate_set_sha256: proof.candidate_set_sha256,
                 support_root_sha256: proof.support_root_sha256,
@@ -511,7 +518,9 @@ impl VerifiedCrystallizedOperator {
                 winner_seal_sha256: proof.winner_seal_sha256,
                 actor_sha256,
                 verifier_sha256,
+                support_lineages: proof.support_lineages.into_boxed_slice(),
                 verified_future_lineages: proof.future_lineages.into_boxed_slice(),
+                uses_typed_actor_renderer,
             },
             parity_seal,
         })
@@ -738,6 +747,11 @@ impl VerifiedCrystallizedOperator {
             .page()
             .header()
             .map_err(CrystallizedOperatorError::InvalidPage)?;
+        let uses_typed_actor_renderer = matches!(
+            runtime_artifact.actor_template().operation,
+            crate::ResponseOperation::FunctionCallFromRoles { .. }
+                | crate::ResponseOperation::CustomToolCallFromRoles { .. }
+        );
         if actor_digest != parity_seal.actor_sha256
             || restored_actor_sha256 != metadata.actor_sha256
             || verifier_digest != parity_seal.verifier_sha256
@@ -751,6 +765,7 @@ impl VerifiedCrystallizedOperator {
         Ok(Self {
             operator: CrystallizedOperator {
                 runtime_artifact,
+                compiler_generation: header.generation,
                 blueprint_sha256: metadata.blueprint_sha256,
                 candidate_set_sha256: metadata.candidate_set_sha256,
                 support_root_sha256: metadata.support_root_sha256,
@@ -759,7 +774,9 @@ impl VerifiedCrystallizedOperator {
                 winner_seal_sha256: metadata.winner_seal_sha256,
                 actor_sha256: metadata.actor_sha256,
                 verifier_sha256: metadata.verifier_sha256,
+                support_lineages: Box::new([]),
                 verified_future_lineages: metadata.verified_future_lineages.into_boxed_slice(),
+                uses_typed_actor_renderer,
             },
             parity_seal,
         })
@@ -2070,6 +2087,16 @@ mod tests {
                 &wrong_bundle_id,
             ),
             Err(CrystallizedOperatorError::RestartDigestMismatch)
+        );
+        let alternate_page_crystal =
+            bundle_v4::reseal_with_alternate_compiler_page_for_test(&operator, &decoded_crystal);
+        assert_eq!(
+            VerifiedCrystallizedOperator::restore_crystallized_bundle_v4(
+                &alternate_page_crystal,
+                alternate_page_crystal.manifest().bundle_id(),
+            ),
+            Err(CrystallizedOperatorError::RestartDigestMismatch),
+            "a valid resealed Page32 from different compiler inputs must fail exact rebuild"
         );
         let bound = operator
             .bind(RuntimeSurfaceEvidence {

@@ -252,7 +252,7 @@ CrystallizedOperatorBundleV4
 ├─ RoutingImage
 │  └─ canonical roles, relation state, phase circuit, grounding contract
 ├─ ExecutionImage
-│  └─ OperatorPage32 entry page and 1..8 canonical VM program pages
+│  └─ OperatorPage32 entry page and 1..8 canonical program-data pages
 ├─ VerifierImage
 │  └─ independently compiled verifier program
 └─ ProofEnvelope
@@ -276,6 +276,11 @@ The image layout is ownership-separated: `RoutingImage` cannot contain the
 actor template or entry page. Restart rebuilds the complete IR from routing
 roles/relations plus bounded execution program pages, then must reproduce the
 same byte-identical bundle.
+
+Restart also recompiles `OperatorPage32` from the sealed generation, support
+lineages, future lineages, and renderer mode. Exact page bytes must equal the
+bundled entry page; a newly resealed bundle with a valid page produced from
+different compiler inputs is rejected.
 
 Recursive growth is ordered as follows:
 
