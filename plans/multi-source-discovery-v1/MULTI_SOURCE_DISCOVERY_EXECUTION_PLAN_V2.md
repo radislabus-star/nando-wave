@@ -1,8 +1,8 @@
 # Nando Multi-Source Discovery Execution Plan V2
 
-Status: `MS2_COMPLETE / MS3_DEPLOYMENT_PENDING / MS4_BLOCKED`
+Status: `MS2_COMPLETE / MS3_LIVE_REPRESENTATION_GAP / MS4_BLOCKED`
 
-Date: 2026-07-24 Europe/Tallinn.
+Date: 2026-07-26 Europe/Tallinn.
 
 This is the executable route from the completed `STOP-MS0` audit through
 historical recovery, fresh structural capture and natural operator induction
@@ -25,13 +25,18 @@ Current implementation checkpoint:
 ```text
 MS0-R / MS1 structural capture                 PASS
 MS2 blind join / factorizer / marginal API     PASS
-MS3 source-neutral role witness                CODE PASS
+MS3 all-observation role version space         LIVE PASS
+MS3 disagreement-derived passive probes        CODE PASS
 MS3 sealed minimal proof basis                 CODE PASS
 MS3 existing crystallizer/admission binding    CODE PASS
-MS3 natural completed RelationFrame            NOT_EVALUATED
+MS3 natural completed RelationFrame            1 JOINED
+MS3 natural selected role witness              REPRESENTATION GAP
 MS3 runtime actor/verifier parity               NOT_EVALUATED
 MS4 natural package admission                   BLOCKED
 ```
+
+Live receipt:
+`STOP_MS3_SOURCE_NEUTRAL_VERSION_SPACE_ROLLOUT.md`.
 
 Stage closure is live-result-only:
 
