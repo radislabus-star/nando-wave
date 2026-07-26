@@ -17,8 +17,10 @@ use nando_operator_learning::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::multi_source_topology_archive::MultiSourceTopologyArchive;
 use crate::request_learning::{
     REQUEST_LEARNING_CHECKPOINT_MAX_BYTES_V2, RequestLearningIndex, RequestLearningWatermarkV2,
+    pre_action_topology_audit_row_v1,
 };
 
 const BRIDGE_STATUS_SCHEMA_V2: &str = "nando.learning-structure-bridge-status.v2";
@@ -296,6 +298,7 @@ impl LearningStructureBridgeRuntimeV2 {
     pub(crate) fn start_consumer(
         &self,
         request_learning: Arc<RequestLearningIndex>,
+        topology_archive: Option<Arc<Mutex<MultiSourceTopologyArchive>>>,
     ) -> Result<(), String> {
         if !self.inner.consumer_enabled {
             return Ok(());
@@ -313,7 +316,11 @@ impl LearningStructureBridgeRuntimeV2 {
             .name("nando-learning-structure-v2".to_owned())
             .spawn(move || {
                 while let Some(inner) = inner.upgrade() {
-                    if let Err(error) = drain_pending(&inner, &request_learning) {
+                    if let Err(error) = drain_pending_with_archive(
+                        &inner,
+                        &request_learning,
+                        topology_archive.as_ref(),
+                    ) {
                         record_failure(&inner.consumer, &error);
                     }
                     let poll = inner.consumer_poll;
@@ -393,7 +400,16 @@ impl LearningStructureBridgeRuntimeV2 {
     }
 }
 
+#[cfg(test)]
 fn drain_pending(inner: &BridgeInner, index: &RequestLearningIndex) -> Result<(), String> {
+    drain_pending_with_archive(inner, index, None)
+}
+
+fn drain_pending_with_archive(
+    inner: &BridgeInner,
+    index: &RequestLearningIndex,
+    topology_archive: Option<&Arc<Mutex<MultiSourceTopologyArchive>>>,
+) -> Result<(), String> {
     for path in pending_paths(&inner.pending_dir)? {
         let started = Instant::now();
         let (sequence, expected_digest) = pending_identity(&path)?;
@@ -434,7 +450,14 @@ fn drain_pending(inner: &BridgeInner, index: &RequestLearningIndex) -> Result<()
                 .observe_structure(record.structure_v1())
                 .map_err(str::to_owned)?,
             LearningStructureRecord::V3(record) => {
-                index.observe_structure_v3(record).map_err(str::to_owned)?
+                index.observe_structure_v3(record).map_err(str::to_owned)?;
+                if let Some(archive) = topology_archive {
+                    let row = pre_action_topology_audit_row_v1(record).map_err(str::to_owned)?;
+                    archive
+                        .lock()
+                        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+                        .append(&row)?;
+                }
             }
         }
         let next_watermark = RequestLearningWatermarkV2 {
@@ -938,6 +961,38 @@ mod tests {
                 .expect("restart");
         assert!(restarted.status().checkpoint_restored);
         assert_eq!(restored.status().structures_applied, 1);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn v3_record_is_archived_before_bridge_ack() {
+        let root = test_root("v3-topology-archive");
+        let (producer, _) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), true, false, Duration::ZERO)
+                .expect("producer");
+        let (receipt, v1) = evidence(1);
+        let (v2, commit) = topology(&receipt, &v1);
+        producer
+            .submit_v3(receipt, v1, v2, commit)
+            .expect("submit v3");
+        let (consumer, index) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), false, true, Duration::ZERO)
+                .expect("consumer");
+        let archive_root = root.join("topology-archive");
+        let archive = Arc::new(Mutex::new(
+            MultiSourceTopologyArchive::open(&archive_root).expect("archive"),
+        ));
+        drain_pending_with_archive(&consumer.inner, &index, Some(&archive)).expect("drain");
+        assert_eq!(consumer.status().pending_records, 0);
+        assert_eq!(archive.lock().expect("archive lock").rows().len(), 1);
+        drop(archive);
+        assert_eq!(
+            MultiSourceTopologyArchive::open(&archive_root)
+                .expect("restart archive")
+                .rows()
+                .len(),
+            1
+        );
         fs::remove_dir_all(root).expect("cleanup");
     }
 

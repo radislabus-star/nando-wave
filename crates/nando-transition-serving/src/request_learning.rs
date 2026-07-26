@@ -145,44 +145,15 @@ impl RequestLearningIndex {
         record: &LearningStructureRecordV3,
     ) -> Result<(), &'static str> {
         let structure_v1 = record.structure_v1();
-        let structure_v2 = record.structure_v2();
-        let commit = record.topology_commit();
-        let capture = record.capture_receipt();
-        if record.validate().is_err() {
-            return Err("request_learning_structure_v3_invalid");
-        }
-        structure_v2
-            .validate()
-            .map_err(|_| "request_learning_structure_v3_invalid")?;
-        commit
-            .validate()
-            .map_err(|_| "request_learning_structure_v3_invalid")?;
-        if structure_v1.client_intent_id_sha256() != structure_v2.turn_intent_id_sha256
-            || commit.turn_intent_id_sha256 != structure_v2.turn_intent_id_sha256
-            || commit.provider_capture_request_root_sha256
-                != structure_v2.provider_capture_request_root_sha256
-        {
-            return Err("request_learning_structure_v3_identity_mismatch");
-        }
+        let topology_row = pre_action_topology_audit_row_v1(record)?;
+        let commit = &topology_row.commit;
         self.observe_structure(structure_v1)?;
         let mut state = self
             .state
             .lock()
             .map_err(|_| "request_learning_index_lock_poisoned")?;
         let key = commit.commitment_root_sha256.clone();
-        let topology = RequestLearningTopologyV4 {
-            bridge_epoch_sha256: record.bridge_epoch_sha256().to_owned(),
-            bridge_sequence: Some(record.bridge_sequence()),
-            record_sha256: Some(record.record_sha256().to_owned()),
-            capture_epoch_sha256: Some(capture.capture_epoch_root().to_hex()),
-            capture_event_sha256: Some(capture.event_root_sha256().to_hex()),
-            capture_receipt_sha256: Some(capture.receipt_sha256().to_hex()),
-            captured_at_unix_ms: Some(capture.observed_at_unix_ms()),
-            session_lineage_sha256: Some(capture.lineage_root_sha256().to_hex()),
-            physical_order_proven: true,
-            structure: structure_v2.clone(),
-            commit: commit.clone(),
-        };
+        let topology = RequestLearningTopologyV4::from(topology_row);
         match state.topology_by_commitment.get(&key) {
             Some(existing) if existing == &topology => return Ok(()),
             Some(_) => return Err("request_learning_topology_commitment_conflict"),
@@ -464,6 +435,55 @@ impl RequestLearningIndex {
             lookup_hits: self.counters.lookup_hits.load(Ordering::Relaxed),
             lookup_misses: self.counters.lookup_misses.load(Ordering::Relaxed),
             ..RequestLearningStatusV2::default()
+        }
+    }
+}
+
+pub(crate) fn pre_action_topology_audit_row_v1(
+    record: &LearningStructureRecordV3,
+) -> Result<PreActionTopologyAuditRowV1, &'static str> {
+    record
+        .validate()
+        .map_err(|_| "request_learning_structure_v3_invalid")?;
+    let structure = record.structure_v2();
+    let commit = record.topology_commit();
+    let capture = record.capture_receipt();
+    if record.structure_v1().client_intent_id_sha256() != structure.turn_intent_id_sha256
+        || commit.turn_intent_id_sha256 != structure.turn_intent_id_sha256
+        || commit.provider_capture_request_root_sha256
+            != structure.provider_capture_request_root_sha256
+    {
+        return Err("request_learning_structure_v3_identity_mismatch");
+    }
+    Ok(PreActionTopologyAuditRowV1 {
+        bridge_epoch_sha256: record.bridge_epoch_sha256().to_owned(),
+        bridge_sequence: Some(record.bridge_sequence()),
+        record_sha256: Some(record.record_sha256().to_owned()),
+        capture_epoch_sha256: Some(capture.capture_epoch_root().to_hex()),
+        capture_event_sha256: Some(capture.event_root_sha256().to_hex()),
+        capture_receipt_sha256: Some(capture.receipt_sha256().to_hex()),
+        captured_at_unix_ms: Some(capture.observed_at_unix_ms()),
+        session_lineage_sha256: Some(capture.lineage_root_sha256().to_hex()),
+        physical_order_proven: true,
+        structure: structure.clone(),
+        commit: commit.clone(),
+    })
+}
+
+impl From<PreActionTopologyAuditRowV1> for RequestLearningTopologyV4 {
+    fn from(row: PreActionTopologyAuditRowV1) -> Self {
+        Self {
+            bridge_epoch_sha256: row.bridge_epoch_sha256,
+            bridge_sequence: row.bridge_sequence,
+            record_sha256: row.record_sha256,
+            capture_epoch_sha256: row.capture_epoch_sha256,
+            capture_event_sha256: row.capture_event_sha256,
+            capture_receipt_sha256: row.capture_receipt_sha256,
+            captured_at_unix_ms: row.captured_at_unix_ms,
+            session_lineage_sha256: row.session_lineage_sha256,
+            physical_order_proven: row.physical_order_proven,
+            structure: row.structure,
+            commit: row.commit,
         }
     }
 }

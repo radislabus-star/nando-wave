@@ -40,7 +40,8 @@ pub struct RequestStructureAuditSnapshotV1 {
     pub pre_action_context_persisted: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct PreActionTopologyAuditRowV1 {
     pub bridge_epoch_sha256: String,
     pub bridge_sequence: Option<u64>,

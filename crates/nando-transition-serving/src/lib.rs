@@ -17,6 +17,7 @@ pub mod multi_source_audit;
 mod multi_source_capture;
 mod multi_source_frame_archive;
 mod multi_source_live;
+mod multi_source_topology_archive;
 mod nginx_terminal;
 mod opportunity_bridge;
 mod provider_capture;
@@ -173,6 +174,7 @@ pub struct ServingConfig {
     pub multi_source_snapshot_poll_ms: u64,
     pub terminal_receipt_archive_path: PathBuf,
     pub multi_source_frame_archive_path: PathBuf,
+    pub multi_source_topology_archive_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -379,6 +381,11 @@ impl ServingConfig {
                 "NANDO_MULTI_SOURCE_FRAME_ARCHIVE",
                 &state_dir,
                 "multi-source-live-v2/relation-frame-archive-v1",
+            ),
+            multi_source_topology_archive_path: env_path_join(
+                "NANDO_MULTI_SOURCE_TOPOLOGY_ARCHIVE",
+                &state_dir,
+                "multi-source-live-v2/pre-action-topology-archive-v1",
             ),
         })
     }
@@ -649,6 +656,8 @@ struct AppState {
     terminal_receipt_archive: Option<Arc<Mutex<terminal_receipt_archive::TerminalReceiptArchive>>>,
     multi_source_frame_archive:
         Option<Arc<Mutex<multi_source_frame_archive::MultiSourceFrameArchive>>>,
+    multi_source_topology_archive:
+        Option<Arc<Mutex<multi_source_topology_archive::MultiSourceTopologyArchive>>>,
 }
 
 #[derive(Default)]
@@ -814,6 +823,18 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     } else {
         None
     };
+    let multi_source_topology_archive = if config.learning_structure_bridge_consumer_enabled {
+        let mut archive = multi_source_topology_archive::MultiSourceTopologyArchive::open(
+            &config.multi_source_topology_archive_path,
+        )?;
+        let existing = request_learning
+            .audit_snapshot_v1()
+            .map_err(str::to_owned)?;
+        archive.append_batch(&existing.topologies)?;
+        Some(Arc::new(Mutex::new(archive)))
+    } else {
+        None
+    };
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -842,6 +863,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         multi_source_snapshot: Arc::new(RwLock::new(None)),
         terminal_receipt_archive,
         multi_source_frame_archive,
+        multi_source_topology_archive,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -888,9 +910,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .map_err(|error| format!("bind:{}:{error}", state.config.bind))?;
     state.provider_capture.start_after_http_bind();
     state.operator_generation_shadow.start_after_http_bind()?;
-    state
-        .learning_structure_bridge
-        .start_consumer(Arc::clone(&state.request_learning))?;
+    state.learning_structure_bridge.start_consumer(
+        Arc::clone(&state.request_learning),
+        state.multi_source_topology_archive.clone(),
+    )?;
     state.learning_evidence_bridge.start(
         Arc::clone(&state.operator_generation_shadow),
         Arc::clone(&state.request_learning),
@@ -1657,7 +1680,7 @@ async fn multi_source_report(State(state): State<AppState>) -> Response {
 
 async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
     let evidence = current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
-    let requests = state.request_learning.audit_snapshot_v1();
+    let requests = archived_request_snapshot(&state);
     let terminals = requests
         .as_ref()
         .map_err(|error| (*error).to_owned())
@@ -1711,7 +1734,7 @@ async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
 
 async fn ms3_representation_gap_report(State(state): State<AppState>) -> Response {
     let evidence = current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
-    let requests = state.request_learning.audit_snapshot_v1();
+    let requests = archived_request_snapshot(&state);
     let terminals = requests
         .as_ref()
         .map_err(|error| (*error).to_owned())
@@ -1783,7 +1806,7 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                 let snapshot = if state.config.embedded_response_miner_enabled {
                     let evidence = current_miner_worker(&state)
                         .and_then(|worker| worker.multi_source_evidence());
-                    let requests = state.request_learning.audit_snapshot_v1();
+                    let requests = archived_request_snapshot(&state);
                     let active_protocols = multi_source_live::active_protocol_mode_roots(
                         &state.config.response_registry_path,
                     );
@@ -1844,6 +1867,23 @@ fn archived_terminal_receipts(
         .lock()
         .map_err(|_| "terminal_archive_lock_poisoned".to_owned())
         .map(|archive| archive.receipts_for_requests(&request_ids))
+}
+
+fn archived_request_snapshot(
+    state: &AppState,
+) -> Result<nando_operator_learning::multi_source::RequestStructureAuditSnapshotV1, &'static str> {
+    let mut snapshot = state.request_learning.audit_snapshot_v1()?;
+    let rows = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or("multi_source_topology_archive_not_configured")?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned")?
+        .rows();
+    snapshot.stored_topologies = u64::try_from(rows.len()).unwrap_or(u64::MAX);
+    snapshot.pre_action_context_persisted = !rows.is_empty();
+    snapshot.topologies = rows;
+    Ok(snapshot)
 }
 
 fn archived_relation_frames(
@@ -5831,6 +5871,8 @@ mod tests {
                 .join("multi-source-live-v2/terminal-receipt-archive-v1"),
             multi_source_frame_archive_path: root
                 .join("multi-source-live-v2/relation-frame-archive-v1"),
+            multi_source_topology_archive_path: root
+                .join("multi-source-live-v2/pre-action-topology-archive-v1"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -5893,6 +5935,7 @@ mod tests {
             multi_source_snapshot: Arc::new(RwLock::new(None)),
             terminal_receipt_archive: None,
             multi_source_frame_archive: None,
+            multi_source_topology_archive: None,
         };
         refresh_response_executor(&state);
         state
