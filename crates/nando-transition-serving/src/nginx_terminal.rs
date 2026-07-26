@@ -1,64 +1,9 @@
-use std::{
-    collections::BTreeMap,
-    fs::File,
-    io::{BufRead, BufReader, Read, Seek, SeekFrom},
-    path::Path,
-};
-
 use nando_operator_kernel::sha256_bytes;
 use nando_operator_learning::multi_source::TransportTerminalReceiptV1;
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-const MAX_TERMINAL_LOG_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_TERMINAL_RECEIPTS: usize = 16_384;
-
-pub(super) fn load_transport_terminal_receipts_v1(
-    path: &Path,
-) -> Result<Vec<TransportTerminalReceiptV1>, String> {
-    let mut file = File::open(path).map_err(|error| format!("nginx_terminal_open:{error}"))?;
-    let len = file
-        .metadata()
-        .map_err(|error| format!("nginx_terminal_metadata:{error}"))?
-        .len();
-    let start = len.saturating_sub(MAX_TERMINAL_LOG_BYTES);
-    file.seek(SeekFrom::Start(start))
-        .map_err(|error| format!("nginx_terminal_seek:{error}"))?;
-    let mut bytes =
-        Vec::with_capacity(usize::try_from(len.saturating_sub(start)).unwrap_or(64 * 1024 * 1024));
-    file.take(MAX_TERMINAL_LOG_BYTES)
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("nginx_terminal_read:{error}"))?;
-    if start > 0
-        && let Some(newline) = bytes.iter().position(|byte| *byte == b'\n')
-    {
-        bytes.drain(..=newline);
-    }
-
-    let mut by_request = BTreeMap::new();
-    for line in BufReader::new(bytes.as_slice()).lines() {
-        let Ok(line) = line else {
-            continue;
-        };
-        let Some(receipt) = parse_terminal_line(&line) else {
-            continue;
-        };
-        by_request.insert(receipt.request_event_id_sha256.clone(), receipt);
-    }
-    let mut receipts = by_request.into_values().collect::<Vec<_>>();
-    receipts.sort_by_key(|receipt| {
-        (
-            receipt.started_at_unix_nanos,
-            receipt.request_event_id_sha256.clone(),
-        )
-    });
-    if receipts.len() > MAX_TERMINAL_RECEIPTS {
-        receipts.drain(..receipts.len() - MAX_TERMINAL_RECEIPTS);
-    }
-    Ok(receipts)
-}
-
-fn parse_terminal_line(line: &str) -> Option<TransportTerminalReceiptV1> {
+pub(super) fn parse_terminal_line(line: &str) -> Option<TransportTerminalReceiptV1> {
     let row = serde_json::from_str::<Value>(line).ok()?;
     if row.get("schema")?.as_str()? != "nando.nginx-terminal.v1" {
         return None;

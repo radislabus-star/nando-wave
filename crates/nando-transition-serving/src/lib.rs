@@ -25,6 +25,7 @@ mod runtime_policy;
 pub mod session_backfill;
 mod session_stream;
 mod stream_evidence;
+mod terminal_receipt_archive;
 pub use session_stream::{
     verified_capture_bound_training_cases_from_sessions,
     verified_collection_observations_from_session, verified_relation_frames_from_session,
@@ -169,6 +170,7 @@ pub struct ServingConfig {
     pub opportunity_bridge_poll_ms: u64,
     pub multi_source_snapshot_path: PathBuf,
     pub multi_source_snapshot_poll_ms: u64,
+    pub terminal_receipt_archive_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -366,6 +368,11 @@ impl ServingConfig {
             ),
             multi_source_snapshot_poll_ms: env_u64("NANDO_MULTI_SOURCE_SNAPSHOT_POLL_MS", 15_000)
                 .clamp(250, 60_000),
+            terminal_receipt_archive_path: env_path_join(
+                "NANDO_TERMINAL_RECEIPT_ARCHIVE",
+                &state_dir,
+                "multi-source-live-v2/terminal-receipt-archive-v1",
+            ),
         })
     }
 }
@@ -632,6 +639,7 @@ struct AppState {
     multi_source_snapshot: Arc<
         RwLock<Option<nando_operator_learning::multi_source::LiveMultiSourceDiscoverySnapshotV3>>,
     >,
+    terminal_receipt_archive: Option<Arc<Mutex<terminal_receipt_archive::TerminalReceiptArchive>>>,
 }
 
 #[derive(Default)]
@@ -774,6 +782,20 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         config.learning_structure_bridge_consumer_enabled,
         Duration::from_millis(config.learning_structure_bridge_poll_ms),
     )?;
+    let terminal_receipt_archive = if config.learning_structure_bridge_consumer_enabled {
+        match config.nginx_terminal_path.as_deref() {
+            Some(source_path) => {
+                let mut archive = terminal_receipt_archive::TerminalReceiptArchive::open(
+                    &config.terminal_receipt_archive_path,
+                )?;
+                archive.sync_source(source_path)?;
+                Some(Arc::new(Mutex::new(archive)))
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -800,6 +822,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         learning_structure_bridge,
         opportunity_bridge,
         multi_source_snapshot: Arc::new(RwLock::new(None)),
+        terminal_receipt_archive,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -1615,12 +1638,10 @@ async fn multi_source_report(State(state): State<AppState>) -> Response {
 async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
     let evidence = current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
     let requests = state.request_learning.audit_snapshot_v1();
-    let terminals = state
-        .config
-        .nginx_terminal_path
-        .as_deref()
-        .ok_or_else(|| "nginx_terminal_path_not_configured".to_owned())
-        .and_then(nginx_terminal::load_transport_terminal_receipts_v1);
+    let terminals = requests
+        .as_ref()
+        .map_err(|error| (*error).to_owned())
+        .and_then(|requests| archived_terminal_receipts(&state, requests));
     match (evidence, requests, terminals) {
         (Some(evidence), Ok(requests), Ok(terminals)) => {
             // This route exposes proof roots and typed dispositions only. It is
@@ -1669,12 +1690,10 @@ async fn ms3_failure_corpus_report(State(state): State<AppState>) -> Response {
 async fn ms3_representation_gap_report(State(state): State<AppState>) -> Response {
     let evidence = current_miner_worker(&state).and_then(|worker| worker.multi_source_evidence());
     let requests = state.request_learning.audit_snapshot_v1();
-    let terminals = state
-        .config
-        .nginx_terminal_path
-        .as_deref()
-        .ok_or_else(|| "nginx_terminal_path_not_configured".to_owned())
-        .and_then(nginx_terminal::load_transport_terminal_receipts_v1);
+    let terminals = requests
+        .as_ref()
+        .map_err(|error| (*error).to_owned())
+        .and_then(|requests| archived_terminal_receipts(&state, requests));
     match (evidence, requests, terminals) {
         (Some(evidence), Ok(requests), Ok(terminals)) => {
             let report =
@@ -1725,6 +1744,16 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
         .spawn(move || {
             let mut published = false;
             loop {
+                if let (Some(archive), Some(source_path)) = (
+                    state.terminal_receipt_archive.as_ref(),
+                    state.config.nginx_terminal_path.as_deref(),
+                ) && let Err(error) = archive
+                    .lock()
+                    .map_err(|_| "terminal_archive_lock_poisoned".to_owned())
+                    .and_then(|mut archive| archive.sync_source(source_path))
+                {
+                    eprintln!("nando-terminal-receipt-archive: {error}");
+                }
                 let snapshot = if state.config.embedded_response_miner_enabled {
                     let evidence = current_miner_worker(&state)
                         .and_then(|worker| worker.multi_source_evidence());
@@ -1769,6 +1798,24 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
         })
         .map(|_| ())
         .map_err(|error| format!("multi_source_snapshot_thread:{error}"))
+}
+
+fn archived_terminal_receipts(
+    state: &AppState,
+    requests: &nando_operator_learning::multi_source::RequestStructureAuditSnapshotV1,
+) -> Result<Vec<nando_operator_learning::multi_source::TransportTerminalReceiptV1>, String> {
+    let request_ids = requests
+        .topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    state
+        .terminal_receipt_archive
+        .as_ref()
+        .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "terminal_archive_lock_poisoned".to_owned())
+        .map(|archive| archive.receipts_for_requests(&request_ids))
 }
 
 fn streaming_miner_signal_tree(
@@ -5734,6 +5781,8 @@ mod tests {
             opportunity_bridge_poll_ms: 100,
             multi_source_snapshot_path: root.join("multi-source-live-v2/snapshot.cbor"),
             multi_source_snapshot_poll_ms: 1_000,
+            terminal_receipt_archive_path: root
+                .join("multi-source-live-v2/terminal-receipt-archive-v1"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -5794,6 +5843,7 @@ mod tests {
             learning_structure_bridge,
             opportunity_bridge,
             multi_source_snapshot: Arc::new(RwLock::new(None)),
+            terminal_receipt_archive: None,
         };
         refresh_response_executor(&state);
         state
