@@ -93,7 +93,11 @@ fn rich_render_sequence_transition(index: u8) -> TeacherTransition {
 
 fn filter_count_transition(index: u8) -> TeacherTransition {
     let field = format!("state_{index}");
-    let predicate = if index % 2 == 0 { "active" } else { "ready" };
+    let predicate = if index.is_multiple_of(2) {
+        "active"
+    } else {
+        "ready"
+    };
     let rows = vec![
         json!({(field.clone()): predicate, "value": 3}),
         json!({(field): "other", "value": 5}),
