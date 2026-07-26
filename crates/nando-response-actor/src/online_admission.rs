@@ -628,7 +628,9 @@ pub fn merge_with_proven_active_online_admission(
     for existing in &existing_registry.packages {
         if let Some(replacement) = candidate_by_id.get(existing.package_id.as_str()) {
             if packages_have_same_execution_identity(existing, replacement)? {
-                equivalent_ids.insert(existing.package_id.clone());
+                if !candidate_upgrades_legacy_crystal_to_v4(existing, replacement) {
+                    equivalent_ids.insert(existing.package_id.clone());
+                }
             } else if !candidate_crystallizes_same_law(existing, replacement) {
                 return Err("active_generation_package_id_conflict");
             }
@@ -694,6 +696,20 @@ pub fn merge_with_proven_active_online_admission(
         vec![candidate, retained]
     };
     merge_online_admission_snapshots(snapshots)?.ok_or("active_generation_merge_empty")
+}
+
+fn candidate_upgrades_legacy_crystal_to_v4(
+    active: &ResponsePackage,
+    candidate: &ResponsePackage,
+) -> bool {
+    matches!(
+        (
+            active.crystallized_operator.as_ref(),
+            candidate.crystallized_operator.as_ref(),
+        ),
+        (Some(active), Some(candidate))
+            if !active.has_canonical_bundle_v4() && candidate.has_canonical_bundle_v4()
+    )
 }
 
 fn candidate_crystallizes_same_law(active: &ResponsePackage, candidate: &ResponsePackage) -> bool {

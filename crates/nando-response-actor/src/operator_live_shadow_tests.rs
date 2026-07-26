@@ -707,6 +707,87 @@ fn proven_active_merge_replaces_same_law_with_crystallized_runtime() {
 }
 
 #[test]
+fn proven_active_merge_replaces_legacy_crystal_with_v4_bundle() {
+    let mut state = LiveScalarShadowState::default();
+    let mut support = transition("total", true);
+    support.before.frame_id_sha256 = format!("{:064x}", 1);
+    support.before.session_id_sha256 = format!("{:064x}", 101);
+    support.before.observed_at_unix_nanos = 1;
+    state.observe(&support);
+
+    let mut future = transition("renamed_total", true);
+    future.before.frame_id_sha256 = format!("{:064x}", 2);
+    future.before.session_id_sha256 = format!("{:064x}", 102);
+    future.before.observed_at_unix_nanos = 2;
+    state.observe(&future);
+
+    let candidate = crate::build_crystallized_admission_snapshot(
+        &state.admission_candidates(),
+        "test-project",
+        1,
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+    )
+    .expect("V4 admission")
+    .expect("candidate");
+    let mut legacy_registry = candidate.registry.clone();
+    let mut legacy_json = serde_json::to_value(
+        legacy_registry.packages[0]
+            .crystallized_operator
+            .as_ref()
+            .expect("V4 bundle"),
+    )
+    .expect("bundle JSON");
+    let legacy_object = legacy_json.as_object_mut().expect("bundle object");
+    legacy_object.remove("crystallized_bundle_v4_cbor");
+    legacy_object.remove("canonical_bundle_id");
+    legacy_registry.packages[0].crystallized_operator =
+        Some(serde_json::from_value(legacy_json).expect("legacy bundle"));
+    let binding = &candidate.admission.response_authority.packages[0];
+    let legacy_admission = crate::authority::build_composite_admission_for_registry(
+        &legacy_registry,
+        std::collections::BTreeMap::from([(
+            legacy_registry.packages[0].package_id.clone(),
+            (
+                binding.support_manifest_sha256.clone(),
+                binding.exact_causal_proof_sha256.clone(),
+                binding.runtime_parity_receipt_set_sha256.clone(),
+                binding.future_verifier_receipt_set_sha256.clone(),
+                binding.semantic_alias_proof_sha256.clone(),
+            ),
+        )]),
+        "test-project",
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+        "missing receipts",
+        "missing verifier",
+    )
+    .expect("legacy authority");
+
+    let merged = crate::merge_with_proven_active_online_admission(
+        candidate,
+        legacy_registry,
+        legacy_admission,
+        "test-project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        30,
+    )
+    .expect("V4 format upgrade");
+    let upgraded = merged.registry.packages[0]
+        .crystallized_operator
+        .as_ref()
+        .expect("upgraded bundle");
+    assert!(upgraded.has_canonical_bundle_v4());
+    upgraded.restore_verified().expect("verified V4 restore");
+}
+
+#[test]
 fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary() {
     let mut state = LiveScalarShadowState::default();
     for index in 1_u64..=8 {
