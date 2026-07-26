@@ -24,7 +24,9 @@ use crate::multi_source_frame_archive::MultiSourceFrameArchive;
 const QUEUE_CAPACITY: usize = 4_096;
 const MAX_DURABLE_OPPORTUNITY_BATCH_EVENTS: usize = 256;
 const OPPORTUNITY_LEDGER_SEGMENT_BYTES: u64 = 64 * 1024 * 1024;
-const INPUTS_PER_SYNTHESIS_SLICE: u64 = 64;
+// Drain one full bounded ingress queue before forcing expensive synthesis.
+// An earlier idle boundary still runs the pending slice immediately.
+const INPUTS_PER_SYNTHESIS_SLICE: u64 = 4_096;
 const MAX_SYNTHESIS_SLICES_PER_BURST: u64 = 8;
 const MAX_SYNTHESIS_BURST: Duration = Duration::from_millis(5);
 const CHECKPOINT_EVENTS: u64 = 4_096;
