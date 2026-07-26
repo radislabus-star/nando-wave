@@ -3,6 +3,7 @@
 Status: `MS2_COMPLETE / MS3_UNIQUE_LAW_FROZEN / INDEPENDENT_FUTURE_PENDING / MS4_BLOCKED`
 
 Date: 2026-07-26 Europe/Tallinn.
+Last live/capability checkpoint: 2026-07-27 Europe/Tallinn.
 
 This is the executable route from the completed `STOP-MS0` audit through
 historical recovery, fresh structural capture and natural operator induction
@@ -35,14 +36,24 @@ MS3 linked-frame acquisition gate               PASS / NO_GAP 1
 MS3 current durable natural joined frame        1
 MS3 bounded version space                       COMPLETE / 1 CLASS
 MS3 candidate freeze                            SEALED / RESTART EXACT
-MS3 independent future                          COLLECTING / NEW LINEAGE 1 / APPLICABLE 0
+MS3 independent future                          COLLECTING / LINEAGES 2 / TOPOLOGIES 30
+MS3 durable pre-action prediction               COMMITTED 1 / OUTCOME PENDING
 MS3 historical 78,598-token gap row             LEGACY EVICTED / NOT REUSED
 MS3 runtime actor/verifier parity               NOT_EVALUATED
 MS4 natural package admission                   BLOCKED
+MS4 frozen-future -> BundleV4 bridge            CODE + TEST PASS / QUARANTINE ONLY
+MS5 rich multi-role renderer                    SHADOW CAPABILITY PASS
+MS6 typed FILTER -> COUNT                       SHADOW CAPABILITY PASS
+MS7 bounded typed composition                   SHADOW SUBSTRATE PASS
+MS8 marginal coverage portfolio                 SHADOW PLANNER PASS
+MS4-MS8 new authority                           FALSE
 ```
 
 Live receipt:
 `STOP_MS3_UNIQUE_LAW_FREEZE.md`.
+
+Parallel capability checkpoint:
+`MS4_MS8_PARALLEL_CAPABILITY_CHECKPOINT_2026-07-27.md`.
 
 Stage closure is live-result-only:
 
