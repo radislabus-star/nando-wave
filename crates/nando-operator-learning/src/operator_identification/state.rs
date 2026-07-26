@@ -497,6 +497,18 @@ impl OperatorIdentificationMachineV1 {
     }
 
     #[must_use]
+    pub fn candidate_programs(&self) -> BTreeMap<String, ResponseProgram> {
+        self.descriptors
+            .keys()
+            .filter_map(|digest| {
+                self.arena
+                    .program_by_digest(digest)
+                    .map(|candidate| (digest.clone(), candidate.program.clone()))
+            })
+            .collect()
+    }
+
+    #[must_use]
     pub const fn evidence_ledger(&self) -> Option<&GenerationEvidenceLedgerV3> {
         self.evidence_ledger.as_ref()
     }

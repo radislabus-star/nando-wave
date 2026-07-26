@@ -1,0 +1,69 @@
+{
+  "schema": "nando.stop-ms3-unique-law-freeze.v1",
+  "sampled_at": "2026-07-26T22:31:37+03:00",
+  "verdict": "UNIQUE_LAW_FROZEN_INDEPENDENT_FUTURE_PENDING",
+  "roots": {
+    "acquisition_report_sha256": "67b9b4dc5c17570b9203d2db4400afbaba17610e6d59ee56b4d7f575e8c7982f",
+    "linked_receipt_sha256": "d836338f0efccd1ff82edb9c1b536ace7758c073a935100117d42e146f70672d",
+    "topology_sha256": "c064a43115e0d0a4998c9bc86d8ecb60e0521d2f4eb1db930828bfdf1abc9ec3",
+    "frame_sha256": "6babf3b923a1f6d2e5904f85f5e22860933be0f2d1f05f9ede396e9cc7e40642",
+    "terminal_sha256": "0b4f5db42ee6faf8cb49ce0a1ea3d886dd9667e4c4330a3ba65d0dfee89f8776",
+    "transport_binding_sha256": "e264a88f11517f1950085abedcd6e11deb4cca735ef6af70a5d67b679f2e7d34",
+    "contract_sha256": "23f002035fb5090827a7815fc24d2fdc633df2126a32c978b5347ae69410ba81",
+    "candidate_program_sha256": "4036f3216731a4797f3190d6de08de5748fdb90b09b826f029254186173d5c9a",
+    "semantic_class_sha256": "aae14454b996f05d90c8dc441a14d160f008e8ecb08b04a0d3eba7e0f354df08",
+    "semantic_quotient_sha256": "187554c2145772565db96212a906b37505dbc0784fa50e63fc0f8bf49f8a0179",
+    "candidate_freeze_sha256": "a1266a3197ba4c0f72b3f0eac3f0a4cec566796a7d983beaee269e036a2e19a2",
+    "machine_checkpoint_sha256": "2c24c7f149a175f1e9adfe67a4d1d6539419df21981c7befc92c713a79f85f5b",
+    "frozen_envelope_file_sha256": "cfeade1afa5c82c03765b917b05399493e11a7dfa03a4bfe0edab5efe62733c1",
+    "prediction_ledger_file_sha256": "addaef06dcee22405b48bdb0707406c2bff627368a23d34fc634f815ba3dc292"
+  },
+  "partition": {
+    "support_watermark": 13116,
+    "contract_watermark": 13420,
+    "future_min_sequence": 13421,
+    "pre_freeze_buffer_sequence_span": 304,
+    "pre_freeze_buffer_disposition": "PRE_FREEZE_BUFFER_EXCLUDED",
+    "prediction_min_sequence": 13612
+  },
+  "version_space": {
+    "candidate_programs": 1,
+    "semantic_classes": 1,
+    "state": "unique_law_frozen",
+    "machine_checkpoint_bytes": 11457
+  },
+  "live_future": {
+    "post_open_topologies": 86,
+    "support_lineage_reuse": 85,
+    "independent_topologies": 1,
+    "independent_lineages": 1,
+    "structurally_applicable": 0,
+    "predictions_committed": 0,
+    "receipt": null,
+    "blocker": "APPLICABLE_INDEPENDENT_TOPOLOGY_PENDING"
+  },
+  "runtime": {
+    "cold_bind": "127.0.0.1:18790",
+    "cold_invocation_id": "b49f5e8615c14a3fb29115708fcbffb4",
+    "installed_binary_sha256": "d2b4f667cdf7b1b8ddb66da8a0ed9b0815056fa7954bcd38f133d7e1c0cd8118",
+    "hot_invocation_id": "aec3a81260c648ed84538066131715c6",
+    "hot_restarted": false
+  },
+  "verification": {
+    "operator_learning_tests_passed": 286,
+    "transition_serving_tests_passed": 133,
+    "transition_serving_tests_ignored": 1,
+    "strict_clippy": "PASS",
+    "rustfmt": "PASS",
+    "graphify_nodes": 30493,
+    "graphify_edges": 57016,
+    "nanda_composite_gate": "PASS",
+    "active_response_packages": 2,
+    "active_false_accepts": 0,
+    "active_runtime_parity_failures": 0,
+    "m3": "WATCH"
+  },
+  "authority_ready": false,
+  "phase_mutation_allowed": false,
+  "ms4_unlocked": false
+}

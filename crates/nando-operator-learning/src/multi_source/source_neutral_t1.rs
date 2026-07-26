@@ -2,9 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
     AtomSource, AtomValueType, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
-    MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1, RelationAtom,
-    RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram, ResponseRenderSegment,
-    ResponseValueSelector, SemanticRole, response_program_version_root_sha256,
+    MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
+    PreActionMultiSourceTopologyV1, RelationAtom, RelationFrame, ResponseArgument,
+    ResponseOperation, ResponseProgram, ResponseRenderSegment, ResponseValueSelector, SemanticRole,
+    canonical_json_sha256, response_program_version_root_sha256,
 };
 
 use super::BlindThenRevealJoinedTransitionV1;
@@ -98,10 +99,10 @@ pub(super) fn t1_program_consistency_blocker(
     };
     let mut frontier = vec![(program.clone(), BTreeSet::<ResponseValueSelector>::new())];
     for structural_selector in structural_selectors {
-        let Some(witness) = witness_for_selector(structural_selector, joined) else {
+        let Some(witness) = witness_for_selector(structural_selector, &joined.topology) else {
             return Some("structural_role_missing_or_ambiguous");
         };
-        let Some(role) = role_for_witness(joined, witness) else {
+        let Some(role) = role_for_witness(&joined.topology, witness) else {
             return Some("selected_structural_role_missing");
         };
         let physical_options = observations
@@ -240,7 +241,7 @@ fn role_binding_options(
         .iter()
         .filter(|witness| witness.value_sha256 == observation.value_root)
         .filter_map(|witness| {
-            let role = role_for_witness(joined, witness)?;
+            let role = role_for_witness(&joined.topology, witness)?;
             role_type_matches(role.type_class, observation.value_type).then_some(())?;
             let selector =
                 structural_selector_for_role(joined, role, witness, observation.value_type)?;
@@ -258,7 +259,7 @@ fn structural_selector_for_role(
     value_type: AtomValueType,
 ) -> Option<ResponseValueSelector> {
     if role_has_relation(
-        joined,
+        &joined.topology,
         role.local_role_id,
         MultiSourceRelationKindV1::ContinuationHandle,
     ) {
@@ -297,7 +298,7 @@ fn source_neutral_t1_blocker(
     if observations.iter().any(|observation| {
         joined.topology.role_witnesses.iter().any(|witness| {
             witness.value_sha256 == observation.value_root
-                && role_for_witness(joined, witness)
+                && role_for_witness(&joined.topology, witness)
                     .is_some_and(|role| role_type_matches(role.type_class, observation.value_type))
         }) && role_binding_options(joined, observation).is_empty()
     }) {
@@ -366,22 +367,45 @@ fn normalize_continuation_argument_roles(program: &mut ResponseProgram) {
     }
 }
 
+pub(super) fn pre_action_t1_binding_root(
+    program: &ResponseProgram,
+    topology: &PreActionMultiSourceTopologyV1,
+) -> Result<String, &'static str> {
+    let selectors = program_role_selectors(program).ok_or("primary_selector_missing")?;
+    let bindings = selectors
+        .into_iter()
+        .map(|selector| {
+            let witness = witness_for_selector(selector, topology)
+                .ok_or("structural_role_missing_or_ambiguous")?;
+            let role =
+                role_for_witness(topology, witness).ok_or("selected_structural_role_missing")?;
+            Ok((
+                selector.clone(),
+                role.local_role_id,
+                witness.value_sha256.clone(),
+            ))
+        })
+        .collect::<Result<Vec<_>, &'static str>>()?;
+    canonical_json_sha256(&("nando.ms3-pre-action-t1-binding.v1", bindings))
+        .map_err(|_| "pre_action_binding_commitment_failed")
+}
+
 fn witness_for_selector<'a>(
     selector: &ResponseValueSelector,
-    joined: &'a BlindThenRevealJoinedTransitionV1,
+    topology: &'a PreActionMultiSourceTopologyV1,
 ) -> Option<&'a MultiSourceRoleWitnessV1> {
     match selector {
         ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
             ordinal,
             value_type,
-        } => unique_matching_witness(joined, |witness| {
+        } => unique_matching_witness(topology, |witness| {
             witness.request_reference_ordinal == Some(*ordinal)
-                && role_for_witness(joined, witness)
+                && role_for_witness(topology, witness)
                     .is_some_and(|role| role_type_matches(role.type_class, *value_type))
         }),
         ResponseValueSelector::UniqueScalar { value_type } => {
-            let mut witnesses = joined.topology.role_witnesses.iter().filter(|witness| {
-                role_for_witness(joined, witness)
+            let mut witnesses = topology.role_witnesses.iter().filter(|witness| {
+                role_for_witness(topology, witness)
                     .is_some_and(|role| role_type_matches(role.type_class, *value_type))
             });
             let witness = witnesses.next()?;
@@ -390,19 +414,19 @@ fn witness_for_selector<'a>(
         ResponseValueSelector::LatestTurnOutputScalarOrdinal {
             scalar_ordinal,
             value_type,
-        } => unique_matching_witness(joined, |witness| {
-            role_for_witness(joined, witness).is_some_and(|role| {
+        } => unique_matching_witness(topology, |witness| {
+            role_for_witness(topology, witness).is_some_and(|role| {
                 role.temporal_class == MultiSourceTemporalClassV1::Latest
                     && role.value_ordinal == *scalar_ordinal
                     && role_type_matches(role.type_class, *value_type)
             })
         }),
         ResponseValueSelector::ContinuationHandle { value_type } => {
-            unique_matching_witness_prefer_latest(joined, |witness| {
-                role_for_witness(joined, witness).is_some_and(|role| {
+            unique_matching_witness_prefer_latest(topology, |witness| {
+                role_for_witness(topology, witness).is_some_and(|role| {
                     role_type_matches(role.type_class, *value_type)
                         && role_has_relation(
-                            joined,
+                            topology,
                             role.local_role_id,
                             MultiSourceRelationKindV1::ContinuationHandle,
                         )
@@ -433,11 +457,11 @@ fn program_role_selectors(program: &ResponseProgram) -> Option<Vec<&ResponseValu
 }
 
 fn role_has_relation(
-    joined: &BlindThenRevealJoinedTransitionV1,
+    topology: &PreActionMultiSourceTopologyV1,
     role_id: u16,
     relation: MultiSourceRelationKindV1,
 ) -> bool {
-    joined.topology.relations.iter().any(|edge| {
+    topology.relations.iter().any(|edge| {
         edge.relation == relation
             && edge.source_role_id == role_id
             && edge.target_role_id == role_id
@@ -445,11 +469,10 @@ fn role_has_relation(
 }
 
 fn unique_matching_witness(
-    joined: &BlindThenRevealJoinedTransitionV1,
+    topology: &PreActionMultiSourceTopologyV1,
     mut predicate: impl FnMut(&MultiSourceRoleWitnessV1) -> bool,
 ) -> Option<&MultiSourceRoleWitnessV1> {
-    let mut witnesses = joined
-        .topology
+    let mut witnesses = topology
         .role_witnesses
         .iter()
         .filter(|witness| predicate(witness));
@@ -458,11 +481,10 @@ fn unique_matching_witness(
 }
 
 fn unique_matching_witness_prefer_latest(
-    joined: &BlindThenRevealJoinedTransitionV1,
+    topology: &PreActionMultiSourceTopologyV1,
     mut predicate: impl FnMut(&MultiSourceRoleWitnessV1) -> bool,
 ) -> Option<&MultiSourceRoleWitnessV1> {
-    let matches = joined
-        .topology
+    let matches = topology
         .role_witnesses
         .iter()
         .filter(|witness| predicate(witness))
@@ -473,7 +495,7 @@ fn unique_matching_witness_prefer_latest(
     let latest = matches
         .into_iter()
         .filter(|witness| {
-            role_for_witness(joined, witness)
+            role_for_witness(topology, witness)
                 .is_some_and(|role| role.temporal_class == MultiSourceTemporalClassV1::Latest)
         })
         .collect::<Vec<_>>();
@@ -484,11 +506,10 @@ fn unique_matching_witness_prefer_latest(
 }
 
 fn role_for_witness<'a>(
-    joined: &'a BlindThenRevealJoinedTransitionV1,
+    topology: &'a PreActionMultiSourceTopologyV1,
     witness: &MultiSourceRoleWitnessV1,
 ) -> Option<&'a MultiSourceRoleNodeV1> {
-    joined
-        .topology
+    topology
         .roles
         .iter()
         .find(|role| role.local_role_id == witness.local_role_id)

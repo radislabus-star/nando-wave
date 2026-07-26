@@ -14,6 +14,7 @@ mod learning_structure_bridge;
 mod live_economics;
 mod miner_worker;
 mod ms3_capture_health;
+mod ms3_frozen_version_space;
 mod ms3_linked_frame_acquisition;
 mod ms3_receipt_health;
 pub mod multi_source_audit;
@@ -681,6 +682,8 @@ struct AppState {
         Option<Arc<Mutex<multi_source_topology_archive::MultiSourceTopologyArchive>>>,
     ms3_linked_frame_acquisition:
         Option<Arc<Mutex<ms3_linked_frame_acquisition::Ms3LinkedFrameAcquisitionRuntime>>>,
+    ms3_frozen_version_space:
+        Option<Arc<Mutex<ms3_frozen_version_space::Ms3FrozenVersionSpaceRuntime>>>,
 }
 
 #[derive(Default)]
@@ -874,6 +877,23 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         }
         None => None,
     };
+    let ms3_frozen_version_space = if ms3_linked_frame_acquisition.is_some() {
+        let current_capture_sequence = multi_source_topology_archive
+            .as_ref()
+            .and_then(|archive| archive.lock().ok())
+            .map(|archive| archive.max_bridge_sequence())
+            .unwrap_or(0);
+        Some(Arc::new(Mutex::new(
+            ms3_frozen_version_space::Ms3FrozenVersionSpaceRuntime::open(
+                &config
+                    .ms3_linked_frame_acquisition_path
+                    .join("version-space-v1"),
+                current_capture_sequence,
+            )?,
+        )))
+    } else {
+        None
+    };
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -904,6 +924,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         multi_source_frame_archive,
         multi_source_topology_archive,
         ms3_linked_frame_acquisition,
+        ms3_frozen_version_space,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -930,6 +951,14 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/ms3-linked-frame-acquisition",
             get(ms3_linked_frame_acquisition_report),
+        )
+        .route(
+            "/v2/multi-source/ms3-frozen-version-space",
+            get(ms3_frozen_version_space_report),
+        )
+        .route(
+            "/v2/multi-source/ms3-independent-future",
+            get(ms3_independent_future_report),
         )
         .route(
             "/v2/multi-source/ms3-capture-health",
@@ -961,6 +990,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     state.learning_structure_bridge.start_consumer(
         Arc::clone(&state.request_learning),
         state.multi_source_topology_archive.clone(),
+        state.ms3_frozen_version_space.clone(),
     )?;
     state.learning_evidence_bridge.start(
         Arc::clone(&state.operator_generation_shadow),
@@ -1856,6 +1886,154 @@ async fn ms3_linked_frame_acquisition_report(State(state): State<AppState>) -> R
     }
 }
 
+async fn ms3_frozen_version_space_report(State(state): State<AppState>) -> Response {
+    match evaluate_ms3_frozen_version_space(&state) {
+        Ok(contract) => json_response(
+            StatusCode::OK,
+            json!({
+                "schema": "nando.ms3-frozen-version-space-status.v1",
+                "contract": contract,
+                "future_evidence_window_open": contract.future_collector_kind().is_some(),
+                "future_collector_kind": contract.future_collector_kind(),
+                "authority_ready": false,
+                "phase_mutation_allowed": false
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-frozen-version-space-error.v1",
+                "error": error,
+                "authority_ready": false,
+                "phase_mutation_allowed": false
+            }),
+        ),
+    }
+}
+
+async fn ms3_independent_future_report(State(state): State<AppState>) -> Response {
+    match evaluate_ms3_independent_future(&state) {
+        Ok(future) => {
+            let (predictions, contract_root, prediction_min_sequence) = state
+                .ms3_frozen_version_space
+                .as_ref()
+                .and_then(|runtime| runtime.lock().ok())
+                .map(|runtime| {
+                    (
+                        runtime.predictions(),
+                        runtime
+                            .contract()
+                            .map(|contract| contract.contract_root_sha256.clone()),
+                        runtime.prediction_min_sequence(),
+                    )
+                })
+                .unwrap_or_default();
+            let diagnostics = ms3_future_prediction_diagnostics(&state)
+                .unwrap_or_else(|error| json!({"error": error}));
+            json_response(
+                StatusCode::OK,
+                json!({
+                    "schema": "nando.ms3-independent-future-status.v1",
+                    "contract_root_sha256": contract_root,
+                    "prediction_min_sequence": prediction_min_sequence,
+                    "predictions_committed": predictions.len(),
+                    "first_prediction_sequence": predictions.first().map(|row| row.capture_sequence),
+                    "pre_action_diagnostics": diagnostics,
+                    "verdict": future.as_ref().map_or("collecting", |envelope| match envelope.receipt.verdict {
+                        nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Pass => "pass",
+                        nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction => "contradiction",
+                    }),
+                    "receipt": future.map(|envelope| envelope.receipt),
+                    "authority_ready": false,
+                    "phase_mutation_allowed": false
+                }),
+            )
+        }
+        Err(error) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-independent-future-error.v1",
+                "error": error,
+                "authority_ready": false,
+                "phase_mutation_allowed": false
+            }),
+        ),
+    }
+}
+
+fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> {
+    let (frozen, prediction_min_sequence, committed_topologies) = {
+        let runtime = state
+            .ms3_frozen_version_space
+            .as_ref()
+            .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?
+            .lock()
+            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+        (
+            runtime
+                .envelope()
+                .cloned()
+                .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())?,
+            runtime
+                .prediction_min_sequence()
+                .ok_or_else(|| "ms3_prediction_contract_missing".to_owned())?,
+            runtime
+                .predictions()
+                .into_iter()
+                .map(|prediction| prediction.topology_root_sha256)
+                .collect::<BTreeSet<_>>(),
+        )
+    };
+    let rows = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+        .rows()
+        .into_iter()
+        .filter(|row| {
+            row.bridge_sequence
+                .is_some_and(|sequence| sequence >= prediction_min_sequence)
+        })
+        .collect::<Vec<_>>();
+    let support_reuse = rows
+        .iter()
+        .filter(|row| {
+            row.session_lineage_sha256.as_deref()
+                == Some(frozen.contract.session_lineage_sha256.as_str())
+        })
+        .count();
+    let independent = rows
+        .iter()
+        .filter(|row| {
+            row.session_lineage_sha256.as_deref()
+                != Some(frozen.contract.session_lineage_sha256.as_str())
+        })
+        .collect::<Vec<_>>();
+    let structurally_applicable = independent
+        .iter()
+        .filter(|row| {
+            nando_operator_learning::multi_source::predict_ms3_unique_law_v1(&frozen, row, 1)
+                .is_ok_and(|prediction| prediction.is_some())
+        })
+        .count();
+    let independent_lineages = independent
+        .iter()
+        .filter_map(|row| row.session_lineage_sha256.as_deref())
+        .collect::<BTreeSet<_>>()
+        .len();
+    Ok(json!({
+        "post_open_topologies": rows.len(),
+        "support_lineage_reuse": support_reuse,
+        "independent_topologies": independent.len(),
+        "independent_lineages": independent_lineages,
+        "structurally_applicable": structurally_applicable,
+        "structurally_not_applicable": independent.len().saturating_sub(structurally_applicable),
+        "committed_topologies": committed_topologies.len()
+    }))
+}
+
 async fn ms3_capture_health_report(State(state): State<AppState>) -> Response {
     match evaluate_ms3_capture_health(&state) {
         Ok(report) => json_response(
@@ -1895,6 +2073,12 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                 }
                 if let Err(error) = evaluate_ms3_linked_frame_acquisition(&state) {
                     eprintln!("nando-ms3-linked-frame-acquisition: {error}");
+                }
+                if let Err(error) = evaluate_ms3_frozen_version_space(&state) {
+                    eprintln!("nando-ms3-frozen-version-space: {error}");
+                }
+                if let Err(error) = evaluate_ms3_independent_future(&state) {
+                    eprintln!("nando-ms3-independent-future: {error}");
                 }
                 let snapshot = if state.config.embedded_response_miner_enabled {
                     let evidence = current_miner_worker(&state)
@@ -2027,6 +2211,242 @@ fn evaluate_ms3_linked_frame_acquisition(
         .lock()
         .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
         .evaluate(unix_now(), new_topologies, frames, terminals)
+}
+
+fn evaluate_ms3_frozen_version_space(
+    state: &AppState,
+) -> Result<nando_operator_learning::multi_source::FrozenVersionSpaceContractV1, String> {
+    let runtime = state
+        .ms3_frozen_version_space
+        .as_ref()
+        .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?;
+    if let Some(contract) = runtime
+        .lock()
+        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+        .contract()
+        .cloned()
+    {
+        return Ok(contract);
+    }
+
+    let acquisition = evaluate_ms3_linked_frame_acquisition(state)?;
+    let no_gap_receipts = acquisition
+        .receipts
+        .iter()
+        .filter(|receipt| receipt.gap_class.is_none())
+        .collect::<Vec<_>>();
+    if no_gap_receipts.len() != 1 {
+        return Err(format!(
+            "ms3_no_gap_receipt_count:{}",
+            no_gap_receipts.len()
+        ));
+    }
+    let linked_receipt = no_gap_receipts[0];
+    let (watermark_rows, evaluated_rows) = {
+        let acquisition_runtime = state
+            .ms3_linked_frame_acquisition
+            .as_ref()
+            .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?
+            .lock()
+            .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?;
+        (
+            acquisition_runtime.contract().topology_watermark_rows,
+            acquisition_runtime
+                .frozen_evaluated_topology_rows()
+                .ok_or_else(|| "ms3_acquisition_denominator_not_frozen".to_owned())?,
+        )
+    };
+    let frozen_topologies = {
+        let archive = state
+            .multi_source_topology_archive
+            .as_ref()
+            .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+            .lock()
+            .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
+        let mut rows = archive.rows_after(
+            usize::try_from(watermark_rows)
+                .map_err(|_| "ms3_version_space_watermark_range".to_owned())?,
+        )?;
+        rows.truncate(usize::try_from(evaluated_rows).unwrap_or(usize::MAX));
+        rows
+    };
+    if !frozen_topologies.iter().any(|topology| {
+        topology.commit.commitment_root_sha256 == linked_receipt.topology_commitment_root_sha256
+    }) {
+        return Err("ms3_linked_topology_missing".to_owned());
+    }
+    // Binding identity includes the next request boundary, so replay the exact
+    // frozen denominator before selecting the receipt-owned transition.
+    let request_ids = frozen_topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let intent_ids = frozen_topologies
+        .iter()
+        .map(|row| row.structure.turn_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let terminals = state
+        .terminal_receipt_archive
+        .as_ref()
+        .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
+        .receipts_for_requests(&request_ids);
+    let frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
+        .frames_for_intents(&intent_ids);
+    let ledger = nando_operator_learning::multi_source::TransportBindingLedgerV1::build(
+        &frozen_topologies,
+        &frames,
+        &terminals,
+    );
+    let bound = ledger
+        .bound_for_topology(&linked_receipt.topology_commitment_root_sha256)
+        .iter()
+        .find(|bound| {
+            bound.binding.binding_root_sha256 == linked_receipt.transport_binding_root_sha256
+                && bound.binding.terminal_receipt_root_sha256
+                    == linked_receipt.terminal_receipt_root_sha256
+                && bound.joined.completed_frame_root_sha256
+                    == linked_receipt.completed_frame_root_sha256
+        })
+        .cloned()
+        .ok_or_else(|| "ms3_linked_transport_binding_missing".to_owned())?;
+    let frame = frames
+        .iter()
+        .find(|frame| {
+            nando_operator_kernel::canonical_json_sha256(*frame)
+                .is_ok_and(|root| root == linked_receipt.completed_frame_root_sha256)
+        })
+        .cloned()
+        .ok_or_else(|| "ms3_linked_frame_missing".to_owned())?;
+
+    let prepared = nando_operator_learning::multi_source::prepare_ms3_frozen_version_space_v1(
+        &acquisition,
+        &bound,
+        &frame,
+    )
+    .map_err(|error| format!("ms3_version_space_prepare:{error}"))?;
+    // Candidate enumeration and exact replay are complete before this second
+    // watermark is captured. Intervening rows cannot become support or future.
+    let contract_watermark = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+        .max_bridge_sequence();
+    runtime
+        .lock()
+        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+        .freeze(
+            prepared,
+            contract_watermark,
+            nando_operator_learning::multi_source::Ms3VersionSpaceVersionsV1 {
+                compiler_version: nando_operator_persistence::CRYSTALLIZED_OPERATOR_COMPILER_V2
+                    .to_owned(),
+                vm_abi: nando_operator_persistence::CRYSTALLIZED_OPERATOR_VM_ABI_V1.to_owned(),
+            },
+        )
+}
+
+fn evaluate_ms3_independent_future(
+    state: &AppState,
+) -> Result<Option<nando_operator_learning::multi_source::Ms3IndependentFutureEnvelopeV1>, String> {
+    let runtime = state
+        .ms3_frozen_version_space
+        .as_ref()
+        .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?;
+    let (frozen, predictions, existing) = {
+        let runtime = runtime
+            .lock()
+            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+        (
+            runtime
+                .envelope()
+                .cloned()
+                .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())?,
+            runtime.predictions(),
+            runtime.independent_future().cloned(),
+        )
+    };
+    if existing.is_some() || predictions.is_empty() {
+        return Ok(existing);
+    }
+    let prediction = &predictions[0];
+    let future_topologies = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+        .rows()
+        .into_iter()
+        .filter(|row| {
+            row.bridge_sequence
+                .is_some_and(|sequence| sequence >= frozen.contract.future_min_sequence)
+        })
+        .collect::<Vec<_>>();
+    let request_ids = future_topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let intent_ids = future_topologies
+        .iter()
+        .map(|row| row.structure.turn_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let terminals = state
+        .terminal_receipt_archive
+        .as_ref()
+        .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
+        .receipts_for_requests(&request_ids);
+    let frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
+        .frames_for_intents(&intent_ids);
+    let ledger = nando_operator_learning::multi_source::TransportBindingLedgerV1::build(
+        &future_topologies,
+        &frames,
+        &terminals,
+    );
+    let Some(bound) = ledger
+        .bound_for_topology(&prediction.topology_root_sha256)
+        .iter()
+        .find(|bound| {
+            bound.binding.request_event_id_sha256 == prediction.request_event_id_sha256
+                && bound.binding.turn_intent_id_sha256 == prediction.turn_intent_id_sha256
+                && bound.binding.session_lineage_sha256 == prediction.session_lineage_sha256
+        })
+        .cloned()
+    else {
+        return Ok(None);
+    };
+    let frame = frames
+        .iter()
+        .find(|frame| {
+            nando_operator_kernel::canonical_json_sha256(*frame)
+                .is_ok_and(|root| root == bound.binding.completed_frame_root_sha256)
+        })
+        .cloned()
+        .ok_or_else(|| "ms3_future_frame_missing".to_owned())?;
+    let future = nando_operator_learning::multi_source::seal_ms3_independent_future_v1(
+        &frozen, prediction, &bound, &frame,
+    )
+    .map_err(|error| format!("ms3_independent_future_seal:{error}"))?;
+    runtime
+        .lock()
+        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+        .seal_independent_future(future.clone())?;
+    Ok(Some(future))
 }
 
 fn evaluate_ms3_capture_health(
@@ -6172,6 +6592,7 @@ mod tests {
             multi_source_frame_archive: None,
             multi_source_topology_archive: None,
             ms3_linked_frame_acquisition: None,
+            ms3_frozen_version_space: None,
         };
         refresh_response_executor(&state);
         state

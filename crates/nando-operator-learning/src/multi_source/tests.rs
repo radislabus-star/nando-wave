@@ -879,6 +879,211 @@ fn linked_frame_acquisition_excludes_outcomes_after_the_frozen_deadline() {
 }
 
 #[test]
+fn frozen_version_space_excludes_the_pre_freeze_buffer_with_two_watermarks() {
+    let topology = t1_topology_row("freeze", "request-freeze", "session", 1, 1_000);
+    let frame = t1_completed_frame("freeze", "action-freeze", "session", 1_500);
+    let terminal = terminal("request-freeze", 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![topology.clone()],
+        vec![frame.clone()],
+        vec![terminal.clone()],
+    );
+    let ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+    let bound = &ledger.bound_for_topology(&topology.commit.commitment_root_sha256)[0];
+
+    let envelope = prepare_ms3_frozen_version_space_v1(&report, bound, &frame)
+        .expect("prepared version space")
+        .seal(
+            7,
+            Ms3VersionSpaceVersionsV1 {
+                compiler_version: "test-compiler.v1".to_owned(),
+                vm_abi: "test-vm.v1".to_owned(),
+            },
+        )
+        .expect("frozen version space");
+
+    assert_eq!(envelope.contract.support_watermark, 1);
+    assert_eq!(envelope.contract.contract_watermark, 7);
+    assert_eq!(envelope.contract.future_min_sequence, 8);
+    assert_eq!(envelope.contract.pre_freeze_buffer_sequence_span, 6);
+    assert_eq!(
+        envelope.contract.pre_freeze_buffer_disposition,
+        MS3_PRE_FREEZE_BUFFER_EXCLUDED
+    );
+    assert!(matches!(
+        envelope.contract.state,
+        Ms3FrozenVersionSpaceStateV1::UniqueLawFrozen { .. }
+    ));
+    assert!(!envelope.contract.authority_ready);
+    assert!(!envelope.contract.phase_mutation_allowed);
+}
+
+#[test]
+fn frozen_version_space_restart_is_byte_identical_and_rejects_tampering() {
+    let topology = t1_topology_row("restart", "request-restart", "session", 3, 1_000);
+    let frame = t1_completed_frame("restart", "action-restart", "session", 1_500);
+    let terminal = terminal("request-restart", 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![topology.clone()],
+        vec![frame.clone()],
+        vec![terminal.clone()],
+    );
+    let ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+    let bound = &ledger.bound_for_topology(&topology.commit.commitment_root_sha256)[0];
+    let envelope = prepare_ms3_frozen_version_space_v1(&report, bound, &frame)
+        .expect("prepared version space")
+        .seal(
+            9,
+            Ms3VersionSpaceVersionsV1 {
+                compiler_version: "test-compiler.v1".to_owned(),
+                vm_abi: "test-vm.v1".to_owned(),
+            },
+        )
+        .expect("frozen version space");
+    let bytes = envelope.canonical_bytes().expect("canonical envelope");
+    let restored =
+        FrozenVersionSpaceEnvelopeV1::from_canonical_bytes(&bytes).expect("restored envelope");
+    assert_eq!(restored.canonical_bytes().expect("restored bytes"), bytes);
+
+    let mut tampered = bytes;
+    let last = tampered.last_mut().expect("non-empty envelope");
+    *last ^= 1;
+    assert!(FrozenVersionSpaceEnvelopeV1::from_canonical_bytes(&tampered).is_err());
+}
+
+#[test]
+fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically() {
+    let support_topology =
+        t1_topology_row("support", "request-support", "support-lineage", 1, 1_000);
+    let support_frame = t1_completed_frame("support", "action-support", "support-lineage", 1_500);
+    let support_terminal = terminal("request-support", 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![support_topology.clone()],
+        vec![support_frame.clone()],
+        vec![support_terminal.clone()],
+    );
+    let support_ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&support_topology),
+        std::slice::from_ref(&support_frame),
+        std::slice::from_ref(&support_terminal),
+    );
+    let support_bound =
+        &support_ledger.bound_for_topology(&support_topology.commit.commitment_root_sha256)[0];
+    let frozen = prepare_ms3_frozen_version_space_v1(&report, support_bound, &support_frame)
+        .expect("prepared version space")
+        .seal(
+            7,
+            Ms3VersionSpaceVersionsV1 {
+                compiler_version: "test-compiler.v1".to_owned(),
+                vm_abi: "test-vm.v1".to_owned(),
+            },
+        )
+        .expect("frozen version space");
+
+    let future_topology = t1_topology_row("future", "request-future", "future-lineage", 8, 2_000);
+    let prediction = predict_ms3_unique_law_v1(&frozen, &future_topology, 2_050_000_000)
+        .expect("pre-action prediction")
+        .expect("applicable future");
+    let future_frame = t1_completed_frame("future", "action-future", "future-lineage", 2_500);
+    let future_terminal = terminal("request-future", 1_990, 2_100);
+    let future_ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&future_topology),
+        std::slice::from_ref(&future_frame),
+        std::slice::from_ref(&future_terminal),
+    );
+    let future_bound =
+        &future_ledger.bound_for_topology(&future_topology.commit.commitment_root_sha256)[0];
+    let future = seal_ms3_independent_future_v1(&frozen, &prediction, future_bound, &future_frame)
+        .expect("independent future");
+
+    assert_eq!(future.receipt.verdict, Ms3IndependentFutureVerdictV1::Pass);
+    assert!(future.receipt.exact_transfer_parity);
+    assert!(!future.receipt.runtime_actor_verifier_parity);
+    assert!(!future.receipt.authority_ready);
+    let bytes = future
+        .canonical_bytes(&frozen)
+        .expect("future canonical bytes");
+    let restored = Ms3IndependentFutureEnvelopeV1::from_canonical_bytes(&bytes, &frozen)
+        .expect("future restart");
+    assert_eq!(
+        restored
+            .canonical_bytes(&frozen)
+            .expect("restored future bytes"),
+        bytes
+    );
+}
+
+#[test]
+fn ambiguous_linked_frame_freezes_predictions_without_opening_authority() {
+    let topology = t1_competing_role_topology_row(
+        "ambiguous-freeze",
+        "request-ambiguous-freeze",
+        "session",
+        5,
+        1_000,
+        true,
+    );
+    let frame = t1_competing_role_projection_frame(
+        "ambiguous-freeze",
+        "action-ambiguous-freeze",
+        "session",
+        1_500,
+        true,
+    );
+    let terminal = terminal("request-ambiguous-freeze", 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![topology.clone()],
+        vec![frame.clone()],
+        vec![terminal.clone()],
+    );
+    let ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+    let bound = &ledger.bound_for_topology(&topology.commit.commitment_root_sha256)[0];
+    let envelope = prepare_ms3_frozen_version_space_v1(&report, bound, &frame)
+        .expect("prepared version space")
+        .seal(
+            8,
+            Ms3VersionSpaceVersionsV1 {
+                compiler_version: "test-compiler.v1".to_owned(),
+                vm_abi: "test-vm.v1".to_owned(),
+            },
+        )
+        .expect("ambiguous version space");
+
+    assert!(matches!(
+        envelope.contract.state,
+        Ms3FrozenVersionSpaceStateV1::Ambiguous {
+            semantic_classes: 2
+        }
+    ));
+    assert_eq!(
+        envelope.contract.future_collector_kind(),
+        Some("distinguishing_observation")
+    );
+    assert!(envelope.contract.passive_probe.is_some());
+    assert!(!envelope.contract.authority_ready);
+}
+
+#[test]
 fn ms3_failure_corpus_accounts_for_every_frozen_topology() {
     let topologies = vec![
         t1_topology_row("missing", "request-missing", "session-a", 1, 1_000),

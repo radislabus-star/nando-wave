@@ -27,7 +27,7 @@ pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3: &str =
 pub const MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1: &str = "nando.multi-source-t1-proof-basis.v1";
 const MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS: usize = 64;
 const MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS: usize = 12;
-const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
+pub(super) const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
     "nando.multi-source-t1.source-neutral-role-version-space.v2";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -739,7 +739,7 @@ fn select_highest_marginal_cohort(
         })
 }
 
-fn t1_protocol_mode_root(
+pub(super) fn t1_protocol_mode_root(
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<String, &'static str> {
     if programs.is_empty() {
@@ -815,7 +815,7 @@ fn protocol_role_placeholder(
     Ok(ResponseValueSelector::UniqueScalar { value_type })
 }
 
-fn generation_manifest(
+pub(super) fn generation_manifest(
     shape_root: &str,
     protocol_mode_root: &str,
     programs: &BTreeMap<String, ResponseProgram>,
@@ -875,7 +875,7 @@ fn generation_manifest(
     .map_err(|error| format!("generation_manifest:{error:?}").to_lowercase())
 }
 
-fn semantic_descriptor(
+pub(super) fn semantic_descriptor(
     shape_root: &str,
     protocol_mode_root: &str,
     program_root: &str,
@@ -909,14 +909,19 @@ fn observation_for_row(
     row: &EligibleT1Row,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<crate::OperatorObservationV1, String> {
+    observation_for_transition(&row.joined, &row.frame, programs)
+}
+
+pub(super) fn observation_for_transition(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    frame: &RelationFrame,
+    programs: &BTreeMap<String, ResponseProgram>,
+) -> Result<crate::OperatorObservationV1, String> {
     let evaluations = programs
         .iter()
         .map(|(root, program)| {
-            let accepted = super::source_neutral_t1::t1_program_is_consistent(
-                program,
-                &row.joined,
-                &row.frame,
-            );
+            let accepted =
+                super::source_neutral_t1::t1_program_is_consistent(program, joined, frame);
             ExactProgramEvaluation {
                 program_digest_sha256: root.clone(),
                 accepted,
@@ -929,27 +934,27 @@ fn observation_for_row(
         })
         .collect();
     seal_operator_observation_v1(OperatorObservationInputV1 {
-        capture_sequence: row.joined.capture_sequence,
-        lineage_root_sha256: row.joined.session_lineage_sha256.clone(),
-        event_root_sha256: row.joined.action_event_id_sha256.clone(),
-        request_root_sha256: row.joined.request_event_id_sha256.clone(),
-        pre_action_relation_root_sha256: row.joined.topology_commitment_root_sha256.clone(),
-        observed_action_root_sha256: row.joined.semantic_action_root_sha256.clone(),
+        capture_sequence: joined.capture_sequence,
+        lineage_root_sha256: joined.session_lineage_sha256.clone(),
+        event_root_sha256: joined.action_event_id_sha256.clone(),
+        request_root_sha256: joined.request_event_id_sha256.clone(),
+        pre_action_relation_root_sha256: joined.topology_commitment_root_sha256.clone(),
+        observed_action_root_sha256: joined.semantic_action_root_sha256.clone(),
         observed_delta_root_sha256: canonical_json_sha256(&(
             "nando.multi-source-t1-observed-delta.v1",
-            row.joined.completed_frame_root_sha256.as_str(),
-            &row.joined.effect_atoms,
-            row.joined.accepted,
+            joined.completed_frame_root_sha256.as_str(),
+            &joined.effect_atoms,
+            joined.accepted,
         ))
         .map_err(|_| "observed_delta_commitment_failed".to_owned())?,
-        verifier_receipt_root_sha256: row.joined.verifier_receipt_root_sha256.clone(),
+        verifier_receipt_root_sha256: joined.verifier_receipt_root_sha256.clone(),
         outcome: GenerationLearningOutcomeV3::VerifiedPass,
         evaluations,
     })
     .map_err(|error| format!("operator_observation:{error}"))
 }
 
-fn passive_probe(
+pub(super) fn passive_probe(
     shape_root: &str,
     machine: &OperatorIdentificationMachineV1,
     programs: &BTreeMap<String, ResponseProgram>,
@@ -1027,7 +1032,10 @@ fn passive_probe(
     })
 }
 
-fn t1_probe_dimension_signature(program: &ResponseProgram, dimension: &str) -> Option<String> {
+pub(super) fn t1_probe_dimension_signature(
+    program: &ResponseProgram,
+    dimension: &str,
+) -> Option<String> {
     match dimension {
         "role_binding" => canonical_json_sha256(&(
             "nando.multi-source-t1-probe-role-binding.v1",

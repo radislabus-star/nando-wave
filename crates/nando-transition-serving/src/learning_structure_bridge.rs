@@ -17,6 +17,7 @@ use nando_operator_learning::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::ms3_frozen_version_space::Ms3FrozenVersionSpaceRuntime;
 use crate::multi_source_topology_archive::MultiSourceTopologyArchive;
 use crate::request_learning::{
     REQUEST_LEARNING_CHECKPOINT_MAX_BYTES_V2, RequestLearningIndex, RequestLearningWatermarkV2,
@@ -299,6 +300,7 @@ impl LearningStructureBridgeRuntimeV2 {
         &self,
         request_learning: Arc<RequestLearningIndex>,
         topology_archive: Option<Arc<Mutex<MultiSourceTopologyArchive>>>,
+        ms3_frozen_version_space: Option<Arc<Mutex<Ms3FrozenVersionSpaceRuntime>>>,
     ) -> Result<(), String> {
         if !self.inner.consumer_enabled {
             return Ok(());
@@ -320,6 +322,7 @@ impl LearningStructureBridgeRuntimeV2 {
                         &inner,
                         &request_learning,
                         topology_archive.as_ref(),
+                        ms3_frozen_version_space.as_ref(),
                     ) {
                         record_failure(&inner.consumer, &error);
                     }
@@ -402,13 +405,14 @@ impl LearningStructureBridgeRuntimeV2 {
 
 #[cfg(test)]
 fn drain_pending(inner: &BridgeInner, index: &RequestLearningIndex) -> Result<(), String> {
-    drain_pending_with_archive(inner, index, None)
+    drain_pending_with_archive(inner, index, None, None)
 }
 
 fn drain_pending_with_archive(
     inner: &BridgeInner,
     index: &RequestLearningIndex,
     topology_archive: Option<&Arc<Mutex<MultiSourceTopologyArchive>>>,
+    ms3_frozen_version_space: Option<&Arc<Mutex<Ms3FrozenVersionSpaceRuntime>>>,
 ) -> Result<(), String> {
     for path in pending_paths(&inner.pending_dir)? {
         let started = Instant::now();
@@ -451,12 +455,34 @@ fn drain_pending_with_archive(
                 .map_err(str::to_owned)?,
             LearningStructureRecord::V3(record) => {
                 index.observe_structure_v3(record).map_err(str::to_owned)?;
+                let topology_row = (topology_archive.is_some()
+                    || ms3_frozen_version_space.is_some())
+                .then(|| pre_action_topology_audit_row_v1(record).map_err(str::to_owned))
+                .transpose()?;
                 if let Some(archive) = topology_archive {
-                    let row = pre_action_topology_audit_row_v1(record).map_err(str::to_owned)?;
                     archive
                         .lock()
                         .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
-                        .append(&row)?;
+                        .append(
+                            topology_row
+                                .as_ref()
+                                .ok_or_else(|| "multi_source_topology_row_missing".to_owned())?,
+                        )?;
+                }
+                if let Some(runtime) = ms3_frozen_version_space {
+                    // Persist the law prediction while only pre-action topology is visible.
+                    // Terminal and completed-frame evidence are joined by the later evaluator.
+                    let predicted_at_unix_nanos =
+                        u64::try_from(unix_now_nanos()).unwrap_or(u64::MAX);
+                    runtime
+                        .lock()
+                        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+                        .observe_topology(
+                            topology_row
+                                .as_ref()
+                                .ok_or_else(|| "multi_source_topology_row_missing".to_owned())?,
+                            predicted_at_unix_nanos,
+                        )?;
                 }
             }
         }
@@ -982,7 +1008,7 @@ mod tests {
         let archive = Arc::new(Mutex::new(
             MultiSourceTopologyArchive::open(&archive_root).expect("archive"),
         ));
-        drain_pending_with_archive(&consumer.inner, &index, Some(&archive)).expect("drain");
+        drain_pending_with_archive(&consumer.inner, &index, Some(&archive), None).expect("drain");
         assert_eq!(consumer.status().pending_records, 0);
         assert_eq!(archive.lock().expect("archive lock").rows().len(), 1);
         drop(archive);

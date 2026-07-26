@@ -99,6 +99,14 @@ impl MultiSourceTopologyArchive {
         self.by_commitment.len()
     }
 
+    pub(super) fn max_bridge_sequence(&self) -> u64 {
+        self.by_commitment
+            .values()
+            .filter_map(|row| row.bridge_sequence)
+            .max()
+            .unwrap_or(0)
+    }
+
     pub(super) fn prefix_root(&self, rows: usize) -> Result<String, String> {
         if rows > self.append_order.len() {
             return Err("multi_source_topology_archive_prefix_out_of_range".to_owned());

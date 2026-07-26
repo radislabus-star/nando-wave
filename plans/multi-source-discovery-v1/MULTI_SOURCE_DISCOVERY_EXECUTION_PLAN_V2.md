@@ -1,6 +1,6 @@
 # Nando Multi-Source Discovery Execution Plan V2
 
-Status: `MS2_COMPLETE / MS3_LINKED_FRAME_ACQUISITION_LIVE / MS4_BLOCKED`
+Status: `MS2_COMPLETE / MS3_UNIQUE_LAW_FROZEN / INDEPENDENT_FUTURE_PENDING / MS4_BLOCKED`
 
 Date: 2026-07-26 Europe/Tallinn.
 
@@ -31,15 +31,18 @@ MS3 sealed minimal proof basis                 CODE PASS
 MS3 existing crystallizer/admission binding    CODE PASS
 MS3 representation-gap adjudicator             DEPLOYED / AUTHORITY FALSE
 MS3 topology/frame/terminal archives            LIVE / RESTART EXACT
-MS3 linked-frame acquisition gate               COLLECTING 0/256
-MS3 current durable natural joined frame        0
+MS3 linked-frame acquisition gate               PASS / NO_GAP 1
+MS3 current durable natural joined frame        1
+MS3 bounded version space                       COMPLETE / 1 CLASS
+MS3 candidate freeze                            SEALED / RESTART EXACT
+MS3 independent future                          COLLECTING / NEW LINEAGE 1 / APPLICABLE 0
 MS3 historical 78,598-token gap row             LEGACY EVICTED / NOT REUSED
 MS3 runtime actor/verifier parity               NOT_EVALUATED
 MS4 natural package admission                   BLOCKED
 ```
 
 Live receipt:
-`STOP_MS3_LINKED_FRAME_ACQUISITION.md`.
+`STOP_MS3_UNIQUE_LAW_FREEZE.md`.
 
 Stage closure is live-result-only:
 
@@ -1007,6 +1010,28 @@ joined T1 observations
 -> OperatorIdentificationMachineV1
 ```
 
+The candidate freeze uses two evidence watermarks:
+
+```text
+support_watermark
+  last row admitted to support
+
+contract_watermark
+  current capture sequence after bounded enumeration, exact replay and
+  semantic quotient, immediately before the immutable contract is written
+
+future_min_sequence
+  contract_watermark + 1
+
+support_watermark < sequence <= contract_watermark
+  PRE_FREEZE_BUFFER_EXCLUDED
+```
+
+The future prediction ledger has a separate open watermark. It may be later
+than `future_min_sequence` after rollout or restart, because a prediction that
+was not committed while only pre-action topology was visible cannot be
+reconstructed afterward.
+
 Outcomes:
 
 ```text
@@ -1054,6 +1079,26 @@ actor/verifier parity                 PASS
 exact episode authority removed       PASS
 candidate execution authority         false
 ```
+
+Current live boundary:
+
+```text
+support_watermark                13116
+contract_watermark               13420
+future_min_sequence              13421
+pre-freeze excluded span           304
+semantic classes                     1
+prediction_min_sequence          13612
+post-open topology rows              86
+support-lineage reuse                85
+independent topology rows             1
+structurally applicable rows          0
+independent future                    PENDING
+```
+
+The 85 support-lineage rows are excluded from transfer authority. The one
+independent row does not satisfy the frozen structural applicability contract,
+so it creates neither a prediction nor negative evidence.
 
 ## 11. MS4: First Natural Multi-Source ACTIVE Package
 

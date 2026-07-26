@@ -3,6 +3,7 @@
 mod audit;
 mod factorizer;
 mod failure_corpus;
+mod frozen_version_space;
 mod identification;
 mod join;
 mod linked_frame_acquisition;
@@ -25,6 +26,16 @@ pub use factorizer::{
 pub use failure_corpus::{
     MS3_FAILURE_CORPUS_MAX_ROWS_V1, MS3_FAILURE_CORPUS_SCHEMA_V1, Ms3FailureCorpusRowV1,
     Ms3FailureCorpusV1, Ms3FailureDispositionV1, build_ms3_failure_corpus_v1,
+};
+pub use frozen_version_space::{
+    FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1,
+    MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1, MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1,
+    MS3_FUTURE_PREDICTION_SCHEMA_V1, MS3_INDEPENDENT_FUTURE_ENVELOPE_SCHEMA_V1,
+    MS3_INDEPENDENT_FUTURE_RECEIPT_SCHEMA_V1, MS3_PRE_FREEZE_BUFFER_EXCLUDED,
+    Ms3FrozenVersionSpaceErrorV1, Ms3FrozenVersionSpaceStateV1, Ms3FuturePredictionV1,
+    Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureReceiptV1, Ms3IndependentFutureVerdictV1,
+    Ms3VersionSpaceVersionsV1, Ms3ZeroClassReasonV1, PreparedMs3VersionSpaceV1,
+    predict_ms3_unique_law_v1, prepare_ms3_frozen_version_space_v1, seal_ms3_independent_future_v1,
 };
 pub use identification::{
     MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
