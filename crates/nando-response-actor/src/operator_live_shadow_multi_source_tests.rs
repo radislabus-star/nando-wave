@@ -442,6 +442,16 @@ fn multi_source_freeze_reconstructs_through_independent_admission() {
         Some(identification.report_root_sha256.as_str())
     );
 
+    assert_eq!(
+        candidate.package.admission_candidate_blocker(),
+        Some("package_not_active")
+    );
+    let mut authority_candidate = candidate.clone();
+    authority_candidate.package.state = crate::ResponsePackageState::Active;
+    assert_eq!(
+        authority_candidate.package.admission_candidate_blocker(),
+        Some("semantic_applicability_guard_missing")
+    );
     let admitted = build_crystallized_admission_snapshot(
         &[candidate],
         "multi-source-test",
@@ -451,13 +461,10 @@ fn multi_source_freeze_reconstructs_through_independent_admission() {
         &"a".repeat(64),
         &"b".repeat(64),
     )
-    .expect("admission evaluation")
-    .expect("active package");
-    assert_eq!(admitted.registry.packages.len(), 1);
-    assert_eq!(admitted.registry.packages[0].proof.wrong_accepts, 0);
-    assert_eq!(
-        admitted.registry.packages[0].proof.runtime_parity_failures,
-        0
+    .expect("admission evaluation");
+    assert!(
+        admitted.is_none(),
+        "a transfer-ready projection remains non-authoritative until applicability negatives exist"
     );
 }
 
@@ -520,6 +527,16 @@ fn rich_multi_role_law_reconstructs_through_independent_admission() {
     assert_eq!(candidate.package.proof.wrong_accepts, 0);
     assert_eq!(candidate.package.proof.runtime_parity_failures, 0);
 
+    assert_eq!(
+        candidate.package.admission_candidate_blocker(),
+        Some("package_not_active")
+    );
+    let mut authority_candidate = candidate.clone();
+    authority_candidate.package.state = crate::ResponsePackageState::Active;
+    assert_eq!(
+        authority_candidate.package.admission_candidate_blocker(),
+        Some("semantic_applicability_guard_missing")
+    );
     let admitted = build_crystallized_admission_snapshot(
         &[candidate],
         "rich-multi-source-test",
@@ -529,12 +546,9 @@ fn rich_multi_role_law_reconstructs_through_independent_admission() {
         &"a".repeat(64),
         &"b".repeat(64),
     )
-    .expect("admission evaluation")
-    .expect("active package");
-    assert_eq!(admitted.registry.packages.len(), 1);
-    assert_eq!(admitted.registry.packages[0].proof.wrong_accepts, 0);
-    assert_eq!(
-        admitted.registry.packages[0].proof.runtime_parity_failures,
-        0
+    .expect("admission evaluation");
+    assert!(
+        admitted.is_none(),
+        "a rich projection remains non-authoritative until applicability negatives exist"
     );
 }

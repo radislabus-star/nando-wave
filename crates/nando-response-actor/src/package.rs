@@ -1888,6 +1888,46 @@ mod tests {
     }
 
     #[test]
+    fn terminal_projection_without_applicability_negatives_is_quarantined() {
+        let selector = ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal: 0,
+            value_type: AtomValueType::String,
+        };
+        let mut package = adaptive_request_last_token_package();
+        package.program = ResponseProgram::project_selected_value(
+            selector.clone(),
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        package.verifier = Some(VerifierProgram::ProjectSelectedValue {
+            selector,
+            format: ValueProjectionFormat::PlainText,
+            renderer: crate::CollectionOutputRenderer::Direct,
+            completion_state: "completed".to_owned(),
+            require_unique_value: true,
+        });
+        let canonical_program_root_sha256 =
+            nando_operator_kernel::response_program_version_root_sha256(&package.program)
+                .expect("program root");
+        package.proof.adaptive_identification = Some(
+            nando_operator_admission::seal_adaptive_identification_proof_v1(
+                nando_operator_admission::AdaptiveIdentificationProofInputV1 {
+                    candidate_freeze_root_sha256: "11".repeat(32),
+                    semantic_class_id_sha256: "22".repeat(32),
+                    canonical_program_root_sha256,
+                    applicability_scope_root_sha256: "33".repeat(32),
+                    transfer_proof_root_sha256: "44".repeat(32),
+                },
+            )
+            .expect("adaptive proof"),
+        );
+        assert_eq!(
+            package.admission_candidate_blocker(),
+            Some("semantic_applicability_guard_missing")
+        );
+    }
+
+    #[test]
     fn status_package_requires_external_evidence_and_exact_verifier_binding() {
         let package = active_status_package();
         assert_eq!(package.validate(), Ok(()));

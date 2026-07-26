@@ -1497,36 +1497,43 @@ fn multi_role_rows_reach_verified_crystallized_operator() {
         &"a".repeat(64),
         &"b".repeat(64),
     )
-    .expect("external admission verifies rich operator")
-    .expect("rich operator reaches registry");
-    let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
-        .expect("hot executor restores rich operator");
-    let execution = executor.execute_shadow(
-        "Return new_total and new_failed",
-        &json!({
-            "input": [{
-                "type": "function_call_output",
-                "output": "{\"new_total\":777,\"new_failed\":9}"
-            }]
-        }),
+    .expect("external admission evaluates rich operator");
+    assert!(
+        snapshot.is_none(),
+        "the crystallized operator needs applicability negatives before registry authority"
     );
+    let execution = restored
+        .bind_pre_action(
+            "Return new_total and new_failed",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"new_total\":777,\"new_failed\":9}"
+                }]
+            }),
+        )
+        .expect("bind unseen rich values")
+        .execute_verified()
+        .expect("verify unseen rich values");
     assert_eq!(
-        execution.response.as_deref(),
-        Some("Total: 777; failed: 9"),
-        "{execution:#?}"
+        execution, "Total: 777; failed: 9",
+        "rich crystallized execution remains available before authority"
     );
-    let reversed = executor.execute_shadow(
-        "Return new_failed and new_total",
-        &json!({
-            "input": [{
-                "type": "function_call_output",
-                "output": "{\"new_total\":777,\"new_failed\":9}"
-            }]
-        }),
-    );
+    let reversed = restored
+        .bind_pre_action(
+            "Return new_failed and new_total",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"new_total\":777,\"new_failed\":9}"
+                }]
+            }),
+        )
+        .expect("bind reversed rich roles")
+        .execute_verified()
+        .expect("verify reversed rich roles");
     assert_eq!(
-        reversed.response.as_deref(),
-        Some("Total: 9; failed: 777"),
-        "request ordinal, not field name or JSON order, owns the role: {reversed:#?}"
+        reversed, "Total: 9; failed: 777",
+        "request ordinal, not field name or JSON order, owns the role"
     );
 }

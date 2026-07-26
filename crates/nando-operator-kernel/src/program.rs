@@ -349,7 +349,10 @@ pub const fn response_value_selector_requires_semantic_applicability_guard(
 ) -> bool {
     matches!(
         selector,
-        ResponseValueSelector::RequestLastToken | ResponseValueSelector::RequestUniqueLiteral
+        ResponseValueSelector::RequestReferencedJsonField { .. }
+            | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. }
+            | ResponseValueSelector::RequestLastToken
+            | ResponseValueSelector::RequestUniqueLiteral
     )
 }
 
@@ -1478,6 +1481,18 @@ mod tests {
         );
         assert!(response_program_requires_semantic_applicability_guard(
             &request_projection
+        ));
+
+        let request_field_projection = ResponseProgram::project_selected_value(
+            ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                ordinal: 0,
+                value_type: AtomValueType::String,
+            },
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        assert!(response_program_requires_semantic_applicability_guard(
+            &request_field_projection
         ));
 
         let request_filtered_collection = ResponseProgram::compose_collection(
