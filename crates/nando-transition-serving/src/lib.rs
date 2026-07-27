@@ -2949,6 +2949,11 @@ fn evaluate_ms3_independent_future(
             runtime.independent_future().cloned(),
         )
     };
+    eprintln!(
+        "nando-ms3-independent-future-evaluate: predictions={} existing={}",
+        predictions.len(),
+        existing.is_some()
+    );
     if existing.is_some() || predictions.is_empty() {
         return Ok(existing);
     }
@@ -3008,6 +3013,10 @@ fn evaluate_ms3_independent_future(
             // precommitted roots; missing evidence is neither contradiction nor anti-evidence.
             continue;
         };
+        eprintln!(
+            "nando-ms3-independent-future-exact: prediction={} capture_sequence={}",
+            prediction.prediction_root_sha256, prediction.capture_sequence
+        );
         if bound.binding.action_observed_at_unix_nanos <= durable_at
             || bound.binding.request_completed_at_unix_nanos <= durable_at
         {
