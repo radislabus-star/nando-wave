@@ -223,7 +223,7 @@ impl Ms3FrozenVersionSpaceRuntime {
         topology: &PreActionTopologyAuditRowV1,
         predicted_at_unix_nanos: u64,
     ) -> Result<bool, String> {
-        self.observe_topology_inner(topology, predicted_at_unix_nanos)
+        self.observe_topology_inner(topology, predicted_at_unix_nanos, true)
     }
 
     pub(super) fn observe_historical_topology(
@@ -231,13 +231,14 @@ impl Ms3FrozenVersionSpaceRuntime {
         topology: &PreActionTopologyAuditRowV1,
         observed_at_unix_nanos: u64,
     ) -> Result<bool, String> {
-        self.observe_topology_inner(topology, observed_at_unix_nanos)
+        self.observe_topology_inner(topology, observed_at_unix_nanos, false)
     }
 
     fn observe_topology_inner(
         &mut self,
         topology: &PreActionTopologyAuditRowV1,
         observed_at_unix_nanos: u64,
+        allow_concurrent_live_prediction: bool,
     ) -> Result<bool, String> {
         if self.independent_future.is_some() {
             return Ok(false);
@@ -270,14 +271,13 @@ impl Ms3FrozenVersionSpaceRuntime {
             .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?
             .contract
             .clone();
-        if self
+        let gate_verdict = self
             .applicability_ledger
             .as_ref()
             .expect("gate checked")
             .report(observed_at_unix_nanos / 1_000_000_000)
-            .verdict
-            != nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::Collecting
-        {
+            .verdict;
+        if !future_topology_observation_allowed(gate_verdict, allow_concurrent_live_prediction) {
             return Ok(false);
         }
         let classification = classify_ms3_unique_law_v1(frozen, topology, observed_at_unix_nanos)
@@ -604,6 +604,21 @@ fn validate_runtime_links(
     Ok(())
 }
 
+fn future_topology_observation_allowed(
+    verdict: nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1,
+    allow_concurrent_live_prediction: bool,
+) -> bool {
+    use nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1;
+
+    match verdict {
+        Ms3FutureApplicabilityVerdictV1::Collecting => true,
+        Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending => {
+            allow_concurrent_live_prediction
+        }
+        Ms3FutureApplicabilityVerdictV1::AcquisitionFail => false,
+    }
+}
+
 fn validate_committed_state_presence(
     envelope: bool,
     predictions: bool,
@@ -767,6 +782,28 @@ mod tests {
             validate_committed_state_presence(true, true, false),
             Err("ms3_future_applicability_state_missing".to_owned())
         );
+    }
+
+    #[test]
+    fn live_topology_can_precommit_concurrently_but_historical_replay_cannot() {
+        use nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1;
+
+        assert!(future_topology_observation_allowed(
+            Ms3FutureApplicabilityVerdictV1::Collecting,
+            false
+        ));
+        assert!(future_topology_observation_allowed(
+            Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending,
+            true
+        ));
+        assert!(!future_topology_observation_allowed(
+            Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending,
+            false
+        ));
+        assert!(!future_topology_observation_allowed(
+            Ms3FutureApplicabilityVerdictV1::AcquisitionFail,
+            true
+        ));
     }
 
     #[test]

@@ -2718,8 +2718,11 @@ fn evaluate_ms3_independent_future(
                         terminal.completed_at_unix_nanos,
                         capture_fence,
                     )?;
+                continue;
             }
-            continue;
+            // Predictions are ordered by capture sequence. A later outcome cannot be selected
+            // while an earlier precommitted request is still genuinely unresolved.
+            return Ok(None);
         };
         if bound.binding.action_observed_at_unix_nanos <= durable_at
             || bound.binding.request_completed_at_unix_nanos <= durable_at
