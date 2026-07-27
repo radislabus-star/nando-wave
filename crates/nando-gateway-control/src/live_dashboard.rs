@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.27-b016";
+const DASHBOARD_BUILD: &str = "2026.07.27-b017";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -373,9 +373,10 @@ const TEMPLATE: &str = r#"
 .legacy-strip { display:flex; justify-content:center; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 24px; border-top:1px solid var(--line); color:var(--muted); text-align:center; font-size:12px; font-weight:700; }
 .legacy-strip b { color:#dce2e6; }
 .legacy-warning { color:var(--red); }
-.ms3-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.ms3-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .ms3-cell { min-width:0; padding:14px 18px; border-right:1px solid var(--line); }
-.ms3-cell:last-child { border-right:0; }
+.ms3-cell:nth-child(4n) { border-right:0; }
+.ms3-cell:nth-child(-n+4) { border-bottom:1px solid var(--line); }
 .ms3-label { color:var(--muted); font-size:11px; font-weight:800; }
 .ms3-value { margin-top:7px; color:var(--cyan); font-size:15px; font-weight:800; overflow-wrap:anywhere; }
 .ms3-value.good { color:var(--green); }
@@ -451,7 +452,7 @@ const TEMPLATE: &str = r#"
   .ms3-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .ms3-cell { border-bottom:1px solid var(--line); }
   .ms3-cell:nth-child(2n) { border-right:0; }
-  .ms3-cell:last-child { grid-column:1 / -1; border-bottom:0; }
+  .ms3-cell:nth-last-child(-n+2) { border-bottom:0; }
   .window-head,.live-foot .live-inner { align-items:flex-start; flex-direction:column; gap:8px; }
 }
 @media (max-width:560px) {
@@ -567,15 +568,18 @@ const TEMPLATE: &str = r#"
     <div class="legacy-strip"><span>АРХИВ V3: <b id="legacy-values">__LEGACY_VALUES__</b></span><span class="legacy-warning">ОТДЕЛЬНАЯ ACCOUNTING PARTITION · ВХОДИТ В SERVER TOTAL · EXACT SHARE СЧИТАЕТСЯ В V4</span></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
-    <h2 class="band-title">ЕСТЕСТВЕННЫЙ ОПЕРАТОР · MS3</h2>
+    <h2 class="band-title">АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3</h2>
     <div class="ms3-grid">
-      <div class="ms3-cell"><div class="ms3-label">ЗАКОН</div><div id="ms3-law" class="ms3-value good">FROZEN</div></div>
-      <div class="ms3-cell"><div class="ms3-label">НЕЗАВИСИМЫЕ TOPOLOGY</div><div id="ms3-topologies" class="ms3-value watch">— / 256</div></div>
-      <div class="ms3-cell"><div class="ms3-label">ПРИМЕНИМЫЕ / PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
-      <div class="ms3-cell"><div class="ms3-label">FUTURE PROOF</div><div id="ms3-future" class="ms3-value watch">НЕ ОЦЕНЕН</div></div>
+      <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
+      <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
+      <div class="ms3-cell"><div class="ms3-label">ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
+      <div class="ms3-cell"><div class="ms3-label">TERMINAL / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
+      <div class="ms3-cell"><div class="ms3-label">DURABLE / ACTIVE PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">INDEPENDENT FUTURE</div><div id="ms3-future" class="ms3-value watch">НЕ ОЦЕНЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">AUTHORITY</div><div id="ms3-authority" class="ms3-value locked">FALSE</div></div>
     </div>
-    <div id="ms3-note" class="ms3-note">Загрузка frozen future applicability contract…</div>
+    <div id="ms3-note" class="ms3-note">Загрузка generation lifecycle и frozen acquisition…</div>
   </div></section>
   <div class="epoch-strip"><span>МОСТ: <b>opportunity seq <span id="bridge-pair">— / —</span></b> · hot process tokens <span id="bridge-tokens">—</span> · pending <span id="bridge-queue">—</span></span><span id="epoch-visibility" class="epoch-visibility">STRUCTURE —</span></div>
   <section class="live-band"><div class="live-inner">
@@ -700,23 +704,55 @@ const TEMPLATE: &str = r#"
     text("legacy-values", `${number.format(legacy.input_tokens || 0)} вход / ${number.format(legacy.cpu_tokens || 0)} CPU`);
 
     const ms3 = snapshot.ms3 || {};
-    const contract = ms3.contract || {};
-    const independent = ms3.independent_topologies || 0;
-    const limit = contract.max_independent_topologies || 256;
-    const predictions = ms3.predictions_committed || 0;
-    const effectivePredictions = ms3.effective_active_predictions ?? ms3.active_predictions ?? 0;
-    const futureVerdict = ms3.effective_verdict || ms3.verdict || "collecting";
-    const futureBlocker = ms3.effective_blocker || ms3.blocker || "report unavailable";
-    const applicable = Math.max(0, independent - (ms3.structurally_not_applicable || 0));
-    text("ms3-law", futureVerdict === "contradiction" ? "LAW REFUTED" : contract.frozen_law_contract_root_sha256 ? "UNIQUE LAW FROZEN" : "НЕТ КОНТРАКТА");
-    text("ms3-topologies", `${independent} / ${limit}`);
-    text("ms3-predictions", `${applicable} / ${predictions} · ACTIVE ${effectivePredictions}`);
-    text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : "НЕ ОЦЕНЕН");
-    text("ms3-authority", ms3.authority_ready ? "TRUE" : "FALSE");
-    stateClass("ms3-law", `ms3-value ${futureVerdict === "contradiction" ? "locked" : contract.frozen_law_contract_root_sha256 ? "good" : "locked"}`);
+    const lifecycleStatus = snapshot.ms3_lifecycle || {};
+    const lifecycle = lifecycleStatus.lifecycle || {};
+    const acquisition = snapshot.ms3_acquisition || {};
+    const acquisitionContract = acquisition.acquisition_contract || {};
+    const generations = lifecycleStatus.registry?.generations || [];
+    const activeGeneration = lifecycleStatus.active_generation_sequence || lifecycle.active_generation_sequence || 0;
+    const predecessor = generations.find(row => row.generation_sequence + 1 === activeGeneration);
+    const predecessorVerdict = predecessor?.terminal?.verdict || "none";
+    const predecessorBlocker = predecessor?.terminal?.blocker || "";
+    const acquisitionVerdict = acquisition.verdict || "unavailable";
+    const topologyRows = acquisition.new_topology_rows_seen || 0;
+    const topologyLimit = acquisitionContract.max_new_topology_rows || 256;
+    const terminalRows = acquisition.terminal_receipt_rows || 0;
+    const linkedRows = acquisition.linked_frame_rows || 0;
+    const futureVerdict = ms3.effective_verdict || ms3.verdict || "not_evaluated";
+    const lawFrozen = Boolean(lifecycleStatus.active_frozen_envelope_root_sha256);
+    const futureFrozen = Boolean(lifecycleStatus.active_future_envelope_root_sha256);
+    const authorityReady = lifecycleStatus.authority_ready === true || ms3.authority_ready === true;
+    const phaseMutation = lifecycleStatus.phase_mutation_allowed === true || acquisition.phase_update_allowed === true || ms3.phase_mutation_allowed === true;
+    const predictionsCommitted = ms3.predictions_committed || 0;
+    const activePredictions = ms3.effective_active_predictions ?? ms3.active_predictions ?? 0;
+    const activePhase = authorityReady
+      ? "ADMITTED"
+      : futureVerdict === "future_pass"
+        ? "FUTURE_PASS"
+        : futureVerdict === "contradiction"
+          ? "CONTRADICTION"
+          : activePredictions > 0 || futureVerdict === "applicable_prediction_pending"
+            ? "FUTURE_PENDING"
+            : lawFrozen
+              ? "UNIQUE_LAW_FROZEN"
+              : acquisitionVerdict.toUpperCase();
+    text("ms3-generation", activeGeneration > 0 ? `G${activeGeneration} · ${activePhase}` : "НЕТ ДАННЫХ");
+    text("ms3-predecessor", predecessor ? `G${predecessor.generation_sequence} · ${predecessorVerdict.toUpperCase()}` : "НЕТ");
+    text("ms3-acquisition", `${number.format(topologyRows)} / ${number.format(topologyLimit)}`);
+    text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(linkedRows)}`);
+    text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
+    text("ms3-predictions", `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}`);
+    text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : activePredictions > 0 ? "OUTCOME PENDING" : futureFrozen ? futureVerdict.toUpperCase() : "НЕ ОЦЕНЕН");
+    text("ms3-authority", authorityReady ? "TRUE" : "FALSE");
+    stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" ? "locked" : "watch"}`);
+    stateClass("ms3-predecessor", `ms3-value ${predecessorVerdict === "contradiction" ? "locked" : "watch"}`);
+    stateClass("ms3-law", `ms3-value ${futureVerdict === "future_pass" ? "good" : lawFrozen ? "watch" : "locked"}`);
     stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" ? "locked" : "watch"}`);
-    stateClass("ms3-authority", `ms3-value ${ms3.authority_ready ? "good" : "locked"}`);
-    text("ms3-note", `${futureBlocker} · lifecycle ${ms3.lifecycle_terminal ? "TERMINAL" : "OPEN"} · неприменимых ${ms3.structurally_not_applicable || 0} · censored ${ms3.censored_missing_completed_frame || 0} · precommit missing ${ms3.precommitted_prediction_missing || 0} · phase mutation ${ms3.phase_mutation_allowed ? "TRUE" : "FALSE"}`);
+    stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
+    const predecessorText = predecessor
+      ? `G${predecessor.generation_sequence} ${predecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
+      : "";
+    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${acquisitionVerdict.toUpperCase()} · watermark ${number.format(acquisitionContract.topology_watermark_rows || 0)} · deadline ${localTime(acquisitionContract.deadline_unix || 0)} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
 
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
@@ -852,7 +888,12 @@ mod tests {
         assert!(html.contains("ПРИМЕНЕНО LEARNER"));
         assert!(html.contains("ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU"));
         assert!(html.contains("ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА"));
-        assert!(html.contains("ЕСТЕСТВЕННЫЙ ОПЕРАТОР · MS3"));
+        assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
+        assert!(html.contains("ACTIVE GENERATION"));
+        assert!(html.contains("PREDECESSOR"));
+        assert!(html.contains("TERMINAL / LINKED"));
+        assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));
+        assert!(html.contains("INDEPENDENT FUTURE"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));
         assert!(html.contains("CANDIDATE INPUT"));
         assert!(html.contains("CRYSTALLIZER"));

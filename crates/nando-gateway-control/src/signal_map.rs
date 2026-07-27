@@ -310,7 +310,7 @@ pub(crate) fn render(
                 "доказательство поколения недоступно".into()
             },
             diagnostic: format!(
-                "живая lineage partition.v{} / поколение {}",
+                "F5 signal-lineage partition.v{} / поколение {} (не MS3 generation)",
                 live.partition, live.generation
             ),
             output: "устойчивое к перезапуску поколение маршрутизации".into(),
@@ -517,7 +517,7 @@ pub(crate) fn render(
 <div class="architecture-title"><h2>NANDO MACHINE · МАРШРУТ СИГНАЛА</h2><p>один вход, один текущий владелец на каждом этапе, одна строгая передача до CPU</p></div>
 <div class="architecture-state"><span class="state-chip live">ОБЫЧНЫЙ ВХОД</span><span class="state-chip proven">КОНТРОЛИРУЕМОЕ ДОКАЗАТЕЛЬСТВО</span><span class="state-chip {}">AUTHORITY {}</span></div>
 </div>
-<div class="identity-line"><span><b>МОДЕЛЬ</b> {}</span><span><b>РАЗВЁРНУТО</b> {} · {}</span><span><b>ЖИВАЯ LINEAGE</b> partition.v{} · поколение {}</span><span><b>ДОКАЗАТЕЛЬСТВО</b> {}</span></div>
+<div class="identity-line"><span><b>МОДЕЛЬ</b> {}</span><span><b>BUILD MANIFEST</b> {} · {}</span><span><b>F5 SIGNAL-LINEAGE</b> partition.v{} · поколение {} · НЕ MS3</span><span><b>ДОКАЗАТЕЛЬСТВО</b> {}</span></div>
 <div class="pipeline-legend"><span><b>ЖИВОЙ ПОТОК</b> обычный трафик проходит этап</span><span><b>РАБОТАЕТ</b> проверенный transition-маршрут исполняется на CPU</span><span><b>ТОЛЬКО ДОКАЗАТЕЛЬСТВО</b> способность доказана без живого покрытия</span><span><b>БЛОК</b> обычный сигнал остановлен</span><span><b>ЗАКРЫТО</b> authority отсутствует</span></div>
 <div class="current-blocker"><span class="blocker-label">ТЕКУЩИЙ БЛОКЕР</span><strong>{}</strong><p>{}</p></div>
 <div class="pipeline-stack">{}</div>

@@ -32,6 +32,10 @@ const HOT_SERVING_RUNTIME_HEALTH_URL: &str = "http://127.0.0.1:18789/health";
 const COLD_LEARNING_HEALTH_URL: &str = "http://127.0.0.1:18790/health/bridge";
 const COLD_MS3_FUTURE_APPLICABILITY_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/ms3-future-applicability";
+const COLD_MS3_GENERATION_REGISTRY_URL: &str =
+    "http://127.0.0.1:18790/v2/multi-source/ms3-generation-registry";
+const COLD_MS3_LINKED_FRAME_ACQUISITION_URL: &str =
+    "http://127.0.0.1:18790/v2/multi-source/ms3-linked-frame-acquisition";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -1057,11 +1061,13 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let response_registry = read_json(&state.config.response_registry_path);
     let response_admission_controller =
         read_json(&state.config.response_admission_controller_report_path);
-    let (live, hot_health, cold_health, ms3_future) = tokio::join!(
+    let (live, hot_health, cold_health, ms3_future, ms3_lifecycle, ms3_acquisition) = tokio::join!(
         read_live_miner_report(),
         read_live_json(HOT_SERVING_HEALTH_URL),
         read_live_json(COLD_LEARNING_HEALTH_URL),
         read_live_json(COLD_MS3_FUTURE_APPLICABILITY_URL),
+        read_live_json(COLD_MS3_GENERATION_REGISTRY_URL),
+        read_live_json(COLD_MS3_LINKED_FRAME_ACQUISITION_URL),
     );
     let economics = live
         .get("economics")
@@ -1289,6 +1295,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                 "classes": online_opportunity.get("classes").cloned().unwrap_or_else(|| json!({})),
             },
             "ms3": ms3_future,
+            "ms3_lifecycle": ms3_lifecycle,
+            "ms3_acquisition": ms3_acquisition,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
             "controller_relation_candidates": controller_relation_candidates,
