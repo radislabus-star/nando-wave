@@ -2112,7 +2112,7 @@ fn insert_ms3_terminal_status(
 }
 
 fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> {
-    let (frozen, prediction_min_sequence, committed_topologies) = {
+    let (frozen, prediction_min_sequence, predictions, prediction_commitments) = {
         let runtime = state
             .ms3_frozen_version_space
             .as_ref()
@@ -2127,13 +2127,22 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
             runtime
                 .prediction_min_sequence()
                 .ok_or_else(|| "ms3_prediction_contract_missing".to_owned())?,
+            runtime.predictions(),
             runtime
                 .predictions()
                 .into_iter()
-                .map(|prediction| prediction.topology_root_sha256)
-                .collect::<BTreeSet<_>>(),
+                .filter_map(|prediction| {
+                    runtime
+                        .prediction_commitment(&prediction.prediction_root_sha256)
+                        .map(|commitment| (prediction.prediction_root_sha256, commitment))
+                })
+                .collect::<BTreeMap<_, _>>(),
         )
     };
+    let committed_topologies = predictions
+        .iter()
+        .map(|prediction| prediction.topology_root_sha256.clone())
+        .collect::<BTreeSet<_>>();
     let rows = state
         .multi_source_topology_archive
         .as_ref()
@@ -2173,6 +2182,105 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
         .filter_map(|row| row.session_lineage_sha256.as_deref())
         .collect::<BTreeSet<_>>()
         .len();
+    let request_ids = predictions
+        .iter()
+        .map(|prediction| prediction.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let intent_ids = predictions
+        .iter()
+        .map(|prediction| prediction.turn_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let terminals = state
+        .terminal_receipt_archive
+        .as_ref()
+        .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
+        .receipts_for_requests(&request_ids);
+    let frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
+        .frames_for_intents(&intent_ids);
+    let terminals_by_request = terminals
+        .iter()
+        .map(|terminal| (terminal.request_event_id_sha256.as_str(), terminal))
+        .collect::<BTreeMap<_, _>>();
+    let frame_intents = frames
+        .iter()
+        .map(|frame| frame.client_intent_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let transport = nando_operator_learning::multi_source::TransportBindingLedgerV1::build(
+        &rows, &frames, &terminals,
+    );
+    let mut exact_transport_bindings = 0_usize;
+    let mut terminal_without_completed_frame = 0_usize;
+    let mut completed_frame_without_terminal = 0_usize;
+    let mut terminal_and_frame_without_exact_binding = 0_usize;
+    let mut neither_terminal_nor_frame = 0_usize;
+    let mut outcome_after_durable_prediction = 0_usize;
+    let mut outcome_before_or_at_durable_prediction = 0_usize;
+    let mut first_unresolved = None;
+    for prediction in &predictions {
+        let terminal = terminals_by_request
+            .get(prediction.request_event_id_sha256.as_str())
+            .copied();
+        let frame_exists = frame_intents.contains(prediction.turn_intent_id_sha256.as_str());
+        let exact = transport
+            .bound_for_topology(&prediction.topology_root_sha256)
+            .iter()
+            .find(|bound| {
+                bound.binding.request_event_id_sha256 == prediction.request_event_id_sha256
+                    && bound.binding.turn_intent_id_sha256 == prediction.turn_intent_id_sha256
+                    && bound.binding.session_lineage_sha256 == prediction.session_lineage_sha256
+            });
+        match (terminal.is_some(), frame_exists, exact.as_ref()) {
+            (_, _, Some(bound)) => {
+                exact_transport_bindings = exact_transport_bindings.saturating_add(1);
+                let durable_at = prediction_commitments
+                    .get(&prediction.prediction_root_sha256)
+                    .map(|(_, durable_at)| *durable_at)
+                    .unwrap_or(u64::MAX);
+                if bound.binding.action_observed_at_unix_nanos > durable_at
+                    && bound.binding.request_completed_at_unix_nanos > durable_at
+                {
+                    outcome_after_durable_prediction =
+                        outcome_after_durable_prediction.saturating_add(1);
+                } else {
+                    outcome_before_or_at_durable_prediction =
+                        outcome_before_or_at_durable_prediction.saturating_add(1);
+                }
+            }
+            (true, false, None) => {
+                terminal_without_completed_frame =
+                    terminal_without_completed_frame.saturating_add(1);
+            }
+            (false, true, None) => {
+                completed_frame_without_terminal =
+                    completed_frame_without_terminal.saturating_add(1);
+            }
+            (true, true, None) => {
+                terminal_and_frame_without_exact_binding =
+                    terminal_and_frame_without_exact_binding.saturating_add(1);
+            }
+            (false, false, None) => {
+                neither_terminal_nor_frame = neither_terminal_nor_frame.saturating_add(1);
+            }
+        }
+        if exact.is_none() && first_unresolved.is_none() {
+            first_unresolved = Some(json!({
+                "prediction_root_sha256": prediction.prediction_root_sha256,
+                "capture_sequence": prediction.capture_sequence,
+                "topology_root_sha256": prediction.topology_root_sha256,
+                "request_event_id_sha256": prediction.request_event_id_sha256,
+                "turn_intent_id_sha256": prediction.turn_intent_id_sha256,
+                "terminal_receipt_found": terminal.is_some(),
+                "completed_frame_found": frame_exists
+            }));
+        }
+    }
     Ok(json!({
         "post_open_topologies": rows.len(),
         "support_lineage_reuse": support_reuse,
@@ -2180,7 +2288,20 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
         "independent_lineages": independent_lineages,
         "structurally_applicable": structurally_applicable,
         "structurally_not_applicable": independent.len().saturating_sub(structurally_applicable),
-        "committed_topologies": committed_topologies.len()
+        "committed_topologies": committed_topologies.len(),
+        "outcome_join": {
+            "durable_commitments": prediction_commitments.len(),
+            "terminal_receipts_found": terminals.len(),
+            "completed_frames_found": frames.len(),
+            "exact_transport_bindings": exact_transport_bindings,
+            "outcome_after_durable_prediction": outcome_after_durable_prediction,
+            "outcome_before_or_at_durable_prediction": outcome_before_or_at_durable_prediction,
+            "terminal_without_completed_frame": terminal_without_completed_frame,
+            "completed_frame_without_terminal": completed_frame_without_terminal,
+            "terminal_and_frame_without_exact_binding": terminal_and_frame_without_exact_binding,
+            "neither_terminal_nor_frame": neither_terminal_nor_frame,
+            "first_unresolved": first_unresolved
+        }
     }))
 }
 
