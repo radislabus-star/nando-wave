@@ -5,14 +5,17 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     FrozenVersionSpaceEnvelopeV1, MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL,
-    Ms3FutureApplicabilityReportV1, Ms3FutureApplicabilityVerdictV1,
-    Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureVerdictV1,
+    MS3_LINKED_FRAME_ACQUISITION_FAIL, Ms3FutureApplicabilityReportV1,
+    Ms3FutureApplicabilityVerdictV1, Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureVerdictV1,
+    Ms3LinkedFrameAcquisitionReportV1, Ms3LinkedFrameAcquisitionVerdictV1,
 };
 
 pub const MS3_GENERATION_REGISTRY_SCHEMA_V1: &str = "nando.ms3-generation-registry.v1";
 pub const MS3_GENERATION_TERMINAL_SCHEMA_V1: &str = "nando.ms3-generation-terminal.v1";
 pub const MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1: &str =
     "nando.ms3-generation-acquisition-failure.v1";
+pub const MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1: &str =
+    "nando.ms3-generation-linked-acquisition-failure.v1";
 const MAX_MS3_GENERATION_REGISTRY_BYTES: usize = 12 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -53,6 +56,25 @@ pub struct Ms3GenerationAcquisitionFailureReceiptV1 {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
+    pub schema: String,
+    pub receipt_root_sha256: String,
+    pub generation_sequence: u64,
+    pub acquisition_contract_root_sha256: String,
+    pub acquisition_report_root_sha256: String,
+    pub topology_prefix_root_sha256: String,
+    pub topology_watermark_rows: u64,
+    pub evaluated_topology_rows: u64,
+    pub terminal_receipt_rows: u64,
+    pub closure_capture_sequence: u64,
+    pub generated_at_unix: u64,
+    pub blocker: String,
+    pub authority_ready: bool,
+    pub phase_mutation_allowed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Ms3GenerationEntryV1 {
     pub generation_sequence: u64,
     pub frozen_envelope_root_sha256: String,
@@ -74,6 +96,8 @@ pub struct Ms3GenerationRegistryV1 {
     pub schema: String,
     pub registry_root_sha256: String,
     pub generations: Vec<Ms3GenerationEntryV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linked_acquisition_failures: Vec<Ms3GenerationLinkedAcquisitionFailureReceiptV1>,
     pub authority_ready: bool,
     pub phase_mutation_allowed: bool,
 }
@@ -97,6 +121,7 @@ impl Ms3GenerationRegistryV1 {
             schema: MS3_GENERATION_REGISTRY_SCHEMA_V1.to_owned(),
             registry_root_sha256: String::new(),
             generations: Vec::new(),
+            linked_acquisition_failures: Vec::new(),
             authority_ready: false,
             phase_mutation_allowed: false,
         };
@@ -112,21 +137,8 @@ impl Ms3GenerationRegistryV1 {
         frozen
             .validate()
             .map_err(|_| Ms3GenerationRegistryErrorV1::InvalidFrozenEnvelope)?;
-        if self
-            .generations
-            .last()
-            .is_some_and(|entry| !entry.is_closed())
-        {
-            return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
-        }
-        if self.generations.last().is_some_and(|entry| {
-            entry
-                .terminal
-                .as_ref()
-                .is_some_and(|terminal| terminal.verdict == Ms3IndependentFutureVerdictV1::Pass)
-        }) {
-            return Err(Ms3GenerationRegistryErrorV1::SuccessorAfterPass);
-        }
+        let generation_sequence = self.next_generation_sequence();
+        self.require_successor_allowed(generation_sequence)?;
         if self.generations.iter().any(|entry| {
             entry.frozen_envelope_root_sha256 == frozen.envelope_root_sha256
                 || entry.frozen_contract_root_sha256 == frozen.contract.contract_root_sha256
@@ -135,9 +147,9 @@ impl Ms3GenerationRegistryV1 {
         }) {
             return Err(Ms3GenerationRegistryErrorV1::EvidenceReuse);
         }
-        if let Some(previous) = self.generations.last() {
-            let closure_sequence = previous
-                .closure_capture_sequence()
+        if generation_sequence > 1 {
+            let closure_sequence = self
+                .closure_capture_sequence(generation_sequence - 1)
                 .ok_or(Ms3GenerationRegistryErrorV1::TerminalGenerationMissing)?;
             if frozen.contract.support_watermark <= closure_sequence
                 || frozen.contract.future_min_sequence <= closure_sequence
@@ -145,9 +157,6 @@ impl Ms3GenerationRegistryV1 {
                 return Err(Ms3GenerationRegistryErrorV1::EvidenceReuse);
             }
         }
-        let generation_sequence = u64::try_from(self.generations.len())
-            .unwrap_or(u64::MAX)
-            .saturating_add(1);
         self.generations.push(Ms3GenerationEntryV1 {
             generation_sequence,
             frozen_envelope_root_sha256: frozen.envelope_root_sha256.clone(),
@@ -163,6 +172,68 @@ impl Ms3GenerationRegistryV1 {
         });
         self.reseal()?;
         Ok(generation_sequence)
+    }
+
+    pub fn seal_linked_acquisition_failure(
+        &mut self,
+        generation_sequence: u64,
+        report: &Ms3LinkedFrameAcquisitionReportV1,
+        closure_capture_sequence: u64,
+    ) -> Result<Ms3GenerationLinkedAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1> {
+        if !report.validate()
+            || report.verdict != Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+            || report.blocker != MS3_LINKED_FRAME_ACQUISITION_FAIL
+            || generation_sequence == 0
+            || closure_capture_sequence == 0
+        {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if let Some(existing) = self
+            .linked_acquisition_failures
+            .iter()
+            .find(|receipt| receipt.generation_sequence == generation_sequence)
+        {
+            return (existing.acquisition_contract_root_sha256
+                == report.acquisition_contract.contract_root_sha256
+                && existing.acquisition_report_root_sha256 == report.report_root_sha256)
+                .then_some(existing.clone())
+                .ok_or(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if generation_sequence != self.next_generation_sequence()
+            || self
+                .generations
+                .iter()
+                .any(|entry| entry.generation_sequence == generation_sequence)
+        {
+            return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
+        }
+        self.require_successor_allowed(generation_sequence)?;
+        let mut receipt = Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
+            schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1.to_owned(),
+            receipt_root_sha256: String::new(),
+            generation_sequence,
+            acquisition_contract_root_sha256: report
+                .acquisition_contract
+                .contract_root_sha256
+                .clone(),
+            acquisition_report_root_sha256: report.report_root_sha256.clone(),
+            topology_prefix_root_sha256: report
+                .acquisition_contract
+                .topology_prefix_root_sha256
+                .clone(),
+            topology_watermark_rows: report.acquisition_contract.topology_watermark_rows,
+            evaluated_topology_rows: report.evaluated_topology_rows,
+            terminal_receipt_rows: report.terminal_receipt_rows,
+            closure_capture_sequence,
+            generated_at_unix: report.generated_at_unix,
+            blocker: report.blocker.clone(),
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        };
+        receipt.receipt_root_sha256 = receipt.expected_root()?;
+        self.linked_acquisition_failures.push(receipt.clone());
+        self.reseal()?;
+        Ok(receipt)
     }
 
     pub fn seal_terminal(
@@ -304,6 +375,92 @@ impl Ms3GenerationRegistryV1 {
     }
 
     #[must_use]
+    pub fn next_generation_sequence(&self) -> u64 {
+        self.generations
+            .iter()
+            .map(|entry| entry.generation_sequence)
+            .chain(
+                self.linked_acquisition_failures
+                    .iter()
+                    .map(|receipt| receipt.generation_sequence),
+            )
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1)
+    }
+
+    #[must_use]
+    pub fn linked_acquisition_failure(
+        &self,
+        generation_sequence: u64,
+    ) -> Option<&Ms3GenerationLinkedAcquisitionFailureReceiptV1> {
+        self.linked_acquisition_failures
+            .iter()
+            .find(|receipt| receipt.generation_sequence == generation_sequence)
+    }
+
+    #[must_use]
+    pub fn closure_root(&self, generation_sequence: u64) -> Option<&str> {
+        self.generations
+            .iter()
+            .find(|entry| entry.generation_sequence == generation_sequence)
+            .and_then(Ms3GenerationEntryV1::closure_root)
+            .or_else(|| {
+                self.linked_acquisition_failure(generation_sequence)
+                    .map(|receipt| receipt.receipt_root_sha256.as_str())
+            })
+    }
+
+    #[must_use]
+    pub fn generation_is_open(&self, generation_sequence: u64) -> bool {
+        self.generations
+            .iter()
+            .find(|entry| entry.generation_sequence == generation_sequence)
+            .is_some_and(|entry| !entry.is_closed())
+    }
+
+    fn require_successor_allowed(
+        &self,
+        generation_sequence: u64,
+    ) -> Result<(), Ms3GenerationRegistryErrorV1> {
+        if generation_sequence == 1 {
+            return Ok(());
+        }
+        let previous_sequence = generation_sequence - 1;
+        if self
+            .generations
+            .iter()
+            .find(|entry| entry.generation_sequence == previous_sequence)
+            .is_some_and(|entry| {
+                entry
+                    .terminal
+                    .as_ref()
+                    .is_some_and(|terminal| terminal.verdict == Ms3IndependentFutureVerdictV1::Pass)
+            })
+        {
+            return Err(Ms3GenerationRegistryErrorV1::SuccessorAfterPass);
+        }
+        if self.generation_is_open(previous_sequence) {
+            return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
+        }
+        if self.closure_root(previous_sequence).is_none() {
+            return Err(Ms3GenerationRegistryErrorV1::TerminalGenerationMissing);
+        }
+        Ok(())
+    }
+
+    fn closure_capture_sequence(&self, generation_sequence: u64) -> Option<u64> {
+        self.generations
+            .iter()
+            .find(|entry| entry.generation_sequence == generation_sequence)
+            .and_then(Ms3GenerationEntryV1::closure_capture_sequence)
+            .or_else(|| {
+                self.linked_acquisition_failure(generation_sequence)
+                    .map(|receipt| receipt.closure_capture_sequence)
+            })
+    }
+
+    #[must_use]
     pub fn validate(&self) -> bool {
         let roots_unique = {
             let envelope_roots = self
@@ -347,14 +504,33 @@ impl Ms3GenerationRegistryV1 {
                 .collect::<Vec<_>>();
             roots.iter().copied().collect::<BTreeSet<_>>().len() == roots.len()
         };
+        let sequence_count = self
+            .generations
+            .len()
+            .saturating_add(self.linked_acquisition_failures.len());
+        let generation_sequences = self
+            .generations
+            .iter()
+            .map(|entry| entry.generation_sequence)
+            .chain(
+                self.linked_acquisition_failures
+                    .iter()
+                    .map(|receipt| receipt.generation_sequence),
+            )
+            .collect::<BTreeSet<_>>();
+        let sequences_are_contiguous = generation_sequences.len() == sequence_count
+            && generation_sequences
+                .iter()
+                .copied()
+                .eq(1..=u64::try_from(sequence_count).unwrap_or(u64::MAX));
         self.schema == MS3_GENERATION_REGISTRY_SCHEMA_V1
             && !self.authority_ready
             && !self.phase_mutation_allowed
             && roots_unique
             && evidence_roots_unique
-            && self.generations.iter().enumerate().all(|(index, entry)| {
-                entry.generation_sequence == u64::try_from(index).unwrap_or(u64::MAX) + 1
-                    && valid_nonzero_sha256(&entry.frozen_envelope_root_sha256)
+            && sequences_are_contiguous
+            && self.generations.iter().all(|entry| {
+                valid_nonzero_sha256(&entry.frozen_envelope_root_sha256)
                     && valid_nonzero_sha256(&entry.frozen_contract_root_sha256)
                     && valid_nonzero_sha256(&entry.support_rows_root_sha256)
                     && valid_nonzero_sha256(&entry.topology_root_sha256)
@@ -378,12 +554,23 @@ impl Ms3GenerationRegistryV1 {
                     })
                     && !(entry.terminal.is_some() && entry.acquisition_failure.is_some())
             })
-            && self.generations.windows(2).all(|pair| {
-                pair[0].closure_allows_successor()
-                    && pair[0].closure_capture_sequence().is_some_and(|sequence| {
-                        pair[1].support_watermark > sequence
-                            && pair[1].future_min_sequence > sequence
-                    })
+            && self
+                .linked_acquisition_failures
+                .iter()
+                .all(Ms3GenerationLinkedAcquisitionFailureReceiptV1::validate)
+            && (1..u64::try_from(sequence_count).unwrap_or(u64::MAX)).all(|sequence| {
+                self.closure_root(sequence).is_some()
+                    && self
+                        .generations
+                        .iter()
+                        .find(|entry| entry.generation_sequence == sequence + 1)
+                        .is_none_or(|next| {
+                            self.closure_capture_sequence(sequence)
+                                .is_some_and(|closure| {
+                                    next.support_watermark > closure
+                                        && next.future_min_sequence > closure
+                                })
+                        })
             })
             && self
                 .expected_root()
@@ -422,13 +609,23 @@ impl Ms3GenerationRegistryV1 {
     }
 
     fn expected_root(&self) -> Result<String, Ms3GenerationRegistryErrorV1> {
-        canonical_json_sha256(&(
-            MS3_GENERATION_REGISTRY_SCHEMA_V1,
-            &self.generations,
-            false,
-            false,
-        ))
-        .map_err(|_| Ms3GenerationRegistryErrorV1::Serialization)
+        let root = if self.linked_acquisition_failures.is_empty() {
+            canonical_json_sha256(&(
+                MS3_GENERATION_REGISTRY_SCHEMA_V1,
+                &self.generations,
+                false,
+                false,
+            ))
+        } else {
+            canonical_json_sha256(&(
+                MS3_GENERATION_REGISTRY_SCHEMA_V1,
+                &self.generations,
+                &self.linked_acquisition_failures,
+                false,
+                false,
+            ))
+        };
+        root.map_err(|_| Ms3GenerationRegistryErrorV1::Serialization)
     }
 }
 
@@ -519,6 +716,47 @@ impl Ms3GenerationAcquisitionFailureReceiptV1 {
     }
 }
 
+impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
+    #[must_use]
+    pub fn validate(&self) -> bool {
+        self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1
+            && self.generation_sequence > 0
+            && valid_nonzero_sha256(&self.receipt_root_sha256)
+            && valid_nonzero_sha256(&self.acquisition_contract_root_sha256)
+            && valid_nonzero_sha256(&self.acquisition_report_root_sha256)
+            && valid_nonzero_sha256(&self.topology_prefix_root_sha256)
+            && self.evaluated_topology_rows > 0
+            && self.terminal_receipt_rows >= self.evaluated_topology_rows
+            && self.closure_capture_sequence > 0
+            && self.generated_at_unix > 0
+            && self.blocker == MS3_LINKED_FRAME_ACQUISITION_FAIL
+            && !self.authority_ready
+            && !self.phase_mutation_allowed
+            && self
+                .expected_root()
+                .is_ok_and(|root| root == self.receipt_root_sha256)
+    }
+
+    fn expected_root(&self) -> Result<String, Ms3GenerationRegistryErrorV1> {
+        canonical_json_sha256(&(
+            MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1,
+            self.generation_sequence,
+            self.acquisition_contract_root_sha256.as_str(),
+            self.acquisition_report_root_sha256.as_str(),
+            self.topology_prefix_root_sha256.as_str(),
+            self.topology_watermark_rows,
+            self.evaluated_topology_rows,
+            self.terminal_receipt_rows,
+            self.closure_capture_sequence,
+            self.generated_at_unix,
+            self.blocker.as_str(),
+            false,
+            false,
+        ))
+        .map_err(|_| Ms3GenerationRegistryErrorV1::Serialization)
+    }
+}
+
 impl Ms3GenerationEntryV1 {
     fn is_closed(&self) -> bool {
         self.terminal.is_some() || self.acquisition_failure.is_some()
@@ -535,10 +773,16 @@ impl Ms3GenerationEntryV1 {
             })
     }
 
-    fn closure_allows_successor(&self) -> bool {
-        self.terminal.as_ref().is_some_and(|terminal| {
-            terminal.verdict == Ms3IndependentFutureVerdictV1::Contradiction
-        }) || self.acquisition_failure.is_some()
+    fn closure_root(&self) -> Option<&str> {
+        self.terminal
+            .as_ref()
+            .filter(|terminal| terminal.verdict == Ms3IndependentFutureVerdictV1::Contradiction)
+            .map(|terminal| terminal.terminal_root_sha256.as_str())
+            .or_else(|| {
+                self.acquisition_failure
+                    .as_ref()
+                    .map(|failure| failure.receipt_root_sha256.as_str())
+            })
     }
 }
 
@@ -637,6 +881,7 @@ mod tests {
                 terminal: Some(terminal),
                 acquisition_failure: None,
             }],
+            linked_acquisition_failures: Vec::new(),
             authority_ready: false,
             phase_mutation_allowed: false,
         };
@@ -663,6 +908,7 @@ mod tests {
                 terminal: None,
                 acquisition_failure: None,
             }],
+            linked_acquisition_failures: Vec::new(),
             authority_ready: false,
             phase_mutation_allowed: false,
         };

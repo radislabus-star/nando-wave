@@ -710,10 +710,15 @@ const TEMPLATE: &str = r#"
     const acquisition = snapshot.ms3_acquisition || {};
     const acquisitionContract = acquisition.acquisition_contract || {};
     const generations = lifecycleStatus.registry?.generations || [];
+    const linkedAcquisitionFailures = lifecycleStatus.registry?.linked_acquisition_failures || [];
     const activeGeneration = lifecycleStatus.active_generation_sequence || lifecycle.active_generation_sequence || 0;
-    const predecessor = generations.find(row => row.generation_sequence + 1 === activeGeneration);
+    const predecessor = generations.find(row => row.generation_sequence + 1 === activeGeneration)
+      || linkedAcquisitionFailures
+        .filter(row => row.generation_sequence + 1 === activeGeneration)
+        .map(row => ({generation_sequence: row.generation_sequence, linked_acquisition_failure: row}))[0];
     const predecessorVerdict = predecessor?.terminal?.verdict || (predecessor?.acquisition_failure ? "acquisition_fail" : "none");
-    const predecessorBlocker = predecessor?.terminal?.blocker || predecessor?.acquisition_failure?.blocker || "";
+    const effectivePredecessorVerdict = predecessor?.linked_acquisition_failure ? "linked_acquisition_fail" : predecessorVerdict;
+    const predecessorBlocker = predecessor?.terminal?.blocker || predecessor?.acquisition_failure?.blocker || predecessor?.linked_acquisition_failure?.blocker || "";
     const acquisitionVerdict = acquisition.verdict || "unavailable";
     const topologyRows = acquisition.new_topology_rows_seen || 0;
     const topologyLimit = acquisitionContract.max_new_topology_rows || 256;
@@ -744,7 +749,7 @@ const TEMPLATE: &str = r#"
               ? "UNIQUE_LAW_FROZEN"
               : acquisitionVerdict.toUpperCase();
     text("ms3-generation", activeGeneration > 0 ? `G${activeGeneration} · ${activePhase}` : "НЕТ ДАННЫХ");
-    text("ms3-predecessor", predecessor ? `G${predecessor.generation_sequence} · ${predecessorVerdict.toUpperCase()}` : "НЕТ");
+    text("ms3-predecessor", predecessor ? `G${predecessor.generation_sequence} · ${effectivePredecessorVerdict.toUpperCase()}` : "НЕТ");
     text("ms3-acquisition", `${number.format(topologyRows)} / ${number.format(topologyLimit)}`);
     text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(linkedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
@@ -753,13 +758,13 @@ const TEMPLATE: &str = r#"
     text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : futureAcquisitionFailed ? "ACQUISITION FAIL" : activePredictions > 0 ? "OUTCOME PENDING" : futureFrozen ? futureVerdict.toUpperCase() : "НЕ ОЦЕНЕН");
     text("ms3-authority", authorityReady ? "TRUE" : "FALSE");
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
-    stateClass("ms3-predecessor", `ms3-value ${predecessorVerdict === "contradiction" || predecessorVerdict === "acquisition_fail" ? "locked" : "watch"}`);
+    stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
     stateClass("ms3-future-applicability", `ms3-value ${futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-law", `ms3-value ${futureVerdict === "future_pass" ? "good" : lawFrozen ? "watch" : "locked"}`);
     stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
     const predecessorText = predecessor
-      ? `G${predecessor.generation_sequence} ${predecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
+      ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
     text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)} · blocker ${futureBlocker || "none"} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
     text("next-route", authorityReady
@@ -912,6 +917,8 @@ mod tests {
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
         assert!(html.contains("SUPPORT / LINKED ACQUISITION"));
+        assert!(html.contains("linked_acquisition_failures"));
+        assert!(html.contains("linked_acquisition_fail"));
         assert!(html.contains("TERMINAL / LINKED"));
         assert!(html.contains("FUTURE APPLICABILITY"));
         assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));

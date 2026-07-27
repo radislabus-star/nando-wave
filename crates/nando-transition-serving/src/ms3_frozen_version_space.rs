@@ -142,6 +142,7 @@ impl Ms3FrozenVersionSpaceRuntime {
             &mut generation_registry,
             envelope.as_ref(),
             independent_future.as_ref(),
+            generation_sequence,
         )?;
         validate_generation_position(&generation_registry, envelope.as_ref(), generation_sequence)?;
         if registry_changed {
@@ -591,6 +592,35 @@ impl Ms3FrozenVersionSpaceRuntime {
         Ok(receipt)
     }
 
+    pub(super) fn seal_linked_acquisition_failure(
+        &mut self,
+        report: &nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionReportV1,
+        closure_capture_sequence: u64,
+    ) -> Result<
+        nando_operator_learning::multi_source::Ms3GenerationLinkedAcquisitionFailureReceiptV1,
+        String,
+    > {
+        if self.envelope.is_some() || self.independent_future.is_some() {
+            return Err("ms3_linked_acquisition_failure_after_freeze".to_owned());
+        }
+        let mut generation_registry = self.generation_registry.clone();
+        let receipt = generation_registry
+            .seal_linked_acquisition_failure(
+                self.generation_sequence,
+                report,
+                closure_capture_sequence,
+            )
+            .map_err(|error| {
+                format!("ms3_generation_registry_linked_acquisition_failure:{error:?}")
+            })?;
+        let registry_bytes = generation_registry
+            .canonical_bytes()
+            .map_err(|error| format!("ms3_generation_registry_encode:{error:?}"))?;
+        write_atomic(&self.generation_registry_path, &registry_bytes)?;
+        self.generation_registry = generation_registry;
+        Ok(receipt)
+    }
+
     pub(super) const fn independent_future(&self) -> Option<&Ms3IndependentFutureEnvelopeV1> {
         self.independent_future.as_ref()
     }
@@ -633,13 +663,10 @@ fn reconcile_generation_registry(
     registry: &mut Ms3GenerationRegistryV1,
     frozen: Option<&FrozenVersionSpaceEnvelopeV1>,
     future: Option<&Ms3IndependentFutureEnvelopeV1>,
+    generation_sequence: u64,
 ) -> Result<bool, String> {
     let Some(frozen) = frozen else {
-        if registry
-            .generations
-            .last()
-            .is_some_and(|entry| entry.terminal.is_none() && entry.acquisition_failure.is_none())
-        {
+        if registry.generation_is_open(registry.next_generation_sequence().saturating_sub(1)) {
             return Err("ms3_generation_registry_active_artifact_missing".to_owned());
         }
         return future
@@ -648,7 +675,11 @@ fn reconcile_generation_registry(
             .ok_or_else(|| "ms3_generation_registry_future_without_frozen".to_owned());
     };
     let mut changed = false;
-    match registry.generations.last() {
+    match registry
+        .generations
+        .iter()
+        .find(|entry| entry.generation_sequence == generation_sequence)
+    {
         None => {
             registry
                 .append_generation(frozen)
@@ -684,23 +715,24 @@ fn validate_generation_position(
     frozen: Option<&FrozenVersionSpaceEnvelopeV1>,
     generation_sequence: u64,
 ) -> Result<(), String> {
-    match (frozen, registry.generations.last()) {
+    let frozen_entry = registry
+        .generations
+        .iter()
+        .find(|entry| entry.generation_sequence == generation_sequence);
+    match (frozen, frozen_entry) {
         (Some(frozen), Some(entry))
             if entry.generation_sequence == generation_sequence
                 && entry.frozen_envelope_root_sha256 == frozen.envelope_root_sha256
-                && entry.frozen_contract_root_sha256
-                    == frozen.contract.contract_root_sha256 =>
+                && entry.frozen_contract_root_sha256 == frozen.contract.contract_root_sha256 =>
         {
             Ok(())
         }
         (Some(_), _) => Err("ms3_generation_registry_active_generation_mismatch".to_owned()),
-        (None, None) if generation_sequence == 1 => Ok(()),
-        (None, Some(entry))
-            if entry.generation_sequence.saturating_add(1) == generation_sequence
-                && (entry.terminal.as_ref().is_some_and(|terminal| {
-                    terminal.verdict
-                        == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
-                }) || entry.acquisition_failure.is_some()) =>
+        (None, _) if registry.next_generation_sequence() == generation_sequence => Ok(()),
+        (None, _)
+            if registry
+                .linked_acquisition_failure(generation_sequence)
+                .is_some() =>
         {
             Ok(())
         }

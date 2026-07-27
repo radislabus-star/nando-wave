@@ -1,4 +1,4 @@
-//! Durable active-generation pointer for autonomous MS3 contradiction rollover.
+//! Durable active-generation pointer for autonomous MS3 failure rollover.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
@@ -129,13 +129,17 @@ impl Ms3GenerationLifecycleRuntime {
         current_frozen: &Ms3FrozenVersionSpaceRuntime,
     ) -> Result<Ms3ActiveGenerationRuntimes, String> {
         validate_runtime_binding(&self.manifest, current_acquisition, current_frozen)?;
-        let current_entry = current_frozen
-            .generation_registry()
-            .generations
-            .last()
-            .filter(|entry| entry.generation_sequence == self.manifest.active_generation_sequence)
-            .ok_or_else(|| "ms3_lifecycle_terminal_registry_missing".to_owned())?;
-        let predecessor_terminal_root_sha256 =
+        let registry = current_frozen.generation_registry();
+        let linked_failure =
+            registry.linked_acquisition_failure(self.manifest.active_generation_sequence);
+        let predecessor_terminal_root_sha256 = if let Some(failure) = linked_failure {
+            failure.receipt_root_sha256.clone()
+        } else {
+            let current_entry = registry
+                .generations
+                .iter()
+                .find(|entry| entry.generation_sequence == self.manifest.active_generation_sequence)
+                .ok_or_else(|| "ms3_lifecycle_terminal_registry_missing".to_owned())?;
             if let Some(future) = current_frozen.independent_future() {
                 if future.receipt.verdict != Ms3IndependentFutureVerdictV1::Contradiction {
                     return Err("ms3_lifecycle_successor_requires_terminal_failure".to_owned());
@@ -154,7 +158,8 @@ impl Ms3GenerationLifecycleRuntime {
                 failure.receipt_root_sha256.clone()
             } else {
                 return Err("ms3_lifecycle_successor_requires_terminal_failure".to_owned());
-            };
+            }
+        };
         let next_generation_sequence = self
             .manifest
             .active_generation_sequence
@@ -312,22 +317,8 @@ fn predecessor_terminal_root(
         return Ok(None);
     }
     registry
-        .generations
-        .iter()
-        .find(|entry| entry.generation_sequence.saturating_add(1) == generation_sequence)
-        .and_then(|entry| {
-            entry
-                .terminal
-                .as_ref()
-                .filter(|terminal| terminal.verdict == Ms3IndependentFutureVerdictV1::Contradiction)
-                .map(|terminal| terminal.terminal_root_sha256.clone())
-                .or_else(|| {
-                    entry
-                        .acquisition_failure
-                        .as_ref()
-                        .map(|failure| failure.receipt_root_sha256.clone())
-                })
-        })
+        .closure_root(generation_sequence - 1)
+        .map(str::to_owned)
         .map(Some)
         .ok_or_else(|| "ms3_lifecycle_predecessor_missing".to_owned())
 }
@@ -949,6 +940,167 @@ mod tests {
         assert_eq!(restored.manifest(), lifecycle.manifest());
         assert_eq!(restored_generation.acquisition.generation_sequence(), 2);
         assert!(restored_generation.frozen.envelope().is_none());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn exhausted_linked_acquisition_rolls_forward_and_preserves_generation_sequence() {
+        let root = test_root("linked-acquisition-failure-rollover");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock");
+        let opened_at_unix = now.as_secs();
+        let opened_at_ms = u64::try_from(now.as_millis()).expect("milliseconds");
+        let topology_root = root.join("topologies");
+        let mut topology_archive =
+            MultiSourceTopologyArchive::open(&topology_root).expect("topology archive");
+        let (mut lifecycle, mut generation_one) = Ms3GenerationLifecycleRuntime::open(
+            &root,
+            &topology_archive,
+            opened_at_unix,
+            1,
+            86_400,
+        )
+        .expect("generation one");
+        let unlinked = topology(
+            "unlinked",
+            "request-unlinked",
+            "unlinked-lineage",
+            1,
+            opened_at_ms,
+        );
+        topology_archive
+            .append(&unlinked)
+            .expect("unlinked topology");
+        let failed = generation_one
+            .acquisition
+            .evaluate(
+                opened_at_unix,
+                vec![unlinked],
+                Vec::new(),
+                vec![terminal(
+                    "request-unlinked",
+                    opened_at_ms,
+                    opened_at_ms.saturating_add(10),
+                )],
+            )
+            .expect("terminal acquisition failure");
+        assert_eq!(
+            failed.verdict,
+            nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+        );
+        let failure = generation_one
+            .frozen
+            .seal_linked_acquisition_failure(&failed, topology_archive.max_bridge_sequence())
+            .expect("durable linked acquisition failure");
+        assert_eq!(failure.generation_sequence, 1);
+        assert!(!failure.authority_ready);
+        assert!(!failure.phase_mutation_allowed);
+        assert_eq!(
+            generation_one
+                .frozen
+                .seal_linked_acquisition_failure(
+                    &failed,
+                    topology_archive.max_bridge_sequence().saturating_add(100),
+                )
+                .expect("idempotent failure after capture advanced"),
+            failure
+        );
+
+        let mut generation_two = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                opened_at_unix.saturating_add(1),
+                &generation_one.acquisition,
+                &generation_one.frozen,
+            )
+            .expect("generation two");
+        assert_eq!(lifecycle.manifest().active_generation_sequence, 2);
+        assert_eq!(
+            lifecycle.manifest().predecessor_terminal_root_sha256,
+            Some(failure.receipt_root_sha256.clone())
+        );
+        assert_eq!(generation_two.acquisition.generation_sequence(), 2);
+        assert!(generation_two.frozen.envelope().is_none());
+
+        let support = topology(
+            "support-two",
+            "request-support-two",
+            "support-two-lineage",
+            2,
+            opened_at_ms.saturating_add(1_000),
+        );
+        let frame = completed_frame(
+            "support-two",
+            "action-support-two",
+            "support-two-lineage",
+            opened_at_ms.saturating_add(1_500),
+            true,
+        );
+        let support_terminal = terminal(
+            "request-support-two",
+            opened_at_ms.saturating_add(900),
+            opened_at_ms.saturating_add(1_100),
+        );
+        topology_archive.append(&support).expect("support topology");
+        let report = generation_two
+            .acquisition
+            .evaluate(
+                opened_at_unix.saturating_add(1),
+                vec![support.clone()],
+                vec![frame.clone()],
+                vec![support_terminal.clone()],
+            )
+            .expect("linked acquisition");
+        let ledger = TransportBindingLedgerV1::build(
+            std::slice::from_ref(&support),
+            std::slice::from_ref(&frame),
+            std::slice::from_ref(&support_terminal),
+        );
+        let bound = &ledger.bound_for_topology(&support.commit.commitment_root_sha256)[0];
+        let prepared = prepare_ms3_frozen_version_space_v1(&report, bound, &frame)
+            .expect("prepared version space");
+        generation_two
+            .frozen
+            .freeze(
+                prepared,
+                topology_archive.max_bridge_sequence(),
+                Ms3VersionSpaceVersionsV1 {
+                    compiler_version: "test-compiler.v1".to_owned(),
+                    vm_abi: "test-vm.v1".to_owned(),
+                },
+                opened_at_unix.saturating_add(1),
+            )
+            .expect("generation two freeze");
+        assert_eq!(
+            generation_two
+                .frozen
+                .generation_registry()
+                .generations
+                .last()
+                .expect("frozen generation")
+                .generation_sequence,
+            2
+        );
+        assert_eq!(
+            generation_two
+                .frozen
+                .generation_registry()
+                .linked_acquisition_failure(1),
+            Some(&failure)
+        );
+
+        let (restored, restored_generation) = Ms3GenerationLifecycleRuntime::open(
+            &root,
+            &topology_archive,
+            opened_at_unix.saturating_add(2),
+            256,
+            86_400,
+        )
+        .expect("restart");
+        assert_eq!(restored.manifest(), lifecycle.manifest());
+        assert_eq!(restored_generation.frozen.generation_sequence(), 2);
+        assert!(restored_generation.frozen.envelope().is_some());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 

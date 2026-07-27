@@ -2750,6 +2750,10 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     let mut frozen = frozen
         .lock()
         .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+    let linked_acquisition_failure = acquisition.terminal_report().filter(|report| {
+        report.verdict
+            == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+    });
     let terminal_contradiction = frozen.independent_future().is_some_and(|future| {
         future.receipt.verdict
             == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
@@ -2760,7 +2764,7 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
             report.verdict
                 == nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail
         });
-    if !terminal_contradiction && !applicability_failed {
+    if linked_acquisition_failure.is_none() && !terminal_contradiction && !applicability_failed {
         return Ok(false);
     }
     if applicability_failed && !terminal_contradiction {
@@ -2769,6 +2773,9 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     let topology_archive = topology_archive
         .lock()
         .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
+    if let Some(report) = linked_acquisition_failure.as_ref() {
+        frozen.seal_linked_acquisition_failure(report, topology_archive.max_bridge_sequence())?;
+    }
     let mut lifecycle = lifecycle
         .lock()
         .map_err(|_| "ms3_generation_lifecycle_lock_poisoned".to_owned())?;
