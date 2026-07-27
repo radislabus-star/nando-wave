@@ -10,9 +10,10 @@ use nando_operator_learning::multi_source::{
     FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1, Ms3FutureApplicabilityContractV1,
     Ms3FutureApplicabilityDispositionV1, Ms3FutureApplicabilityEventV1,
     Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1, Ms3FutureApplicabilityV1,
-    Ms3FuturePredictionV1, Ms3GenerationRegistryV1, Ms3IndependentFutureEnvelopeV1,
-    Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1, PreparedMs3VersionSpaceV1,
-    classify_ms3_unique_law_v1,
+    Ms3FutureApplicabilityVerdictV1, Ms3FuturePredictionV1,
+    Ms3GenerationAcquisitionFailureReceiptV1, Ms3GenerationRegistryV1,
+    Ms3IndependentFutureEnvelopeV1, Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1,
+    PreparedMs3VersionSpaceV1, classify_ms3_unique_law_v1,
 };
 use serde::{Deserialize, Serialize};
 
@@ -544,6 +545,52 @@ impl Ms3FrozenVersionSpaceRuntime {
         Ok(())
     }
 
+    pub(super) fn seal_applicability_acquisition_failure(
+        &mut self,
+        generated_at_unix: u64,
+    ) -> Result<Ms3GenerationAcquisitionFailureReceiptV1, String> {
+        if self.independent_future.is_some() {
+            return Err("ms3_acquisition_failure_after_independent_future".to_owned());
+        }
+        if let Some(receipt) = self
+            .generation_registry
+            .generations
+            .last()
+            .and_then(|entry| entry.acquisition_failure.clone())
+        {
+            return Ok(receipt);
+        }
+        let frozen = self
+            .envelope
+            .as_ref()
+            .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())?;
+        let applicability = self
+            .applicability_ledger
+            .as_ref()
+            .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?;
+        let report = applicability.report(generated_at_unix);
+        if !report.validate() || report.verdict != Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+        {
+            return Err("ms3_acquisition_failure_gate_not_exhausted".to_owned());
+        }
+        let terminal_capture_sequence = applicability
+            .events
+            .iter()
+            .map(|event| event.capture_sequence)
+            .max()
+            .unwrap_or(applicability.contract.opened_at_sequence);
+        let mut generation_registry = self.generation_registry.clone();
+        let receipt = generation_registry
+            .seal_acquisition_failure(frozen, &report, terminal_capture_sequence)
+            .map_err(|error| format!("ms3_generation_registry_acquisition_failure:{error:?}"))?;
+        let registry_bytes = generation_registry
+            .canonical_bytes()
+            .map_err(|error| format!("ms3_generation_registry_encode:{error:?}"))?;
+        write_atomic(&self.generation_registry_path, &registry_bytes)?;
+        self.generation_registry = generation_registry;
+        Ok(receipt)
+    }
+
     pub(super) const fn independent_future(&self) -> Option<&Ms3IndependentFutureEnvelopeV1> {
         self.independent_future.as_ref()
     }
@@ -591,7 +638,7 @@ fn reconcile_generation_registry(
         if registry
             .generations
             .last()
-            .is_some_and(|entry| entry.terminal.is_none())
+            .is_some_and(|entry| entry.terminal.is_none() && entry.acquisition_failure.is_none())
         {
             return Err("ms3_generation_registry_active_artifact_missing".to_owned());
         }
@@ -650,10 +697,10 @@ fn validate_generation_position(
         (None, None) if generation_sequence == 1 => Ok(()),
         (None, Some(entry))
             if entry.generation_sequence.saturating_add(1) == generation_sequence
-                && entry.terminal.as_ref().is_some_and(|terminal| {
+                && (entry.terminal.as_ref().is_some_and(|terminal| {
                     terminal.verdict
                         == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
-                }) =>
+                }) || entry.acquisition_failure.is_some()) =>
         {
             Ok(())
         }

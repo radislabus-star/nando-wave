@@ -2754,8 +2754,17 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
         future.receipt.verdict
             == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
     });
-    if !terminal_contradiction {
+    let applicability_failed = frozen
+        .applicability_report(unix_now())?
+        .is_some_and(|report| {
+            report.verdict
+                == nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+        });
+    if !terminal_contradiction && !applicability_failed {
         return Ok(false);
+    }
+    if applicability_failed && !terminal_contradiction {
+        frozen.seal_applicability_acquisition_failure(unix_now())?;
     }
     let topology_archive = topology_archive
         .lock()

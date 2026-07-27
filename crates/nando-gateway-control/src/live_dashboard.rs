@@ -572,9 +572,10 @@ const TEMPLATE: &str = r#"
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
-      <div class="ms3-cell"><div class="ms3-label">LINKED ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
+      <div class="ms3-cell"><div class="ms3-label">SUPPORT / LINKED ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
       <div class="ms3-cell"><div class="ms3-label">TERMINAL / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
+      <div class="ms3-cell"><div class="ms3-label">FUTURE APPLICABILITY</div><div id="ms3-future-applicability" class="ms3-value watch">0 / 256</div></div>
       <div class="ms3-cell"><div class="ms3-label">DURABLE / ACTIVE PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">INDEPENDENT FUTURE</div><div id="ms3-future" class="ms3-value watch">НЕ ОЦЕНЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">AUTHORITY</div><div id="ms3-authority" class="ms3-value locked">FALSE</div></div>
@@ -711,8 +712,8 @@ const TEMPLATE: &str = r#"
     const generations = lifecycleStatus.registry?.generations || [];
     const activeGeneration = lifecycleStatus.active_generation_sequence || lifecycle.active_generation_sequence || 0;
     const predecessor = generations.find(row => row.generation_sequence + 1 === activeGeneration);
-    const predecessorVerdict = predecessor?.terminal?.verdict || "none";
-    const predecessorBlocker = predecessor?.terminal?.blocker || "";
+    const predecessorVerdict = predecessor?.terminal?.verdict || (predecessor?.acquisition_failure ? "acquisition_fail" : "none");
+    const predecessorBlocker = predecessor?.terminal?.blocker || predecessor?.acquisition_failure?.blocker || "";
     const acquisitionVerdict = acquisition.verdict || "unavailable";
     const topologyRows = acquisition.new_topology_rows_seen || 0;
     const topologyLimit = acquisitionContract.max_new_topology_rows || 256;
@@ -747,11 +748,13 @@ const TEMPLATE: &str = r#"
     text("ms3-acquisition", `${number.format(topologyRows)} / ${number.format(topologyLimit)}`);
     text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(linkedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
+    text("ms3-future-applicability", `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}`);
     text("ms3-predictions", `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}`);
     text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : futureAcquisitionFailed ? "ACQUISITION FAIL" : activePredictions > 0 ? "OUTCOME PENDING" : futureFrozen ? futureVerdict.toUpperCase() : "НЕ ОЦЕНЕН");
     text("ms3-authority", authorityReady ? "TRUE" : "FALSE");
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
-    stateClass("ms3-predecessor", `ms3-value ${predecessorVerdict === "contradiction" ? "locked" : "watch"}`);
+    stateClass("ms3-predecessor", `ms3-value ${predecessorVerdict === "contradiction" || predecessorVerdict === "acquisition_fail" ? "locked" : "watch"}`);
+    stateClass("ms3-future-applicability", `ms3-value ${futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-law", `ms3-value ${futureVerdict === "future_pass" ? "good" : lawFrozen ? "watch" : "locked"}`);
     stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
@@ -764,7 +767,7 @@ const TEMPLATE: &str = r#"
       : futureVerdict === "future_pass"
         ? "BundleV4 → external admission → bounded lease"
         : futureAcquisitionFailed
-          ? "repair prediction → terminal/frame join → new preregistered generation"
+          ? "new preregistered generation → fresh independent lineage → support acquisition"
         : activePredictions > 0
           ? "terminal outcome → independent verifier → FUTURE_PASS"
           : lawFrozen
@@ -908,8 +911,9 @@ mod tests {
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
-        assert!(html.contains("LINKED ACQUISITION"));
+        assert!(html.contains("SUPPORT / LINKED ACQUISITION"));
         assert!(html.contains("TERMINAL / LINKED"));
+        assert!(html.contains("FUTURE APPLICABILITY"));
         assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));
         assert!(html.contains("INDEPENDENT FUTURE"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));

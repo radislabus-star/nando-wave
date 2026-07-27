@@ -4,11 +4,15 @@ use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    FrozenVersionSpaceEnvelopeV1, Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureVerdictV1,
+    FrozenVersionSpaceEnvelopeV1, MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL,
+    Ms3FutureApplicabilityReportV1, Ms3FutureApplicabilityVerdictV1,
+    Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureVerdictV1,
 };
 
 pub const MS3_GENERATION_REGISTRY_SCHEMA_V1: &str = "nando.ms3-generation-registry.v1";
 pub const MS3_GENERATION_TERMINAL_SCHEMA_V1: &str = "nando.ms3-generation-terminal.v1";
+pub const MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1: &str =
+    "nando.ms3-generation-acquisition-failure.v1";
 const MAX_MS3_GENERATION_REGISTRY_BYTES: usize = 12 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -31,6 +35,24 @@ pub struct Ms3GenerationTerminalReceiptV1 {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct Ms3GenerationAcquisitionFailureReceiptV1 {
+    pub schema: String,
+    pub receipt_root_sha256: String,
+    pub generation_sequence: u64,
+    pub frozen_contract_root_sha256: String,
+    pub applicability_contract_root_sha256: String,
+    pub applicability_ledger_root_sha256: String,
+    pub applicability_report_root_sha256: String,
+    pub terminal_capture_sequence: u64,
+    pub independent_topologies: u64,
+    pub generated_at_unix: u64,
+    pub blocker: String,
+    pub authority_ready: bool,
+    pub phase_mutation_allowed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Ms3GenerationEntryV1 {
     pub generation_sequence: u64,
     pub frozen_envelope_root_sha256: String,
@@ -42,6 +64,8 @@ pub struct Ms3GenerationEntryV1 {
     pub support_watermark: u64,
     pub future_min_sequence: u64,
     pub terminal: Option<Ms3GenerationTerminalReceiptV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquisition_failure: Option<Ms3GenerationAcquisitionFailureReceiptV1>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -91,7 +115,7 @@ impl Ms3GenerationRegistryV1 {
         if self
             .generations
             .last()
-            .is_some_and(|entry| entry.terminal.is_none())
+            .is_some_and(|entry| !entry.is_closed())
         {
             return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
         }
@@ -112,12 +136,11 @@ impl Ms3GenerationRegistryV1 {
             return Err(Ms3GenerationRegistryErrorV1::EvidenceReuse);
         }
         if let Some(previous) = self.generations.last() {
-            let terminal = previous
-                .terminal
-                .as_ref()
+            let closure_sequence = previous
+                .closure_capture_sequence()
                 .ok_or(Ms3GenerationRegistryErrorV1::TerminalGenerationMissing)?;
-            if frozen.contract.support_watermark <= terminal.future_capture_sequence
-                || frozen.contract.future_min_sequence <= terminal.future_capture_sequence
+            if frozen.contract.support_watermark <= closure_sequence
+                || frozen.contract.future_min_sequence <= closure_sequence
             {
                 return Err(Ms3GenerationRegistryErrorV1::EvidenceReuse);
             }
@@ -136,6 +159,7 @@ impl Ms3GenerationRegistryV1 {
             support_watermark: frozen.contract.support_watermark,
             future_min_sequence: frozen.contract.future_min_sequence,
             terminal: None,
+            acquisition_failure: None,
         });
         self.reseal()?;
         Ok(generation_sequence)
@@ -166,6 +190,9 @@ impl Ms3GenerationRegistryV1 {
             }
             return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
         }
+        if entry.acquisition_failure.is_some() {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
         if self.future_evidence_was_used(future) {
             return Err(Ms3GenerationRegistryErrorV1::EvidenceReuse);
         }
@@ -188,6 +215,61 @@ impl Ms3GenerationRegistryV1 {
         self.generations[entry_index].terminal = Some(terminal.clone());
         self.reseal()?;
         Ok(terminal)
+    }
+
+    pub fn seal_acquisition_failure(
+        &mut self,
+        frozen: &FrozenVersionSpaceEnvelopeV1,
+        report: &Ms3FutureApplicabilityReportV1,
+        terminal_capture_sequence: u64,
+    ) -> Result<Ms3GenerationAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1> {
+        if !report.validate()
+            || report.verdict != Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+            || report.blocker != MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL
+        {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        let entry_index = self
+            .generations
+            .len()
+            .checked_sub(1)
+            .ok_or(Ms3GenerationRegistryErrorV1::TerminalGenerationMissing)?;
+        let entry = &self.generations[entry_index];
+        if entry.frozen_envelope_root_sha256 != frozen.envelope_root_sha256
+            || entry.frozen_contract_root_sha256 != frozen.contract.contract_root_sha256
+            || report.contract.frozen_law_contract_root_sha256
+                != frozen.contract.contract_root_sha256
+            || terminal_capture_sequence < report.contract.opened_at_sequence
+        {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if let Some(existing) = &entry.acquisition_failure {
+            return (existing.applicability_ledger_root_sha256 == report.ledger_root_sha256)
+                .then_some(existing.clone())
+                .ok_or(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if entry.terminal.is_some() {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        let mut receipt = Ms3GenerationAcquisitionFailureReceiptV1 {
+            schema: MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1.to_owned(),
+            receipt_root_sha256: String::new(),
+            generation_sequence: entry.generation_sequence,
+            frozen_contract_root_sha256: entry.frozen_contract_root_sha256.clone(),
+            applicability_contract_root_sha256: report.contract.contract_root_sha256.clone(),
+            applicability_ledger_root_sha256: report.ledger_root_sha256.clone(),
+            applicability_report_root_sha256: report.report_root_sha256.clone(),
+            terminal_capture_sequence,
+            independent_topologies: report.independent_topologies,
+            generated_at_unix: report.generated_at_unix,
+            blocker: report.blocker.clone(),
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        };
+        receipt.receipt_root_sha256 = receipt.expected_root()?;
+        self.generations[entry_index].acquisition_failure = Some(receipt.clone());
+        self.reseal()?;
+        Ok(receipt)
     }
 
     #[must_use]
@@ -287,13 +369,21 @@ impl Ms3GenerationRegistryV1 {
                                 == entry.frozen_contract_root_sha256
                             && terminal.future_capture_sequence >= entry.future_min_sequence
                     })
+                    && entry.acquisition_failure.as_ref().is_none_or(|failure| {
+                        failure.validate()
+                            && failure.generation_sequence == entry.generation_sequence
+                            && failure.frozen_contract_root_sha256
+                                == entry.frozen_contract_root_sha256
+                            && failure.terminal_capture_sequence >= entry.support_watermark
+                    })
+                    && !(entry.terminal.is_some() && entry.acquisition_failure.is_some())
             })
             && self.generations.windows(2).all(|pair| {
-                pair[0].terminal.as_ref().is_some_and(|terminal| {
-                    terminal.verdict == Ms3IndependentFutureVerdictV1::Contradiction
-                        && pair[1].support_watermark > terminal.future_capture_sequence
-                        && pair[1].future_min_sequence > terminal.future_capture_sequence
-                })
+                pair[0].closure_allows_successor()
+                    && pair[0].closure_capture_sequence().is_some_and(|sequence| {
+                        pair[1].support_watermark > sequence
+                            && pair[1].future_min_sequence > sequence
+                    })
             })
             && self
                 .expected_root()
@@ -390,6 +480,68 @@ impl Ms3GenerationTerminalReceiptV1 {
     }
 }
 
+impl Ms3GenerationAcquisitionFailureReceiptV1 {
+    #[must_use]
+    pub fn validate(&self) -> bool {
+        self.schema == MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1
+            && self.generation_sequence > 0
+            && valid_nonzero_sha256(&self.receipt_root_sha256)
+            && valid_nonzero_sha256(&self.frozen_contract_root_sha256)
+            && valid_nonzero_sha256(&self.applicability_contract_root_sha256)
+            && valid_nonzero_sha256(&self.applicability_ledger_root_sha256)
+            && valid_nonzero_sha256(&self.applicability_report_root_sha256)
+            && self.terminal_capture_sequence > 0
+            && self.generated_at_unix > 0
+            && self.blocker == MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL
+            && !self.authority_ready
+            && !self.phase_mutation_allowed
+            && self
+                .expected_root()
+                .is_ok_and(|root| root == self.receipt_root_sha256)
+    }
+
+    fn expected_root(&self) -> Result<String, Ms3GenerationRegistryErrorV1> {
+        canonical_json_sha256(&(
+            MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1,
+            self.generation_sequence,
+            self.frozen_contract_root_sha256.as_str(),
+            self.applicability_contract_root_sha256.as_str(),
+            self.applicability_ledger_root_sha256.as_str(),
+            self.applicability_report_root_sha256.as_str(),
+            self.terminal_capture_sequence,
+            self.independent_topologies,
+            self.generated_at_unix,
+            self.blocker.as_str(),
+            false,
+            false,
+        ))
+        .map_err(|_| Ms3GenerationRegistryErrorV1::Serialization)
+    }
+}
+
+impl Ms3GenerationEntryV1 {
+    fn is_closed(&self) -> bool {
+        self.terminal.is_some() || self.acquisition_failure.is_some()
+    }
+
+    fn closure_capture_sequence(&self) -> Option<u64> {
+        self.terminal
+            .as_ref()
+            .map(|terminal| terminal.future_capture_sequence)
+            .or_else(|| {
+                self.acquisition_failure
+                    .as_ref()
+                    .map(|failure| failure.terminal_capture_sequence)
+            })
+    }
+
+    fn closure_allows_successor(&self) -> bool {
+        self.terminal.as_ref().is_some_and(|terminal| {
+            terminal.verdict == Ms3IndependentFutureVerdictV1::Contradiction
+        }) || self.acquisition_failure.is_some()
+    }
+}
+
 fn evidence_was_used(entry: &Ms3GenerationEntryV1, frozen: &FrozenVersionSpaceEnvelopeV1) -> bool {
     let new_roots = [
         frozen.contract.topology_root_sha256.as_str(),
@@ -483,6 +635,7 @@ mod tests {
                 support_watermark: 7,
                 future_min_sequence: 9,
                 terminal: Some(terminal),
+                acquisition_failure: None,
             }],
             authority_ready: false,
             phase_mutation_allowed: false,
@@ -508,6 +661,7 @@ mod tests {
                 support_watermark: 7,
                 future_min_sequence: 8,
                 terminal: None,
+                acquisition_failure: None,
             }],
             authority_ready: false,
             phase_mutation_allowed: false,

@@ -129,24 +129,32 @@ impl Ms3GenerationLifecycleRuntime {
         current_frozen: &Ms3FrozenVersionSpaceRuntime,
     ) -> Result<Ms3ActiveGenerationRuntimes, String> {
         validate_runtime_binding(&self.manifest, current_acquisition, current_frozen)?;
-        let future = current_frozen
-            .independent_future()
-            .ok_or_else(|| "ms3_lifecycle_terminal_future_missing".to_owned())?;
-        if future.receipt.verdict != Ms3IndependentFutureVerdictV1::Contradiction {
-            return Err("ms3_lifecycle_successor_requires_contradiction".to_owned());
-        }
-        let terminal = current_frozen
+        let current_entry = current_frozen
             .generation_registry()
             .generations
             .last()
             .filter(|entry| entry.generation_sequence == self.manifest.active_generation_sequence)
-            .and_then(|entry| entry.terminal.as_ref())
             .ok_or_else(|| "ms3_lifecycle_terminal_registry_missing".to_owned())?;
-        if terminal.verdict != Ms3IndependentFutureVerdictV1::Contradiction
-            || terminal.future_receipt_root_sha256 != future.receipt.receipt_root_sha256
-        {
-            return Err("ms3_lifecycle_terminal_registry_mismatch".to_owned());
-        }
+        let predecessor_terminal_root_sha256 =
+            if let Some(future) = current_frozen.independent_future() {
+                if future.receipt.verdict != Ms3IndependentFutureVerdictV1::Contradiction {
+                    return Err("ms3_lifecycle_successor_requires_terminal_failure".to_owned());
+                }
+                let terminal = current_entry
+                    .terminal
+                    .as_ref()
+                    .ok_or_else(|| "ms3_lifecycle_terminal_registry_missing".to_owned())?;
+                if terminal.verdict != Ms3IndependentFutureVerdictV1::Contradiction
+                    || terminal.future_receipt_root_sha256 != future.receipt.receipt_root_sha256
+                {
+                    return Err("ms3_lifecycle_terminal_registry_mismatch".to_owned());
+                }
+                terminal.terminal_root_sha256.clone()
+            } else if let Some(failure) = &current_entry.acquisition_failure {
+                failure.receipt_root_sha256.clone()
+            } else {
+                return Err("ms3_lifecycle_successor_requires_terminal_failure".to_owned());
+            };
         let next_generation_sequence = self
             .manifest
             .active_generation_sequence
@@ -175,7 +183,7 @@ impl Ms3GenerationLifecycleRuntime {
         let manifest = Ms3GenerationLifecycleManifestV1::seal(
             next_generation_sequence,
             acquisition.contract(),
-            Some(terminal.terminal_root_sha256.clone()),
+            Some(predecessor_terminal_root_sha256),
         )?;
         validate_runtime_binding(&manifest, &acquisition, &frozen)?;
         write_atomic(&self.manifest_path, &manifest.canonical_bytes()?)?;
@@ -307,9 +315,20 @@ fn predecessor_terminal_root(
         .generations
         .iter()
         .find(|entry| entry.generation_sequence.saturating_add(1) == generation_sequence)
-        .and_then(|entry| entry.terminal.as_ref())
-        .filter(|terminal| terminal.verdict == Ms3IndependentFutureVerdictV1::Contradiction)
-        .map(|terminal| Some(terminal.terminal_root_sha256.clone()))
+        .and_then(|entry| {
+            entry
+                .terminal
+                .as_ref()
+                .filter(|terminal| terminal.verdict == Ms3IndependentFutureVerdictV1::Contradiction)
+                .map(|terminal| terminal.terminal_root_sha256.clone())
+                .or_else(|| {
+                    entry
+                        .acquisition_failure
+                        .as_ref()
+                        .map(|failure| failure.receipt_root_sha256.clone())
+                })
+        })
+        .map(Some)
         .ok_or_else(|| "ms3_lifecycle_predecessor_missing".to_owned())
 }
 
@@ -578,7 +597,7 @@ mod tests {
 
     fn terminal_generation(
         root: &Path,
-        pass: bool,
+        future_verifier_label: Option<bool>,
     ) -> (
         MultiSourceTopologyArchive,
         Ms3GenerationLifecycleRuntime,
@@ -653,6 +672,9 @@ mod tests {
                 opened_at_unix,
             )
             .expect("frozen law");
+        let Some(pass) = future_verifier_label else {
+            return (topology_archive, lifecycle, runtimes);
+        };
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -769,7 +791,8 @@ mod tests {
     #[test]
     fn contradiction_rolls_to_fresh_generation_and_restarts_without_evidence_loss() {
         let root = test_root("rollover");
-        let (topology_archive, mut lifecycle, generation_one) = terminal_generation(&root, false);
+        let (topology_archive, mut lifecycle, generation_one) =
+            terminal_generation(&root, Some(false));
         let legacy_contract =
             std::fs::read(root.join("contract-v1.cbor")).expect("legacy acquisition contract");
         let legacy_report =
@@ -849,7 +872,8 @@ mod tests {
     #[test]
     fn prepared_successor_is_idempotent_when_manifest_publish_did_not_happen() {
         let root = test_root("retry");
-        let (topology_archive, mut lifecycle, generation_one) = terminal_generation(&root, false);
+        let (topology_archive, mut lifecycle, generation_one) =
+            terminal_generation(&root, Some(false));
         let generation_one_manifest =
             std::fs::read(root.join(LIFECYCLE_FILE)).expect("generation one manifest");
         let first_successor = lifecycle
@@ -883,9 +907,56 @@ mod tests {
     }
 
     #[test]
+    fn exhausted_applicability_gate_rolls_to_fresh_generation_and_restarts() {
+        let root = test_root("applicability-failure-rollover");
+        let (topology_archive, mut lifecycle, mut generation_one) =
+            terminal_generation(&root, None);
+        let failure = generation_one
+            .frozen
+            .seal_applicability_acquisition_failure(u64::MAX)
+            .expect("durable acquisition failure");
+        assert_eq!(failure.generation_sequence, 1);
+        assert_eq!(failure.independent_topologies, 0);
+        assert!(!failure.authority_ready);
+        assert!(!failure.phase_mutation_allowed);
+        assert_eq!(
+            generation_one
+                .frozen
+                .seal_applicability_acquisition_failure(u64::MAX)
+                .expect("idempotent acquisition failure"),
+            failure
+        );
+
+        let generation_two = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                200,
+                &generation_one.acquisition,
+                &generation_one.frozen,
+            )
+            .expect("fresh successor");
+        assert_eq!(lifecycle.manifest().active_generation_sequence, 2);
+        assert_eq!(
+            lifecycle.manifest().predecessor_terminal_root_sha256,
+            Some(failure.receipt_root_sha256)
+        );
+        assert_eq!(generation_two.acquisition.generation_sequence(), 2);
+        assert!(generation_two.frozen.envelope().is_none());
+
+        let (restored, restored_generation) =
+            Ms3GenerationLifecycleRuntime::open(&root, &topology_archive, 300, 256, 86_400)
+                .expect("restart");
+        assert_eq!(restored.manifest(), lifecycle.manifest());
+        assert_eq!(restored_generation.acquisition.generation_sequence(), 2);
+        assert!(restored_generation.frozen.envelope().is_none());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn future_pass_does_not_create_a_successor() {
         let root = test_root("pass");
-        let (topology_archive, mut lifecycle, generation_one) = terminal_generation(&root, true);
+        let (topology_archive, mut lifecycle, generation_one) =
+            terminal_generation(&root, Some(true));
         let result = lifecycle.prepare_successor(
             &topology_archive,
             200,
@@ -894,7 +965,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            Err(ref error) if error == "ms3_lifecycle_successor_requires_contradiction"
+            Err(ref error) if error == "ms3_lifecycle_successor_requires_terminal_failure"
         ));
         assert_eq!(lifecycle.manifest().active_generation_sequence, 1);
         assert!(!root.join(GENERATIONS_DIRECTORY).exists());
