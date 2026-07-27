@@ -146,3 +146,67 @@ fresh independent applicable topology
 
 `CanonicalOperatorIR`, BundleV4 and External Admission remain locked until
 `FUTURE_PASS`.
+
+## Missing Completed Frame Lifecycle Repair
+
+Live evaluation exposed a lifecycle state that the original deadline-only gate
+did not distinguish:
+
+```text
+durable prediction
++ durable terminal receipt
++ no completed RelationFrame
++ later durable topology from the same lineage
+-> CENSORED_MISSING_COMPLETED_FRAME
+```
+
+The later topology is a capture fence. Its root, request identity, lineage,
+sequence and capture time are committed into the censored receipt. A global
+watermark or elapsed delay is not sufficient. Without this same-lineage fence,
+the prediction remains pending.
+
+The censored outcome:
+
+```text
+creates anti-evidence       false
+updates phase memory        false
+grants authority            false
+counts as contradiction     false
+closes current prediction   true
+reopens acquisition         true
+```
+
+The first live prediction had a terminal receipt but no completed frame. Its
+terminal preceded the durable prediction by 37 ms, while a later request in
+the same lineage proved capture had advanced. The repaired evaluator emitted
+the censored receipt immediately instead of waiting for the 24-hour emergency
+deadline.
+
+After deployment and a cold restart, a second pending frame-less prediction
+was independently censored and acquisition returned to `COLLECTING` again:
+
+```text
+predictions committed                 2
+censored missing completed frame      2
+active predictions                    0
+verdict                               collecting
+blocker                               applicable_independent_topology_pending
+authority ready                       false
+phase mutation allowed                false
+```
+
+The hot serving PID remained unchanged and its restart count stayed zero.
+The installed cold binary SHA-256 is
+`4dc1f7f0dfb276014400e9bf6c9f9da62cd5a5a0b2afc9bfa99145eb4cbee0aa`.
+The implementation commits are `5a3112e` and `5793ee0`.
+
+Verification after the final source synchronization:
+
+```text
+nando-operator-learning               298 / 298 PASS
+nando-transition-serving              138 PASS / 2 ignored
+strict Clippy for changed crates       PASS
+NANDA composite gate                  PASS
+false accepts                         0
+runtime parity failures               0
+```
