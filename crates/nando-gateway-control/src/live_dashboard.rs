@@ -602,7 +602,7 @@ const TEMPLATE: &str = r#"
     <div class="window-head"><h2 class="band-title">ЖИВЫЕ ОКНА</h2><div id="window-summary" class="window-summary">NANDO — / MIXED — / OUTSIDE — / IDLE —</div></div>
     <div class="window-scroll"><div class="window-table"><div class="window-row header"><span>ОКНО</span><span>СЕССИЯ</span><span>КОНФИГ</span><span>СТАТУС</span><span>КОНЕЧНАЯ ТОЧКА</span></div><div id="window-rows"></div></div></div>
   </div></section>
-  <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span class="next-route">relation evidence → circuit → future proof → admission</span></span><span>false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · bridge failures <b id="bridge-failures">0</b></span></div></footer>
+  <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span id="next-route" class="next-route">relation evidence → circuit → future proof → admission</span></span><span>false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · bridge failures <b id="bridge-failures">0</b></span></div></footer>
 </main>
 <script>
 (() => {
@@ -752,7 +752,16 @@ const TEMPLATE: &str = r#"
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${predecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
-    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${acquisitionVerdict.toUpperCase()} · watermark ${number.format(acquisitionContract.topology_watermark_rows || 0)} · deadline ${localTime(acquisitionContract.deadline_unix || 0)} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
+    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · acquisition ${acquisitionVerdict.toUpperCase()} · watermark ${number.format(acquisitionContract.topology_watermark_rows || 0)} · deadline ${localTime(acquisitionContract.deadline_unix || 0)} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
+    text("next-route", authorityReady
+      ? "ordinary CPU receipt → avoided upstream call"
+      : futureVerdict === "future_pass"
+        ? "BundleV4 → external admission → bounded lease"
+        : activePredictions > 0
+          ? "terminal outcome → independent verifier → FUTURE_PASS"
+          : lawFrozen
+            ? "applicable topology → durable prediction → terminal outcome"
+            : "linked evidence → version space → unique law freeze");
 
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
