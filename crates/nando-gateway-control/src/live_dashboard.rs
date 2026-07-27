@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.27-b018";
+const DASHBOARD_BUILD: &str = "2026.07.27-b019";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -572,7 +572,7 @@ const TEMPLATE: &str = r#"
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
-      <div class="ms3-cell"><div class="ms3-label">ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
+      <div class="ms3-cell"><div class="ms3-label">LINKED ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
       <div class="ms3-cell"><div class="ms3-label">TERMINAL / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">DURABLE / ACTIVE PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
@@ -719,18 +719,24 @@ const TEMPLATE: &str = r#"
     const terminalRows = acquisition.terminal_receipt_rows || 0;
     const linkedRows = acquisition.linked_frame_rows || 0;
     const futureVerdict = ms3.effective_verdict || ms3.verdict || "not_evaluated";
+    const futureBlocker = ms3.effective_blocker || ms3.blocker || "";
     const lawFrozen = Boolean(lifecycleStatus.active_frozen_envelope_root_sha256);
     const futureFrozen = Boolean(lifecycleStatus.active_future_envelope_root_sha256);
     const authorityReady = lifecycleStatus.authority_ready === true || ms3.authority_ready === true;
     const phaseMutation = lifecycleStatus.phase_mutation_allowed === true || acquisition.phase_update_allowed === true || ms3.phase_mutation_allowed === true;
     const predictionsCommitted = ms3.predictions_committed || 0;
     const activePredictions = ms3.effective_active_predictions ?? ms3.active_predictions ?? 0;
+    const futureTopologies = ms3.independent_topologies || 0;
+    const futureTopologyLimit = ms3.contract?.max_independent_topologies || 256;
+    const futureAcquisitionFailed = futureVerdict === "acquisition_fail";
     const activePhase = authorityReady
       ? "ADMITTED"
       : futureVerdict === "future_pass"
         ? "FUTURE_PASS"
         : futureVerdict === "contradiction"
           ? "CONTRADICTION"
+          : futureAcquisitionFailed
+            ? "ACQUISITION_FAIL"
           : activePredictions > 0 || futureVerdict === "applicable_prediction_pending"
             ? "FUTURE_PENDING"
             : lawFrozen
@@ -742,21 +748,23 @@ const TEMPLATE: &str = r#"
     text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(linkedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
     text("ms3-predictions", `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}`);
-    text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : activePredictions > 0 ? "OUTCOME PENDING" : futureFrozen ? futureVerdict.toUpperCase() : "НЕ ОЦЕНЕН");
+    text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : futureAcquisitionFailed ? "ACQUISITION FAIL" : activePredictions > 0 ? "OUTCOME PENDING" : futureFrozen ? futureVerdict.toUpperCase() : "НЕ ОЦЕНЕН");
     text("ms3-authority", authorityReady ? "TRUE" : "FALSE");
-    stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" ? "locked" : "watch"}`);
+    stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${predecessorVerdict === "contradiction" ? "locked" : "watch"}`);
     stateClass("ms3-law", `ms3-value ${futureVerdict === "future_pass" ? "good" : lawFrozen ? "watch" : "locked"}`);
-    stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" ? "locked" : "watch"}`);
+    stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${predecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
-    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · acquisition ${acquisitionVerdict.toUpperCase()} · watermark ${number.format(acquisitionContract.topology_watermark_rows || 0)} · deadline ${localTime(acquisitionContract.deadline_unix || 0)} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
+    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)} · blocker ${futureBlocker || "none"} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
     text("next-route", authorityReady
       ? "ordinary CPU receipt → avoided upstream call"
       : futureVerdict === "future_pass"
         ? "BundleV4 → external admission → bounded lease"
+        : futureAcquisitionFailed
+          ? "repair prediction → terminal/frame join → new preregistered generation"
         : activePredictions > 0
           ? "terminal outcome → independent verifier → FUTURE_PASS"
           : lawFrozen
@@ -900,6 +908,7 @@ mod tests {
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
+        assert!(html.contains("LINKED ACQUISITION"));
         assert!(html.contains("TERMINAL / LINKED"));
         assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));
         assert!(html.contains("INDEPENDENT FUTURE"));
