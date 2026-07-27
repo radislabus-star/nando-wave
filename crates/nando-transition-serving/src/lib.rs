@@ -1984,29 +1984,48 @@ async fn ms3_independent_future_report(State(state): State<AppState>) -> Respons
 }
 
 async fn ms3_future_applicability_report(State(state): State<AppState>) -> Response {
-    let report = state
+    let status = state
         .ms3_frozen_version_space
         .as_ref()
         .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())
         .and_then(|runtime| {
-            runtime
+            let runtime = runtime
                 .lock()
-                .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+                .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+            let report = runtime
                 .applicability_report(unix_now())
                 .and_then(|report| {
                     report.ok_or_else(|| "ms3_future_applicability_not_open".to_owned())
-                })
+                })?;
+            Ok::<_, String>((report, runtime.independent_future().cloned()))
         });
-    match report {
-        Ok(report) => json_response(
-            StatusCode::OK,
-            serde_json::to_value(report).unwrap_or_else(|_| {
+    match status {
+        Ok((report, independent_future)) => {
+            let mut value = serde_json::to_value(&report).unwrap_or_else(|_| {
                 json!({
                     "schema": "nando.ms3-future-applicability-error.v1",
                     "error": "report_encode"
                 })
-            }),
-        ),
+            });
+            if let Some(future) = independent_future
+                && let Some(status) = value.as_object_mut()
+            {
+                use nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1;
+
+                let verdict = match future.receipt.verdict {
+                    Ms3IndependentFutureVerdictV1::Pass => "future_pass",
+                    Ms3IndependentFutureVerdictV1::Contradiction => "contradiction",
+                };
+                insert_ms3_terminal_status(
+                    status,
+                    serde_json::to_value(report.verdict).unwrap_or(Value::Null),
+                    verdict,
+                    &future.receipt.blocker,
+                    &future.receipt.receipt_root_sha256,
+                );
+            }
+            json_response(StatusCode::OK, value)
+        }
         Err(error) => json_response(
             StatusCode::SERVICE_UNAVAILABLE,
             json!({
@@ -2017,6 +2036,26 @@ async fn ms3_future_applicability_report(State(state): State<AppState>) -> Respo
             }),
         ),
     }
+}
+
+fn insert_ms3_terminal_status(
+    status: &mut serde_json::Map<String, Value>,
+    ledger_verdict: Value,
+    effective_verdict: &str,
+    effective_blocker: &str,
+    receipt_root_sha256: &str,
+) {
+    // The immutable applicability ledger describes topology acquisition. Once an
+    // independent future is sealed, its verifier receipt owns the lifecycle verdict.
+    status.insert("ledger_verdict".to_owned(), ledger_verdict);
+    status.insert("effective_verdict".to_owned(), json!(effective_verdict));
+    status.insert("effective_blocker".to_owned(), json!(effective_blocker));
+    status.insert("effective_active_predictions".to_owned(), json!(0));
+    status.insert("lifecycle_terminal".to_owned(), json!(true));
+    status.insert(
+        "independent_future_receipt_root_sha256".to_owned(),
+        json!(receipt_root_sha256),
+    );
 }
 
 fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> {
@@ -6601,6 +6640,31 @@ mod tests {
     static PROJECT_STATUS_TEST_ID: AtomicU64 = AtomicU64::new(0);
     const STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA: &str =
         "status_projection_external_evidence.v1";
+
+    #[test]
+    fn sealed_ms3_future_owns_effective_lifecycle_status() {
+        let mut status = serde_json::Map::from_iter([("active_predictions".to_owned(), json!(1))]);
+        insert_ms3_terminal_status(
+            &mut status,
+            json!("applicable_prediction_pending"),
+            "contradiction",
+            "physical_transition_mismatch",
+            &"a".repeat(64),
+        );
+
+        assert_eq!(status["active_predictions"], json!(1));
+        assert_eq!(status["effective_active_predictions"], json!(0));
+        assert_eq!(
+            status["ledger_verdict"],
+            json!("applicable_prediction_pending")
+        );
+        assert_eq!(status["effective_verdict"], json!("contradiction"));
+        assert_eq!(
+            status["effective_blocker"],
+            json!("physical_transition_mismatch")
+        );
+        assert_eq!(status["lifecycle_terminal"], json!(true));
+    }
 
     #[test]
     fn observation_dedupe_memory_is_bounded() {
