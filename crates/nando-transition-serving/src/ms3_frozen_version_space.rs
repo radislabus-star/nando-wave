@@ -7,12 +7,12 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use nando_operator_learning::multi_source::{
-    FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1, Ms3CompletedFrameCaptureFenceV1,
-    Ms3FutureApplicabilityContractV1, Ms3FutureApplicabilityDispositionV1,
-    Ms3FutureApplicabilityEventV1, Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1,
-    Ms3FutureApplicabilityV1, Ms3FuturePredictionV1, Ms3GenerationRegistryV1,
-    Ms3IndependentFutureEnvelopeV1, Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1,
-    PreparedMs3VersionSpaceV1, classify_ms3_unique_law_v1,
+    FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1, Ms3FutureApplicabilityContractV1,
+    Ms3FutureApplicabilityDispositionV1, Ms3FutureApplicabilityEventV1,
+    Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1, Ms3FutureApplicabilityV1,
+    Ms3FuturePredictionV1, Ms3GenerationRegistryV1, Ms3IndependentFutureEnvelopeV1,
+    Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1, PreparedMs3VersionSpaceV1,
+    classify_ms3_unique_law_v1,
 };
 use serde::{Deserialize, Serialize};
 
@@ -495,36 +495,6 @@ impl Ms3FrozenVersionSpaceRuntime {
                 action_observed_at_unix_nanos,
             )),
             now,
-        )
-        .map_err(str::to_owned)?;
-        self.append_applicability_event(event)
-    }
-
-    pub(super) fn record_censored_missing_completed_frame(
-        &mut self,
-        prediction: &Ms3FuturePredictionV1,
-        terminal_receipt_root_sha256: &str,
-        terminal_completed_at_unix_nanos: u64,
-        capture_fence: Ms3CompletedFrameCaptureFenceV1,
-    ) -> Result<bool, String> {
-        if self.prediction_is_disqualified(&prediction.prediction_root_sha256) {
-            return Ok(false);
-        }
-        let (_, durable_at) = self
-            .prediction_commitment(&prediction.prediction_root_sha256)
-            .ok_or_else(|| "ms3_prediction_durable_receipt_missing".to_owned())?;
-        let gate = self
-            .applicability_ledger
-            .as_ref()
-            .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?;
-        let event = Ms3FutureApplicabilityEventV1::seal_censored_missing_completed_frame(
-            &gate.contract,
-            prediction,
-            durable_at,
-            terminal_receipt_root_sha256,
-            terminal_completed_at_unix_nanos,
-            capture_fence,
-            unix_now_nanos(),
         )
         .map_err(str::to_owned)?;
         self.append_applicability_event(event)
