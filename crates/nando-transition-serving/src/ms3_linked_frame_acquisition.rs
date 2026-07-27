@@ -95,6 +95,10 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         self.terminal_report.is_some()
     }
 
+    pub(super) fn terminal_report(&self) -> Option<Ms3LinkedFrameAcquisitionReportV1> {
+        self.terminal_report.clone()
+    }
+
     pub(super) fn frozen_evaluated_topology_rows(&self) -> Option<u64> {
         self.terminal_report
             .as_ref()

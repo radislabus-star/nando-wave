@@ -2119,6 +2119,7 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
         .spawn(move || {
             let mut published = false;
             let mut last_future_generation = None;
+            let mut last_snapshot_generation = None;
             loop {
                 if let (Some(archive), Some(source_path)) = (
                     state.terminal_receipt_archive.as_ref(),
@@ -2148,41 +2149,55 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                         eprintln!("nando-ms3-independent-future-generation: {error}");
                     }
                 }
-                let snapshot = if state.config.embedded_response_miner_enabled {
-                    let evidence = current_miner_worker(&state)
-                        .and_then(|worker| worker.multi_source_evidence());
-                    let requests = archived_request_snapshot(&state);
-                    let active_protocols = multi_source_live::active_protocol_mode_roots(
-                        &state.config.response_registry_path,
-                    );
-                    match (evidence, requests, active_protocols) {
-                        (Some(evidence), Ok(requests), Ok(active_protocols)) => {
-                            archived_relation_frames(&state, &requests).and_then(|frames| {
-                                multi_source_live::build_snapshot(
-                                    evidence.opportunities,
-                                    requests,
-                                    frames,
-                                    &active_protocols,
-                                )
-                                .and_then(|snapshot| {
-                                    multi_source_live::write_snapshot(
-                                        &state.config.multi_source_snapshot_path,
-                                        &snapshot,
-                                    )?;
-                                    Ok(snapshot)
+                let snapshot_generation = state
+                    .config
+                    .embedded_response_miner_enabled
+                    .then(|| multi_source_snapshot_generation(&state))
+                    .transpose();
+                let refresh_snapshot = !published
+                    || !state.config.embedded_response_miner_enabled
+                    || snapshot_generation.is_err()
+                    || snapshot_generation.as_ref().is_ok_and(|generation| {
+                        last_snapshot_generation.as_ref() != generation.as_ref()
+                    });
+                if refresh_snapshot {
+                    let snapshot = if state.config.embedded_response_miner_enabled {
+                        let evidence = current_miner_worker(&state)
+                            .and_then(|worker| worker.multi_source_evidence());
+                        let requests = archived_request_snapshot(&state);
+                        let active_protocols = multi_source_live::active_protocol_mode_roots(
+                            &state.config.response_registry_path,
+                        );
+                        match (evidence, requests, active_protocols) {
+                            (Some(evidence), Ok(requests), Ok(active_protocols)) => {
+                                archived_relation_frames(&state, &requests).and_then(|frames| {
+                                    multi_source_live::build_snapshot(
+                                        evidence.opportunities,
+                                        requests,
+                                        frames,
+                                        &active_protocols,
+                                    )
+                                    .and_then(|snapshot| {
+                                        multi_source_live::write_snapshot(
+                                            &state.config.multi_source_snapshot_path,
+                                            &snapshot,
+                                        )?;
+                                        Ok(snapshot)
+                                    })
                                 })
-                            })
+                            }
+                            _ => Err("live_multi_source_snapshot_inputs_pending".to_owned()),
                         }
-                        _ => Err("live_multi_source_snapshot_inputs_pending".to_owned()),
+                    } else {
+                        multi_source_live::read_snapshot(&state.config.multi_source_snapshot_path)
+                    };
+                    if let Ok(snapshot) = snapshot {
+                        if let Ok(mut target) = state.multi_source_snapshot.write() {
+                            *target = Some(snapshot);
+                        }
+                        published = true;
+                        last_snapshot_generation = snapshot_generation.ok().flatten();
                     }
-                } else {
-                    multi_source_live::read_snapshot(&state.config.multi_source_snapshot_path)
-                };
-                if let Ok(snapshot) = snapshot {
-                    if let Ok(mut target) = state.multi_source_snapshot.write() {
-                        *target = Some(snapshot);
-                    }
-                    published = true;
                 }
                 let retry_ms = if published {
                     state.config.multi_source_snapshot_poll_ms
@@ -2194,6 +2209,54 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
         })
         .map(|_| ())
         .map_err(|error| format!("multi_source_snapshot_thread:{error}"))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct MultiSourceSnapshotGeneration {
+    evidence_generation: u64,
+    request_structures_applied: u64,
+    topology_rows: usize,
+    frame_rows: usize,
+    registry_bytes: u64,
+    registry_modified_nanos: u128,
+}
+
+fn multi_source_snapshot_generation(
+    state: &AppState,
+) -> Result<MultiSourceSnapshotGeneration, String> {
+    let evidence_generation = current_miner_worker(state)
+        .and_then(|worker| worker.multi_source_evidence_generation())
+        .ok_or_else(|| "multi_source_evidence_generation_pending".to_owned())?;
+    let request_structures_applied = state.request_learning.status().structures_applied;
+    let topology_rows = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+        .len();
+    let frame_rows = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
+        .len();
+    let registry = fs::metadata(&state.config.response_registry_path)
+        .map_err(|error| format!("multi_source_registry_metadata:{error}"))?;
+    let registry_modified_nanos = registry
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |duration| duration.as_nanos());
+    Ok(MultiSourceSnapshotGeneration {
+        evidence_generation,
+        request_structures_applied,
+        topology_rows,
+        frame_rows,
+        registry_bytes: registry.len(),
+        registry_modified_nanos,
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2312,6 +2375,13 @@ fn evaluate_ms3_linked_frame_acquisition(
         .ms3_linked_frame_acquisition
         .as_ref()
         .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?;
+    if let Some(report) = runtime
+        .lock()
+        .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
+        .terminal_report()
+    {
+        return Ok(report);
+    }
     let watermark_rows = runtime
         .lock()
         .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?

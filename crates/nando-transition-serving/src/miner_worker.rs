@@ -160,6 +160,7 @@ impl CollectionMinerPublishedSnapshot {
 
 #[derive(Clone)]
 pub(crate) struct MultiSourceMinerEvidenceSnapshotV1 {
+    generation: u64,
     pub(crate) opportunities: Vec<OpportunityIntentAuditRowV1>,
 }
 
@@ -519,6 +520,13 @@ impl MinerWorkerHandle {
             .ok()
             .and_then(|snapshot| snapshot.clone())
     }
+
+    pub(crate) fn multi_source_evidence_generation(&self) -> Option<u64> {
+        self.multi_source_evidence
+            .read()
+            .ok()
+            .and_then(|snapshot| snapshot.as_ref().map(|snapshot| snapshot.generation))
+    }
 }
 
 pub fn spawn_miner_worker(
@@ -615,6 +623,7 @@ fn spawn_miner_worker_with_report_heartbeat(
             .append_batch(&initial_frames)?;
     }
     let initial_multi_source_evidence = MultiSourceMinerEvidenceSnapshotV1 {
+        generation: 1,
         opportunities: initial_opportunities,
     };
     let initial_collection_snapshot = collection_miner
@@ -1206,7 +1215,11 @@ fn publish_multi_source_evidence(
     target: &std::sync::RwLock<Option<MultiSourceMinerEvidenceSnapshotV1>>,
 ) {
     if let Ok(mut published) = target.write() {
+        let generation = published
+            .as_ref()
+            .map_or(1, |snapshot| snapshot.generation.saturating_add(1));
         *published = Some(MultiSourceMinerEvidenceSnapshotV1 {
+            generation,
             opportunities: stream.opportunity_audit_rows_v1(),
         });
     }
