@@ -547,8 +547,7 @@ impl Ms3FrozenVersionSpaceRuntime {
             .applicability_ledger
             .as_ref()
             .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?;
-        if gate.report(unix_now_nanos() / 1_000_000_000).verdict
-            != nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending
+        if !future_outcome_resolution_allowed(gate.report(unix_now_nanos() / 1_000_000_000).verdict)
         {
             return Err("ms3_future_applicability_gate_closed".to_owned());
         }
@@ -762,6 +761,18 @@ fn future_topology_observation_allowed(
     }
 }
 
+fn future_outcome_resolution_allowed(
+    verdict: nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1,
+) -> bool {
+    use nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1;
+
+    matches!(
+        verdict,
+        Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending
+            | Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+    )
+}
+
 fn validate_committed_state_presence(
     envelope: bool,
     predictions: bool,
@@ -946,6 +957,15 @@ mod tests {
         assert!(!future_topology_observation_allowed(
             Ms3FutureApplicabilityVerdictV1::AcquisitionFail,
             true
+        ));
+        assert!(future_outcome_resolution_allowed(
+            Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending
+        ));
+        assert!(future_outcome_resolution_allowed(
+            Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+        ));
+        assert!(!future_outcome_resolution_allowed(
+            Ms3FutureApplicabilityVerdictV1::Collecting
         ));
     }
 

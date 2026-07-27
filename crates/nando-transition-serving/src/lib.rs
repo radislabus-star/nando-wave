@@ -2848,7 +2848,7 @@ fn evaluate_ms3_independent_future(
         .ms3_frozen_version_space
         .as_ref()
         .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?;
-    let (frozen, predictions, existing, gate_verdict) = {
+    let (frozen, predictions, existing) = {
         let runtime = runtime
             .lock()
             .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
@@ -2871,18 +2871,9 @@ fn evaluate_ms3_independent_future(
                 })
                 .collect::<Vec<_>>(),
             runtime.independent_future().cloned(),
-            runtime
-                .applicability_report(unix_now())?
-                .map(|report| report.verdict),
         )
     };
-    if existing.is_some()
-        || predictions.is_empty()
-        || gate_verdict
-            == Some(
-                nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail,
-            )
-    {
+    if existing.is_some() || predictions.is_empty() {
         return Ok(existing);
     }
     let future_topologies = state
@@ -2939,14 +2930,16 @@ fn evaluate_ms3_independent_future(
             let terminal = terminals.iter().find(|terminal| {
                 terminal.request_event_id_sha256 == prediction.request_event_id_sha256
             });
-            let completed_frame_exists = frames
-                .iter()
-                .any(|frame| frame.client_intent_id_sha256 == prediction.turn_intent_id_sha256);
+            let completed_frame_missing = ledger.failure_for_topology(
+                &prediction.topology_root_sha256,
+            ) == Some(
+                nando_operator_learning::multi_source::TransportBindingFailureV1::CompletedFrameMissing,
+            );
 
             // A later durable request in the same lineage proves capture advanced beyond this
             // completed request. Only then may a missing frame close the prediction as censored.
             let capture_fence = terminal.and_then(|terminal| {
-                (!completed_frame_exists)
+                completed_frame_missing
                     .then(|| {
                         future_topologies
                             .iter()
