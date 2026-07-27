@@ -15,6 +15,7 @@ mod live_economics;
 mod miner_worker;
 mod ms3_capture_health;
 mod ms3_frozen_version_space;
+mod ms3_generation_lifecycle;
 mod ms3_linked_frame_acquisition;
 mod ms3_receipt_health;
 pub mod multi_source_audit;
@@ -680,6 +681,8 @@ struct AppState {
         Option<Arc<Mutex<multi_source_frame_archive::MultiSourceFrameArchive>>>,
     multi_source_topology_archive:
         Option<Arc<Mutex<multi_source_topology_archive::MultiSourceTopologyArchive>>>,
+    ms3_generation_lifecycle:
+        Option<Arc<Mutex<ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime>>>,
     ms3_linked_frame_acquisition:
         Option<Arc<Mutex<ms3_linked_frame_acquisition::Ms3LinkedFrameAcquisitionRuntime>>>,
     ms3_frozen_version_space:
@@ -861,40 +864,28 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     } else {
         None
     };
-    let ms3_linked_frame_acquisition = match multi_source_topology_archive.as_ref() {
-        Some(archive) => {
-            let archive = archive
-                .lock()
-                .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
-            let runtime = ms3_linked_frame_acquisition::Ms3LinkedFrameAcquisitionRuntime::open(
-                &config.ms3_linked_frame_acquisition_path,
-                &archive,
-                unix_now(),
-                config.ms3_linked_frame_acquisition_max_topologies,
-                config.ms3_linked_frame_acquisition_max_seconds,
-            )?;
-            Some(Arc::new(Mutex::new(runtime)))
-        }
-        None => None,
-    };
-    let ms3_frozen_version_space = if ms3_linked_frame_acquisition.is_some() {
-        let current_capture_sequence = multi_source_topology_archive
-            .as_ref()
-            .and_then(|archive| archive.lock().ok())
-            .map(|archive| archive.max_bridge_sequence())
-            .unwrap_or(0);
-        Some(Arc::new(Mutex::new(
-            ms3_frozen_version_space::Ms3FrozenVersionSpaceRuntime::open(
-                &config
-                    .ms3_linked_frame_acquisition_path
-                    .join("version-space-v1"),
-                current_capture_sequence,
-                unix_now(),
-            )?,
-        )))
-    } else {
-        None
-    };
+    let (ms3_generation_lifecycle, ms3_linked_frame_acquisition, ms3_frozen_version_space) =
+        match multi_source_topology_archive.as_ref() {
+            Some(archive) => {
+                let archive = archive
+                    .lock()
+                    .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
+                let (lifecycle, runtimes) =
+                    ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime::open(
+                        &config.ms3_linked_frame_acquisition_path,
+                        &archive,
+                        unix_now(),
+                        config.ms3_linked_frame_acquisition_max_topologies,
+                        config.ms3_linked_frame_acquisition_max_seconds,
+                    )?;
+                (
+                    Some(Arc::new(Mutex::new(lifecycle))),
+                    Some(Arc::new(Mutex::new(runtimes.acquisition))),
+                    Some(Arc::new(Mutex::new(runtimes.frozen))),
+                )
+            }
+            None => (None, None, None),
+        };
     if let (Some(runtime), Some(archive)) = (
         ms3_frozen_version_space.as_ref(),
         multi_source_topology_archive.as_ref(),
@@ -941,9 +932,13 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         terminal_receipt_archive,
         multi_source_frame_archive,
         multi_source_topology_archive,
+        ms3_generation_lifecycle,
         ms3_linked_frame_acquisition,
         ms3_frozen_version_space,
     };
+    if state.ms3_generation_lifecycle.is_some() {
+        rollover_ms3_generation_if_terminal(&state)?;
+    }
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
         spawn_evidence_runtime(state.clone())?;
@@ -1996,8 +1991,17 @@ async fn ms3_generation_registry_report(State(state): State<AppState>) -> Respon
             let runtime = runtime
                 .lock()
                 .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+            let lifecycle = state
+                .ms3_generation_lifecycle
+                .as_ref()
+                .ok_or_else(|| "ms3_generation_lifecycle_not_configured".to_owned())?
+                .lock()
+                .map_err(|_| "ms3_generation_lifecycle_lock_poisoned".to_owned())?
+                .manifest()
+                .clone();
             Ok::<_, String>((
                 runtime.generation_registry().clone(),
+                lifecycle,
                 runtime
                     .envelope()
                     .map(|envelope| envelope.envelope_root_sha256.clone()),
@@ -2007,11 +2011,13 @@ async fn ms3_generation_registry_report(State(state): State<AppState>) -> Respon
             ))
         });
     match status {
-        Ok((registry, active_frozen_root, active_future_root)) => json_response(
+        Ok((registry, lifecycle, active_frozen_root, active_future_root)) => json_response(
             StatusCode::OK,
             json!({
                 "schema": "nando.ms3-generation-registry-status.v1",
                 "registry": registry,
+                "lifecycle": lifecycle,
+                "active_generation_sequence": lifecycle.active_generation_sequence,
                 "active_frozen_envelope_root_sha256": active_frozen_root,
                 "active_future_envelope_root_sha256": active_future_root,
                 "authority_ready": false,
@@ -2234,6 +2240,9 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                     Err(error) => {
                         eprintln!("nando-ms3-independent-future-generation: {error}");
                     }
+                }
+                if let Err(error) = rollover_ms3_generation_if_terminal(&state) {
+                    eprintln!("nando-ms3-generation-rollover: {error}");
                 }
                 let snapshot_generation = state
                     .config
@@ -2509,6 +2518,54 @@ fn evaluate_ms3_linked_frame_acquisition(
         .lock()
         .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
         .evaluate(unix_now(), new_topologies, frames, terminals)
+}
+
+fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String> {
+    let Some(lifecycle) = state.ms3_generation_lifecycle.as_ref() else {
+        return Ok(false);
+    };
+    let acquisition = state
+        .ms3_linked_frame_acquisition
+        .as_ref()
+        .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?;
+    let frozen = state
+        .ms3_frozen_version_space
+        .as_ref()
+        .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?;
+    let topology_archive = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?;
+
+    let mut acquisition = acquisition
+        .lock()
+        .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?;
+    let mut frozen = frozen
+        .lock()
+        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+    let terminal_contradiction = frozen.independent_future().is_some_and(|future| {
+        future.receipt.verdict
+            == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
+    });
+    if !terminal_contradiction {
+        return Ok(false);
+    }
+    let topology_archive = topology_archive
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
+    let mut lifecycle = lifecycle
+        .lock()
+        .map_err(|_| "ms3_generation_lifecycle_lock_poisoned".to_owned())?;
+    if lifecycle.manifest().active_generation_sequence != frozen.generation_sequence()
+        || acquisition.generation_sequence() != frozen.generation_sequence()
+    {
+        return Err("ms3_generation_rollover_active_sequence_mismatch".to_owned());
+    }
+    let runtimes =
+        lifecycle.prepare_successor(&topology_archive, unix_now(), &acquisition, &frozen)?;
+    *acquisition = runtimes.acquisition;
+    *frozen = runtimes.frozen;
+    Ok(true)
 }
 
 fn evaluate_ms3_frozen_version_space(
@@ -7020,6 +7077,7 @@ mod tests {
             terminal_receipt_archive: None,
             multi_source_frame_archive: None,
             multi_source_topology_archive: None,
+            ms3_generation_lifecycle: None,
             ms3_linked_frame_acquisition: None,
             ms3_frozen_version_space: None,
         };

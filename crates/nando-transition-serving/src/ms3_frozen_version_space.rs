@@ -20,12 +20,14 @@ const ENVELOPE_FILE: &str = "frozen-version-space-v1.cbor";
 const PREDICTIONS_FILE: &str = "future-predictions-v1.cbor";
 const FUTURE_FILE: &str = "independent-future-v1.cbor";
 const APPLICABILITY_FILE: &str = "future-applicability-v1.cbor";
+#[cfg(test)]
 const GENERATION_REGISTRY_FILE: &str = "generation-registry-v1.cbor";
 const MAX_ENVELOPE_BYTES: usize = 12 * 1024 * 1024;
 const MAX_PREDICTIONS: usize = 256;
 const PREDICTION_LEDGER_SCHEMA_V1: &str = "nando.ms3-future-prediction-ledger.v1";
 
 pub(super) struct Ms3FrozenVersionSpaceRuntime {
+    generation_sequence: u64,
     envelope: Option<FrozenVersionSpaceEnvelopeV1>,
     envelope_path: PathBuf,
     prediction_ledger: Option<PredictionLedgerV1>,
@@ -52,9 +54,14 @@ struct PredictionLedgerV1 {
 impl Ms3FrozenVersionSpaceRuntime {
     pub(super) fn open(
         directory: &Path,
+        generation_registry_path: &Path,
+        generation_sequence: u64,
         current_capture_sequence: u64,
         opened_at_unix: u64,
     ) -> Result<Self, String> {
+        if generation_sequence == 0 {
+            return Err("ms3_version_space_generation_invalid".to_owned());
+        }
         fs::create_dir_all(directory)
             .map_err(|error| format!("ms3_version_space_directory:{error}"))?;
         let envelope_path = directory.join(ENVELOPE_FILE);
@@ -122,7 +129,7 @@ impl Ms3FrozenVersionSpaceRuntime {
             prediction_ledger.as_ref(),
             independent_future.as_ref(),
         )?;
-        let generation_registry_path = directory.join(GENERATION_REGISTRY_FILE);
+        let generation_registry_path = generation_registry_path.to_path_buf();
         let mut generation_registry = read_bounded(&generation_registry_path)?
             .map(|bytes| {
                 Ms3GenerationRegistryV1::from_canonical_bytes(&bytes)
@@ -135,6 +142,7 @@ impl Ms3FrozenVersionSpaceRuntime {
             envelope.as_ref(),
             independent_future.as_ref(),
         )?;
+        validate_generation_position(&generation_registry, envelope.as_ref(), generation_sequence)?;
         if registry_changed {
             let bytes = generation_registry
                 .canonical_bytes()
@@ -142,6 +150,7 @@ impl Ms3FrozenVersionSpaceRuntime {
             write_atomic(&generation_registry_path, &bytes)?;
         }
         Ok(Self {
+            generation_sequence,
             envelope,
             envelope_path,
             prediction_ledger,
@@ -230,9 +239,12 @@ impl Ms3FrozenVersionSpaceRuntime {
         };
         let applicability_bytes = applicability.canonical_bytes().map_err(str::to_owned)?;
         let mut generation_registry = self.generation_registry.clone();
-        generation_registry
+        let appended_generation = generation_registry
             .append_generation(&envelope)
             .map_err(|error| format!("ms3_generation_registry_append:{error:?}"))?;
+        if appended_generation != self.generation_sequence {
+            return Err("ms3_generation_registry_sequence_mismatch".to_owned());
+        }
         let registry_bytes = generation_registry
             .canonical_bytes()
             .map_err(|error| format!("ms3_generation_registry_encode:{error:?}"))?;
@@ -579,6 +591,10 @@ impl Ms3FrozenVersionSpaceRuntime {
         &self.generation_registry
     }
 
+    pub(super) const fn generation_sequence(&self) -> u64 {
+        self.generation_sequence
+    }
+
     fn append_applicability_event(
         &mut self,
         event: Ms3FutureApplicabilityEventV1,
@@ -645,6 +661,35 @@ fn reconcile_generation_registry(
         return Err("ms3_generation_registry_terminal_future_missing".to_owned());
     }
     Ok(changed)
+}
+
+fn validate_generation_position(
+    registry: &Ms3GenerationRegistryV1,
+    frozen: Option<&FrozenVersionSpaceEnvelopeV1>,
+    generation_sequence: u64,
+) -> Result<(), String> {
+    match (frozen, registry.generations.last()) {
+        (Some(frozen), Some(entry))
+            if entry.generation_sequence == generation_sequence
+                && entry.frozen_envelope_root_sha256 == frozen.envelope_root_sha256
+                && entry.frozen_contract_root_sha256
+                    == frozen.contract.contract_root_sha256 =>
+        {
+            Ok(())
+        }
+        (Some(_), _) => Err("ms3_generation_registry_active_generation_mismatch".to_owned()),
+        (None, None) if generation_sequence == 1 => Ok(()),
+        (None, Some(entry))
+            if entry.generation_sequence.saturating_add(1) == generation_sequence
+                && entry.terminal.as_ref().is_some_and(|terminal| {
+                    terminal.verdict
+                        == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
+                }) =>
+        {
+            Ok(())
+        }
+        (None, _) => Err("ms3_generation_registry_position_invalid".to_owned()),
+    }
 }
 
 fn validate_applicability_link(
@@ -926,6 +971,7 @@ mod tests {
         )
         .expect("event");
         let mut runtime = Ms3FrozenVersionSpaceRuntime {
+            generation_sequence: 1,
             envelope: None,
             envelope_path: root.join(ENVELOPE_FILE),
             prediction_ledger: None,

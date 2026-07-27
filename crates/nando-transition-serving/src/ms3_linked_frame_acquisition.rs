@@ -20,12 +20,14 @@ const TERMINAL_REPORT_FILE: &str = "terminal-report-v1.cbor";
 const MAX_STATE_BYTES: usize = 4 * 1024 * 1024;
 
 pub(super) struct Ms3LinkedFrameAcquisitionRuntime {
+    generation_sequence: u64,
     contract: Ms3LinkedFrameAcquisitionContractV1,
     terminal_report: Option<Ms3LinkedFrameAcquisitionReportV1>,
     terminal_report_path: PathBuf,
 }
 
 impl Ms3LinkedFrameAcquisitionRuntime {
+    #[cfg(test)]
     pub(super) fn open(
         directory: &Path,
         topology_archive: &MultiSourceTopologyArchive,
@@ -33,6 +35,27 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         max_new_topology_rows: u64,
         max_elapsed_seconds: u64,
     ) -> Result<Self, String> {
+        Self::open_generation(
+            directory,
+            1,
+            topology_archive,
+            opened_at_unix,
+            max_new_topology_rows,
+            max_elapsed_seconds,
+        )
+    }
+
+    pub(super) fn open_generation(
+        directory: &Path,
+        generation_sequence: u64,
+        topology_archive: &MultiSourceTopologyArchive,
+        opened_at_unix: u64,
+        max_new_topology_rows: u64,
+        max_elapsed_seconds: u64,
+    ) -> Result<Self, String> {
+        if generation_sequence == 0 {
+            return Err("ms3_acquisition_generation_invalid".to_owned());
+        }
         fs::create_dir_all(directory)
             .map_err(|error| format!("ms3_acquisition_directory:{error}"))?;
         let contract_path = directory.join(CONTRACT_FILE);
@@ -81,10 +104,15 @@ impl Ms3LinkedFrameAcquisitionRuntime {
             return Err("ms3_acquisition_terminal_report_invalid".to_owned());
         }
         Ok(Self {
+            generation_sequence,
             contract,
             terminal_report,
             terminal_report_path,
         })
+    }
+
+    pub(super) const fn generation_sequence(&self) -> u64 {
+        self.generation_sequence
     }
 
     pub(super) const fn contract(&self) -> &Ms3LinkedFrameAcquisitionContractV1 {
