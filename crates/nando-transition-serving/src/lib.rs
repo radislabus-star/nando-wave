@@ -3964,6 +3964,12 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
+    let multi_source_snapshot = state
+        .multi_source_snapshot
+        .read()
+        .ok()
+        .and_then(|snapshot| snapshot.clone())
+        .filter(|snapshot| snapshot.transfer_ready);
     let (relation_candidates, mut crystallized_candidates, retained_transitions) = response_miner
         .as_ref()
         .map(|miner| {
@@ -3974,19 +3980,16 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
                     (
                         miner.admission_candidates(),
                         miner.crystallized_admission_candidates(),
-                        miner.retained_teacher_transitions_for_multi_source_proof_v1(),
+                        multi_source_snapshot
+                            .as_ref()
+                            .map(|_| miner.retained_teacher_transitions_for_multi_source_proof_v1())
+                            .unwrap_or_default(),
                     )
                 })
         })
         .transpose()?
         .unwrap_or_default();
-    if let Some(snapshot) = state
-        .multi_source_snapshot
-        .read()
-        .ok()
-        .and_then(|snapshot| snapshot.clone())
-        .filter(|snapshot| snapshot.transfer_ready)
-    {
+    if let Some(snapshot) = multi_source_snapshot {
         match nando_response_actor::crystallize_multi_source_t1_candidate_v1(
             &snapshot.t1_identification,
             &retained_transitions,

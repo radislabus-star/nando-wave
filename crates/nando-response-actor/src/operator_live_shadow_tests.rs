@@ -556,6 +556,41 @@ fn simple_law_reaches_admission_with_one_support_and_one_future() {
 }
 
 #[test]
+fn law_evaluation_cache_reuses_unchanged_proof_and_invalidates_new_evidence() {
+    let mut state = LiveScalarShadowState::default();
+    let mut support = transition("total", true);
+    support.before.frame_id_sha256 = format!("{:064x}", 1);
+    support.before.session_id_sha256 = format!("{:064x}", 101);
+    support.before.observed_at_unix_nanos = 1;
+    state.observe(&support);
+
+    let mut future = transition("renamed_total", true);
+    future.before.frame_id_sha256 = format!("{:064x}", 2);
+    future.before.session_id_sha256 = format!("{:064x}", 102);
+    future.before.observed_at_unix_nanos = 2;
+    state.observe(&future);
+
+    assert!(state.evaluation_cache.borrow().is_empty());
+    let first = state.admission_candidates();
+    assert_eq!(first.len(), 1);
+    assert_eq!(state.evaluation_cache.borrow().len(), 1);
+    assert_eq!(state.report().admission_candidates, 1);
+    assert_eq!(state.evaluation_cache.borrow().len(), 1);
+
+    let mut next_future = transition("third_total", true);
+    next_future.before.frame_id_sha256 = format!("{:064x}", 3);
+    next_future.before.session_id_sha256 = format!("{:064x}", 103);
+    next_future.before.observed_at_unix_nanos = 3;
+    state.observe(&next_future);
+    assert!(state.evaluation_cache.borrow().is_empty());
+
+    let refreshed = state.admission_candidates();
+    assert_eq!(refreshed.len(), 1);
+    assert_eq!(state.report().future_rows, 2);
+    assert_eq!(state.evaluation_cache.borrow().len(), 1);
+}
+
+#[test]
 fn additive_merge_keeps_active_crystallized_generation_when_only_evidence_grows() {
     let mut state = LiveScalarShadowState::default();
     let mut support = transition("total", true);

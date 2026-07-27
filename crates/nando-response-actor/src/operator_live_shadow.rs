@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use nando_core::wave::{
     BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence, BlueprintPhaseControl,
@@ -160,6 +163,10 @@ pub struct LiveScalarShadowState {
     #[serde(default)]
     extraction_blockers_by_action: BTreeMap<String, BTreeMap<LiveScalarShadowBlocker, usize>>,
     laws: BTreeMap<String, LiveScalarLawState>,
+    // Derived proof work can be much more expensive than ingest. Cache it per
+    // immutable law generation so authority refreshes do not replay every law.
+    #[serde(skip)]
+    evaluation_cache: RefCell<BTreeMap<String, LiveScalarLawEvaluation>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -173,6 +180,12 @@ struct LiveScalarLawState {
     support_actor_hypotheses: Vec<ResponseProgram>,
     #[serde(default)]
     support_hypotheses_initialized: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+struct LiveScalarLawEvaluation {
+    report: LiveScalarShadowReport,
+    candidates: Vec<LiveScalarAdmissionCandidate>,
 }
 
 pub(super) struct CompetingBlueprintSet {

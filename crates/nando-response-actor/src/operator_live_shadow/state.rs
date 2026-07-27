@@ -55,6 +55,7 @@ impl LiveScalarShadowState {
                 return;
             }
             law.support.push(transition.clone());
+            self.evaluation_cache.get_mut().remove(&law_key);
             return;
         }
         if law
@@ -70,6 +71,7 @@ impl LiveScalarShadowState {
         }
         if law.future.len() < LIVE_SCALAR_MAX_EVIDENCE_ROWS {
             law.future.push(transition.clone());
+            self.evaluation_cache.get_mut().remove(&law_key);
         } else {
             *self
                 .blockers
@@ -112,7 +114,7 @@ impl LiveScalarShadowState {
         let Some(incoming) = transition.runtime_parity_case.as_ref() else {
             return;
         };
-        match existing.runtime_parity_case.as_mut() {
+        let evidence_changed = match existing.runtime_parity_case.as_mut() {
             Some(current)
                 if current.request_text == incoming.request_text
                     && current.provider_payload == incoming.provider_payload
@@ -120,14 +122,22 @@ impl LiveScalarShadowState {
             {
                 current.evidence_ref_sha256 = incoming.evidence_ref_sha256.clone();
                 current.capture_receipt = incoming.capture_receipt.clone();
+                true
             }
-            None => existing.runtime_parity_case = Some(incoming.clone()),
+            None => {
+                existing.runtime_parity_case = Some(incoming.clone());
+                true
+            }
             Some(_) => {
                 *self
                     .blockers
                     .entry(LiveScalarShadowBlocker::CaptureProvenanceConflict)
                     .or_default() += 1;
+                false
             }
+        };
+        if evidence_changed {
+            self.evaluation_cache.get_mut().remove(&law_key);
         }
     }
 
@@ -144,7 +154,7 @@ impl LiveScalarShadowState {
         };
         self.executable = self.executable.saturating_add(1);
         let law_key = commitment_hex(&sample.law_sha256);
-        let law = self.laws.entry(law_key).or_default();
+        let law = self.laws.entry(law_key.clone()).or_default();
         if law
             .support
             .iter()
@@ -165,6 +175,7 @@ impl LiveScalarShadowState {
             return;
         }
         law.support.push(transition.clone());
+        self.evaluation_cache.get_mut().remove(&law_key);
     }
 
     /// Imports a replay row only when the capture owner can reconstruct its
@@ -229,27 +240,20 @@ impl LiveScalarShadowState {
                 .collect(),
             ..LiveScalarShadowReport::default()
         };
-        let mut candidates = Vec::new();
+        let mut admission_candidates = 0_usize;
         for (law_key, law) in &self.laws {
-            let blockers_before = report.blockers.clone();
-            evaluate_live_law(law_key, law, &mut report, &mut candidates);
+            let evaluation = self.cached_law_evaluation(law_key, law);
+            admission_candidates = admission_candidates.saturating_add(evaluation.candidates.len());
+            merge_law_evaluation(&mut report, &evaluation.report);
             if let Some(law_report) = report
                 .laws
                 .iter_mut()
                 .find(|law_report| law_report.law_sha256 == *law_key)
             {
-                law_report.evaluation_blockers = report
-                    .blockers
-                    .iter()
-                    .filter_map(|(blocker, count)| {
-                        let delta = count
-                            .saturating_sub(blockers_before.get(blocker).copied().unwrap_or(0));
-                        (delta != 0).then(|| (blocker.clone(), delta))
-                    })
-                    .collect();
+                law_report.evaluation_blockers = evaluation.report.blockers;
             }
         }
-        report.admission_candidates = candidates.len();
+        report.admission_candidates = admission_candidates;
         report
     }
 
@@ -275,12 +279,10 @@ impl LiveScalarShadowState {
 
     #[must_use]
     pub fn admission_candidates(&self) -> Vec<LiveScalarAdmissionCandidate> {
-        let mut report = LiveScalarShadowReport::default();
-        let mut candidates = Vec::new();
-        for (law_key, law) in &self.laws {
-            evaluate_live_law(law_key, law, &mut report, &mut candidates);
-        }
-        candidates
+        self.laws
+            .iter()
+            .flat_map(|(law_key, law)| self.cached_law_evaluation(law_key, law).candidates)
+            .collect()
     }
 
     /// Returns only already completed support rows for strategy migration.
@@ -306,6 +308,70 @@ impl LiveScalarShadowState {
                 })
         });
         support
+    }
+}
+
+impl LiveScalarShadowState {
+    fn cached_law_evaluation(
+        &self,
+        law_key: &str,
+        law: &LiveScalarLawState,
+    ) -> LiveScalarLawEvaluation {
+        if let Some(evaluation) = self.evaluation_cache.borrow().get(law_key) {
+            return evaluation.clone();
+        }
+        let mut report = LiveScalarShadowReport::default();
+        let mut candidates = Vec::new();
+        evaluate_live_law(law_key, law, &mut report, &mut candidates);
+        let evaluation = LiveScalarLawEvaluation { report, candidates };
+        self.evaluation_cache
+            .borrow_mut()
+            .insert(law_key.to_owned(), evaluation.clone());
+        evaluation
+    }
+}
+
+fn merge_law_evaluation(aggregate: &mut LiveScalarShadowReport, law: &LiveScalarShadowReport) {
+    aggregate.candidate_freezes = aggregate
+        .candidate_freezes
+        .saturating_add(law.candidate_freezes);
+    aggregate.transfer_proofs = aggregate
+        .transfer_proofs
+        .saturating_add(law.transfer_proofs);
+    aggregate.actor_hypotheses = aggregate
+        .actor_hypotheses
+        .saturating_add(law.actor_hypotheses);
+    aggregate.competing_blueprints = aggregate
+        .competing_blueprints
+        .saturating_add(law.competing_blueprints);
+    aggregate.frozen_laws = aggregate.frozen_laws.saturating_add(law.frozen_laws);
+    aggregate.full_phase_winners = aggregate
+        .full_phase_winners
+        .saturating_add(law.full_phase_winners);
+    aggregate.causal_control_passes = aggregate
+        .causal_control_passes
+        .saturating_add(law.causal_control_passes);
+    aggregate.verified_shadow_operators = aggregate
+        .verified_shadow_operators
+        .saturating_add(law.verified_shadow_operators);
+    aggregate.transfer_basis_rows = aggregate
+        .transfer_basis_rows
+        .saturating_add(law.transfer_basis_rows);
+    aggregate.monitored_future_rows = aggregate
+        .monitored_future_rows
+        .saturating_add(law.monitored_future_rows);
+    aggregate.future_applicability_negatives = aggregate
+        .future_applicability_negatives
+        .saturating_add(law.future_applicability_negatives);
+    aggregate.future_censored_rows = aggregate
+        .future_censored_rows
+        .saturating_add(law.future_censored_rows);
+    aggregate.shadow_executions = aggregate
+        .shadow_executions
+        .saturating_add(law.shadow_executions);
+    for (blocker, count) in &law.blockers {
+        let aggregate_count = aggregate.blockers.entry(blocker.clone()).or_default();
+        *aggregate_count = aggregate_count.saturating_add(*count);
     }
 }
 
