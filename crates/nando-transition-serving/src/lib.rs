@@ -2222,6 +2222,7 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
     let mut neither_terminal_nor_frame = 0_usize;
     let mut outcome_after_durable_prediction = 0_usize;
     let mut outcome_before_or_at_durable_prediction = 0_usize;
+    let mut transport_failures = BTreeMap::<String, usize>::new();
     let mut first_unresolved = None;
     for prediction in &predictions {
         let terminal = terminals_by_request
@@ -2236,6 +2237,13 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                     && bound.binding.turn_intent_id_sha256 == prediction.turn_intent_id_sha256
                     && bound.binding.session_lineage_sha256 == prediction.session_lineage_sha256
             });
+        let transport_failure = transport.failure_for_topology(&prediction.topology_root_sha256);
+        if let Some(failure) = transport_failure {
+            let count = transport_failures
+                .entry(format!("{failure:?}"))
+                .or_default();
+            *count = count.saturating_add(1);
+        }
         match (terminal.is_some(), frame_exists, exact.as_ref()) {
             (_, _, Some(bound)) => {
                 exact_transport_bindings = exact_transport_bindings.saturating_add(1);
@@ -2277,7 +2285,8 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                 "request_event_id_sha256": prediction.request_event_id_sha256,
                 "turn_intent_id_sha256": prediction.turn_intent_id_sha256,
                 "terminal_receipt_found": terminal.is_some(),
-                "completed_frame_found": frame_exists
+                "completed_frame_found": frame_exists,
+                "transport_failure": transport_failure.map(|failure| format!("{failure:?}"))
             }));
         }
     }
@@ -2300,6 +2309,7 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
             "completed_frame_without_terminal": completed_frame_without_terminal,
             "terminal_and_frame_without_exact_binding": terminal_and_frame_without_exact_binding,
             "neither_terminal_nor_frame": neither_terminal_nor_frame,
+            "transport_failures": transport_failures,
             "first_unresolved": first_unresolved
         }
     }))
