@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.27-b017";
+const DASHBOARD_BUILD: &str = "2026.07.27-b018";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
