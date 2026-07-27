@@ -2949,14 +2949,13 @@ fn evaluate_ms3_independent_future(
             runtime.independent_future().cloned(),
         )
     };
-    eprintln!(
-        "nando-ms3-independent-future-evaluate: predictions={} existing={}",
-        predictions.len(),
-        existing.is_some()
-    );
     if existing.is_some() || predictions.is_empty() {
         return Ok(existing);
     }
+    let committed_topology_roots = predictions
+        .iter()
+        .map(|(prediction, _)| prediction.topology_root_sha256.as_str())
+        .collect::<BTreeSet<_>>();
     let future_topologies = state
         .multi_source_topology_archive
         .as_ref()
@@ -2968,15 +2967,16 @@ fn evaluate_ms3_independent_future(
         .filter(|row| {
             row.bridge_sequence
                 .is_some_and(|sequence| sequence >= frozen.contract.future_min_sequence)
+                && committed_topology_roots.contains(row.commit.commitment_root_sha256.as_str())
         })
         .collect::<Vec<_>>();
-    let request_ids = future_topologies
+    let request_ids = predictions
         .iter()
-        .map(|row| row.structure.request_event_id_sha256.clone())
+        .map(|(prediction, _)| prediction.request_event_id_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let intent_ids = future_topologies
+    let intent_ids = predictions
         .iter()
-        .map(|row| row.structure.turn_intent_id_sha256.clone())
+        .map(|(prediction, _)| prediction.turn_intent_id_sha256.clone())
         .collect::<BTreeSet<_>>();
     let terminals = state
         .terminal_receipt_archive
@@ -3013,10 +3013,6 @@ fn evaluate_ms3_independent_future(
             // precommitted roots; missing evidence is neither contradiction nor anti-evidence.
             continue;
         };
-        eprintln!(
-            "nando-ms3-independent-future-exact: prediction={} capture_sequence={}",
-            prediction.prediction_root_sha256, prediction.capture_sequence
-        );
         if bound.binding.action_observed_at_unix_nanos <= durable_at
             || bound.binding.request_completed_at_unix_nanos <= durable_at
         {
