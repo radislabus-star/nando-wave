@@ -166,6 +166,9 @@ impl Ms3GenerationRegistryV1 {
             }
             return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
         }
+        if self.future_evidence_was_used(future) {
+            return Err(Ms3GenerationRegistryErrorV1::EvidenceReuse);
+        }
         let mut terminal = Ms3GenerationTerminalReceiptV1 {
             schema: MS3_GENERATION_TERMINAL_SCHEMA_V1.to_owned(),
             terminal_root_sha256: String::new(),
@@ -185,6 +188,37 @@ impl Ms3GenerationRegistryV1 {
         self.generations[entry_index].terminal = Some(terminal.clone());
         self.reseal()?;
         Ok(terminal)
+    }
+
+    #[must_use]
+    pub fn future_evidence_was_used(&self, future: &Ms3IndependentFutureEnvelopeV1) -> bool {
+        let future_roots = [
+            future.receipt.topology_root_sha256.as_str(),
+            future.receipt.completed_frame_root_sha256.as_str(),
+            future.receipt.session_lineage_sha256.as_str(),
+        ];
+        self.evidence_roots_were_used(future_roots)
+    }
+
+    fn evidence_roots_were_used(&self, future_roots: [&str; 3]) -> bool {
+        self.generations.iter().any(|entry| {
+            let support_roots = [
+                entry.topology_root_sha256.as_str(),
+                entry.frame_root_sha256.as_str(),
+                entry.session_lineage_sha256.as_str(),
+            ];
+            future_roots.iter().any(|root| support_roots.contains(root))
+                || entry.terminal.as_ref().is_some_and(|terminal| {
+                    let terminal_roots = [
+                        terminal.future_topology_root_sha256.as_str(),
+                        terminal.future_completed_frame_root_sha256.as_str(),
+                        terminal.future_session_lineage_sha256.as_str(),
+                    ];
+                    future_roots
+                        .iter()
+                        .any(|root| terminal_roots.contains(root))
+                })
+        })
     }
 
     #[must_use]
@@ -456,5 +490,42 @@ mod tests {
         registry.registry_root_sha256 = registry.expected_root().expect("registry root");
 
         assert!(!registry.validate());
+    }
+
+    #[test]
+    fn future_evidence_cannot_reuse_a_prior_generation_lineage() {
+        let registry = Ms3GenerationRegistryV1 {
+            schema: MS3_GENERATION_REGISTRY_SCHEMA_V1.to_owned(),
+            registry_root_sha256: String::new(),
+            generations: vec![Ms3GenerationEntryV1 {
+                generation_sequence: 1,
+                frozen_envelope_root_sha256: "1".repeat(64),
+                frozen_contract_root_sha256: "2".repeat(64),
+                support_rows_root_sha256: "3".repeat(64),
+                topology_root_sha256: "4".repeat(64),
+                frame_root_sha256: "5".repeat(64),
+                session_lineage_sha256: "6".repeat(64),
+                support_watermark: 7,
+                future_min_sequence: 8,
+                terminal: None,
+            }],
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        };
+        let unused_topology = "7".repeat(64);
+        let unused_frame = "8".repeat(64);
+        let reused_lineage = "6".repeat(64);
+        let fresh_lineage = "9".repeat(64);
+
+        assert!(registry.evidence_roots_were_used([
+            &unused_topology,
+            &unused_frame,
+            &reused_lineage,
+        ]));
+        assert!(!registry.evidence_roots_were_used([
+            &unused_topology,
+            &unused_frame,
+            &fresh_lineage,
+        ]));
     }
 }

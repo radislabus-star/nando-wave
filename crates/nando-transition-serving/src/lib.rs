@@ -3044,10 +3044,16 @@ fn evaluate_ms3_independent_future(
             &frame,
         )
         .map_err(|error| format!("ms3_independent_future_seal:{error}"))?;
-        runtime
+        let mut runtime = runtime
             .lock()
-            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
-            .seal_independent_future(future.clone())?;
+            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+        if runtime
+            .generation_registry()
+            .future_evidence_was_used(&future)
+        {
+            continue;
+        }
+        runtime.seal_independent_future(future.clone())?;
         return Ok(Some(future));
     }
     Ok(None)
