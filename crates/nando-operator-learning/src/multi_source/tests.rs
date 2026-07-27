@@ -1179,6 +1179,74 @@ fn independent_future_rejects_prediction_durable_after_action_observation() {
 }
 
 #[test]
+fn missing_completed_frame_is_censored_after_a_durable_same_lineage_fence() {
+    let contract =
+        Ms3FutureApplicabilityContractV1::seal(root("censor-law"), 7, 8, 100).expect("contract");
+    let prediction = Ms3FuturePredictionV1 {
+        schema: MS3_FUTURE_PREDICTION_SCHEMA_V1.to_owned(),
+        prediction_root_sha256: root("censor-prediction"),
+        contract_root_sha256: root("censor-contract"),
+        candidate_freeze_root_sha256: root("censor-freeze"),
+        canonical_program_root_sha256: root("censor-program"),
+        capture_sequence: 8,
+        topology_root_sha256: root("censor-topology"),
+        request_event_id_sha256: root("censor-request"),
+        turn_intent_id_sha256: root("censor-intent"),
+        session_lineage_sha256: root("censor-lineage"),
+        pre_action_binding_root_sha256: root("censor-binding"),
+        predicted_at_unix_nanos: 100_000_000_001,
+        authority_ready: false,
+        phase_mutation_allowed: false,
+    };
+    let mut ledger = Ms3FutureApplicabilityLedgerV1::new(contract.clone()).expect("ledger");
+    let committed = Ms3FutureApplicabilityEventV1::seal(
+        &contract,
+        prediction.capture_sequence,
+        prediction.topology_root_sha256.clone(),
+        prediction.session_lineage_sha256.clone(),
+        Ms3FutureApplicabilityDispositionV1::PredictionCommitted,
+        String::new(),
+        Some(&prediction),
+        Some(101_000_000_000),
+        None,
+        101_000_000_000,
+    )
+    .expect("committed");
+    assert!(ledger.append(committed).expect("append committed"));
+
+    let censored = Ms3FutureApplicabilityEventV1::seal_censored_missing_completed_frame(
+        &contract,
+        &prediction,
+        101_000_000_000,
+        &root("censor-terminal"),
+        102_000_000_000,
+        Ms3CompletedFrameCaptureFenceV1 {
+            topology_root_sha256: root("censor-fence-topology"),
+            request_event_id_sha256: root("censor-fence-request"),
+            session_lineage_sha256: prediction.session_lineage_sha256.clone(),
+            capture_sequence: 9,
+            captured_at_unix_nanos: 102_500_000_000,
+        },
+        103_000_000_000,
+    )
+    .expect("censored");
+    assert!(!censored.authority_ready);
+    assert!(!censored.phase_mutation_allowed);
+    assert!(ledger.append(censored).expect("append censored"));
+
+    let report = ledger.report(103);
+    assert_eq!(report.independent_topologies, 1);
+    assert_eq!(report.censored_missing_completed_frame, 1);
+    assert_eq!(report.active_predictions, 0);
+    assert_eq!(report.verdict, Ms3FutureApplicabilityVerdictV1::Collecting);
+
+    let bytes = ledger.canonical_bytes().expect("canonical bytes");
+    let restored =
+        Ms3FutureApplicabilityLedgerV1::from_canonical_bytes(&bytes).expect("restart restore");
+    assert_eq!(restored.canonical_bytes().expect("restored bytes"), bytes);
+}
+
+#[test]
 fn future_applicability_gate_fails_only_after_its_frozen_deadline() {
     let contract =
         Ms3FutureApplicabilityContractV1::seal(root("law"), 7, 8, 100).expect("contract");

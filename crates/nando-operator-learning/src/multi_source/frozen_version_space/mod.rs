@@ -10,8 +10,9 @@ pub use applicability::{
     MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1, MS3_FUTURE_APPLICABILITY_LEDGER_SCHEMA_V1,
     MS3_FUTURE_APPLICABILITY_MAX_INDEPENDENT_TOPOLOGIES_V1,
     MS3_FUTURE_APPLICABILITY_REPORT_SCHEMA_V1, MS3_FUTURE_APPLICABILITY_WINDOW_SECONDS_V1,
-    Ms3FutureApplicabilityContractV1, Ms3FutureApplicabilityDispositionV1,
-    Ms3FutureApplicabilityEventV1, Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1,
+    Ms3CompletedFrameCaptureFenceV1, Ms3FutureApplicabilityContractV1,
+    Ms3FutureApplicabilityDispositionV1, Ms3FutureApplicabilityEventV1,
+    Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1,
     Ms3FutureApplicabilityVerdictV1,
 };
 pub use future::{

@@ -7,11 +7,12 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use nando_operator_learning::multi_source::{
-    FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1, Ms3FutureApplicabilityContractV1,
-    Ms3FutureApplicabilityDispositionV1, Ms3FutureApplicabilityEventV1,
-    Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1, Ms3FutureApplicabilityV1,
-    Ms3FuturePredictionV1, Ms3IndependentFutureEnvelopeV1, Ms3VersionSpaceVersionsV1,
-    PreActionTopologyAuditRowV1, PreparedMs3VersionSpaceV1, classify_ms3_unique_law_v1,
+    FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1, Ms3CompletedFrameCaptureFenceV1,
+    Ms3FutureApplicabilityContractV1, Ms3FutureApplicabilityDispositionV1,
+    Ms3FutureApplicabilityEventV1, Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1,
+    Ms3FutureApplicabilityV1, Ms3FuturePredictionV1, Ms3IndependentFutureEnvelopeV1,
+    Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1, PreparedMs3VersionSpaceV1,
+    classify_ms3_unique_law_v1,
 };
 use serde::{Deserialize, Serialize};
 
@@ -254,9 +255,11 @@ impl Ms3FrozenVersionSpaceRuntime {
         if self.applicability_ledger.as_ref().is_some_and(|ledger| {
             ledger.events.iter().any(|event| {
                 event.topology_root_sha256 == topology.commit.commitment_root_sha256
-                    && (event.disposition
-                        != Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
-                        || event.prediction_root_sha256.is_none())
+                    && (!matches!(
+                        event.disposition,
+                        Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
+                            | Ms3FutureApplicabilityDispositionV1::CensoredMissingCompletedFrame
+                    ) || event.prediction_root_sha256.is_none())
             })
         }) {
             return Ok(false);
@@ -405,9 +408,11 @@ impl Ms3FrozenVersionSpaceRuntime {
     pub(super) fn prediction_is_disqualified(&self, prediction_root: &str) -> bool {
         self.applicability_ledger.as_ref().is_some_and(|ledger| {
             ledger.events.iter().any(|event| {
-                event.disposition
-                    == Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
-                    && event.prediction_root_sha256.as_deref() == Some(prediction_root)
+                matches!(
+                    event.disposition,
+                    Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
+                        | Ms3FutureApplicabilityDispositionV1::CensoredMissingCompletedFrame
+                ) && event.prediction_root_sha256.as_deref() == Some(prediction_root)
             })
         })
     }
@@ -445,6 +450,36 @@ impl Ms3FrozenVersionSpaceRuntime {
                 action_observed_at_unix_nanos,
             )),
             now,
+        )
+        .map_err(str::to_owned)?;
+        self.append_applicability_event(event)
+    }
+
+    pub(super) fn record_censored_missing_completed_frame(
+        &mut self,
+        prediction: &Ms3FuturePredictionV1,
+        terminal_receipt_root_sha256: &str,
+        terminal_completed_at_unix_nanos: u64,
+        capture_fence: Ms3CompletedFrameCaptureFenceV1,
+    ) -> Result<bool, String> {
+        if self.prediction_is_disqualified(&prediction.prediction_root_sha256) {
+            return Ok(false);
+        }
+        let (_, durable_at) = self
+            .prediction_commitment(&prediction.prediction_root_sha256)
+            .ok_or_else(|| "ms3_prediction_durable_receipt_missing".to_owned())?;
+        let gate = self
+            .applicability_ledger
+            .as_ref()
+            .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?;
+        let event = Ms3FutureApplicabilityEventV1::seal_censored_missing_completed_frame(
+            &gate.contract,
+            prediction,
+            durable_at,
+            terminal_receipt_root_sha256,
+            terminal_completed_at_unix_nanos,
+            capture_fence,
+            unix_now_nanos(),
         )
         .map_err(str::to_owned)?;
         self.append_applicability_event(event)
