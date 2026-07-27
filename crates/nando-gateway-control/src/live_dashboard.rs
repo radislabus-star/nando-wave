@@ -704,16 +704,19 @@ const TEMPLATE: &str = r#"
     const independent = ms3.independent_topologies || 0;
     const limit = contract.max_independent_topologies || 256;
     const predictions = ms3.predictions_committed || 0;
+    const effectivePredictions = ms3.effective_active_predictions ?? ms3.active_predictions ?? 0;
+    const futureVerdict = ms3.effective_verdict || ms3.verdict || "collecting";
+    const futureBlocker = ms3.effective_blocker || ms3.blocker || "report unavailable";
     const applicable = Math.max(0, independent - (ms3.structurally_not_applicable || 0));
-    text("ms3-law", contract.frozen_law_contract_root_sha256 ? "UNIQUE LAW FROZEN" : "НЕТ КОНТРАКТА");
+    text("ms3-law", futureVerdict === "contradiction" ? "LAW REFUTED" : contract.frozen_law_contract_root_sha256 ? "UNIQUE LAW FROZEN" : "НЕТ КОНТРАКТА");
     text("ms3-topologies", `${independent} / ${limit}`);
-    text("ms3-predictions", `${applicable} / ${predictions}`);
-    text("ms3-future", ms3.verdict === "future_pass" ? "PASS" : ms3.verdict === "contradiction" ? "CONTRADICTION" : "НЕ ОЦЕНЕН");
+    text("ms3-predictions", `${applicable} / ${predictions} · ACTIVE ${effectivePredictions}`);
+    text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : "НЕ ОЦЕНЕН");
     text("ms3-authority", ms3.authority_ready ? "TRUE" : "FALSE");
-    stateClass("ms3-law", `ms3-value ${contract.frozen_law_contract_root_sha256 ? "good" : "locked"}`);
-    stateClass("ms3-future", `ms3-value ${ms3.verdict === "future_pass" ? "good" : ms3.verdict === "contradiction" ? "locked" : "watch"}`);
+    stateClass("ms3-law", `ms3-value ${futureVerdict === "contradiction" ? "locked" : contract.frozen_law_contract_root_sha256 ? "good" : "locked"}`);
+    stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${ms3.authority_ready ? "good" : "locked"}`);
-    text("ms3-note", `${ms3.blocker || "report unavailable"} · неприменимых ${ms3.structurally_not_applicable || 0} · precommit missing ${ms3.precommitted_prediction_missing || 0} · до deadline ${duration((contract.deadline_unix || 0) - Math.floor(Date.now() / 1000))} · phase mutation ${ms3.phase_mutation_allowed ? "TRUE" : "FALSE"}`);
+    text("ms3-note", `${futureBlocker} · lifecycle ${ms3.lifecycle_terminal ? "TERMINAL" : "OPEN"} · неприменимых ${ms3.structurally_not_applicable || 0} · censored ${ms3.censored_missing_completed_frame || 0} · precommit missing ${ms3.precommitted_prediction_missing || 0} · phase mutation ${ms3.phase_mutation_allowed ? "TRUE" : "FALSE"}`);
 
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
