@@ -2927,69 +2927,10 @@ fn evaluate_ms3_independent_future(
             })
             .cloned();
         let Some(bound) = bound else {
-            let terminal = terminals.iter().find(|terminal| {
-                terminal.request_event_id_sha256 == prediction.request_event_id_sha256
-            });
-            let completed_frame_missing = ledger.failure_for_topology(
-                &prediction.topology_root_sha256,
-            ) == Some(
-                nando_operator_learning::multi_source::TransportBindingFailureV1::CompletedFrameMissing,
-            );
-
-            // A later durable request in the same lineage proves capture advanced beyond this
-            // completed request. Only then may a missing frame close the prediction as censored.
-            let capture_fence = terminal.and_then(|terminal| {
-                completed_frame_missing
-                    .then(|| {
-                        future_topologies
-                            .iter()
-                            .filter(|topology| {
-                                topology.session_lineage_sha256.as_deref()
-                                    == Some(prediction.session_lineage_sha256.as_str())
-                                    && topology.bridge_sequence.is_some_and(|sequence| {
-                                        sequence > prediction.capture_sequence
-                                    })
-                                    && topology.structure.request_event_id_sha256
-                                        != prediction.request_event_id_sha256
-                                    && topology.captured_at_unix_ms.is_some_and(|captured_at| {
-                                        captured_at.saturating_mul(1_000_000)
-                                            > terminal.completed_at_unix_nanos
-                                    })
-                            })
-                            .min_by_key(|topology| topology.bridge_sequence)
-                    })
-                    .flatten()
-                    .map(|topology| {
-                        nando_operator_learning::multi_source::Ms3CompletedFrameCaptureFenceV1 {
-                            topology_root_sha256: topology.commit.commitment_root_sha256.clone(),
-                            request_event_id_sha256: topology
-                                .structure
-                                .request_event_id_sha256
-                                .clone(),
-                            session_lineage_sha256: prediction.session_lineage_sha256.clone(),
-                            capture_sequence: topology.bridge_sequence.expect("fence filtered"),
-                            captured_at_unix_nanos: topology
-                                .captured_at_unix_ms
-                                .expect("fence timestamp filtered")
-                                .saturating_mul(1_000_000),
-                        }
-                    })
-            });
-            if let (Some(terminal), Some(capture_fence)) = (terminal, capture_fence) {
-                runtime
-                    .lock()
-                    .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
-                    .record_censored_missing_completed_frame(
-                        &prediction,
-                        &terminal.receipt_root_sha256,
-                        terminal.completed_at_unix_nanos,
-                        capture_fence,
-                    )?;
-                continue;
-            }
-            // Predictions are ordered by capture sequence. A later outcome cannot be selected
-            // while an earlier precommitted request is still genuinely unresolved.
-            return Ok(None);
+            // Topology progress does not prove that the independent frame consumer has
+            // crossed this request. Keep the prediction unresolved and inspect the remaining
+            // precommitted roots; missing evidence is neither contradiction nor anti-evidence.
+            continue;
         };
         if bound.binding.action_observed_at_unix_nanos <= durable_at
             || bound.binding.request_completed_at_unix_nanos <= durable_at
