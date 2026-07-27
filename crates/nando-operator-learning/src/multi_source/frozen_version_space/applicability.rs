@@ -367,12 +367,6 @@ impl Ms3FutureApplicabilityEventV1 {
                         && self.terminal_completed_at_unix_nanos.is_some()
                         && self.action_observed_at_unix_nanos.is_none()
                         && self
-                            .terminal_completed_at_unix_nanos
-                            .is_some_and(|completed| {
-                                self.prediction_durable_at_unix_nanos
-                                    .is_some_and(|durable| completed > durable)
-                            })
-                        && self
                             .completed_frame_capture_fence
                             .as_ref()
                             .is_some_and(|fence| {

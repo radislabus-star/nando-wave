@@ -2672,7 +2672,7 @@ fn evaluate_ms3_independent_future(
             // A later durable request in the same lineage proves capture advanced beyond this
             // completed request. Only then may a missing frame close the prediction as censored.
             let capture_fence = terminal.and_then(|terminal| {
-                (!completed_frame_exists && terminal.completed_at_unix_nanos > durable_at)
+                (!completed_frame_exists)
                     .then(|| {
                         future_topologies
                             .iter()

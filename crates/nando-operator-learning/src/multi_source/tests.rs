@@ -1219,7 +1219,7 @@ fn missing_completed_frame_is_censored_after_a_durable_same_lineage_fence() {
         &prediction,
         101_000_000_000,
         &root("censor-terminal"),
-        102_000_000_000,
+        100_500_000_000,
         Ms3CompletedFrameCaptureFenceV1 {
             topology_root_sha256: root("censor-fence-topology"),
             request_event_id_sha256: root("censor-fence-request"),
