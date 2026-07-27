@@ -90,8 +90,7 @@ impl MultiSourceFrameArchive {
             .collect()
     }
 
-    #[cfg(test)]
-    fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         self.by_frame.len()
     }
 }

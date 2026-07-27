@@ -30,6 +30,7 @@ const INPUTS_PER_SYNTHESIS_SLICE: u64 = 4_096;
 const MAX_SYNTHESIS_SLICES_PER_BURST: u64 = 8;
 const MAX_SYNTHESIS_BURST: Duration = Duration::from_millis(5);
 const CHECKPOINT_EVENTS: u64 = 4_096;
+const CHECKPOINT_MIN_TIMED_EVENTS: u64 = 256;
 const CHECKPOINT_MAX_DEFERRED_EVENTS: u64 = 65_536;
 const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(60);
 const REPORT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
@@ -83,6 +84,7 @@ pub struct MinerWorkerStatus {
     pub queue_capacity: usize,
     pub inputs_per_synthesis_slice: u64,
     pub checkpoint_events: u64,
+    pub checkpoint_min_timed_events: u64,
     pub checkpoint_max_deferred_events: u64,
     pub checkpoint_interval_seconds: u64,
     pub enqueued: u64,
@@ -394,6 +396,7 @@ impl MinerWorkerHandle {
             queue_capacity: QUEUE_CAPACITY,
             inputs_per_synthesis_slice: INPUTS_PER_SYNTHESIS_SLICE,
             checkpoint_events: CHECKPOINT_EVENTS,
+            checkpoint_min_timed_events: CHECKPOINT_MIN_TIMED_EVENTS,
             checkpoint_max_deferred_events: CHECKPOINT_MAX_DEFERRED_EVENTS,
             checkpoint_interval_seconds: CHECKPOINT_INTERVAL.as_secs(),
             enqueued,
@@ -763,7 +766,7 @@ fn spawn_miner_worker_with_report_heartbeat(
                         Err(TryRecvError::Empty) => None,
                         Err(TryRecvError::Disconnected) => break,
                     }
-                } else if events_since_checkpoint > 0 {
+                } else if events_since_checkpoint >= CHECKPOINT_MIN_TIMED_EVENTS {
                     let timeout = CHECKPOINT_INTERVAL
                         .checked_sub(last_checkpoint.elapsed())
                         .unwrap_or(Duration::ZERO);
@@ -1088,9 +1091,8 @@ fn spawn_miner_worker_with_report_heartbeat(
                     }
                 }
 
-                let checkpoint_due = events_since_checkpoint >= CHECKPOINT_EVENTS
-                    || (events_since_checkpoint > 0
-                        && last_checkpoint.elapsed() >= CHECKPOINT_INTERVAL);
+                let checkpoint_due =
+                    checkpoint_is_due(events_since_checkpoint, last_checkpoint.elapsed());
                 let checkpoint_boundary_is_safe = !input_was_available
                     || events_since_checkpoint >= CHECKPOINT_MAX_DEFERRED_EVENTS;
                 if checkpoint_due && checkpoint_boundary_is_safe {
@@ -1173,6 +1175,12 @@ fn spawn_miner_worker_with_report_heartbeat(
         multi_source_evidence,
         _report_heartbeat_lifetime: report_heartbeat_lifetime,
     })
+}
+
+fn checkpoint_is_due(events_since_checkpoint: u64, elapsed: Duration) -> bool {
+    events_since_checkpoint >= CHECKPOINT_EVENTS
+        || (events_since_checkpoint >= CHECKPOINT_MIN_TIMED_EVENTS
+            && elapsed >= CHECKPOINT_INTERVAL)
 }
 
 fn publish_collection_snapshot(
@@ -1275,6 +1283,19 @@ mod tests {
 
     use nando_operator_learning::{OnlineCollectionConfig, OpportunityBridgeEventV1};
     use nando_response_actor::{OnlineResponseStream, OnlineResponseTailConfig};
+
+    #[test]
+    fn timed_checkpoint_requires_a_meaningful_durable_delta() {
+        assert!(!checkpoint_is_due(
+            CHECKPOINT_MIN_TIMED_EVENTS - 1,
+            CHECKPOINT_INTERVAL
+        ));
+        assert!(checkpoint_is_due(
+            CHECKPOINT_MIN_TIMED_EVENTS,
+            CHECKPOINT_INTERVAL
+        ));
+        assert!(checkpoint_is_due(CHECKPOINT_EVENTS, Duration::from_secs(0)));
+    }
 
     #[test]
     fn opportunity_ledger_replays_legacy_events_and_atomic_batches() {

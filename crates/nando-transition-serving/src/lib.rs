@@ -2118,6 +2118,7 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
         .name("nando-multi-source-snapshot".to_owned())
         .spawn(move || {
             let mut published = false;
+            let mut last_future_generation = None;
             loop {
                 if let (Some(archive), Some(source_path)) = (
                     state.terminal_receipt_archive.as_ref(),
@@ -2135,8 +2136,17 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                 if let Err(error) = evaluate_ms3_frozen_version_space(&state) {
                     eprintln!("nando-ms3-frozen-version-space: {error}");
                 }
-                if let Err(error) = evaluate_ms3_independent_future(&state) {
-                    eprintln!("nando-ms3-independent-future: {error}");
+                match ms3_future_evidence_generation(&state) {
+                    Ok(generation) if last_future_generation.as_ref() != Some(&generation) => {
+                        if let Err(error) = evaluate_ms3_independent_future(&state) {
+                            eprintln!("nando-ms3-independent-future: {error}");
+                        }
+                        last_future_generation = Some(generation);
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        eprintln!("nando-ms3-independent-future-generation: {error}");
+                    }
                 }
                 let snapshot = if state.config.embedded_response_miner_enabled {
                     let evidence = current_miner_worker(&state)
@@ -2184,6 +2194,80 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
         })
         .map(|_| ())
         .map_err(|error| format!("multi_source_snapshot_thread:{error}"))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Ms3FutureEvidenceGeneration {
+    topology_rows: usize,
+    frame_rows: usize,
+    terminal_rows: usize,
+    contract_root_sha256: Option<String>,
+    active_prediction_roots: Vec<String>,
+    acquisition_closed: bool,
+    independent_future_sealed: bool,
+}
+
+fn ms3_future_evidence_generation(state: &AppState) -> Result<Ms3FutureEvidenceGeneration, String> {
+    let topology_rows = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+        .len();
+    let frame_rows = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
+        .len();
+    let terminal_rows = state
+        .terminal_receipt_archive
+        .as_ref()
+        .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
+        .len();
+    let (contract_root_sha256, active_prediction_roots, acquisition_closed, sealed) = state
+        .ms3_frozen_version_space
+        .as_ref()
+        .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())
+        .and_then(|runtime| {
+            let acquisition_closed = runtime
+                .applicability_report(unix_now())?
+                .is_some_and(|report| {
+                    report.verdict
+                        == nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+                });
+            let active_prediction_roots = runtime
+                .predictions()
+                .into_iter()
+                .filter(|prediction| {
+                    !runtime.prediction_is_disqualified(&prediction.prediction_root_sha256)
+                })
+                .map(|prediction| prediction.prediction_root_sha256)
+                .collect();
+            Ok::<_, String>((
+                runtime
+                    .contract()
+                    .map(|contract| contract.contract_root_sha256.clone()),
+                active_prediction_roots,
+                acquisition_closed,
+                runtime.independent_future().is_some(),
+            ))
+        })?;
+    Ok(Ms3FutureEvidenceGeneration {
+        topology_rows,
+        frame_rows,
+        terminal_rows,
+        contract_root_sha256,
+        active_prediction_roots,
+        acquisition_closed,
+        independent_future_sealed: sealed,
+    })
 }
 
 fn archived_terminal_receipts(
