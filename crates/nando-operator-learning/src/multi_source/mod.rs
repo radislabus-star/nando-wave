@@ -10,6 +10,9 @@ mod join;
 mod linked_frame_acquisition;
 mod live_snapshot;
 mod marginal;
+mod ms3_generation_registry_v1;
+mod north_star_cellular_support_v1;
+mod north_star_proof_v1;
 mod representation_gap;
 mod source_neutral_t1;
 mod transport_binding;
@@ -81,6 +84,22 @@ pub use marginal::{
     COVERAGE_OPPORTUNITY_MAX_ROWS_V1, COVERAGE_OPPORTUNITY_SNAPSHOT_SCHEMA_V1,
     CoverageOpportunitySnapshotV1, MarginalShapeOpportunityV1,
     build_coverage_opportunity_snapshot_v1,
+};
+pub use ms3_generation_registry_v1::{
+    MS3_GENERATION_REGISTRY_SCHEMA_V1, MS3_GENERATION_TERMINAL_SCHEMA_V1, Ms3GenerationEntryV1,
+    Ms3GenerationRegistryErrorV1, Ms3GenerationRegistryV1, Ms3GenerationTerminalReceiptV1,
+};
+pub use north_star_cellular_support_v1::{
+    NORTH_STAR_CELLULAR_SUPPORT_SCHEMA_V1, NorthStarCellularSupportErrorV1,
+    NorthStarCellularSupportReportV1, NorthStarCellularSupportV1,
+    synthesize_north_star_cellular_support_v1,
+};
+pub use north_star_proof_v1::{
+    NORTH_STAR_MIN_PASSING_SEEDS_V1, NORTH_STAR_PROOF_CONTRACT_SCHEMA_V1,
+    NORTH_STAR_PROOF_REPORT_SCHEMA_V1, NORTH_STAR_REQUIRED_SEEDS_V1, NorthStarArmMetricsV1,
+    NorthStarBudgetV1, NorthStarProofArmV1, NorthStarProofContractV1, NorthStarProofErrorV1,
+    NorthStarProofReportV1, NorthStarProofSeedReceiptV1, NorthStarProofThresholdsV1,
+    NorthStarProofVerdictV1, NorthStarSeedConditionsV1, evaluate_north_star_proof_v1,
 };
 pub use representation_gap::{
     REPRESENTATION_GAP_ADJUDICATION_SCHEMA_V1, REPRESENTATION_GAP_REPORT_SCHEMA_V1,

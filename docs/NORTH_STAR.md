@@ -248,3 +248,60 @@ Organ192 - малый организм
 ```
 
 Это и есть северная звезда.
+
+## Текущая доказательная граница
+
+По состоянию исходников на 2026-07-27 Северная звезда имеет отдельный
+fail-closed proof contract:
+
+```text
+frozen MS3 natural-law contract
+-> independently verified phase receipts
+-> relation fragments
+-> CircuitSynthesizer
+-> FrozenSynthesizedCircuitSet
+-> disjoint future waves
+-> OperatorGrokkingConsolidator
+-> five fixed seeds and seven fixed arms
+-> snapshot and remote restore
+-> NorthStarProofV1
+```
+
+Обязательные arms:
+
+```text
+cellular wave ensemble
+equal-budget monolith
+exact structural search
+no phase
+shuffled phase
+magnitude only
+random center
+```
+
+Proof требует как минимум четыре проходящих seed из пяти, нулевые wrong
+accepts и runtime parity failures, отсутствие support/future overlap,
+delayed-transition и cleanup evidence, exact snapshot restore и отдельный
+remote restore. Каждый arm связывает метрики с корнями experiment report,
+frozen future и snapshot.
+
+`NorthStarProofV1` не является admission receipt. Даже его будущий `PASS`
+оставляет `authority_ready=false`: право исполнения по-прежнему выдаёт только
+внешний admission после отдельного operator proof.
+
+Честный текущий статус:
+
+```text
+MS3 generation 1 independent future   CONTRADICTION
+blocker                               physical_transition_mismatch
+immutable generation registry         IMPLEMENTED
+verified phase -> circuit bridge       SHADOW TEST PASS
+five-seed ensemble experiment          NOT EVALUATED
+NorthStarProofV1 report                NOT ISSUED
+new authority                          0
+```
+
+Exact structural MS3 остаётся контрольной веткой. Он не может быть
+переименован в cellular-wave evidence. Cellular arm принимает только
+`VerifiedDeltaReceipt` с независимым verifier и никогда не принимает готовую
+`ResponseProgram` как доказательство grokking.

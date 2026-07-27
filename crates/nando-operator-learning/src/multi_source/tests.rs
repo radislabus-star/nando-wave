@@ -1,9 +1,12 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    SOURCE_NEUTRAL_EXTRACTOR_VERSION,
+    SOURCE_NEUTRAL_EXTRACTOR_VERSION, TYPED_EXECUTION_STAGE_RECEIPT_SCHEMA_V1, TypedExecutionStage,
+    TypedExecutionStageReceipt, VerifiedDeltaOutcome, VerifiedDeltaReceipt, VerifiedDeltaRelation,
+    VerifiedDeltaRelationState,
     opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass},
 };
+use nando_core::wave::{CircuitSynthesisConfig, OperatorGrokkingConfig};
 use nando_operator_kernel::{
     AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, MultiSourceCardinalityClassV1,
     MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1,
@@ -759,6 +762,382 @@ fn acquisition_contract(
         max_elapsed_seconds,
     )
     .expect("acquisition contract")
+}
+
+fn frozen_unique_law_fixture(
+    label: &str,
+    session: &str,
+    support_sequence: u64,
+    contract_watermark: u64,
+) -> FrozenVersionSpaceEnvelopeV1 {
+    let intent = format!("{label}-support");
+    let request = format!("request-{label}-support");
+    let action = format!("action-{label}-support");
+    let topology = t1_topology_row(&intent, &request, session, support_sequence, 1_000);
+    let frame = t1_completed_frame(&intent, &action, session, 1_500);
+    let terminal = terminal(&request, 990, 1_100);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(256, 60),
+        2,
+        vec![topology.clone()],
+        vec![frame.clone()],
+        vec![terminal.clone()],
+    );
+    let ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+    let bound = &ledger.bound_for_topology(&topology.commit.commitment_root_sha256)[0];
+    prepare_ms3_frozen_version_space_v1(&report, bound, &frame)
+        .expect("prepared fixture version space")
+        .seal(
+            contract_watermark,
+            Ms3VersionSpaceVersionsV1 {
+                compiler_version: "test-compiler.v1".to_owned(),
+                vm_abi: "test-vm.v1".to_owned(),
+            },
+        )
+        .expect("frozen fixture version space")
+}
+
+fn independent_future_fixture(
+    frozen: &FrozenVersionSpaceEnvelopeV1,
+    label: &str,
+    session: &str,
+    capture_sequence: u64,
+    pass: bool,
+) -> Ms3IndependentFutureEnvelopeV1 {
+    let intent = format!("{label}-future");
+    let request = format!("request-{label}-future");
+    let action = format!("action-{label}-future");
+    let topology = t1_topology_row(&intent, &request, session, capture_sequence, 2_000);
+    let prediction = predict_ms3_unique_law_v1(frozen, &topology, 2_050_000_000)
+        .expect("fixture prediction")
+        .expect("applicable fixture future");
+    let mut frame = t1_completed_frame(&intent, &action, session, 2_500);
+    if !pass {
+        frame.verifier_label = Some(false);
+    }
+    let terminal = terminal(&request, 1_990, 2_100);
+    let ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+    let bound = &ledger.bound_for_topology(&topology.commit.commitment_root_sha256)[0];
+    seal_ms3_independent_future_v1(
+        frozen,
+        &prediction,
+        &root(&format!("{label}-applicability")),
+        2_060_000_000,
+        bound,
+        &frame,
+    )
+    .expect("fixture independent future")
+}
+
+fn north_star_budget() -> NorthStarBudgetV1 {
+    NorthStarBudgetV1 {
+        total_memory_bytes: 16 * 1024,
+        hot_memory_bytes: 4 * 1024,
+        max_support_rows: 256,
+        max_future_rows: 256,
+        max_exact_checks: 10_000,
+        max_cpu_nanos: 1_000_000,
+    }
+}
+
+fn verified_phase_receipt(
+    surface: u8,
+    plane: u8,
+    source_role: u8,
+    target_role: u8,
+    phase_re_micro: i32,
+    phase_im_micro: i32,
+) -> VerifiedDeltaReceipt {
+    let stages = TypedExecutionStage::ALL
+        .into_iter()
+        .map(|stage| TypedExecutionStageReceipt {
+            schema: TYPED_EXECUTION_STAGE_RECEIPT_SCHEMA_V1.to_owned(),
+            stage,
+            generation: 7,
+            operator_fingerprint64: 42,
+            surface_id_sha256: root(&format!("surface-{surface}")),
+            session_id_sha256: root(&format!("phase-session-{surface}")),
+            input_relation_sha256: root(&format!("phase-input-{surface}")),
+            predicted_relation_sha256: root(&format!("phase-output-{surface}")),
+            observed_relation_sha256: root(&format!("phase-output-{surface}")),
+            stage_payload_sha256: root(&format!("phase-stage-{surface}-{stage:?}")),
+            independently_observed: stage == TypedExecutionStage::IndependentVerifier,
+            accepted: true,
+        })
+        .collect();
+    VerifiedDeltaReceipt::from_typed_trace(
+        stages,
+        VerifiedDeltaOutcome::Positive,
+        vec![VerifiedDeltaRelation {
+            plane,
+            source_role,
+            target_role,
+            state: VerifiedDeltaRelationState::Supported,
+            phase_re_micro,
+            phase_im_micro,
+        }],
+    )
+    .expect("verified phase receipt")
+}
+
+fn north_star_seed_receipt(
+    contract: &NorthStarProofContractV1,
+    seed: u64,
+    passes: bool,
+    wrong_accepts: u64,
+) -> NorthStarProofSeedReceiptV1 {
+    let budget_root = contract.budget.root_sha256().expect("budget root");
+    let arms = contract
+        .arms
+        .iter()
+        .copied()
+        .map(|arm| {
+            let primary_score_milli = if arm == NorthStarProofArmV1::CellularWaveEnsemble {
+                1_000
+            } else if passes {
+                900
+            } else {
+                990
+            };
+            NorthStarArmMetricsV1 {
+                arm,
+                budget_root_sha256: budget_root.clone(),
+                experiment_report_root_sha256: root(&format!("experiment-{seed}-{arm:?}")),
+                future_rows_root_sha256: root(&format!("future-{seed}")),
+                snapshot_root_sha256: root(&format!("snapshot-{seed}-{arm:?}")),
+                primary_score_milli,
+                future_rows: 10,
+                correct_executions: 10,
+                wrong_accepts: if arm == NorthStarProofArmV1::CellularWaveEnsemble {
+                    wrong_accepts
+                } else {
+                    0
+                },
+                runtime_parity_failures: 0,
+                verifier_coverage_milli: 1_000,
+                exact_checks: 100,
+                memory_bytes: 8 * 1024,
+                cpu_nanos: 100_000,
+                circuit_formed: arm == NorthStarProofArmV1::CellularWaveEnsemble,
+            }
+        })
+        .collect();
+    NorthStarProofSeedReceiptV1::seal(
+        contract,
+        seed,
+        arms,
+        NorthStarSeedConditionsV1 {
+            delayed_transition_observed: true,
+            exact_memory_cleanup_observed: true,
+            key_ablation_drop_milli: if passes { 100 } else { 10 },
+            non_key_ablation_drop_milli: 10,
+            snapshot_restore_exact: true,
+            snapshot_cold_start_gain_milli: if passes { 100 } else { 10 },
+        },
+    )
+    .expect("seed receipt")
+}
+
+#[test]
+fn north_star_proof_is_restart_exact_and_requires_four_of_five_safe_seeds() {
+    let frozen = frozen_unique_law_fixture("north-star", "support-north-star", 1, 7);
+    let contract =
+        NorthStarProofContractV1::seal(1, &frozen, vec![11, 22, 33, 44, 55], north_star_budget())
+            .expect("North Star contract");
+    let contract_bytes = contract.canonical_bytes().expect("contract bytes");
+    assert_eq!(
+        NorthStarProofContractV1::from_canonical_bytes(&contract_bytes).expect("contract restore"),
+        contract
+    );
+
+    let three_passes = contract
+        .seeds
+        .iter()
+        .enumerate()
+        .map(|(index, seed)| north_star_seed_receipt(&contract, *seed, index < 3, 0))
+        .collect();
+    let report =
+        evaluate_north_star_proof_v1(&contract, three_passes, 0, true, true).expect("report");
+    assert_eq!(report.verdict, NorthStarProofVerdictV1::Fail);
+    assert_eq!(report.blocker, "north_star_seed_threshold_not_met");
+
+    let four_passes = contract
+        .seeds
+        .iter()
+        .enumerate()
+        .map(|(index, seed)| north_star_seed_receipt(&contract, *seed, index < 4, 0))
+        .collect();
+    let report =
+        evaluate_north_star_proof_v1(&contract, four_passes, 0, true, true).expect("report");
+    assert_eq!(report.verdict, NorthStarProofVerdictV1::Pass);
+    assert!(!report.authority_ready);
+    assert!(!report.phase_mutation_allowed);
+    let report_bytes = report.canonical_bytes(&contract).expect("report bytes");
+    assert_eq!(
+        NorthStarProofReportV1::from_canonical_bytes(&report_bytes, &contract)
+            .expect("report restore"),
+        report
+    );
+}
+
+#[test]
+fn north_star_cellular_support_uses_only_independently_verified_phase_receipts() {
+    let frozen = frozen_unique_law_fixture("cellular-support", "cellular-support", 1, 7);
+    let receipts = vec![
+        verified_phase_receipt(1, 0, 0, 1, 1_000_000, 0),
+        verified_phase_receipt(2, 1, 1, 2, 0, 1_000_000),
+        verified_phase_receipt(3, 2, 0, 2, -1_000_000, 0),
+    ];
+    let support = synthesize_north_star_cellular_support_v1(
+        &frozen,
+        7,
+        42,
+        &receipts,
+        CircuitSynthesisConfig::default(),
+        OperatorGrokkingConfig::default(),
+    )
+    .expect("cellular support");
+
+    assert_eq!(support.synthesis.emitted_circuits, 1);
+    assert_eq!(support.frozen_circuits.circuits().len(), 1);
+    assert!(support.report.validate());
+    assert!(!support.report.authority_ready);
+    assert!(!support.report.phase_mutation_allowed);
+    let bytes = support.report.canonical_bytes().expect("support bytes");
+    assert_eq!(
+        NorthStarCellularSupportReportV1::from_canonical_bytes(&bytes).expect("support restart"),
+        support.report
+    );
+
+    let duplicate = vec![
+        receipts[0].clone(),
+        receipts[0].clone(),
+        receipts[2].clone(),
+    ];
+    assert_eq!(
+        synthesize_north_star_cellular_support_v1(
+            &frozen,
+            7,
+            42,
+            &duplicate,
+            CircuitSynthesisConfig::default(),
+            OperatorGrokkingConfig::default(),
+        ),
+        Err(NorthStarCellularSupportErrorV1::InsufficientIndependentEvidence)
+    );
+}
+
+#[test]
+fn north_star_proof_rejects_seed_arm_budget_and_root_substitution() {
+    let frozen = frozen_unique_law_fixture("north-star-veto", "support-veto", 1, 7);
+    assert_eq!(
+        NorthStarProofContractV1::seal(1, &frozen, vec![11, 11, 33, 44, 55], north_star_budget()),
+        Err(NorthStarProofErrorV1::InvalidContract)
+    );
+    let contract =
+        NorthStarProofContractV1::seal(1, &frozen, vec![11, 22, 33, 44, 55], north_star_budget())
+            .expect("North Star contract");
+    let mut duplicated = north_star_seed_receipt(&contract, 11, true, 0);
+    duplicated.arms[1].arm = duplicated.arms[0].arm;
+    assert!(!duplicated.validate(&contract));
+
+    let mut unequal_budget = north_star_seed_receipt(&contract, 11, true, 0);
+    unequal_budget.arms[1].budget_root_sha256 = root("foreign-budget");
+    assert!(!unequal_budget.validate(&contract));
+
+    let receipt = north_star_seed_receipt(&contract, 11, true, 0);
+    assert_eq!(
+        evaluate_north_star_proof_v1(&contract, vec![receipt.clone(), receipt], 0, true, true),
+        Err(NorthStarProofErrorV1::InvalidSeedReceipt)
+    );
+
+    let unsafe_receipts = contract
+        .seeds
+        .iter()
+        .map(|seed| north_star_seed_receipt(&contract, *seed, true, u64::from(*seed == 11)))
+        .collect();
+    let unsafe_report =
+        evaluate_north_star_proof_v1(&contract, unsafe_receipts, 0, true, true).expect("report");
+    assert_eq!(unsafe_report.verdict, NorthStarProofVerdictV1::Fail);
+    assert_eq!(unsafe_report.blocker, "north_star_safety_failure");
+    let partial_unsafe = evaluate_north_star_proof_v1(
+        &contract,
+        vec![north_star_seed_receipt(&contract, 11, true, 1)],
+        0,
+        true,
+        true,
+    )
+    .expect("partial unsafe report");
+    assert_eq!(partial_unsafe.verdict, NorthStarProofVerdictV1::Fail);
+    assert_eq!(partial_unsafe.blocker, "north_star_safety_failure");
+
+    let mut tampered_contract = contract.clone();
+    tampered_contract.support_rows_root_sha256 = root("foreign-support-root");
+    assert!(!tampered_contract.validate());
+    let mut tampered_report = unsafe_report;
+    tampered_report.report_root_sha256 = root("foreign-report-root");
+    assert!(!tampered_report.validate(&contract));
+}
+
+#[test]
+fn generation_registry_blocks_reuse_and_restarts_byte_identically() {
+    let frozen = frozen_unique_law_fixture("generation-one", "support-one", 1, 7);
+    let contradiction =
+        independent_future_fixture(&frozen, "generation-one", "future-one", 8, false);
+    assert_eq!(
+        contradiction.receipt.verdict,
+        Ms3IndependentFutureVerdictV1::Contradiction
+    );
+    let mut registry = Ms3GenerationRegistryV1::new();
+    assert_eq!(registry.append_generation(&frozen), Ok(1));
+    assert_eq!(
+        registry.append_generation(&frozen),
+        Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists)
+    );
+    registry
+        .seal_terminal(&frozen, &contradiction)
+        .expect("terminal contradiction");
+    assert_eq!(
+        registry.append_generation(&frozen),
+        Err(Ms3GenerationRegistryErrorV1::EvidenceReuse)
+    );
+
+    let reused_future = frozen_unique_law_fixture("generation-one", "future-one", 9, 15);
+    assert_eq!(
+        registry.append_generation(&reused_future),
+        Err(Ms3GenerationRegistryErrorV1::EvidenceReuse)
+    );
+    let generation_two = frozen_unique_law_fixture("generation-two", "support-two", 9, 15);
+    assert_eq!(registry.append_generation(&generation_two), Ok(2));
+    let bytes = registry.canonical_bytes().expect("registry bytes");
+    assert_eq!(
+        Ms3GenerationRegistryV1::from_canonical_bytes(&bytes).expect("registry restore"),
+        registry
+    );
+}
+
+#[test]
+fn generation_registry_rejects_successor_after_future_pass() {
+    let frozen = frozen_unique_law_fixture("generation-pass", "support-pass", 1, 7);
+    let future = independent_future_fixture(&frozen, "generation-pass", "future-pass", 8, true);
+    let generation_two = frozen_unique_law_fixture("generation-after-pass", "support-next", 9, 15);
+    let mut registry = Ms3GenerationRegistryV1::new();
+    registry.append_generation(&frozen).expect("generation one");
+    registry
+        .seal_terminal(&frozen, &future)
+        .expect("terminal pass");
+    assert_eq!(
+        registry.append_generation(&generation_two),
+        Err(Ms3GenerationRegistryErrorV1::SuccessorAfterPass)
+    );
 }
 
 #[test]

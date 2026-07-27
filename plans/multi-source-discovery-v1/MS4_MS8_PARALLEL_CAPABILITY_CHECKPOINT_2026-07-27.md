@@ -9,8 +9,10 @@ fail-closed capability path for MS4-MS8 exists and is tested, while every
 production authority gate remains closed.
 
 ```text
-MS3 natural law                         UNIQUE_LAW_FROZEN
-MS3 independent future                 LIVE / OUTCOME PENDING
+MS3 generation 1 law                   UNIQUE_LAW_FROZEN
+MS3 generation 1 independent future    CONTRADICTION
+MS3 generation 1 blocker               physical_transition_mismatch
+MS3 generation registry                IMPLEMENTED / source checkpoint
 MS4 crystallization bridge             IMPLEMENTED / TEST PASS
 MS5 rich multi-role capability         SHADOW TEST PASS
 MS6 typed filter-count capability      SHADOW TEST PASS
@@ -37,14 +39,11 @@ MS3 Natural multi-source identification
   |- exact bounded version space                        PASS
   |- semantic quotient                                  1 class
   |- UNIQUE_LAW_FROZEN                                  PASS
-  `- independent future                                 LIVE
-     |- independent topologies                          30
-     |- independent lineages                             2
-     |- structurally not applicable                     29
+  `- independent future                         CONTRADICTION
      |- predictions durably committed                    1
-     |- active predictions                               1
-     |- precommitted prediction missing                  0
-     `- blocker                         independent_future_outcome_pending
+     |- authority_ready                              false
+     |- phase_mutation_allowed                       false
+     `- blocker                         physical_transition_mismatch
           |
           +---------------- implementation in parallel ----------------+
           |                                                            |
@@ -176,9 +175,11 @@ f8b0135  test(ms5-ms6): satisfy strict clippy arithmetic
 ## Next Authority Transition
 
 ```text
-durably precommitted MS3 prediction
--> later terminal outcome
--> independent verifier
+terminal contradiction generation 1
+-> immutable generation registry
+-> fresh non-reused support and later watermark
+-> generation 2 version space
+-> durably precommitted independent future
 -> FUTURE_PASS
 -> MS4 bridge consumes exact frozen artifacts
 -> BundleV4 in QUARANTINE

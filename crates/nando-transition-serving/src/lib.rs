@@ -979,6 +979,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
             get(ms3_independent_future_report),
         )
         .route(
+            "/v2/multi-source/ms3-generation-registry",
+            get(ms3_generation_registry_report),
+        )
+        .route(
             "/v2/multi-source/ms3-future-applicability",
             get(ms3_future_applicability_report),
         )
@@ -1975,6 +1979,49 @@ async fn ms3_independent_future_report(State(state): State<AppState>) -> Respons
             StatusCode::SERVICE_UNAVAILABLE,
             json!({
                 "schema": "nando.ms3-independent-future-error.v1",
+                "error": error,
+                "authority_ready": false,
+                "phase_mutation_allowed": false
+            }),
+        ),
+    }
+}
+
+async fn ms3_generation_registry_report(State(state): State<AppState>) -> Response {
+    let status = state
+        .ms3_frozen_version_space
+        .as_ref()
+        .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())
+        .and_then(|runtime| {
+            let runtime = runtime
+                .lock()
+                .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+            Ok::<_, String>((
+                runtime.generation_registry().clone(),
+                runtime
+                    .envelope()
+                    .map(|envelope| envelope.envelope_root_sha256.clone()),
+                runtime
+                    .independent_future()
+                    .map(|future| future.envelope_root_sha256.clone()),
+            ))
+        });
+    match status {
+        Ok((registry, active_frozen_root, active_future_root)) => json_response(
+            StatusCode::OK,
+            json!({
+                "schema": "nando.ms3-generation-registry-status.v1",
+                "registry": registry,
+                "active_frozen_envelope_root_sha256": active_frozen_root,
+                "active_future_envelope_root_sha256": active_future_root,
+                "authority_ready": false,
+                "phase_mutation_allowed": false
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms3-generation-registry-error.v1",
                 "error": error,
                 "authority_ready": false,
                 "phase_mutation_allowed": false

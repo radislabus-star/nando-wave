@@ -2,7 +2,7 @@
 
 Status: canonical current-core map.
 
-Current snapshot: 2026-07-26 Europe/Tallinn.
+Current source snapshot: 2026-07-27 Europe/Tallinn.
 
 This document answers three questions in one place:
 
@@ -205,21 +205,24 @@ CrystallizedOperatorBundleV4 restart              PASS / NEW PACKAGE CANONICAL
 V4 routing/execution image ownership              PASS / 1..8 PROGRAM PAGES
 V4 exact Page32 compiler rebuild                  PASS / ADVERSARIAL RESEAL BLOCKED
 legacy page/registry package decode                PASS / COMPATIBILITY ONLY
-response ACTIVE packages                         3
+response ACTIVE packages                         2
 real local CPU execution                         PASS
-verified current-epoch input-token CPU share      about 79.6%
 false accepts                                    0
 runtime parity failures                          0
 M3                                               WATCH / qualifying streak 1 of 3
 production authority                             true, narrow immutable lease
-multi-source STOP-MS0                            COMPLETE / JOIN_INSUFFICIENT
-multi-source next                                MS0-R archive audit, then MS1
+multi-source MS3 generation 1                    CONTRADICTION
+multi-source blocker                             physical_transition_mismatch
+multi-source generation registry                 IMPLEMENTED / authority false
+NorthStar cellular support bridge                SHADOW TEST PASS
+NorthStar five-seed proof                        NOT EVALUATED
 ```
 
-The live numbers are the read-only composite-gate and economics snapshot taken
-on 2026-07-26. They are not timeless claims and must be refreshed before a
-product or economics statement. One-shot identification of a narrow package is
-not a scientific circuit-grokking claim.
+Package counts are a dated source checkpoint, not a timeless live claim, and
+must be refreshed before a product or economics statement. The first natural
+MS3 law was correctly rejected by its independent future; it created no
+authority and no phase mutation. One-shot identification of a narrow package
+is not a scientific circuit-grokking claim.
 
 ## 6. Exact Current Product Boundary
 

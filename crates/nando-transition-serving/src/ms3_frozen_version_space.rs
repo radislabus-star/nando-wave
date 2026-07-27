@@ -10,9 +10,9 @@ use nando_operator_learning::multi_source::{
     FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1, Ms3CompletedFrameCaptureFenceV1,
     Ms3FutureApplicabilityContractV1, Ms3FutureApplicabilityDispositionV1,
     Ms3FutureApplicabilityEventV1, Ms3FutureApplicabilityLedgerV1, Ms3FutureApplicabilityReportV1,
-    Ms3FutureApplicabilityV1, Ms3FuturePredictionV1, Ms3IndependentFutureEnvelopeV1,
-    Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1, PreparedMs3VersionSpaceV1,
-    classify_ms3_unique_law_v1,
+    Ms3FutureApplicabilityV1, Ms3FuturePredictionV1, Ms3GenerationRegistryV1,
+    Ms3IndependentFutureEnvelopeV1, Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1,
+    PreparedMs3VersionSpaceV1, classify_ms3_unique_law_v1,
 };
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +20,7 @@ const ENVELOPE_FILE: &str = "frozen-version-space-v1.cbor";
 const PREDICTIONS_FILE: &str = "future-predictions-v1.cbor";
 const FUTURE_FILE: &str = "independent-future-v1.cbor";
 const APPLICABILITY_FILE: &str = "future-applicability-v1.cbor";
+const GENERATION_REGISTRY_FILE: &str = "generation-registry-v1.cbor";
 const MAX_ENVELOPE_BYTES: usize = 12 * 1024 * 1024;
 const MAX_PREDICTIONS: usize = 256;
 const PREDICTION_LEDGER_SCHEMA_V1: &str = "nando.ms3-future-prediction-ledger.v1";
@@ -33,6 +34,8 @@ pub(super) struct Ms3FrozenVersionSpaceRuntime {
     applicability_ledger_path: PathBuf,
     independent_future: Option<Ms3IndependentFutureEnvelopeV1>,
     independent_future_path: PathBuf,
+    generation_registry: Ms3GenerationRegistryV1,
+    generation_registry_path: PathBuf,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -119,6 +122,25 @@ impl Ms3FrozenVersionSpaceRuntime {
             prediction_ledger.as_ref(),
             independent_future.as_ref(),
         )?;
+        let generation_registry_path = directory.join(GENERATION_REGISTRY_FILE);
+        let mut generation_registry = read_bounded(&generation_registry_path)?
+            .map(|bytes| {
+                Ms3GenerationRegistryV1::from_canonical_bytes(&bytes)
+                    .map_err(|error| format!("ms3_generation_registry_restore:{error:?}"))
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let registry_changed = reconcile_generation_registry(
+            &mut generation_registry,
+            envelope.as_ref(),
+            independent_future.as_ref(),
+        )?;
+        if registry_changed {
+            let bytes = generation_registry
+                .canonical_bytes()
+                .map_err(|error| format!("ms3_generation_registry_encode:{error:?}"))?;
+            write_atomic(&generation_registry_path, &bytes)?;
+        }
         Ok(Self {
             envelope,
             envelope_path,
@@ -128,6 +150,8 @@ impl Ms3FrozenVersionSpaceRuntime {
             applicability_ledger_path,
             independent_future,
             independent_future_path,
+            generation_registry,
+            generation_registry_path,
         })
     }
 
@@ -205,14 +229,23 @@ impl Ms3FrozenVersionSpaceRuntime {
             }
         };
         let applicability_bytes = applicability.canonical_bytes().map_err(str::to_owned)?;
+        let mut generation_registry = self.generation_registry.clone();
+        generation_registry
+            .append_generation(&envelope)
+            .map_err(|error| format!("ms3_generation_registry_append:{error:?}"))?;
+        let registry_bytes = generation_registry
+            .canonical_bytes()
+            .map_err(|error| format!("ms3_generation_registry_encode:{error:?}"))?;
 
         // Publish the in-memory experiment only after every durable component exists.
         write_atomic(&self.applicability_ledger_path, &applicability_bytes)?;
         write_atomic(&self.prediction_ledger_path, &prediction_bytes)?;
         write_atomic(&self.envelope_path, &envelope_bytes)?;
+        write_atomic(&self.generation_registry_path, &registry_bytes)?;
         self.applicability_ledger = Some(applicability);
         self.prediction_ledger = Some(predictions);
         self.envelope = Some(envelope);
+        self.generation_registry = generation_registry;
         self.contract()
             .cloned()
             .ok_or_else(|| "ms3_version_space_contract_missing".to_owned())
@@ -489,8 +522,10 @@ impl Ms3FrozenVersionSpaceRuntime {
         &mut self,
         future: Ms3IndependentFutureEnvelopeV1,
     ) -> Result<(), String> {
-        if self.independent_future.is_some() {
-            return Ok(());
+        if let Some(existing) = &self.independent_future {
+            return (existing.envelope_root_sha256 == future.envelope_root_sha256)
+                .then_some(())
+                .ok_or_else(|| "ms3_independent_future_conflict".to_owned());
         }
         let frozen = self
             .envelope
@@ -514,8 +549,17 @@ impl Ms3FrozenVersionSpaceRuntime {
             self.prediction_ledger.as_ref(),
             Some(&future),
         )?;
+        let mut generation_registry = self.generation_registry.clone();
+        generation_registry
+            .seal_terminal(frozen, &future)
+            .map_err(|error| format!("ms3_generation_registry_terminal:{error:?}"))?;
+        let registry_bytes = generation_registry
+            .canonical_bytes()
+            .map_err(|error| format!("ms3_generation_registry_encode:{error:?}"))?;
         write_atomic(&self.independent_future_path, &bytes)?;
+        write_atomic(&self.generation_registry_path, &registry_bytes)?;
         self.independent_future = Some(future);
+        self.generation_registry = generation_registry;
         Ok(())
     }
 
@@ -529,6 +573,10 @@ impl Ms3FrozenVersionSpaceRuntime {
 
     pub(super) fn contract(&self) -> Option<&FrozenVersionSpaceContractV1> {
         self.envelope.as_ref().map(|envelope| &envelope.contract)
+    }
+
+    pub(super) const fn generation_registry(&self) -> &Ms3GenerationRegistryV1 {
+        &self.generation_registry
     }
 
     fn append_applicability_event(
@@ -547,6 +595,56 @@ impl Ms3FrozenVersionSpaceRuntime {
         self.applicability_ledger = Some(next);
         Ok(true)
     }
+}
+
+fn reconcile_generation_registry(
+    registry: &mut Ms3GenerationRegistryV1,
+    frozen: Option<&FrozenVersionSpaceEnvelopeV1>,
+    future: Option<&Ms3IndependentFutureEnvelopeV1>,
+) -> Result<bool, String> {
+    let Some(frozen) = frozen else {
+        if registry
+            .generations
+            .last()
+            .is_some_and(|entry| entry.terminal.is_none())
+        {
+            return Err("ms3_generation_registry_active_artifact_missing".to_owned());
+        }
+        return future
+            .is_none()
+            .then_some(false)
+            .ok_or_else(|| "ms3_generation_registry_future_without_frozen".to_owned());
+    };
+    let mut changed = false;
+    match registry.generations.last() {
+        None => {
+            registry
+                .append_generation(frozen)
+                .map_err(|error| format!("ms3_generation_registry_bootstrap:{error:?}"))?;
+            changed = true;
+        }
+        Some(entry)
+            if entry.frozen_envelope_root_sha256 == frozen.envelope_root_sha256
+                && entry.frozen_contract_root_sha256 == frozen.contract.contract_root_sha256 => {}
+        Some(_) => return Err("ms3_generation_registry_active_generation_mismatch".to_owned()),
+    }
+    if let Some(future) = future {
+        let terminal_missing = registry
+            .generations
+            .last()
+            .is_none_or(|entry| entry.terminal.is_none());
+        registry
+            .seal_terminal(frozen, future)
+            .map_err(|error| format!("ms3_generation_registry_terminal:{error:?}"))?;
+        changed |= terminal_missing;
+    } else if registry
+        .generations
+        .last()
+        .is_some_and(|entry| entry.terminal.is_some())
+    {
+        return Err("ms3_generation_registry_terminal_future_missing".to_owned());
+    }
+    Ok(changed)
 }
 
 fn validate_applicability_link(
@@ -836,6 +934,8 @@ mod tests {
             applicability_ledger_path: root.join("missing-parent").join(APPLICABILITY_FILE),
             independent_future: None,
             independent_future_path: root.join(FUTURE_FILE),
+            generation_registry: Ms3GenerationRegistryV1::new(),
+            generation_registry_path: root.join(GENERATION_REGISTRY_FILE),
         };
 
         assert!(runtime.append_applicability_event(event).is_err());
