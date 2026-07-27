@@ -2270,6 +2270,41 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                     .map(|(_, durable_at)| *durable_at)
                     .unwrap_or(u64::MAX);
                 if first_exact.is_none() {
+                    let dry_run = commitment.as_ref().map_or_else(
+                        || json!({"error": "prediction_commitment_missing"}),
+                        |(event_root, durable_at)| {
+                            frames
+                                .iter()
+                                .find(|frame| {
+                                    nando_operator_kernel::canonical_json_sha256(*frame).is_ok_and(
+                                        |root| {
+                                            root == bound.binding.completed_frame_root_sha256
+                                        },
+                                    )
+                                })
+                                .map_or_else(
+                                    || json!({"error": "completed_frame_root_missing"}),
+                                    |frame| {
+                                        match nando_operator_learning::multi_source::seal_ms3_independent_future_v1(
+                                            &frozen,
+                                            prediction,
+                                            event_root,
+                                            *durable_at,
+                                            bound,
+                                            frame,
+                                        ) {
+                                            Ok(future) => json!({
+                                                "verdict": format!("{:?}", future.receipt.verdict),
+                                                "blocker": future.receipt.blocker,
+                                                "receipt_root_sha256":
+                                                    future.receipt.receipt_root_sha256
+                                            }),
+                                            Err(error) => json!({"error": error}),
+                                        }
+                                    },
+                                )
+                        },
+                    );
                     first_exact = Some(json!({
                         "prediction_root_sha256": prediction.prediction_root_sha256,
                         "capture_sequence": prediction.capture_sequence,
@@ -2287,7 +2322,8 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                         "request_completed_at_unix_nanos":
                             bound.binding.request_completed_at_unix_nanos,
                         "disqualified": disqualified_predictions
-                            .contains(&prediction.prediction_root_sha256)
+                            .contains(&prediction.prediction_root_sha256),
+                        "seal_dry_run": dry_run
                     }));
                 }
                 if bound.binding.action_observed_at_unix_nanos > durable_at
