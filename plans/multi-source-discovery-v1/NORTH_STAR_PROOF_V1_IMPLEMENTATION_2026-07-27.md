@@ -89,7 +89,7 @@ No endpoint or report grants authority.
 
 ```text
 cargo +1.97.0 test -p nando-operator-learning --lib
-  307 PASS
+  308 PASS
 
 cargo +1.97.0 test -p nando-transition-serving --lib
   140 PASS / 2 ignored
