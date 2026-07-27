@@ -2112,7 +2112,13 @@ fn insert_ms3_terminal_status(
 }
 
 fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> {
-    let (frozen, prediction_min_sequence, predictions, prediction_commitments) = {
+    let (
+        frozen,
+        prediction_min_sequence,
+        predictions,
+        prediction_commitments,
+        disqualified_predictions,
+    ) = {
         let runtime = state
             .ms3_frozen_version_space
             .as_ref()
@@ -2137,6 +2143,14 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                         .map(|commitment| (prediction.prediction_root_sha256, commitment))
                 })
                 .collect::<BTreeMap<_, _>>(),
+            runtime
+                .predictions()
+                .into_iter()
+                .filter(|prediction| {
+                    runtime.prediction_is_disqualified(&prediction.prediction_root_sha256)
+                })
+                .map(|prediction| prediction.prediction_root_sha256)
+                .collect::<BTreeSet<_>>(),
         )
     };
     let committed_topologies = predictions
@@ -2224,6 +2238,7 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
     let mut outcome_before_or_at_durable_prediction = 0_usize;
     let mut transport_failures = BTreeMap::<String, usize>::new();
     let mut first_unresolved = None;
+    let mut first_exact = None;
     for prediction in &predictions {
         let terminal = terminals_by_request
             .get(prediction.request_event_id_sha256.as_str())
@@ -2247,10 +2262,34 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
         match (terminal.is_some(), frame_exists, exact.as_ref()) {
             (_, _, Some(bound)) => {
                 exact_transport_bindings = exact_transport_bindings.saturating_add(1);
-                let durable_at = prediction_commitments
+                let commitment = prediction_commitments
                     .get(&prediction.prediction_root_sha256)
+                    .cloned();
+                let durable_at = commitment
+                    .as_ref()
                     .map(|(_, durable_at)| *durable_at)
                     .unwrap_or(u64::MAX);
+                if first_exact.is_none() {
+                    first_exact = Some(json!({
+                        "prediction_root_sha256": prediction.prediction_root_sha256,
+                        "capture_sequence": prediction.capture_sequence,
+                        "topology_root_sha256": prediction.topology_root_sha256,
+                        "request_event_id_sha256": prediction.request_event_id_sha256,
+                        "turn_intent_id_sha256": prediction.turn_intent_id_sha256,
+                        "applicability_event_root_sha256": commitment
+                            .as_ref()
+                            .map(|(root, _)| root),
+                        "prediction_durable_at_unix_nanos": commitment
+                            .as_ref()
+                            .map(|(_, durable_at)| durable_at),
+                        "action_observed_at_unix_nanos":
+                            bound.binding.action_observed_at_unix_nanos,
+                        "request_completed_at_unix_nanos":
+                            bound.binding.request_completed_at_unix_nanos,
+                        "disqualified": disqualified_predictions
+                            .contains(&prediction.prediction_root_sha256)
+                    }));
+                }
                 if bound.binding.action_observed_at_unix_nanos > durable_at
                     && bound.binding.request_completed_at_unix_nanos > durable_at
                 {
@@ -2310,7 +2349,8 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
             "terminal_and_frame_without_exact_binding": terminal_and_frame_without_exact_binding,
             "neither_terminal_nor_frame": neither_terminal_nor_frame,
             "transport_failures": transport_failures,
-            "first_unresolved": first_unresolved
+            "first_unresolved": first_unresolved,
+            "first_exact": first_exact
         }
     }))
 }
