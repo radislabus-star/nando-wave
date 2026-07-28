@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b031";
+const DASHBOARD_BUILD: &str = "2026.07.28-b032";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -837,17 +837,27 @@ const TEMPLATE: &str = r#"
             : "linked evidence → version space → unique law freeze");
 
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
+    const liveIngestion = minerOverview.live_ingestion || {};
+    const received = liveIngestion.durably_received || {};
+    const applied = liveIngestion.learner_applied || {};
+    const backlog = liveIngestion.backlog || {};
     const joinOpen = Math.max(0, bridge.join_attempts - bridge.join_hits - bridge.join_misses);
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
-    const opportunityLag = bridge.opportunity_pending;
-    const tokenLagComparable = bridge.opportunity_counter_epoch_match === true;
-    const tokenLag = tokenLagComparable && opportunityLag > 0 ? Math.max(0, bridge.request_tokens - bridge.miner_request_tokens) : 0;
-    text("ingestion-received", number.format(bridge.request_tokens));
-    text("ingestion-received-events", `${number.format(bridge.request_events)} requests · seq ${number.format(bridge.opportunity_produced_sequence)}`);
-    text("ingestion-applied", number.format(bridge.miner_request_tokens));
-    text("ingestion-applied-events", `${number.format(bridge.miner_request_events)} requests · seq ${number.format(bridge.opportunity_consumed_sequence)}`);
+    const opportunityLag = backlog.events ?? bridge.opportunity_pending;
+    const tokenLagComparable = liveIngestion.counter_epoch_match ?? bridge.opportunity_counter_epoch_match === true;
+    const receivedTokens = received.input_tokens ?? bridge.request_tokens;
+    const receivedRequests = received.requests ?? bridge.request_events;
+    const receivedSequence = received.sequence ?? bridge.opportunity_produced_sequence;
+    const appliedTokens = applied.input_tokens ?? bridge.miner_request_tokens;
+    const appliedRequests = applied.requests ?? bridge.miner_request_events;
+    const appliedSequence = applied.sequence ?? bridge.opportunity_consumed_sequence;
+    const tokenLag = tokenLagComparable && opportunityLag > 0 ? Math.max(0, receivedTokens - appliedTokens) : 0;
+    text("ingestion-received", number.format(receivedTokens));
+    text("ingestion-received-events", `${number.format(receivedRequests)} requests · seq ${number.format(receivedSequence)}`);
+    text("ingestion-applied", number.format(appliedTokens));
+    text("ingestion-applied-events", `${number.format(appliedRequests)} requests · seq ${number.format(appliedSequence)}`);
     text("ingestion-backlog", `${number.format(opportunityLag)} events`);
-    text("ingestion-inflight", `${number.format(bridge.opportunity_inflight)} inflight входят в durable backlog`);
+    text("ingestion-inflight", `${number.format(backlog.inflight_events ?? bridge.opportunity_inflight)} inflight входят в durable backlog`);
     stateClass("ingestion-backlog-cell", `ingestion-cell backlog ${!tokenLagComparable ? "invalid" : opportunityLag === 0 ? "clear" : ""}`);
     text("ingestion-token-lag", tokenLagComparable ? number.format(tokenLag) : "НЕСОПОСТАВИМО");
     text("ingestion-token-scope", tokenLagComparable ? opportunityLag > 0 ? "токены durable backlog одного process epoch" : "durable request backlog отсутствует" : "hot/cold перезапущены в разные моменты");
@@ -994,6 +1004,7 @@ mod tests {
         assert!(html.contains("ПРИМЕНЕНО LEARNER"));
         assert!(html.contains("id=\"ingestion-backlog-cell\""));
         assert!(html.contains("opportunityLag === 0 ? \"clear\""));
+        assert!(html.contains("const applied = liveIngestion.learner_applied || {}"));
         assert!(html.contains("CPU-маршрут открыт · ACTIVE packages"));
         assert!(!html.contains("CPU работает на ${snapshot.response_package_count}"));
         assert!(html.contains("ВСЕГО БЕЗ CPU-КЛАССА"));

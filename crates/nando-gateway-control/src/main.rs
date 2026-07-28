@@ -1123,6 +1123,20 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let (legacy_total_input_tokens, legacy_cpu_input_tokens) =
         legacy_prior_epoch_token_totals(economics).unwrap_or((0, 0));
     let bridge = live_dashboard::bridge_view(&hot_health, &cold_health);
+    let opportunity_prefix_closed = bridge.opportunity_counter_epoch_match
+        && bridge.opportunity_pending == 0
+        && bridge.opportunity_inflight == 0
+        && bridge.opportunity_produced_sequence == bridge.opportunity_consumed_sequence;
+    let applied_request_tokens = if opportunity_prefix_closed {
+        bridge.request_tokens
+    } else {
+        bridge.miner_request_tokens
+    };
+    let applied_request_events = if opportunity_prefix_closed {
+        bridge.request_events
+    } else {
+        bridge.miner_request_events
+    };
     let admission = admission_status(&state.config);
     let admission_ready_cohorts = persisted_miner
         .pointer("/miner/admission_ready_cohorts")
@@ -1207,6 +1221,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "live_ingestion": {
                 "scope": "current_hot_cold_process_epoch",
                 "counter_epoch_match": bridge.opportunity_counter_epoch_match,
+                "closed_prefix_reconciled": opportunity_prefix_closed,
                 "producer_counter_started_after_sequence":
                     bridge.producer_counter_started_after_sequence,
                 "consumer_counter_started_after_sequence":
@@ -1217,8 +1232,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                     "sequence": bridge.opportunity_produced_sequence,
                 },
                 "learner_applied": {
-                    "input_tokens": bridge.miner_request_tokens,
-                    "requests": bridge.miner_request_events,
+                    "input_tokens": applied_request_tokens,
+                    "requests": applied_request_events,
                     "sequence": bridge.opportunity_consumed_sequence,
                 },
                 "backlog": {
