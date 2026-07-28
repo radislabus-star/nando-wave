@@ -2455,43 +2455,47 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                 {
                     eprintln!("nando-terminal-receipt-archive: {error}");
                 }
-                let acquisition = evaluate_ms3_linked_frame_acquisition(&state)
-                    .inspect_err(|error| {
-                        eprintln!("nando-ms3-linked-frame-acquisition: {error}");
-                    })
-                    .ok();
-                let rolled_over = match rollover_ms3_generation_if_terminal(&state) {
-                    Ok(rolled_over) => rolled_over,
-                    Err(error) => {
-                        eprintln!("nando-ms3-generation-rollover: {error}");
-                        false
-                    }
-                };
-                if rolled_over {
-                    last_future_generation = None;
-                } else if acquisition
-                    .as_ref()
-                    .is_some_and(|report| ms3_acquisition_allows_freeze(report.verdict))
-                    && let Err(error) = evaluate_ms3_frozen_version_space(&state)
-                {
-                    eprintln!("nando-ms3-frozen-version-space: {error}");
-                }
-                let frozen_ready = state
-                    .ms3_frozen_version_space
-                    .as_ref()
-                    .and_then(|runtime| runtime.lock().ok())
-                    .is_some_and(|runtime| runtime.envelope().is_some());
-                if frozen_ready {
-                    match ms3_future_evidence_generation(&state) {
-                        Ok(generation) if last_future_generation.as_ref() != Some(&generation) => {
-                            if let Err(error) = evaluate_ms3_independent_future(&state) {
-                                eprintln!("nando-ms3-independent-future: {error}");
-                            }
-                            last_future_generation = Some(generation);
-                        }
-                        Ok(_) => {}
+                if owns_ms3_lifecycle(&state) {
+                    let acquisition = evaluate_ms3_linked_frame_acquisition(&state)
+                        .inspect_err(|error| {
+                            eprintln!("nando-ms3-linked-frame-acquisition: {error}");
+                        })
+                        .ok();
+                    let rolled_over = match rollover_ms3_generation_if_terminal(&state) {
+                        Ok(rolled_over) => rolled_over,
                         Err(error) => {
-                            eprintln!("nando-ms3-independent-future-generation: {error}");
+                            eprintln!("nando-ms3-generation-rollover: {error}");
+                            false
+                        }
+                    };
+                    if rolled_over {
+                        last_future_generation = None;
+                    } else if acquisition
+                        .as_ref()
+                        .is_some_and(|report| ms3_acquisition_allows_freeze(report.verdict))
+                        && let Err(error) = evaluate_ms3_frozen_version_space(&state)
+                    {
+                        eprintln!("nando-ms3-frozen-version-space: {error}");
+                    }
+                    let frozen_ready = state
+                        .ms3_frozen_version_space
+                        .as_ref()
+                        .and_then(|runtime| runtime.lock().ok())
+                        .is_some_and(|runtime| runtime.envelope().is_some());
+                    if frozen_ready {
+                        match ms3_future_evidence_generation(&state) {
+                            Ok(generation)
+                                if last_future_generation.as_ref() != Some(&generation) =>
+                            {
+                                if let Err(error) = evaluate_ms3_independent_future(&state) {
+                                    eprintln!("nando-ms3-independent-future: {error}");
+                                }
+                                last_future_generation = Some(generation);
+                            }
+                            Ok(_) => {}
+                            Err(error) => {
+                                eprintln!("nando-ms3-independent-future-generation: {error}");
+                            }
                         }
                     }
                 }
@@ -3024,6 +3028,12 @@ fn evaluate_ms3_frozen_version_space(
             },
             unix_now(),
         )
+}
+
+fn owns_ms3_lifecycle(state: &AppState) -> bool {
+    state.ms3_generation_lifecycle.is_some()
+        && state.ms3_linked_frame_acquisition.is_some()
+        && state.ms3_frozen_version_space.is_some()
 }
 
 fn ms3_acquisition_allows_freeze(
@@ -8431,6 +8441,26 @@ mod tests {
         assert!(!ms3_acquisition_allows_freeze(Collecting));
         assert!(!ms3_acquisition_allows_freeze(AcquisitionFail));
         assert!(ms3_acquisition_allows_freeze(LinkedFrameObserved));
+    }
+
+    #[test]
+    fn non_learning_serving_process_does_not_own_ms3_lifecycle() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-serving-ms3-non-owner-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let state = project_status_test_state(&root, &registry_path);
+
+        assert!(!owns_ms3_lifecycle(&state));
+
+        fs::remove_dir_all(root).expect("remove test root");
     }
 
     #[test]
