@@ -1162,6 +1162,11 @@ mod tests {
                 vec![support_terminal],
             )
             .expect("linked capture gap");
+        let mut report = report;
+        report.evaluated_topology_rows = report.evaluated_topology_rows.saturating_add(3);
+        report.new_topology_rows_seen = report.new_topology_rows_seen.saturating_add(3);
+        report.report_root_sha256 = report.expected_root();
+        assert!(report.validate(), "in-flight rows remain valid");
         assert_eq!(
             report.verdict,
             nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved

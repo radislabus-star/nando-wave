@@ -793,13 +793,15 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
             && valid_nonzero_sha256(&self.acquisition_report_root_sha256)
             && valid_nonzero_sha256(&self.topology_prefix_root_sha256)
             && self.evaluated_topology_rows > 0
-            && self.terminal_receipt_rows >= self.evaluated_topology_rows
+            && match self.blocker.as_str() {
+                MS3_LINKED_FRAME_ACQUISITION_FAIL => {
+                    self.terminal_receipt_rows >= self.evaluated_topology_rows
+                }
+                MS3_CAPTURE_GAP_REPAIR_REQUIRED => self.terminal_receipt_rows > 0,
+                _ => false,
+            }
             && self.closure_capture_sequence > 0
             && self.generated_at_unix > 0
-            && matches!(
-                self.blocker.as_str(),
-                MS3_LINKED_FRAME_ACQUISITION_FAIL | MS3_CAPTURE_GAP_REPAIR_REQUIRED
-            )
             && !self.authority_ready
             && !self.phase_mutation_allowed
             && self
