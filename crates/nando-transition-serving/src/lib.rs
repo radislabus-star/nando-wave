@@ -2455,26 +2455,45 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                 {
                     eprintln!("nando-terminal-receipt-archive: {error}");
                 }
-                if let Err(error) = evaluate_ms3_linked_frame_acquisition(&state) {
-                    eprintln!("nando-ms3-linked-frame-acquisition: {error}");
-                }
-                if let Err(error) = evaluate_ms3_frozen_version_space(&state) {
+                let acquisition = evaluate_ms3_linked_frame_acquisition(&state)
+                    .inspect_err(|error| {
+                        eprintln!("nando-ms3-linked-frame-acquisition: {error}");
+                    })
+                    .ok();
+                let rolled_over = match rollover_ms3_generation_if_terminal(&state) {
+                    Ok(rolled_over) => rolled_over,
+                    Err(error) => {
+                        eprintln!("nando-ms3-generation-rollover: {error}");
+                        false
+                    }
+                };
+                if rolled_over {
+                    last_future_generation = None;
+                } else if acquisition
+                    .as_ref()
+                    .is_some_and(|report| ms3_acquisition_allows_freeze(report.verdict))
+                    && let Err(error) = evaluate_ms3_frozen_version_space(&state)
+                {
                     eprintln!("nando-ms3-frozen-version-space: {error}");
                 }
-                match ms3_future_evidence_generation(&state) {
-                    Ok(generation) if last_future_generation.as_ref() != Some(&generation) => {
-                        if let Err(error) = evaluate_ms3_independent_future(&state) {
-                            eprintln!("nando-ms3-independent-future: {error}");
+                let frozen_ready = state
+                    .ms3_frozen_version_space
+                    .as_ref()
+                    .and_then(|runtime| runtime.lock().ok())
+                    .is_some_and(|runtime| runtime.envelope().is_some());
+                if frozen_ready {
+                    match ms3_future_evidence_generation(&state) {
+                        Ok(generation) if last_future_generation.as_ref() != Some(&generation) => {
+                            if let Err(error) = evaluate_ms3_independent_future(&state) {
+                                eprintln!("nando-ms3-independent-future: {error}");
+                            }
+                            last_future_generation = Some(generation);
                         }
-                        last_future_generation = Some(generation);
+                        Ok(_) => {}
+                        Err(error) => {
+                            eprintln!("nando-ms3-independent-future-generation: {error}");
+                        }
                     }
-                    Ok(_) => {}
-                    Err(error) => {
-                        eprintln!("nando-ms3-independent-future-generation: {error}");
-                    }
-                }
-                if let Err(error) = rollover_ms3_generation_if_terminal(&state) {
-                    eprintln!("nando-ms3-generation-rollover: {error}");
                 }
                 let snapshot_generation = state
                     .config
@@ -3005,6 +3024,13 @@ fn evaluate_ms3_frozen_version_space(
             },
             unix_now(),
         )
+}
+
+fn ms3_acquisition_allows_freeze(
+    verdict: nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1,
+) -> bool {
+    verdict
+        == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
 }
 
 fn evaluate_ms3_independent_future(
@@ -8394,6 +8420,17 @@ mod tests {
             response_actor_fallback_stage("execution_authority_missing"),
             "admission"
         );
+    }
+
+    #[test]
+    fn ms3_freeze_waits_for_terminal_linked_evidence() {
+        use nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::{
+            AcquisitionFail, Collecting, LinkedFrameObserved,
+        };
+
+        assert!(!ms3_acquisition_allows_freeze(Collecting));
+        assert!(!ms3_acquisition_allows_freeze(AcquisitionFail));
+        assert!(ms3_acquisition_allows_freeze(LinkedFrameObserved));
     }
 
     #[test]
