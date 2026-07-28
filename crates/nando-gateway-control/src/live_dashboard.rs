@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b043";
+const DASHBOARD_BUILD: &str = "2026.07.28-b044";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -540,9 +540,9 @@ const TEMPLATE: &str = r#"
     <div class="traffic-grid">
       <article class="traffic-stage">
         <div class="stage-index">1 · SERVER ACCOUNTING</div>
-        <div class="stage-label">ВЕСЬ ТРАФИК СЕРВЕРА</div>
+        <div class="stage-label">ВСЕ ЗАПИСАННЫЕ ACCOUNTING PARTITIONS</div>
         <div class="stage-value-row"><output id="server-total-token-count" class="stage-value">__SERVER_TOTAL__</output></div>
-        <div class="stage-unit">НАКОПЛЕННЫХ ВХОДНЫХ ТОКЕНОВ</div>
+        <div class="stage-unit">УЧТЁННЫХ ВХОДНЫХ ТОКЕНОВ · REQUEST_EVENT.V1</div>
         <div id="server-total-breakdown" class="stage-meta">V3 __LEGACY_TOTAL__ + V4 __EPOCH_TOTAL__</div>
         <div id="server-total-scope" class="stage-scope">ВСЯ СОХРАНЁННАЯ ИСТОРИЯ УЧЁТА · ТЕКУЩАЯ V4: __EPOCH_EVENTS__ ЗАПРОСОВ</div>
       </article>
@@ -566,12 +566,12 @@ const TEMPLATE: &str = r#"
         <div class="stage-index">4 · EXECUTION RECEIPTS</div>
         <div class="stage-label">РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU</div>
         <div class="stage-value-row"><output id="server-cpu-token-count" class="stage-value">__SERVER_CPU__</output><output id="server-cpu-share" class="stage-share">__SERVER_CPU_SHARE__</output></div>
-        <div class="stage-unit">НАКОПЛЕННЫХ ВХОДНЫХ ТОКЕНОВ БЕЗ LLM · ДОЛЯ ОТ ВСЕГО SERVER ACCOUNTING</div>
+        <div class="stage-unit">ТОКЕНОВ С VERIFIED EXECUTION RECEIPT · ДОЛЯ ОТ RECORDED SERVER ACCOUNTING</div>
         <div id="server-cpu-breakdown" class="stage-meta">V3 __LEGACY_CPU__ + V4 __EPOCH_CPU__</div>
         <div id="current-v4-execution" class="stage-scope">V4 __EPOCH_CPU__ / __EPOCH_TOTAL__ · __EPOCH_CPU_SHARE__ · __EPOCH_CPU_ACCEPTS__ accepts</div>
       </article>
     </div>
-    <div class="scope-alert"><strong>ЭТО НЕ ОДНА ПОСЛЕДОВАТЕЛЬНАЯ ВОРОНКА.</strong> Server history, miner classification window и live process epoch имеют разные watermark и периоды: между ними нельзя считать остаток или процент. CPU share в четвёртом блоке относится только к server accounting; recognition share — только к опубликованному корпусу майнера.</div>
+    <div class="scope-alert"><strong>ЭТО НЕ ОДНА ПОСЛЕДОВАТЕЛЬНАЯ ВОРОНКА.</strong> Recorded server accounting, miner classification window и live process epoch имеют разные watermark и периоды: между ними нельзя считать остаток или процент. CPU share в четвёртом блоке относится только к записанным request_event.v1 partitions; recognition share — только к опубликованному корпусу майнера.</div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <div class="overview-head">
@@ -1014,10 +1014,11 @@ mod tests {
             cpu_allowed: false,
         });
         assert!(html.contains("ЧЕТЫРЕ ГЛАВНЫЕ ЦИФРЫ"));
-        assert!(html.contains("ВЕСЬ ТРАФИК СЕРВЕРА"));
+        assert!(html.contains("ВСЕ ЗАПИСАННЫЕ ACCOUNTING PARTITIONS"));
+        assert!(html.contains("УЧТЁННЫХ ВХОДНЫХ ТОКЕНОВ · REQUEST_EVENT.V1"));
         assert!(html.contains("РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU"));
         assert!(html.contains("id=\"server-cpu-share\" class=\"stage-share\">1,5%"));
-        assert!(html.contains("ДОЛЯ ОТ ВСЕГО SERVER ACCOUNTING"));
+        assert!(html.contains("ДОЛЯ ОТ RECORDED SERVER ACCOUNTING"));
         assert!(html.contains("PRODUCT M3 ${productM3}"));
         assert!(html.contains("CURRENT WINDOW ${currentM3}"));
         assert!(html.contains("ОПУБЛИКОВАННЫЙ КОРПУС КЛАССИФИКАЦИИ"));
