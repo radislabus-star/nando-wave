@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b032";
+const DASHBOARD_BUILD: &str = "2026.07.28-b033";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -597,7 +597,7 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">TOPOLOGY / LINKED ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
-      <div class="ms3-cell"><div class="ms3-label">TERMINAL / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">TERMINAL / RELEVANT / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">FUTURE APPLICABILITY</div><div id="ms3-future-applicability" class="ms3-value watch">0 / 256</div></div>
       <div class="ms3-cell"><div class="ms3-label">DURABLE / ACTIVE PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
@@ -770,6 +770,7 @@ const TEMPLATE: &str = r#"
     const topologyRows = acquisition.new_topology_rows_seen || 0;
     const topologyLimit = acquisitionContract.max_new_topology_rows || 256;
     const terminalRows = acquisition.terminal_receipt_rows || 0;
+    const relevantRows = acquisition.relevant_verified_frame_rows || 0;
     const linkedRows = acquisition.linked_frame_rows || 0;
     const futureVerdict = ms3.effective_verdict || ms3.verdict || "not_evaluated";
     const activeFreezeBlocker = lifecycleStatus.active_freeze_blocker || "";
@@ -799,7 +800,7 @@ const TEMPLATE: &str = r#"
     text("ms3-generation", activeGeneration > 0 ? `G${activeGeneration} · ${activePhase}` : "НЕТ ДАННЫХ");
     text("ms3-predecessor", predecessor ? `G${predecessor.generation_sequence} · ${effectivePredecessorVerdict.toUpperCase()}` : "НЕТ");
     text("ms3-acquisition", `${number.format(topologyRows)} / ${number.format(topologyLimit)}`);
-    text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(linkedRows)}`);
+    text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(relevantRows)} / ${number.format(linkedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
     text("ms3-future-applicability", `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}`);
     text("ms3-predictions", `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}`);
@@ -1024,7 +1025,7 @@ mod tests {
         assert!(html.contains("capture_gap_repair"));
         assert!(html.contains("linked_evidence_reuse"));
         assert!(html.contains("active_freeze_blocker"));
-        assert!(html.contains("TERMINAL / LINKED"));
+        assert!(html.contains("TERMINAL / RELEVANT / LINKED"));
         assert!(html.contains("FUTURE APPLICABILITY"));
         assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));
         assert!(html.contains("INDEPENDENT FUTURE"));
