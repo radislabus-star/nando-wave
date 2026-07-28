@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b042";
+const DASHBOARD_BUILD: &str = "2026.07.28-b043";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -408,6 +408,7 @@ const TEMPLATE: &str = r#"
 .ms3-value.good { color:var(--green); }
 .ms3-value.watch { color:var(--amber); }
 .ms3-value.locked { color:var(--red); }
+.ms3-value.muted { color:var(--muted); }
 .ms3-note { margin-top:11px; color:var(--muted); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
 .epoch-strip { display:flex; justify-content:center; gap:24px; align-items:center; flex-wrap:wrap; padding:15px 24px; border-bottom:1px solid var(--line); color:#d8dde1; text-align:center; font-size:14px; font-weight:700; }
 .epoch-strip b,.epoch-visibility { color:var(--green); }
@@ -807,8 +808,8 @@ const TEMPLATE: &str = r#"
     text("ms3-acquisition", `${number.format(topologyRows)} / ${number.format(topologyLimit)}`);
     text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(relevantRows)} / ${number.format(linkedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
-    text("ms3-future-applicability", `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}`);
-    text("ms3-predictions", `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}`);
+    text("ms3-future-applicability", lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN");
+    text("ms3-predictions", lawFrozen ? `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}` : "NOT OPEN");
     text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : futureAcquisitionFailed ? "ACQUISITION FAIL" : activePredictions > 0 ? "OUTCOME PENDING" : futureFrozen ? futureVerdict.toUpperCase() : "НЕ ОЦЕНЕН");
     text("ms3-authority", authorityReady ? "TRUE" : "FALSE");
     const captureStatus = captureHealth.status || "NOT_EVALUATED";
@@ -821,7 +822,8 @@ const TEMPLATE: &str = r#"
     text("ms3-operational-note", `oldest ${duration(receiptLag)} · SLO ${duration(receiptSlo)} · stalled ${number.format(receiptStalled)}`);
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
-    stateClass("ms3-future-applicability", `ms3-value ${futureAcquisitionFailed ? "locked" : "watch"}`);
+    stateClass("ms3-future-applicability", `ms3-value ${!lawFrozen ? "muted" : futureAcquisitionFailed ? "locked" : "watch"}`);
+    stateClass("ms3-predictions", `ms3-value ${lawFrozen ? "watch" : "muted"}`);
     stateClass("ms3-law", `ms3-value ${futureVerdict === "future_pass" ? "good" : lawFrozen ? "watch" : "locked"}`);
     stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
@@ -830,7 +832,7 @@ const TEMPLATE: &str = r#"
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
     const currentBlocker = lawFrozen ? futureBlocker : acquisitionBlocker || futureBlocker;
-    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)} · blocker ${currentBlocker || "none"} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
+    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN"} · blocker ${currentBlocker || "none"} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
     text("next-route", authorityReady
       ? "ordinary CPU receipt → avoided upstream call"
       : futureVerdict === "future_pass"
@@ -1060,6 +1062,8 @@ mod tests {
         assert!(html.contains("TERMINAL / RELEVANT / LINKED"));
         assert!(html.contains("FUTURE APPLICABILITY"));
         assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));
+        assert!(html.contains("lawFrozen ? `${number.format(futureTopologies)}"));
+        assert!(html.contains("future topology ${lawFrozen ?"));
         assert!(html.contains("INDEPENDENT FUTURE"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));
         assert!(html.contains("CANDIDATE INPUT"));
