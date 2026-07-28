@@ -159,9 +159,28 @@ impl Ms3LinkedFrameAcquisitionContractV1 {
 pub fn build_ms3_linked_frame_acquisition_report_v1(
     contract: Ms3LinkedFrameAcquisitionContractV1,
     generated_at_unix: u64,
+    new_topologies: Vec<PreActionTopologyAuditRowV1>,
+    frames: Vec<RelationFrame>,
+    terminals: Vec<TransportTerminalReceiptV1>,
+) -> Ms3LinkedFrameAcquisitionReportV1 {
+    build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
+        contract,
+        generated_at_unix,
+        new_topologies,
+        frames,
+        terminals,
+        &BTreeSet::new(),
+    )
+}
+
+#[must_use]
+pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
+    contract: Ms3LinkedFrameAcquisitionContractV1,
+    generated_at_unix: u64,
     mut new_topologies: Vec<PreActionTopologyAuditRowV1>,
     mut frames: Vec<RelationFrame>,
     mut terminals: Vec<TransportTerminalReceiptV1>,
+    used_evidence_roots: &BTreeSet<String>,
 ) -> Ms3LinkedFrameAcquisitionReportV1 {
     let new_topology_rows_seen = u64::try_from(new_topologies.len()).unwrap_or(u64::MAX);
     new_topologies.truncate(usize::try_from(contract.max_new_topology_rows).unwrap_or(usize::MAX));
@@ -196,6 +215,16 @@ pub fn build_ms3_linked_frame_acquisition_report_v1(
     let mut receipts = Vec::new();
     for topology in &new_topologies {
         for bound in ledger.bound_for_topology(&topology.commit.commitment_root_sha256) {
+            if [
+                bound.binding.topology_commitment_root_sha256.as_str(),
+                bound.binding.completed_frame_root_sha256.as_str(),
+                bound.binding.session_lineage_sha256.as_str(),
+            ]
+            .iter()
+            .any(|root| used_evidence_roots.contains(*root))
+            {
+                continue;
+            }
             let gap = gaps_by_binding.get(bound.binding.binding_root_sha256.as_str());
             receipts.push(Ms3LinkedFrameReceiptV1::seal(
                 &contract,

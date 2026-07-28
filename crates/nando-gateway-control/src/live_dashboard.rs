@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.27-b019";
+const DASHBOARD_BUILD: &str = "2026.07.28-b020";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -716,16 +716,26 @@ const TEMPLATE: &str = r#"
       || linkedAcquisitionFailures
         .filter(row => row.generation_sequence + 1 === activeGeneration)
         .map(row => ({generation_sequence: row.generation_sequence, linked_acquisition_failure: row}))[0];
-    const predecessorVerdict = predecessor?.terminal?.verdict || (predecessor?.acquisition_failure ? "acquisition_fail" : "none");
-    const effectivePredecessorVerdict = predecessor?.linked_acquisition_failure ? "linked_acquisition_fail" : predecessorVerdict;
     const predecessorBlocker = predecessor?.terminal?.blocker || predecessor?.acquisition_failure?.blocker || predecessor?.linked_acquisition_failure?.blocker || "";
+    const predecessorVerdict = predecessor?.terminal?.verdict || (predecessor?.acquisition_failure ? "acquisition_fail" : "none");
+    const linkedClosureVerdict = blocker => blocker === "MS3_LINKED_FRAME_ACQUISITION_FAIL"
+      ? "linked_acquisition_fail"
+      : blocker === "ms3_capture_gap_repair_required"
+        ? "capture_gap_repair"
+        : blocker === "MS3_LINKED_EVIDENCE_REUSE"
+          ? "linked_evidence_reuse"
+          : "linked_generation_close";
+    const effectivePredecessorVerdict = predecessor?.linked_acquisition_failure
+      ? linkedClosureVerdict(predecessorBlocker)
+      : predecessorVerdict;
     const acquisitionVerdict = acquisition.verdict || "unavailable";
     const topologyRows = acquisition.new_topology_rows_seen || 0;
     const topologyLimit = acquisitionContract.max_new_topology_rows || 256;
     const terminalRows = acquisition.terminal_receipt_rows || 0;
     const linkedRows = acquisition.linked_frame_rows || 0;
     const futureVerdict = ms3.effective_verdict || ms3.verdict || "not_evaluated";
-    const futureBlocker = ms3.effective_blocker || ms3.blocker || "";
+    const activeFreezeBlocker = lifecycleStatus.active_freeze_blocker || "";
+    const futureBlocker = ms3.effective_blocker || ms3.blocker || activeFreezeBlocker || "";
     const lawFrozen = Boolean(lifecycleStatus.active_frozen_envelope_root_sha256);
     const futureFrozen = Boolean(lifecycleStatus.active_future_envelope_root_sha256);
     const authorityReady = lifecycleStatus.authority_ready === true || ms3.authority_ready === true;
@@ -919,6 +929,9 @@ mod tests {
         assert!(html.contains("SUPPORT / LINKED ACQUISITION"));
         assert!(html.contains("linked_acquisition_failures"));
         assert!(html.contains("linked_acquisition_fail"));
+        assert!(html.contains("capture_gap_repair"));
+        assert!(html.contains("linked_evidence_reuse"));
+        assert!(html.contains("active_freeze_blocker"));
         assert!(html.contains("TERMINAL / LINKED"));
         assert!(html.contains("FUTURE APPLICABILITY"));
         assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));

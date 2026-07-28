@@ -961,11 +961,11 @@ fn spawn_miner_worker_with_report_heartbeat(
                             &thread_counters.opportunity_total_micros,
                             elapsed_micros(started),
                         );
-                        let _ = durable_ack.send(result.clone());
                         if let Err(error) = result {
                             thread_counters
                                 .failed
                                 .fetch_add(event_count, Ordering::Relaxed);
+                            let _ = durable_ack.send(Err(error.clone()));
                             eprintln!("nando-response-miner-v2 opportunity batch error: {error}");
                             continue;
                         }
@@ -984,6 +984,7 @@ fn spawn_miner_worker_with_report_heartbeat(
                         events_since_checkpoint =
                             events_since_checkpoint.saturating_add(event_count);
                         live_inputs_applied = event_count;
+                        let _ = durable_ack.send(Ok(()));
                     }
                     None => {}
                 }

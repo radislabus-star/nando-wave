@@ -1141,6 +1141,62 @@ fn generation_registry_rejects_successor_after_future_pass() {
 }
 
 #[test]
+fn generation_registry_seals_and_restores_linked_evidence_reuse() {
+    let frozen = frozen_unique_law_fixture("reuse-generation", "reused-support-lineage", 1, 7);
+    let future = independent_future_fixture(
+        &frozen,
+        "reuse-generation",
+        "independent-contradiction-lineage",
+        8,
+        false,
+    );
+    let topology = t1_topology_row(
+        "reused-linked",
+        "request-reused-linked",
+        "reused-support-lineage",
+        9,
+        3_000,
+    );
+    let frame = t1_completed_frame(
+        "reused-linked",
+        "action-reused-linked",
+        "reused-support-lineage",
+        3_500,
+    );
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(256, 60),
+        4,
+        vec![topology],
+        vec![frame],
+        vec![terminal("request-reused-linked", 2_990, 3_100)],
+    );
+    let mut registry = Ms3GenerationRegistryV1::new();
+    registry.append_generation(&frozen).expect("generation one");
+    registry
+        .seal_terminal(&frozen, &future)
+        .expect("generation one contradiction");
+    assert!(
+        report
+            .receipts
+            .iter()
+            .all(|receipt| registry.linked_evidence_was_used(receipt))
+    );
+
+    let closure = registry
+        .seal_linked_evidence_reuse(2, &report, 9)
+        .expect("evidence reuse closure");
+    assert_eq!(closure.blocker, MS3_LINKED_EVIDENCE_REUSE);
+    assert!(!closure.authority_ready);
+    assert!(!closure.phase_mutation_allowed);
+    assert_eq!(registry.next_generation_sequence(), 3);
+    let bytes = registry.canonical_bytes().expect("registry bytes");
+    assert_eq!(
+        Ms3GenerationRegistryV1::from_canonical_bytes(&bytes).expect("registry restore"),
+        registry
+    );
+}
+
+#[test]
 fn linked_frame_acquisition_collects_then_fails_at_the_sealed_row_budget() {
     let collecting = build_ms3_linked_frame_acquisition_report_v1(
         acquisition_contract(2, 60),
@@ -1234,6 +1290,36 @@ fn linked_frame_receipt_binds_topology_frame_terminal_and_identity() {
     assert!(valid_nonzero_sha256(&receipt.action_event_id_sha256));
     assert!(!receipt.phase_update_allowed);
     assert!(!receipt.authority_ready);
+}
+
+#[test]
+fn reused_linked_evidence_stays_in_denominator_without_ending_acquisition() {
+    let topology = t1_topology_row("reused", "request-reused", "reused-lineage", 1, 1_000);
+    let frame = t1_completed_frame("reused", "action-reused", "reused-lineage", 1_500);
+    let terminal = terminal("request-reused", 990, 1_100);
+    let used_evidence_roots = BTreeSet::from([root("reused-lineage")]);
+    let report = build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
+        acquisition_contract(8, 60),
+        2,
+        vec![topology],
+        vec![frame],
+        vec![terminal],
+        &used_evidence_roots,
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.evaluated_topology_rows, 1);
+    assert_eq!(report.terminal_receipt_rows, 1);
+    assert_eq!(report.relevant_verified_frame_rows, 1);
+    assert_eq!(report.linked_frame_rows, 0);
+    assert!(report.receipts.is_empty());
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::Collecting
+    );
+    assert_eq!(report.blocker, "linked_frame_pending");
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
 }
 
 #[test]

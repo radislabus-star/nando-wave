@@ -861,6 +861,118 @@ mod tests {
     }
 
     #[test]
+    fn reused_linked_lineage_closes_immutably_and_opens_fresh_successor() {
+        let root = test_root("linked-evidence-reuse");
+        let (mut topology_archive, mut lifecycle, generation_one) =
+            terminal_generation(&root, Some(false));
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock");
+        let mut generation_two = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                now.as_secs(),
+                &generation_one.acquisition,
+                &generation_one.frozen,
+            )
+            .expect("generation two");
+        let now_ms = u64::try_from(now.as_millis()).expect("milliseconds");
+        let reused_topology = topology(
+            "reused-support",
+            "request-reused-support",
+            "support-lineage",
+            3,
+            now_ms,
+        );
+        let reused_frame = completed_frame(
+            "reused-support",
+            "action-reused-support",
+            "support-lineage",
+            now_ms.saturating_add(500),
+            true,
+        );
+        let reused_terminal = terminal(
+            "request-reused-support",
+            now_ms.saturating_sub(10),
+            now_ms.saturating_add(100),
+        );
+        topology_archive
+            .append(&reused_topology)
+            .expect("reused topology remains in denominator");
+        let report = generation_two
+            .acquisition
+            .evaluate(
+                now.as_secs(),
+                vec![reused_topology],
+                vec![reused_frame],
+                vec![reused_terminal],
+            )
+            .expect("legacy terminal reused report");
+        assert!(report.is_terminal());
+        assert!(report.receipts.iter().all(|receipt| {
+            generation_two
+                .frozen
+                .generation_registry()
+                .linked_evidence_was_used(receipt)
+        }));
+        let terminal_report_path = generation_paths(&root, 2).0.join("terminal-report-v1.cbor");
+        let terminal_report_bytes =
+            std::fs::read(&terminal_report_path).expect("terminal report bytes");
+        let closure = generation_two
+            .frozen
+            .seal_linked_evidence_reuse(&report, topology_archive.max_bridge_sequence())
+            .expect("durable evidence reuse closure");
+        assert_eq!(
+            closure.blocker,
+            nando_operator_learning::multi_source::MS3_LINKED_EVIDENCE_REUSE
+        );
+        assert!(!closure.authority_ready);
+        assert!(!closure.phase_mutation_allowed);
+
+        let generation_three = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                now.as_secs().saturating_add(1),
+                &generation_two.acquisition,
+                &generation_two.frozen,
+            )
+            .expect("generation three");
+        assert_eq!(generation_three.acquisition.generation_sequence(), 3);
+        assert_eq!(
+            generation_three
+                .acquisition
+                .contract()
+                .topology_watermark_rows,
+            3
+        );
+        assert_eq!(
+            std::fs::read(&terminal_report_path).expect("terminal report after successor"),
+            terminal_report_bytes
+        );
+        assert!(!lifecycle.manifest().authority_ready);
+        assert!(!lifecycle.manifest().phase_mutation_allowed);
+
+        let (restored, restored_generation) = Ms3GenerationLifecycleRuntime::open(
+            &root,
+            &topology_archive,
+            now.as_secs().saturating_add(2),
+            256,
+            86_400,
+        )
+        .expect("restart");
+        assert_eq!(restored.manifest(), lifecycle.manifest());
+        assert_eq!(restored_generation.acquisition.generation_sequence(), 3);
+        assert_eq!(
+            restored_generation
+                .frozen
+                .generation_registry()
+                .linked_acquisition_failure(2),
+            Some(&closure)
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn prepared_successor_is_idempotent_when_manifest_publish_did_not_happen() {
         let root = test_root("retry");
         let (topology_archive, mut lifecycle, generation_one) =

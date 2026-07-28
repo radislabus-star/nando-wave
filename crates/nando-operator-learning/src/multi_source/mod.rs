@@ -73,7 +73,9 @@ pub use linked_frame_acquisition::{
     MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1, MS3_LINKED_FRAME_RECEIPT_SCHEMA_V1,
     Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
     Ms3LinkedFrameAcquisitionVerdictV1, Ms3LinkedFrameReceiptV1,
-    REPRESENTATION_GAP_CLASSIFIER_VERSION_V1, build_ms3_linked_frame_acquisition_report_v1,
+    REPRESENTATION_GAP_CLASSIFIER_VERSION_V1,
+    build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1,
+    build_ms3_linked_frame_acquisition_report_v1,
 };
 pub use live_snapshot::{
     LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3, LiveMultiSourceDiscoveryBlockerV1,
@@ -88,9 +90,10 @@ pub use marginal::{
 pub use ms3_generation_registry_v1::{
     MS3_CAPTURE_GAP_REPAIR_REQUIRED, MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1,
     MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1, MS3_GENERATION_REGISTRY_SCHEMA_V1,
-    MS3_GENERATION_TERMINAL_SCHEMA_V1, Ms3GenerationAcquisitionFailureReceiptV1,
-    Ms3GenerationEntryV1, Ms3GenerationLinkedAcquisitionFailureReceiptV1,
-    Ms3GenerationRegistryErrorV1, Ms3GenerationRegistryV1, Ms3GenerationTerminalReceiptV1,
+    MS3_GENERATION_TERMINAL_SCHEMA_V1, MS3_LINKED_EVIDENCE_REUSE,
+    Ms3GenerationAcquisitionFailureReceiptV1, Ms3GenerationEntryV1,
+    Ms3GenerationLinkedAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1,
+    Ms3GenerationRegistryV1, Ms3GenerationTerminalReceiptV1,
 };
 pub use north_star_cellular_support_v1::{
     NORTH_STAR_CELLULAR_SUPPORT_SCHEMA_V1, NorthStarCellularSupportErrorV1,

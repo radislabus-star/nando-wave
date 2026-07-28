@@ -10,8 +10,9 @@ use nando_operator_kernel::RelationFrame;
 use nando_operator_learning::multi_source::{
     Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
     PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
-    build_ms3_linked_frame_acquisition_report_v1,
+    build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1,
 };
+use std::collections::BTreeSet;
 
 use crate::multi_source_topology_archive::MultiSourceTopologyArchive;
 
@@ -133,6 +134,7 @@ impl Ms3LinkedFrameAcquisitionRuntime {
             .map(|report| report.evaluated_topology_rows)
     }
 
+    #[cfg(test)]
     pub(super) fn evaluate(
         &mut self,
         generated_at_unix: u64,
@@ -140,15 +142,33 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         frames: Vec<RelationFrame>,
         terminals: Vec<TransportTerminalReceiptV1>,
     ) -> Result<Ms3LinkedFrameAcquisitionReportV1, String> {
+        self.evaluate_excluding_used_evidence(
+            generated_at_unix,
+            new_topologies,
+            frames,
+            terminals,
+            &BTreeSet::new(),
+        )
+    }
+
+    pub(super) fn evaluate_excluding_used_evidence(
+        &mut self,
+        generated_at_unix: u64,
+        new_topologies: Vec<PreActionTopologyAuditRowV1>,
+        frames: Vec<RelationFrame>,
+        terminals: Vec<TransportTerminalReceiptV1>,
+        used_evidence_roots: &BTreeSet<String>,
+    ) -> Result<Ms3LinkedFrameAcquisitionReportV1, String> {
         if let Some(report) = &self.terminal_report {
             return Ok(report.clone());
         }
-        let report = build_ms3_linked_frame_acquisition_report_v1(
+        let report = build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
             self.contract.clone(),
             generated_at_unix,
             new_topologies,
             frames,
             terminals,
+            used_evidence_roots,
         );
         if !report.validate() {
             return Err("ms3_acquisition_report_invalid".to_owned());

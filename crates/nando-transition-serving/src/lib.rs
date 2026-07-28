@@ -1983,6 +1983,11 @@ async fn ms3_independent_future_report(State(state): State<AppState>) -> Respons
 }
 
 async fn ms3_generation_registry_report(State(state): State<AppState>) -> Response {
+    let active_acquisition_report = state
+        .ms3_linked_frame_acquisition
+        .as_ref()
+        .and_then(|runtime| runtime.lock().ok())
+        .and_then(|runtime| runtime.terminal_report());
     let status = state
         .ms3_frozen_version_space
         .as_ref()
@@ -2008,10 +2013,29 @@ async fn ms3_generation_registry_report(State(state): State<AppState>) -> Respon
                 runtime
                     .independent_future()
                     .map(|future| future.envelope_root_sha256.clone()),
+                active_acquisition_report.as_ref().and_then(|report| {
+                    (report.verdict
+                        == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+                        && !report.receipts.is_empty()
+                        && report.receipts.iter().all(|receipt| {
+                            runtime
+                                .generation_registry()
+                                .linked_evidence_was_used(receipt)
+                        }))
+                    .then_some(
+                        nando_operator_learning::multi_source::MS3_LINKED_EVIDENCE_REUSE,
+                    )
+                }),
             ))
         });
     match status {
-        Ok((registry, lifecycle, active_frozen_root, active_future_root)) => json_response(
+        Ok((
+            registry,
+            lifecycle,
+            active_frozen_root,
+            active_future_root,
+            active_freeze_blocker,
+        )) => json_response(
             StatusCode::OK,
             json!({
                 "schema": "nando.ms3-generation-registry-status.v1",
@@ -2020,6 +2044,7 @@ async fn ms3_generation_registry_report(State(state): State<AppState>) -> Respon
                 "active_generation_sequence": lifecycle.active_generation_sequence,
                 "active_frozen_envelope_root_sha256": active_frozen_root,
                 "active_future_envelope_root_sha256": active_future_root,
+                "active_freeze_blocker": active_freeze_blocker,
                 "authority_ready": false,
                 "phase_mutation_allowed": false
             }),
@@ -2721,10 +2746,24 @@ fn evaluate_ms3_linked_frame_acquisition(
         .lock()
         .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
         .frames_for_intents(&intent_ids);
+    let used_evidence_roots = state
+        .ms3_frozen_version_space
+        .as_ref()
+        .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+        .generation_registry()
+        .used_evidence_roots();
     runtime
         .lock()
         .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
-        .evaluate(unix_now(), new_topologies, frames, terminals)
+        .evaluate_excluding_used_evidence(
+            unix_now(),
+            new_topologies,
+            frames,
+            terminals,
+            &used_evidence_roots,
+        )
 }
 
 fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String> {
@@ -2758,12 +2797,25 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
         report.verdict
             == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
             && !report.receipts.is_empty()
+            && !report
+                .receipts
+                .iter()
+                .all(|receipt| frozen.generation_registry().linked_evidence_was_used(receipt))
             && report.receipts.iter().all(|receipt| {
                 receipt.gap_class
                     == Some(
                         nando_operator_learning::multi_source::RepresentationGapClassV1::CaptureGapA,
                     )
             })
+    });
+    let linked_evidence_reuse = acquisition.terminal_report().filter(|report| {
+        report.verdict
+            == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+            && !report.receipts.is_empty()
+            && report
+                .receipts
+                .iter()
+                .all(|receipt| frozen.generation_registry().linked_evidence_was_used(receipt))
     });
     let terminal_contradiction = frozen.independent_future().is_some_and(|future| {
         future.receipt.verdict
@@ -2777,6 +2829,7 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
         });
     if linked_acquisition_failure.is_none()
         && linked_capture_gap_repair.is_none()
+        && linked_evidence_reuse.is_none()
         && !terminal_contradiction
         && !applicability_failed
     {
@@ -2793,6 +2846,9 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     }
     if let Some(report) = linked_capture_gap_repair.as_ref() {
         frozen.seal_linked_capture_gap_repair(report, topology_archive.max_bridge_sequence())?;
+    }
+    if let Some(report) = linked_evidence_reuse.as_ref() {
+        frozen.seal_linked_evidence_reuse(report, topology_archive.max_bridge_sequence())?;
     }
     let mut lifecycle = lifecycle
         .lock()
