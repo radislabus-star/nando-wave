@@ -6,11 +6,19 @@ LAUNCHER="${ROOT}/bin/nando-codex"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
-mkdir -p "${WORK}/home"
+mkdir -p "${WORK}/bin" "${WORK}/home"
 printf '%s\n' '{"ok":true,"service":"nando-nginx-gateway","transport":"nginx"}' >"${WORK}/health.json"
-printf '%s\n' 'process.stdout.write(JSON.stringify(process.argv.slice(2)));' >"${WORK}/argv.js"
+printf '%s\n' '# test entrypoint consumed by the fake node executable' >"${WORK}/argv.js"
+cat >"${WORK}/bin/node" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+shift
+printf '%s\n' "$@" | jq -R -s 'split("\n")[:-1]'
+EOF
+chmod +x "${WORK}/bin/node"
 
 run_launcher() {
+  PATH="${WORK}/bin:${PATH}" \
   HOME="${WORK}/home" \
   NANDO_REAL_CODEX="${WORK}/argv.js" \
   NANDO_CODEX_HEALTH_URL="file://${WORK}/health.json" \
@@ -21,6 +29,7 @@ run_launcher() {
 assert_argv() {
   local actual="$1"
   local expected="$2"
+  [[ -n "${actual}" ]]
   jq -e --argjson expected "${expected}" '. == $expected' <<<"${actual}" >/dev/null
 }
 
