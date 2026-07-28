@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b037";
+const DASHBOARD_BUILD: &str = "2026.07.28-b038";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -624,7 +624,7 @@ const TEMPLATE: &str = r#"
       <div id="pipe-cpu-step" class="pipe-step __CPU_STEP_CLASS__"><div class="pipe-name">CPU ACCEPT</div><div id="pipe-cpu" class="pipe-state">__CPU_STATE__</div></div>
     </div></div>
     <div id="pipeline-note" class="blocker __BLOCKER_CLASS__"><span id="pipeline-note-label" class="blocker-label">ТЕКУЩИЙ РАЗРЫВ</span><span id="blocker-text" class="blocker-copy">__BLOCKER__</span></div>
-    <div class="activity"><span class="activity-label">ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С</span><div id="activity-bars" class="activity-bars"></div></div>
+    <div class="activity"><span class="activity-label">NANDO INGRESS REQUESTS · ПОСЛЕДНИЕ 60 С</span><div id="activity-bars" class="activity-bars"></div></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <div class="window-head"><h2 class="band-title">ЖИВЫЕ ОКНА</h2><div id="window-summary" class="window-summary">ROUTES · NANDO — / MIXED — / DIRECT — / NO SOCKET —</div></div>
@@ -1010,6 +1010,7 @@ mod tests {
         assert!(html.contains("МАЙНЕР УЖЕ ПРИМЕНИЛ"));
         assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
         assert!(html.contains("ЖИВОЙ ВХОД МАЙНЕРА"));
+        assert!(html.contains("NANDO INGRESS REQUESTS · ПОСЛЕДНИЕ 60 С"));
         assert!(html.contains("ПОЛУЧЕНО DURABLE"));
         assert!(html.contains("ПРИМЕНЕНО LEARNER"));
         assert!(html.contains("COMMON COUNTER EPOCH · AFTER SEQ"));
@@ -1050,7 +1051,7 @@ mod tests {
         assert!(html.contains("ВХОД 0 · ДОПУЩЕНО 0 · HELD 0"));
         assert!(html.contains("DELTA 0 · ACTIVE 0"));
         assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
-        assert!(html.contains("ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С"));
+        assert!(html.contains("NANDO INGRESS REQUESTS · ПОСЛЕДНИЕ 60 С"));
         assert!(html.contains("ROUTES · NANDO"));
         assert!(html.contains("HTTPS auth (не API)"));
         assert!(html.contains("5 948 645 890"));
