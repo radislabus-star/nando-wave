@@ -368,36 +368,38 @@ pub fn apply_mode(
     Ok(state)
 }
 
-fn apply_service_mode(_mode: GatewayMode) -> Result<(), ControlError> {
-    systemctl("start", TRANSITION_SERVING_UNIT)
+fn apply_service_mode(mode: GatewayMode) -> Result<(), ControlError> {
+    if !service_mode_requires_active_runtime(mode) || systemctl_is_active(TRANSITION_SERVING_UNIT) {
+        return Ok(());
+    }
+    Err(ControlError::Service(format!(
+        "required service {TRANSITION_SERVING_UNIT} is not active"
+    )))
+}
+
+fn service_mode_requires_active_runtime(mode: GatewayMode) -> bool {
+    mode == GatewayMode::Cpu
 }
 
 pub fn reconcile_startup(config: &ControlConfig) -> Result<PersistedState, ControlError> {
     let current = read_state(&config.state_path);
-    let mode = if current.mode == GatewayMode::Cpu && !admission_status(config).cpu_allowed {
+    let mode = reconciled_startup_mode(&current, admission_status(config).cpu_allowed);
+    apply_mode(config, mode, "startup_reconcile")
+}
+
+fn reconciled_startup_mode(current: &PersistedState, cpu_allowed: bool) -> GatewayMode {
+    if (current.mode == GatewayMode::Cpu && !cpu_allowed)
+        || (current.mode == GatewayMode::Bypass && current.reason == "service_control_failure")
+    {
         GatewayMode::Shadow
     } else {
         current.mode
-    };
-    apply_mode(config, mode, "startup_reconcile")
+    }
 }
 
 fn persist_state(config: &ControlConfig, state: &PersistedState) -> Result<(), ControlError> {
     atomic_write_json(&config.state_path, state)?;
     atomic_write_json(&config.public_state_path, state)
-}
-
-fn systemctl(action: &str, unit: &str) -> Result<(), ControlError> {
-    let status = Command::new("/usr/bin/systemctl")
-        .args([action, unit])
-        .status()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(ControlError::Service(format!(
-            "systemctl {action} {unit} exited with {status}"
-        )))
-    }
 }
 
 fn systemctl_is_active(unit: &str) -> bool {
@@ -603,6 +605,22 @@ mod tests {
         atomic_write_json(&config.state_path, &state)?;
         assert_eq!(read_state(&config.state_path).mode, GatewayMode::Bypass);
         Ok(())
+    }
+
+    #[test]
+    fn only_cpu_mode_requires_an_active_runtime() {
+        assert!(service_mode_requires_active_runtime(GatewayMode::Cpu));
+        assert!(!service_mode_requires_active_runtime(GatewayMode::Shadow));
+        assert!(!service_mode_requires_active_runtime(GatewayMode::Bypass));
+    }
+
+    #[test]
+    fn startup_recovers_only_machine_generated_service_failure_bypass() {
+        let failed = PersistedState::new(GatewayMode::Bypass, "service_control_failure");
+        assert_eq!(reconciled_startup_mode(&failed, false), GatewayMode::Shadow);
+
+        let manual = PersistedState::new(GatewayMode::Bypass, "manual_html");
+        assert_eq!(reconciled_startup_mode(&manual, true), GatewayMode::Bypass);
     }
 
     #[test]

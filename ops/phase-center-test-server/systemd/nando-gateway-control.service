@@ -4,12 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
+User=ubu
+Group=ubu
 EnvironmentFile=/etc/nando-wave/phase-center.env
-Environment=NANDO_GATEWAY_CONTROL_BIND=127.0.0.1:18788
-Environment=NANDO_GATEWAY_CONTROL_STATE_DIR=/var/lib/nando-gateway-control
-Environment=NANDO_GATEWAY_PUBLIC_MODE_JSON=/run/nando-gateway-control/mode.json
-Environment=NANDO_GATEWAY_CPU_ROUTE_READY=1
-Environment=NANDO_ECONOMICS_SNAPSHOT_JSON=/var/lib/nando-wave/transition/economics-live.json
+EnvironmentFile=/etc/nando-wave/roles/gateway-control.env
+EnvironmentFile=-/etc/nando-wave/authority.env
 ExecStart=/opt/nando-wave/bin/nando-gateway-control
 Restart=always
 RestartSec=1s

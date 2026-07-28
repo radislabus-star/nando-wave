@@ -1,0 +1,37 @@
+[Unit]
+Description=Nando private-LAN Nginx transport gateway
+After=network-online.target nando-gateway-control.service nando-response-learning.service nando-transition-serving.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+RuntimeDirectory=nando-gateway
+RuntimeDirectoryMode=0750
+StateDirectory=nando-gateway
+StateDirectoryMode=0750
+ExecStartPre=+/usr/bin/install -d -o www-data -g www-data -m 0750 /var/lib/nando-gateway/client-body /var/lib/nando-gateway/proxy
+ExecStartPre=/usr/sbin/nginx -t -c /etc/nando-gateway/nginx.conf
+ExecStart=/usr/sbin/nginx -c /etc/nando-gateway/nginx.conf -g "daemon off;"
+ExecReload=/usr/sbin/nginx -s reload -c /etc/nando-gateway/nginx.conf
+Restart=always
+RestartSec=1s
+TimeoutStartSec=15s
+TimeoutStopSec=15s
+CPUQuota=25%
+MemoryHigh=96M
+MemoryMax=192M
+TasksMax=32
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

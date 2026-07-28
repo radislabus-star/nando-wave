@@ -58,6 +58,7 @@ class StableM3WindowGateTest(unittest.TestCase):
         self.temp = Path(self.temp_dir.name)
         self.registry_path = self.temp / "registry.json"
         self.miner_path = self.temp / "miner.json"
+        self.online_path = self.temp / "online-miner.json"
         self.economics_path = self.temp / "economics.json"
         self.profile_path = self.temp / "profile.json"
         self.admission_path = self.temp / "admission.json"
@@ -80,11 +81,18 @@ class StableM3WindowGateTest(unittest.TestCase):
         self.env["PATH"] = f"{fake_bin}:{self.env['PATH']}"
         self.env["NANDO_LIVE_GATE_PROFILE"] = str(self.profile_path)
         self.env["NANDO_TRANSITION_ADMISSION_JSON"] = str(self.admission_path)
+        self.env["NANDO_RESPONSE_AUTHORITY_INSPECT"] = str(
+            self.temp / "authority-inspect-disabled"
+        )
         self.env["NANDO_TEST_HEALTH_JSON"] = json.dumps(
             {
                 "response_executor_cache_ready": True,
                 "response_active_profiles": 1,
                 "response_cache_error": "",
+                "response_online": {"false_accepts": 0},
+                "response_runtime_revocation_state_valid": True,
+                "response_runtime_revocations_unresolved_active": 0,
+                "transition_false_accepts": 0,
             }
         )
 
@@ -125,8 +133,20 @@ class StableM3WindowGateTest(unittest.TestCase):
                 "registry_schema": "nando.response-registry.v6",
                 "registry_revision": 1,
                 "registry_sha256": "a" * 64,
-                "packages": [{"package_id": "test-package"}],
+                "packages": [
+                    {"package_id": "test-package", "registry_revision": 1}
+                ],
                 "execution_authority": False,
+            },
+        }
+        self.online = {
+            "schema": "nando.embedded-response-online-miner.v1",
+            "generated_at_unix_ms": self.now * 1000,
+            "tail_follow_active": True,
+            "execution_authority": False,
+            "miner": {
+                "admission_accounting_complete": True,
+                "false_accepts": 0,
             },
         }
         profile = json.loads(BASE_PROFILE.read_text(encoding="utf-8"))
@@ -136,6 +156,7 @@ class StableM3WindowGateTest(unittest.TestCase):
             {
                 "registry": str(self.registry_path),
                 "miner_status": str(self.miner_path),
+                "online_miner_report": str(self.online_path),
                 "economics": str(self.economics_path),
                 "m3_authority_sources": {
                     "terminal_ledger": str(self.ledger_path),
@@ -314,6 +335,7 @@ class StableM3WindowGateTest(unittest.TestCase):
         registry["schema"] = registry_schema
         self.registry_path.write_text(json.dumps(registry), encoding="utf-8")
         self.miner_path.write_text(json.dumps(self.miner), encoding="utf-8")
+        self.online_path.write_text(json.dumps(self.online), encoding="utf-8")
         self.economics_path.write_text(json.dumps(economics), encoding="utf-8")
         completed = subprocess.run(
             [str(GATE), "--status-mode", "--project-root", str(ROOT)],
@@ -409,10 +431,9 @@ class StableM3WindowGateTest(unittest.TestCase):
         self.assertEqual(
             set(policy["m3_authority_sources"]),
             {
-                "terminal_ledger",
-                "gateway_terminal",
-                "execution_events",
-                "false_accept_metrics",
+                "rust_snapshot",
+                "rust_checkpoint",
+                "rust_event_segments",
             },
         )
 
@@ -425,6 +446,35 @@ class StableM3WindowGateTest(unittest.TestCase):
         self.assertTrue(evaluation["false_accept_authority_valid"])
         self.assertTrue(evaluation["evidence_authority_valid"])
         self.assertEqual(evaluation["passing_window_count"], 3)
+
+    def test_large_registry_revision_is_preserved_exactly(self) -> None:
+        revision = 733_761_651_879_438_659
+        self.registry["revision"] = revision
+        candidate = self.miner["response_authority_candidate"]
+        candidate["registry_revision"] = revision
+        candidate["packages"][0]["registry_revision"] = revision
+
+        report = self.run_gate(self.base_economics)
+
+        self.assertTrue(report["eligible_for_local_accept"], report)
+        authority = report["response_authority"]
+        self.assertEqual(authority["registry_revision"], revision)
+        self.assertEqual(authority["packages"][0]["registry_revision"], revision)
+        self.assertEqual(
+            report["sections"]["response_runtime"]["registry_revision"], revision
+        )
+
+    def test_large_nearby_registry_revision_mismatch_is_rejected(self) -> None:
+        revision = 733_761_651_879_438_659
+        self.registry["revision"] = revision
+        candidate = self.miner["response_authority_candidate"]
+        candidate["registry_revision"] = revision + 1
+        candidate["packages"][0]["registry_revision"] = revision + 1
+
+        report = self.run_gate(self.base_economics)
+
+        self.assertFalse(report["eligible_for_local_accept"], report)
+        self.assertEqual(report["sections"]["response_runtime"]["verdict"], "VETO")
 
     def test_two_windows_and_complete_empty_window_set_are_safe_watch(self) -> None:
         two_windows = self.build_economics(days=2)
@@ -443,14 +493,14 @@ class StableM3WindowGateTest(unittest.TestCase):
         forged.pop("m3_windows")
         forged["input_token_saving_share_milli"] = 1000
         response = self.assert_response(
-            self.run_gate(forged), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(forged), verdict="VETO", m3_verdict="WATCH"
         )
         self.assertIn("m3_windows_missing", response["m3_blockers"])
 
         emptied = copy.deepcopy(self.base_economics)
         emptied["m3_windows"] = []
         response = self.assert_response(
-            self.run_gate(emptied), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(emptied), verdict="VETO", m3_verdict="WATCH"
         )
         self.assertIn("m3_window_source_inventory_mismatch", response["m3_blockers"])
 
@@ -480,7 +530,7 @@ class StableM3WindowGateTest(unittest.TestCase):
                 else:
                     forged["m3_windows"][-1]["evidence_rows_sha256"] = value
                 response = self.assert_response(
-                    self.run_gate(forged), verdict="PASS", m3_verdict="WATCH"
+                    self.run_gate(forged), verdict="VETO", m3_verdict="WATCH"
                 )
                 self.assertTrue(response["m3_window_evaluation"]["safety_veto"])
 
@@ -489,7 +539,7 @@ class StableM3WindowGateTest(unittest.TestCase):
         records.pop(0)
         forged = self.rewrite_evidence(self.base_economics, records)
         response = self.assert_response(
-            self.run_gate(forged), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(forged), verdict="VETO", m3_verdict="WATCH"
         )
         self.assertIn(
             "m3_evidence_source_inventory_mismatch",
@@ -508,7 +558,7 @@ class StableM3WindowGateTest(unittest.TestCase):
         )
         forged = self.rewrite_evidence(self.base_economics, records)
         response = self.assert_response(
-            self.run_gate(forged), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(forged), verdict="VETO", m3_verdict="WATCH"
         )
         self.assertIn(
             "m3_evidence_source_inventory_mismatch",
@@ -520,7 +570,7 @@ class StableM3WindowGateTest(unittest.TestCase):
         forged["m3_windows"][-1]["verified_avoided_input_tokens"] += 1
         forged["m3_windows"][-1]["input_token_saving_share_milli"] = 500
         response = self.assert_response(
-            self.run_gate(forged), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(forged), verdict="VETO", m3_verdict="WATCH"
         )
         blockers = response["m3_window_evaluation"]["m3_blockers"]
         self.assertTrue(any("window_counter_mismatch" in blocker for blocker in blockers))
@@ -536,7 +586,7 @@ class StableM3WindowGateTest(unittest.TestCase):
         raw = self.ledger_path.read_bytes()
         self.ledger_path.write_bytes(raw.replace(b'"schema"', b'"schemA"', 1))
         response = self.assert_response(
-            self.run_gate(self.base_economics), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(self.base_economics), verdict="VETO", m3_verdict="WATCH"
         )
         self.assertFalse(response["source_authority_valid"])
 
@@ -626,7 +676,7 @@ class StableM3WindowGateTest(unittest.TestCase):
             as_of_unix=self.now,
         )
         self.assert_response(
-            self.run_gate(incomplete), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(incomplete), verdict="VETO", m3_verdict="WATCH"
         )
 
         forged_receipt = self.build_economics()
@@ -641,14 +691,14 @@ class StableM3WindowGateTest(unittest.TestCase):
             as_of_unix=self.now,
         )
         self.assert_response(
-            self.run_gate(forged_receipt), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(forged_receipt), verdict="VETO", m3_verdict="WATCH"
         )
 
     def test_nonordinary_window_tamper_is_authority_veto(self) -> None:
         forged = copy.deepcopy(self.base_economics)
         forged["m3_windows"][-1]["traffic_class"] = "controlled"
         response = self.assert_response(
-            self.run_gate(forged), verdict="PASS", m3_verdict="WATCH"
+            self.run_gate(forged), verdict="VETO", m3_verdict="WATCH"
         )
         self.assertTrue(response["m3_window_evaluation"]["safety_veto"])
 

@@ -8,6 +8,18 @@ ENV_DIR="${NANDO_DEPLOY_ENV_DIR:-/etc/nando-wave}"
 STATE_DIR="${NANDO_DEPLOY_STATE_DIR:-/var/lib/nando-wave}"
 LOG_DIR="${NANDO_DEPLOY_LOG_DIR:-/var/log/nando-wave}"
 SYSTEMD_DIR="${NANDO_DEPLOY_SYSTEMD_DIR:-/etc/systemd/system}"
+ROLE_ENV_DIR="${ENV_DIR}/roles"
+if [[ -n "${NANDO_DEPLOY_CARGO_BIN:-}" ]]; then
+  CARGO_BIN="${NANDO_DEPLOY_CARGO_BIN}"
+elif [[ -x "${HOME}/.cargo/bin/cargo" ]]; then
+  CARGO_BIN="${HOME}/.cargo/bin/cargo"
+else
+  CARGO_BIN="$(command -v cargo)"
+fi
+CARGO=("${CARGO_BIN}")
+if [[ -n "${NANDO_DEPLOY_RUST_TOOLCHAIN:-}" ]]; then
+  CARGO+=("+${NANDO_DEPLOY_RUST_TOOLCHAIN}")
+fi
 
 if [[ "${1:-}" == "--user" ]]; then
   MODE="user"
@@ -16,6 +28,7 @@ if [[ "${1:-}" == "--user" ]]; then
   STATE_DIR="${NANDO_DEPLOY_STATE_DIR:-${HOME}/.local/state/nando-wave}"
   LOG_DIR="${NANDO_DEPLOY_LOG_DIR:-${HOME}/.local/state/nando-wave/log}"
   SYSTEMD_DIR="${NANDO_DEPLOY_SYSTEMD_DIR:-${HOME}/.config/systemd/user}"
+  ROLE_ENV_DIR="${ENV_DIR}/roles"
 fi
 
 if [[ "${1:-}" == "--help" ]]; then
@@ -33,6 +46,13 @@ Environment overrides:
   NANDO_DEPLOY_LOG_DIR
   NANDO_DEPLOY_SYSTEMD_DIR
   NANDO_DEPLOY_NANDO_CLI_BIN
+  NANDO_DEPLOY_OWNER
+  NANDO_DEPLOY_GROUP
+  NANDO_DEPLOY_CODEX_SESSIONS_DIR
+  NANDO_DEPLOY_GATEWAY_STATE_DIR
+  NANDO_DEPLOY_GATEWAY_CONTROL_STATE_DIR
+  NANDO_DEPLOY_CARGO_BIN
+  NANDO_DEPLOY_RUST_TOOLCHAIN
   NANDO_DEPLOY_INSTALL_ONLY=1
 
 Safety defaults:
@@ -53,17 +73,30 @@ if [[ "${MODE}" == "system" ]]; then
   INSTALL_BIN_DIR="/usr/local/bin"
   DEPLOY_OWNER="${NANDO_DEPLOY_OWNER:-${SUDO_USER:-$(id -un)}}"
   DEPLOY_GROUP="${NANDO_DEPLOY_GROUP:-$(id -gn "${DEPLOY_OWNER}" 2>/dev/null || id -gn)}"
+  GATEWAY_STATE_DIR="${NANDO_DEPLOY_GATEWAY_STATE_DIR:-/var/lib/nando-gateway}"
+  GATEWAY_CONTROL_STATE_DIR="${NANDO_DEPLOY_GATEWAY_CONTROL_STATE_DIR:-/var/lib/nando-gateway-control}"
 else
   SUDO=()
   SYSTEMCTL=(systemctl --user)
   INSTALL_BIN_DIR="${HOME}/.local/bin"
   DEPLOY_OWNER="$(id -un)"
   DEPLOY_GROUP="$(id -gn)"
+  GATEWAY_STATE_DIR="${NANDO_DEPLOY_GATEWAY_STATE_DIR:-${STATE_DIR}/gateway}"
+  GATEWAY_CONTROL_STATE_DIR="${NANDO_DEPLOY_GATEWAY_CONTROL_STATE_DIR:-${STATE_DIR}/gateway-control}"
 fi
 
-echo "build release typed-transition runtime..."
-cargo build --release -q -p nando-transition-inducer --bins
-cargo build --release -q -p nando-transition-serving -p nando-response-actor -p nando-gateway-control --bins
+DEPLOY_HOME="$(getent passwd "${DEPLOY_OWNER}" 2>/dev/null | cut -d: -f6)"
+DEPLOY_HOME="${DEPLOY_HOME:-${HOME}}"
+CODEX_SESSIONS_DIR="${NANDO_DEPLOY_CODEX_SESSIONS_DIR:-${DEPLOY_HOME}/.codex/sessions}"
+
+if [[ ! -x "${CARGO_BIN}" ]]; then
+  echo "cargo is not executable: ${CARGO_BIN}" >&2
+  exit 2
+fi
+
+echo "build release typed-transition runtime with $("${CARGO[@]}" --version)..."
+"${CARGO[@]}" build --release -q -p nando-transition-inducer --bins
+"${CARGO[@]}" build --release -q -p nando-transition-serving -p nando-response-actor -p nando-gateway-control --bins
 NANDO_TRANSITION_EXEC_SRC="${ROOT_DIR}/target/release/nando-transition-live-exec"
 NANDO_TRANSITION_INSPECT_SRC="${ROOT_DIR}/target/release/nando-transition-admission-inspect"
 NANDO_TRANSITION_SERVING_SRC="${ROOT_DIR}/target/release/nando-transition-serving"
@@ -77,6 +110,7 @@ echo "  env_dir=${ENV_DIR}"
 echo "  state_dir=${STATE_DIR}"
 echo "  systemd_dir=${SYSTEMD_DIR}"
 echo "  writable_owner=${DEPLOY_OWNER}:${DEPLOY_GROUP}"
+echo "  codex_sessions_dir=${CODEX_SESSIONS_DIR}"
 
 if [[ -n "${NANDO_DEPLOY_NANDO_CLI_BIN:-}" ]]; then
   if [[ ! -x "${NANDO_DEPLOY_NANDO_CLI_BIN}" ]]; then
@@ -87,7 +121,7 @@ if [[ -n "${NANDO_DEPLOY_NANDO_CLI_BIN:-}" ]]; then
   echo "use prebuilt nando-cli: ${NANDO_CLI_SRC}"
 else
   echo "build release nando-cli..."
-  cargo build --release -q -p nando-cli
+  "${CARGO[@]}" build --release -q -p nando-cli
   NANDO_CLI_SRC="${ROOT_DIR}/target/release/nando-cli"
 fi
 
@@ -100,6 +134,7 @@ echo "install files..."
   "${PREFIX}/ops" \
   "${PREFIX}/data" \
   "${ENV_DIR}" \
+  "${ROLE_ENV_DIR}" \
   "${STATE_DIR}/streaming" \
   "${STATE_DIR}/transition/package-inbox" \
   "${STATE_DIR}/provider-export-drop" \
@@ -142,16 +177,20 @@ else
   "${SUDO[@]}" mkdir -p "${PREFIX}/data/real_traffic"
 fi
 "${SUDO[@]}" find "${PREFIX}/ops/phase-center-test-server/bin" -type f \( -name '*.sh' -o -name '*.py' -o -name 'nando-codex' -o -name 'nando-codex-hook' -o -name 'codex' \) -exec chmod 0755 {} \;
+"${SUDO[@]}" ln -sf \
+  "${PREFIX}/ops/phase-center-test-server/bin/nando-live-transition-gate" \
+  "${PREFIX}/bin/nando-live-transition-gate"
 "${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-llm-gateway.sh" "${INSTALL_BIN_DIR}/nando-llm-gateway"
 "${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-codex" "${INSTALL_BIN_DIR}/nando-codex"
 "${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/codex" "${INSTALL_BIN_DIR}/codex"
-"${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-live-transition-gate" "${INSTALL_BIN_DIR}/nando-live-transition-gate"
+"${SUDO[@]}" ln -sf "${PREFIX}/bin/nando-live-transition-gate" "${INSTALL_BIN_DIR}/nando-live-transition-gate"
 "${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-transition" "${INSTALL_BIN_DIR}/nando-transition"
 
 ENV_FILE="${ENV_DIR}/phase-center.env"
 tmp_env="$(mktemp)"
 sed \
   -e "s#^NANDO_BIN=.*#NANDO_BIN=${PREFIX}/bin/nando-cli#" \
+  -e "s#^NANDO_CODEX_SESSIONS_DIR=.*#NANDO_CODEX_SESSIONS_DIR=${CODEX_SESSIONS_DIR}#" \
   -e "s#^NANDO_STATE_DIR=.*#NANDO_STATE_DIR=${STATE_DIR}/streaming#" \
   -e "s#^NANDO_LOG_DIR=.*#NANDO_LOG_DIR=${LOG_DIR}#" \
   -e "s#^NANDO_PROVIDER_EXPORT_DROP_DIR=.*#NANDO_PROVIDER_EXPORT_DROP_DIR=${STATE_DIR}/provider-export-drop#" \
@@ -190,7 +229,13 @@ else
       printf '%s=%s\n' "${key}" "${value}" >> "${merged_env}"
     fi
   done < "${tmp_env}"
-  for key in NANDO_LEGACY_JSON_AUDIT_ENABLED NANDO_RESPONSE_ONLINE_CHECKPOINT NANDO_STREAMING_EVIDENCE_DIR NANDO_ECONOMICS_SNAPSHOT_JSON; do
+  for key in \
+    NANDO_CODEX_SESSIONS_DIR \
+    NANDO_LEGACY_JSON_AUDIT_ENABLED \
+    NANDO_RESPONSE_ONLINE_CHECKPOINT \
+    NANDO_STREAMING_EVIDENCE_DIR \
+    NANDO_ECONOMICS_SNAPSHOT_JSON
+  do
     value="$(grep -E "^${key}=" "${tmp_env}" | tail -n 1 | cut -d= -f2-)"
     if grep -qE "^${key}=" "${merged_env}"; then
       sed -i "s#^${key}=.*#${key}=${value}#" "${merged_env}"
@@ -259,6 +304,27 @@ ensure_secret_env_key() {
 
 ensure_secret_env_key "NANDO_STATUS_DASHBOARD_KEY"
 
+role_envs=(
+  gateway-control.env
+  response-learning.env
+  transition-serving.env
+)
+
+for role_env in "${role_envs[@]}"; do
+  rendered_role_env="$(mktemp)"
+  sed \
+    -e "s#/opt/nando-wave#${PREFIX}#g" \
+    -e "s#/var/lib/nando-gateway-control#${GATEWAY_CONTROL_STATE_DIR}#g" \
+    -e "s#/var/lib/nando-gateway#${GATEWAY_STATE_DIR}#g" \
+    -e "s#/var/lib/nando-wave#${STATE_DIR}#g" \
+    "${ROOT_DIR}/ops/phase-center-test-server/roles/${role_env}" \
+    > "${rendered_role_env}"
+  "${SUDO[@]}" install -m 0644 \
+    "${rendered_role_env}" \
+    "${ROLE_ENV_DIR}/${role_env}"
+  rm -f "${rendered_role_env}"
+done
+
 WATERMARK_TRACE_JSONL="$(env_value NANDO_WATERMARK_TRACE_JSONL)"
 APPEND_JSONL="$(env_value NANDO_APPEND_JSONL)"
 if [[ -n "${WATERMARK_TRACE_JSONL}" && -n "${APPEND_JSONL}" ]]; then
@@ -297,9 +363,49 @@ if [[ "${INSTALL_ONLY}" != "1" ]]; then
     "${SYSTEMCTL[@]}" disable --now "${unit}" >/dev/null 2>&1 || true
   done
 fi
+service_units=(
+  nando-gateway-control.service
+  nando-response-learning.service
+  nando-transition-serving.service
+)
+
+install_service_unit() {
+  local unit="$1"
+  local source="${ROOT_DIR}/ops/phase-center-test-server/systemd/${unit}"
+  local destination="${SYSTEMD_DIR}/${unit}"
+
+  "${SUDO[@]}" install -m 0644 "${source}" "${destination}"
+  if [[ "${MODE}" == "system" ]]; then
+    "${SUDO[@]}" sed -i \
+      -e "s#^User=.*#User=${DEPLOY_OWNER}#" \
+      -e "s#^Group=.*#Group=${DEPLOY_GROUP}#" \
+      -e "s#/etc/nando-wave/phase-center.env#${ENV_FILE}#g" \
+      -e "s#/etc/nando-wave/roles#${ROLE_ENV_DIR}#g" \
+      -e "s#/etc/nando-wave/authority.env#${ENV_DIR}/authority.env#g" \
+      -e "s#^ReadOnlyPaths=.*\\.codex/sessions#ReadOnlyPaths=-${CODEX_SESSIONS_DIR}#" \
+      "${destination}"
+  else
+    sed -i \
+      -e '/^User=/d' \
+      -e '/^Group=/d' \
+      -e '/^SupplementaryGroups=/d' \
+      -e "s#/etc/nando-wave/phase-center.env#${ENV_FILE}#g" \
+      -e "s#/etc/nando-wave/roles#${ROLE_ENV_DIR}#g" \
+      -e "s#/etc/nando-wave/authority.env#${ENV_DIR}/authority.env#g" \
+      -e "s#WorkingDirectory=/opt/nando-wave#WorkingDirectory=${PREFIX}#" \
+      -e "s#/var/lib/nando-gateway-control#${STATE_DIR}/gateway-control#g" \
+      -e "s#/var/lib/nando-wave#${STATE_DIR}#g" \
+      -e "s#^ReadOnlyPaths=.*\\.codex/sessions#ReadOnlyPaths=-${CODEX_SESSIONS_DIR}#" \
+      -e "s#/opt/nando-wave#${PREFIX}#g" \
+      "${destination}"
+  fi
+}
+
+for unit in "${service_units[@]}"; do
+  install_service_unit "${unit}"
+done
+
 if [[ "${MODE}" == "system" ]]; then
-  "${SUDO[@]}" cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-transition-serving.service" "${SYSTEMD_DIR}/"
-  "${SUDO[@]}" cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-gateway-control.service" "${SYSTEMD_DIR}/"
   for unit in "${obsolete_units[@]}"; do
     "${SUDO[@]}" rm -f "${SYSTEMD_DIR}/${unit}"
   done
@@ -307,18 +413,6 @@ if [[ "${MODE}" == "system" ]]; then
     "${SYSTEMCTL[@]}" daemon-reload
   fi
 else
-  cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-transition-serving.service" "${SYSTEMD_DIR}/"
-  cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-gateway-control.service" "${SYSTEMD_DIR}/"
-  sed -i \
-    -e "s#EnvironmentFile=/etc/nando-wave/phase-center.env#EnvironmentFile=${ENV_FILE}#" \
-    -e "s#WorkingDirectory=/opt/nando-wave#WorkingDirectory=${PREFIX}#" \
-    -e "s#/opt/nando-wave#${PREFIX}#g" \
-    "${SYSTEMD_DIR}"/nando-transition-serving.service
-  sed -i \
-    -e "s#EnvironmentFile=/etc/nando-wave/phase-center.env#EnvironmentFile=${ENV_FILE}#" \
-    -e "s#/var/lib/nando-gateway-control#${STATE_DIR}/gateway-control#g" \
-    -e "s#/opt/nando-wave#${PREFIX}#g" \
-    "${SYSTEMD_DIR}"/nando-gateway-control.service
   if [[ "${INSTALL_ONLY}" != "1" ]]; then
     "${SYSTEMCTL[@]}" daemon-reload
   fi
@@ -335,8 +429,9 @@ fi
 
 echo "enable services..."
 units=(
-  nando-transition-serving.service
   nando-gateway-control.service
+  nando-response-learning.service
+  nando-transition-serving.service
 )
 
 for unit in "${units[@]}"; do
@@ -344,8 +439,9 @@ for unit in "${units[@]}"; do
 done
 
 long_running_services=(
-  nando-transition-serving.service
   nando-gateway-control.service
+  nando-response-learning.service
+  nando-transition-serving.service
 )
 
 for unit in "${long_running_services[@]}"; do

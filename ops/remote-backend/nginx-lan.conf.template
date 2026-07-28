@@ -1,0 +1,237 @@
+worker_processes 1;
+pid /run/nando-gateway/nginx.pid;
+error_log stderr warn;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format nando_economics escape=json
+        '{"schema":"nando.nginx-terminal.v1",'
+        '"request_id":"$request_id",'
+        '"timestamp":"$time_iso8601",'
+        '"method":"$request_method",'
+        '"uri":"$uri",'
+        '"status":$status,'
+        '"request_length":$request_length,'
+        '"request_time":$request_time,'
+        '"completed_at_unix_seconds":"$msec",'
+        '"request_time_seconds":"$request_time",'
+        '"upstream_status":"$upstream_status",'
+        '"upstream_addr":"$upstream_addr",'
+        '"upstream_connect_time":"$upstream_connect_time",'
+        '"upstream_response_time":"$upstream_response_time"}';
+
+    map $request_uri $nando_economics_request {
+        default 0;
+        ~^/v[12]/responses(?:\?|$) 1;
+        ~^/v[12]/chat/completions(?:\?|$) 1;
+    }
+
+    access_log /var/lib/nando-gateway/economics-access.jsonl nando_economics
+        if=$nando_economics_request;
+    server_tokens off;
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 75s;
+    keepalive_requests 10000;
+
+    client_max_body_size 64m;
+    client_body_timeout 3600s;
+    client_body_temp_path /var/lib/nando-gateway/client-body 1 2;
+    proxy_temp_path /var/lib/nando-gateway/proxy 1 2;
+
+    resolver @NANDO_DNS_RESOLVERS@ ipv6=off valid=30s;
+    resolver_timeout 5s;
+
+    map $http_upgrade $nando_connection_upgrade {
+        default upgrade;
+        "" close;
+    }
+
+    server {
+        listen @NANDO_LAN_BIND@;
+        server_name _;
+
+        allow @NANDO_LAN_CIDR@;
+        deny all;
+
+        location = /health {
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            return 200 '{"ok":true,"service":"nando-nginx-gateway","transport":"nginx","scope":"private_lan","python_transport":false}';
+        }
+
+        location = /v1/health {
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            return 200 '{"ok":true,"service":"nando-nginx-gateway","transport":"nginx","scope":"private_lan","python_transport":false}';
+        }
+
+        location = /v2/health {
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            return 200 '{"ok":true,"service":"nando-nginx-gateway","transport":"nginx","scope":"private_lan","python_transport":false}';
+        }
+
+        location = /control-health {
+            proxy_pass http://127.0.0.1:18788/health;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_connect_timeout 1s;
+            proxy_send_timeout 3s;
+            proxy_read_timeout 3s;
+        }
+
+        location = /cpu-health {
+            proxy_pass http://127.0.0.1:18789/health;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_connect_timeout 100ms;
+            proxy_send_timeout 1s;
+            proxy_read_timeout 1s;
+        }
+
+        location ~ ^/v[12]/status/([0-9a-fA-F]+)/?$ {
+            return 302 /control/$1;
+        }
+
+        location /control/ {
+            proxy_pass http://127.0.0.1:18788;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_connect_timeout 1s;
+            proxy_send_timeout 10s;
+            proxy_read_timeout 10s;
+        }
+
+        location /v2/transitions/ {
+            proxy_pass http://127.0.0.1:18789;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_request_buffering on;
+            proxy_buffering off;
+            proxy_connect_timeout 100ms;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 2s;
+        }
+
+        location /v1/transitions/ {
+            proxy_pass http://127.0.0.1:18789;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_request_buffering on;
+            proxy_buffering off;
+            proxy_connect_timeout 100ms;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 2s;
+        }
+
+        location /v2/ {
+            proxy_pass http://127.0.0.1:18789;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_set_header X-Nando-Request-Id $request_id;
+            proxy_request_buffering on;
+            proxy_buffering off;
+            proxy_intercept_errors on;
+            error_page 418 502 503 504 = @nando_upstream_v2;
+            proxy_connect_timeout 100ms;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 300ms;
+        }
+
+        location /v1/ {
+            proxy_pass http://127.0.0.1:18789;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_set_header X-Nando-Request-Id $request_id;
+            proxy_request_buffering on;
+            proxy_buffering off;
+            proxy_intercept_errors on;
+            error_page 418 502 503 504 = @nando_upstream_v1;
+            proxy_connect_timeout 100ms;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 300ms;
+        }
+
+        location @nando_upstream_v2 {
+            set $nando_upstream https://chatgpt.com;
+            rewrite ^/v2/(.*)$ /backend-api/codex/$1 break;
+            proxy_pass $nando_upstream;
+
+            proxy_http_version 1.1;
+            proxy_set_header Host chatgpt.com;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $nando_connection_upgrade;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_set_header Authorization $http_authorization;
+
+            proxy_ssl_server_name on;
+            proxy_ssl_name chatgpt.com;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+
+            proxy_request_buffering off;
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_max_temp_file_size 0;
+            gzip off;
+
+            proxy_connect_timeout 15s;
+            proxy_send_timeout 3600s;
+            proxy_read_timeout 3600s;
+            send_timeout 3600s;
+        }
+
+        location @nando_upstream_v1 {
+            set $nando_upstream https://chatgpt.com;
+            rewrite ^/v1/(.*)$ /backend-api/codex/$1 break;
+            proxy_pass $nando_upstream;
+
+            proxy_http_version 1.1;
+            proxy_set_header Host chatgpt.com;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $nando_connection_upgrade;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_set_header Authorization $http_authorization;
+
+            proxy_ssl_server_name on;
+            proxy_ssl_name chatgpt.com;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+
+            proxy_request_buffering off;
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_max_temp_file_size 0;
+            gzip off;
+
+            proxy_connect_timeout 15s;
+            proxy_send_timeout 3600s;
+            proxy_read_timeout 3600s;
+            send_timeout 3600s;
+        }
+
+        location / {
+            default_type application/json;
+            return 404 '{"error":{"message":"not found","type":"not_found"}}';
+        }
+    }
+}

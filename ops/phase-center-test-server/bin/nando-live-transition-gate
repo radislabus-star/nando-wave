@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+readonly HERE="$(cd -- "$(dirname -- "${SCRIPT_PATH}")" && pwd)"
 readonly OPS_DIR="$(cd -- "${HERE}/.." && pwd)"
 readonly DEFAULT_GATE_DIR="${OPS_DIR}/gates"
 readonly TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/nando-live-transition-composite.XXXXXX")"
@@ -9,6 +10,7 @@ trap 'rm -rf -- "${TMP_DIR}"' EXIT
 
 refresh_proofs=0
 status_mode=0
+project_root="${NANDO_GATE_PROJECT_ROOT:-}"
 
 find_project_root() {
   local candidate current
@@ -29,14 +31,58 @@ find_project_root() {
   return 1
 }
 
-if [[ -n "${NANDO_GATE_PROJECT_ROOT:-}" ]]; then
-  project_root="${NANDO_GATE_PROJECT_ROOT}"
-else
-  project_root="$(find_project_root)" || {
-    jq -n '{verdict:"ERROR", reason:"project_root_not_found"}'
-    exit 2
-  }
-fi
+response_registry_identity_matches() {
+  python3 - "$1" "$2" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as candidate_file:
+    candidate = json.load(candidate_file)
+with open(sys.argv[2], encoding="utf-8") as registry_file:
+    registry = json.load(registry_file)
+
+candidate_revision = candidate.get("registry_revision")
+registry_revision = registry.get("revision")
+packages = candidate.get("packages")
+valid = (
+    isinstance(candidate_revision, int)
+    and not isinstance(candidate_revision, bool)
+    and isinstance(registry_revision, int)
+    and not isinstance(registry_revision, bool)
+    and candidate_revision == registry_revision
+    and candidate.get("registry_schema") == registry.get("schema")
+    and isinstance(packages, list)
+    and len(packages) > 0
+    and all(
+        isinstance(package, dict)
+        and isinstance(package.get("registry_revision"), int)
+        and not isinstance(package.get("registry_revision"), bool)
+        and package["registry_revision"] == registry_revision
+        for package in packages
+    )
+)
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+extract_response_authority_candidate() {
+  python3 - "$1" "$2" <<'PY'
+import json
+import os
+import sys
+
+source_path, destination_path = sys.argv[1:]
+with open(source_path, encoding="utf-8") as source_file:
+    source = json.load(source_file)
+
+candidate = source.get("response_authority_candidate")
+temporary = f"{destination_path}.next"
+with open(temporary, "w", encoding="utf-8") as destination_file:
+    json.dump(candidate, destination_file, sort_keys=True, separators=(",", ":"))
+    destination_file.write("\n")
+os.replace(temporary, destination_path)
+PY
+}
 
 usage() {
   cat <<'EOF'
@@ -72,6 +118,13 @@ while (($# > 0)); do
       ;;
   esac
 done
+
+if [[ -z "${project_root}" ]]; then
+  project_root="$(find_project_root)" || {
+    jq -n '{verdict:"ERROR", reason:"project_root_not_found"}'
+    exit 2
+  }
+fi
 
 readonly PROJECT_ROOT="$(cd -- "${project_root}" && pwd)"
 if [[ -n "${NANDO_LIVE_GATE_PROFILE:-}" ]]; then
@@ -429,7 +482,7 @@ run_response_runtime() {
   ' "${embedded_candidate}" >/dev/null 2>&1; then
     cp "${embedded_candidate}" "${authority_candidate}"
   else
-    jq -c '.response_authority_candidate // null' "${miner_status}" >"${authority_candidate}"
+    extract_response_authority_candidate "${miner_status}" "${authority_candidate}"
   fi
   # Safety predicates must compare the registry with the refreshed candidate.
   # Refresh may remove revoked bindings, but the Rust tool cannot create a new
@@ -466,56 +519,66 @@ run_response_runtime() {
     return
   fi
 
-  local evaluator_rc
+  local evaluator_rc economics_schema
   m3_evaluation="${TMP_DIR}/m3-window-evaluation.json"
+  economics_schema="$(jq -r '.schema // empty' "${economics}")"
   set +e
-  jq -n \
-    --slurpfile economics "${economics}" \
-    --slurpfile profile "${PROFILE}" \
-    'def supported_economics_source:
-      (((.schema == "nando.economics-snapshot.v2")
-          or (.schema == "nando.economics-snapshot.v3"))
-        and (.source == "rust_streaming_economics_v2"))
-      or ((.schema == "nando.economics-snapshot.v4")
-        and (.source == "rust_streaming_economics_v3"));
-    ($economics[0]) as $e
-    | ($profile[0].response_runtime) as $p
-    | ($e.completed_m3_windows // []) as $windows
-    | ($p.m3_required_consecutive_windows // 3) as $required
-    | ($p.minimum_m3_input_token_saving_share_milli // 500) as $share
-    | (($e | supported_economics_source)
-        and (($e.dedupe_conflicts // 0) == 0)
-        and (($e.unresolved_local_outcomes // 0) == 0)
-        and (($e.source_reconciliation.complete // false) == true)
-        and (($e.source_reconciliation.blockers // []) | length == 0)) as $source_ok
-    | ((($e.false_accepts // 0) == 0)
-        and (($e.runtime_parity_mismatches // 0) == 0)) as $false_accept_ok
-    | ((($e.missing_evidence_receipts // 0) == 0)
-        and (($e.verification_coverage_milli // 0) == 1000)) as $evidence_ok
-    | ((($e.false_accepts // 0) > 0)
-        or (($e.runtime_parity_mismatches // 0) > 0)
-        or (($e.dedupe_conflicts // 0) > 0)) as $safety_veto
-    | (($windows | length) >= $required
-        and ($windows[-$required:] | all(.pass == true and .token_share_milli >= $share))) as $window_pass
-    | {
-        schema:"nando.live-transition-m3-evaluation.v1",
-        evaluator:"rust_snapshot_jq_v2",
-        source_authority_valid:$source_ok,
-        false_accept_authority_valid:$false_accept_ok,
-        evidence_authority_valid:$evidence_ok,
-        safety_veto:$safety_veto,
-        m3_verdict:(if ($window_pass and $source_ok and $false_accept_ok and $evidence_ok and ($safety_veto|not)) then "PASS" else "WATCH" end),
-        completed_windows:($windows|length),
-        required_consecutive_windows:$required,
-        windows:$windows,
-        m3_blockers:([]
-          + (if ($windows|length) >= $required then [] else ["m3_windows_below_required"] end)
-          + (if $window_pass then [] else ["m3_window_coverage_below_threshold"] end)
-          + (if $source_ok then [] else ["source_authority_invalid"] end)
-          + (if $false_accept_ok then [] else ["false_accept_authority_invalid"] end)
-          + (if $evidence_ok then [] else ["evidence_authority_invalid"] end)
-          + (if $safety_veto then ["m3_window_safety_veto"] else [] end))
-      }' >"${m3_evaluation}"
+  if [[ "${economics_schema}" == "nando.economics-snapshot.v1" ]]; then
+    python3 \
+      "${PROJECT_ROOT}/ops/phase-center-test-server/bin/nando_live_transition_m3.py" \
+      --economics "${economics}" \
+      --profile "${PROFILE}" \
+      --now-unix "$(date +%s)" \
+      >"${m3_evaluation}"
+  else
+    jq -n \
+      --slurpfile economics "${economics}" \
+      --slurpfile profile "${PROFILE}" \
+      'def supported_economics_source:
+        (((.schema == "nando.economics-snapshot.v2")
+            or (.schema == "nando.economics-snapshot.v3"))
+          and (.source == "rust_streaming_economics_v2"))
+        or ((.schema == "nando.economics-snapshot.v4")
+          and (.source == "rust_streaming_economics_v3"));
+      ($economics[0]) as $e
+      | ($profile[0].response_runtime) as $p
+      | ($e.completed_m3_windows // []) as $windows
+      | ($p.m3_required_consecutive_windows // 3) as $required
+      | ($p.minimum_m3_input_token_saving_share_milli // 500) as $share
+      | (($e | supported_economics_source)
+          and (($e.dedupe_conflicts // 0) == 0)
+          and (($e.unresolved_local_outcomes // 0) == 0)
+          and (($e.source_reconciliation.complete // false) == true)
+          and (($e.source_reconciliation.blockers // []) | length == 0)) as $source_ok
+      | ((($e.false_accepts // 0) == 0)
+          and (($e.runtime_parity_mismatches // 0) == 0)) as $false_accept_ok
+      | ((($e.missing_evidence_receipts // 0) == 0)
+          and (($e.verification_coverage_milli // 0) == 1000)) as $evidence_ok
+      | ((($e.false_accepts // 0) > 0)
+          or (($e.runtime_parity_mismatches // 0) > 0)
+          or (($e.dedupe_conflicts // 0) > 0)) as $safety_veto
+      | (($windows | length) >= $required
+          and ($windows[-$required:] | all(.pass == true and .token_share_milli >= $share))) as $window_pass
+      | {
+          schema:"nando.live-transition-m3-evaluation.v1",
+          evaluator:"rust_snapshot_jq_v2",
+          source_authority_valid:$source_ok,
+          false_accept_authority_valid:$false_accept_ok,
+          evidence_authority_valid:$evidence_ok,
+          safety_veto:$safety_veto,
+          m3_verdict:(if ($window_pass and $source_ok and $false_accept_ok and $evidence_ok and ($safety_veto|not)) then "PASS" else "WATCH" end),
+          completed_windows:($windows|length),
+          required_consecutive_windows:$required,
+          windows:$windows,
+          m3_blockers:([]
+            + (if ($windows|length) >= $required then [] else ["m3_windows_below_required"] end)
+            + (if $window_pass then [] else ["m3_window_coverage_below_threshold"] end)
+            + (if $source_ok then [] else ["source_authority_invalid"] end)
+            + (if $false_accept_ok then [] else ["false_accept_authority_invalid"] end)
+            + (if $evidence_ok then [] else ["evidence_authority_invalid"] end)
+            + (if $safety_veto then ["m3_window_safety_veto"] else [] end))
+        }' >"${m3_evaluation}"
+  fi
   evaluator_rc=$?
   set -e
   if [[ "${evaluator_rc}" != "0" ]] \
@@ -533,6 +596,7 @@ run_response_runtime() {
 
   local baseline_safety_pass safety_pass active_packages m3_threshold lifetime_token_share
   local historical_miner_false_accepts
+  local candidate_registry_identity_valid
   local m3_pass m3_window_pass m3_window_safety_veto registry_schema
   active_packages="$(jq '[.packages[] | select(.state == "active")] | length' "${registry}")"
   registry_schema="$(jq -r '.schema' "${registry}")"
@@ -541,15 +605,26 @@ run_response_runtime() {
   historical_miner_false_accepts="$(jq '.miner.false_accepts // 0' "${online_report}")"
   m3_window_pass="$(jq -r '.m3_verdict == "PASS"' "${m3_evaluation}")"
   m3_window_safety_veto="$(jq -r '.safety_veto' "${m3_evaluation}")"
+  candidate_registry_identity_valid=0
+  if response_registry_identity_matches "${authority_candidate}" "${registry}"; then
+    candidate_registry_identity_valid=1
+  fi
   baseline_safety_pass=0
   if jq -e \
     --argjson active_packages "${active_packages}" \
+    --argjson candidate_registry_identity_valid "${candidate_registry_identity_valid}" \
     --slurpfile online "${online_report}" \
     --slurpfile candidate "${authority_candidate}" \
     --slurpfile economics "${economics}" \
     --slurpfile health "${health}" \
     --slurpfile m3 "${m3_evaluation}" \
-    'def valid_nonzero_sha256:
+    'def supported_economics_source:
+        (((.schema == "nando.economics-snapshot.v2")
+            or (.schema == "nando.economics-snapshot.v3"))
+          and (.source == "rust_streaming_economics_v2"))
+        or ((.schema == "nando.economics-snapshot.v4")
+          and (.source == "rust_streaming_economics_v3"));
+      def valid_nonzero_sha256:
         type == "string"
         and test("^[0-9a-f]{64}$")
         and test("[1-9a-f]");
@@ -581,6 +656,14 @@ run_response_runtime() {
         and (.proof.adaptive_identification.proof_root_sha256
           | valid_nonzero_sha256);
       .schema == "nando.response-registry.v6"
+      and (
+        $economics[0].schema == "nando.economics-snapshot.v1"
+        or ($economics[0] | supported_economics_source)
+      )
+      and $m3[0].source_authority_valid == true
+      and $m3[0].false_accept_authority_valid == true
+      and $m3[0].evidence_authority_valid == true
+      and $m3[0].safety_veto == false
       and all(.packages[] | select(.state == "active");
         .origin == "grounded_synthesis"
         and .verifier != null
@@ -601,7 +684,7 @@ run_response_runtime() {
       and ($candidate[0].schema // "") == "nando.response-authority-candidate.v1"
       and ($candidate[0].authority_schema // "") == "nando.response-authority.v2"
       and ($candidate[0].registry_schema // "") == "nando.response-registry.v6"
-      and ($candidate[0].registry_revision // 0) == .revision
+      and $candidate_registry_identity_valid == 1
       and $candidate[0].execution_authority == false
       and (($candidate[0].packages // []) | length) == $active_packages' \
     "${registry}" >/dev/null; then
@@ -780,7 +863,9 @@ if [[ -f "${embedded_authority_candidate}" ]] && jq -e '
 ' "${embedded_authority_candidate}" >/dev/null 2>&1; then
   cp "${embedded_authority_candidate}" "${TMP_DIR}/response-authority-candidate.json"
 else
-  jq -c '.response_authority_candidate // null' "${response_miner_status}" >"${TMP_DIR}/response-authority-candidate.json"
+  extract_response_authority_candidate \
+    "${response_miner_status}" \
+    "${TMP_DIR}/response-authority-candidate.json"
 fi
 authority_refresher="${NANDO_RESPONSE_AUTHORITY_INSPECT:-/opt/nando-wave/bin/nando-response-authority-inspect}"
 if [[ -x "${authority_refresher}" && -f "${response_registry_path}" ]]; then
@@ -804,6 +889,32 @@ if [[ -n "${runtime_build_sha256}" ]] && jq -e '
   and (.packages | length) > 0
 ' "${TMP_DIR}/response-authority-candidate.json" >/dev/null; then
   candidate_valid=1
+fi
+if [[ "${candidate_valid}" == "1" ]] && ! python3 - \
+  "${TMP_DIR}/response-authority-candidate.json" \
+  "${response_registry_path}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as candidate_file:
+    candidate = json.load(candidate_file)
+with open(sys.argv[2], encoding="utf-8") as registry_file:
+    registry = json.load(registry_file)
+
+candidate_revision = candidate.get("registry_revision")
+registry_revision = registry.get("revision")
+valid = (
+    isinstance(candidate_revision, int)
+    and not isinstance(candidate_revision, bool)
+    and isinstance(registry_revision, int)
+    and not isinstance(registry_revision, bool)
+    and candidate_revision == registry_revision
+    and candidate.get("registry_schema") == registry.get("schema")
+)
+raise SystemExit(0 if valid else 1)
+PY
+then
+  candidate_valid=0
 fi
 jq -s \
   --arg project_id "${PROJECT_ID}" \
@@ -843,7 +954,7 @@ jq -s \
           packages:[]
         } end
       ),
-      m3_complete:(map(select(.section == "response_runtime") | .m3_verdict) | first) == "PASS",
+      m3_complete:((map(select(.section == "response_runtime") | .m3_verdict) | first) == "PASS"),
       enabled_checks:map(select(.required != false) | .section),
       required_actions:map(
         select(.verdict != "PASS")
@@ -882,6 +993,50 @@ jq -s \
       }
     }
   ' "${TMP_DIR}/structural.json" "${TMP_DIR}/wave_causal.json" "${TMP_DIR}/expression_shadow.json" "${TMP_DIR}/runtime_admission.json" "${TMP_DIR}/response_runtime.json" "${TMP_DIR}/deployment.json" >"${TMP_DIR}/final.json"
+
+python3 - \
+  "${TMP_DIR}/final.json" \
+  "${TMP_DIR}/response-authority-candidate.json" \
+  "${response_registry_path}" \
+  "${candidate_valid}" <<'PY'
+import json
+import os
+import sys
+
+final_path, candidate_path, registry_path, candidate_valid = sys.argv[1:]
+with open(final_path, encoding="utf-8") as final_file:
+    report = json.load(final_file)
+with open(candidate_path, encoding="utf-8") as candidate_file:
+    candidate = json.load(candidate_file)
+with open(registry_path, encoding="utf-8") as registry_file:
+    registry = json.load(registry_file)
+
+response_runtime = report.get("sections", {}).get("response_runtime")
+registry_revision = registry.get("revision")
+if (
+    isinstance(response_runtime, dict)
+    and isinstance(registry_revision, int)
+    and not isinstance(registry_revision, bool)
+):
+    response_runtime["registry_revision"] = registry_revision
+
+if candidate_valid == "1" and report.get("verdict") == "PASS":
+    report["response_authority"] = {
+        "schema": candidate["authority_schema"],
+        "registry_schema": candidate["registry_schema"],
+        "registry_revision": candidate["registry_revision"],
+        "registry_sha256": candidate["registry_sha256"],
+        "gate_build_sha256": report["response_authority"]["gate_build_sha256"],
+        "runtime_build_sha256": report["response_authority"]["runtime_build_sha256"],
+        "packages": candidate["packages"],
+    }
+
+temporary = f"{final_path}.exact"
+with open(temporary, "w", encoding="utf-8") as output:
+    json.dump(report, output, sort_keys=True, separators=(",", ":"))
+    output.write("\n")
+os.replace(temporary, final_path)
+PY
 
 status_path="${NANDO_TRANSITION_ADMISSION_JSON:-$(jq -r '.runtime.admission_status' "${PROFILE}")}"
 mkdir -p "$(dirname -- "${status_path}")"
