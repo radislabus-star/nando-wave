@@ -1120,6 +1120,19 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         miner_opportunity,
         "optimistic_executable_upper_bound_tokens",
     );
+    let miner_completed_windows = miner_opportunity
+        .get("completed_m3_windows")
+        .and_then(Value::as_array);
+    let miner_historical_false_accepts = miner_completed_windows
+        .into_iter()
+        .flatten()
+        .map(|window| metric_u64(window, "false_accepts"))
+        .fold(0_u64, u64::saturating_add);
+    let miner_historical_parity_failures = miner_completed_windows
+        .into_iter()
+        .flatten()
+        .map(|window| metric_u64(window, "parity_failures"))
+        .fold(0_u64, u64::saturating_add);
     let (legacy_total_input_tokens, legacy_cpu_input_tokens) =
         legacy_prior_epoch_token_totals(economics).unwrap_or((0, 0));
     let bridge = live_dashboard::bridge_view(&hot_health, &cold_health);
@@ -1323,6 +1336,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                     online_opportunity,
                     "optimistic_executable_upper_bound_share_milli",
                 ),
+                "historical_completed_false_accepts": miner_historical_false_accepts,
+                "historical_completed_parity_failures": miner_historical_parity_failures,
                 "classes": online_opportunity.get("classes").cloned().unwrap_or_else(|| json!({})),
             },
             "ms3": ms3_future,

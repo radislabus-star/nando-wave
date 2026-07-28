@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b039";
+const DASHBOARD_BUILD: &str = "2026.07.28-b040";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -630,7 +630,7 @@ const TEMPLATE: &str = r#"
     <div class="window-head"><h2 class="band-title">ЖИВЫЕ ОКНА</h2><div id="window-summary" class="window-summary">ROUTES · NANDO — / MIXED — / DIRECT — / NO SOCKET —</div></div>
     <div class="window-scroll"><div class="window-table"><div class="window-row header"><span>ОКНО</span><span>СЕССИЯ</span><span>КОНФИГ</span><span>СТАТУС</span><span>КОНЕЧНАЯ ТОЧКА</span></div><div id="window-rows"></div></div></div>
   </div></section>
-  <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span id="next-route" class="next-route">relation evidence → circuit → future proof → admission</span></span><span>false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · bridge failures <b id="bridge-failures">0</b></span></div></footer>
+  <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span id="next-route" class="next-route">relation evidence → circuit → future proof → admission</span></span><span>bridge current: false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · failures <b id="bridge-failures">0</b> · miner completed history: false accepts <b id="historical-false-accepts">0</b> · parity <b id="historical-parity-mismatches">0</b></span></div></footer>
 </main>
 <script>
 (() => {
@@ -871,7 +871,7 @@ const TEMPLATE: &str = r#"
     text("ingestion-epoch", tokenLagComparable ? `COMMON COUNTER EPOCH · AFTER SEQ ${number.format(bridge.producer_counter_started_after_sequence)}` : `COUNTER EPOCH SPLIT · HOT AFTER ${number.format(bridge.producer_counter_started_after_sequence)} / COLD AFTER ${number.format(bridge.consumer_counter_started_after_sequence)}`);
     stateClass("ingestion-epoch", `overview-rule ${tokenLagComparable ? "good" : "warning"}`);
     text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses} · OPEN ${joinOpen}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
-    text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
+    text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures); text("historical-false-accepts", miner.historical_completed_false_accepts || 0); text("historical-parity-mismatches", miner.historical_completed_parity_failures || 0);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
     const crystallizedInput = snapshot.controller_crystallized_candidates || 0; const crystallizedAdmissible = snapshot.controller_crystallized_admissible_candidates || 0; const crystallizedHeld = snapshot.controller_crystallized_held_candidates || 0; const semanticGuardHeld = snapshot.controller_crystallized_held_semantic_guard_candidates || 0; const generationDelta = snapshot.controller_generation_delta_packages || 0;
     text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · OPEN ${joinOpen} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-candidate", controllerInput); text("pipe-crystallizer", `ВХОД ${crystallizedInput} · ДОПУЩЕНО ${crystallizedAdmissible} · HELD ${crystallizedHeld}`);
@@ -1011,6 +1011,7 @@ mod tests {
         assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
         assert!(html.contains("ЖИВОЙ ВХОД МАЙНЕРА"));
         assert!(html.contains("NANDO INGRESS REQUESTS · ПОСЛЕДНИЕ 60 С"));
+        assert!(html.contains("miner completed history: false accepts"));
         assert!(html.contains("ПОЛУЧЕНО DURABLE"));
         assert!(html.contains("ПРИМЕНЕНО LEARNER"));
         assert!(html.contains("COMMON COUNTER EPOCH · AFTER SEQ"));
