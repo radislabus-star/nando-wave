@@ -15,6 +15,16 @@ Private loopback roles
   -> nando-gateway-control :18788
 ```
 
+The public client base URL uses the standard OpenAI-compatible prefix:
+
+```text
+http://192.168.3.94:8787/v1
+```
+
+`/v1/responses` and `/v1/chat/completions` are the client surface. The existing
+`/v2` aliases remain available for compatibility, while miner, MS3, runtime,
+and reconciliation endpoints stay internal.
+
 The first boot is fail-closed:
 
 ```text

@@ -47,9 +47,20 @@ assert_argv \
 dry_run="$({ NANDO_CODEX_DRY_RUN=1 run_launcher exec probe; })"
 jq -e '
   .route_mode == "nando_nginx"
+  and .selected_base_url == "http://127.0.0.1:8787/v1"
   and .config_override_scope == "exec"
   and .config_override_insert_index == 0
   and .config_override_position_verified == true
 ' <<<"${dry_run}" >/dev/null
+
+remote_dry_run="$({
+  NANDO_CODEX_DRY_RUN=1 \
+  NANDO_CODEX_GATEWAY_ORIGIN="http://192.168.3.94:8787" \
+    run_launcher exec probe
+})"
+jq -e '
+  .route_mode == "nando_nginx"
+  and .selected_base_url == "http://192.168.3.94:8787/v1"
+' <<<"${remote_dry_run}" >/dev/null
 
 echo "nando-codex launcher tests: PASS"

@@ -3,10 +3,11 @@ set -euo pipefail
 
 REAL_CODEX="${NANDO_REAL_CODEX:-/home/ubu/.nvm/versions/node/v22.22.2/lib/node_modules/@openai/codex/bin/codex.js}"
 EVENTS_JSONL="${NANDO_GATEWAY_EVENTS_JSONL:-${HOME}/.local/state/nando-wave/streaming/nando-codex-launcher.events.jsonl}"
-HEALTH_URL="${NANDO_CODEX_HEALTH_URL:-http://127.0.0.1:8787/health}"
+GATEWAY_ORIGIN="${NANDO_CODEX_GATEWAY_ORIGIN:-http://127.0.0.1:8787}"
+HEALTH_URL="${NANDO_CODEX_HEALTH_URL:-${GATEWAY_ORIGIN}/health}"
 HEALTH_TIMEOUT_SECONDS="${NANDO_CODEX_HEALTH_TIMEOUT_SECONDS:-0.5}"
 MODEL_PROVIDER="${NANDO_CODEX_MODEL_PROVIDER:-nando_nginx}"
-SELECTED_BASE_URL="http://127.0.0.1:8787/v2"
+SELECTED_BASE_URL="${NANDO_CODEX_BASE_URL:-${GATEWAY_ORIGIN}/v1}"
 MODEL_PROVIDER_OVERRIDE="model_provider=\"${MODEL_PROVIDER}\""
 
 route_mode="direct_fallback"
@@ -99,10 +100,10 @@ build_nando_codex_args() {
 
 sanitize_direct_env() {
   case "${OPENAI_BASE_URL:-}" in
-    http://127.0.0.1:8787/*|http://127.0.0.1:18787/*) unset OPENAI_BASE_URL ;;
+    "${GATEWAY_ORIGIN}"/*|http://127.0.0.1:8787/*|http://127.0.0.1:18787/*) unset OPENAI_BASE_URL ;;
   esac
   case "${OPENAI_API_BASE:-}" in
-    http://127.0.0.1:8787/*|http://127.0.0.1:18787/*) unset OPENAI_API_BASE ;;
+    "${GATEWAY_ORIGIN}"/*|http://127.0.0.1:8787/*|http://127.0.0.1:18787/*) unset OPENAI_API_BASE ;;
   esac
   if [[ "${OPENAI_API_KEY:-}" == "nando-local" ]]; then
     unset OPENAI_API_KEY
