@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b030";
+const DASHBOARD_BUILD: &str = "2026.07.28-b031";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -596,7 +596,7 @@ const TEMPLATE: &str = r#"
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
-      <div class="ms3-cell"><div class="ms3-label">SUPPORT / LINKED ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
+      <div class="ms3-cell"><div class="ms3-label">TOPOLOGY / LINKED ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
       <div class="ms3-cell"><div class="ms3-label">TERMINAL / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">FUTURE APPLICABILITY</div><div id="ms3-future-applicability" class="ms3-value watch">0 / 256</div></div>
@@ -1004,7 +1004,7 @@ mod tests {
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
-        assert!(html.contains("SUPPORT / LINKED ACQUISITION"));
+        assert!(html.contains("TOPOLOGY / LINKED ACQUISITION"));
         assert!(html.contains("CAPTURE / RECEIPT HEALTH"));
         assert!(html.contains("RECEIPT_STALLED"));
         assert!(html.contains("· OPEN ${joinOpen}"));
