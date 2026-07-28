@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b040";
+const DASHBOARD_BUILD: &str = "2026.07.28-b041";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -581,7 +581,7 @@ const TEMPLATE: &str = r#"
       <div class="ingestion-cell"><div class="ingestion-label">ПОЛУЧЕНО DURABLE</div><div id="ingestion-received" class="ingestion-value">—</div><div id="ingestion-received-events" class="ingestion-note">hot producer</div></div>
       <div class="ingestion-cell applied"><div class="ingestion-label">ПРИМЕНЕНО LEARNER</div><div id="ingestion-applied" class="ingestion-value">—</div><div id="ingestion-applied-events" class="ingestion-note">cold consumer</div></div>
       <div id="ingestion-backlog-cell" class="ingestion-cell backlog"><div class="ingestion-label">DURABLE BACKLOG</div><div id="ingestion-backlog" class="ingestion-value">—</div><div id="ingestion-inflight" class="ingestion-note">inflight является частью backlog</div></div>
-      <div class="ingestion-cell"><div class="ingestion-label">TOKEN LAG</div><div id="ingestion-token-lag" class="ingestion-value">—</div><div id="ingestion-token-scope" class="ingestion-note">только при общем process epoch</div></div>
+      <div class="ingestion-cell"><div class="ingestion-label">TOKEN COUNTER DELTA</div><div id="ingestion-token-lag" class="ingestion-value">—</div><div id="ingestion-token-scope" class="ingestion-note">только при общем process epoch</div></div>
     </div>
   </div></section>
   <section class="live-band"><div class="live-inner">
@@ -848,6 +848,7 @@ const TEMPLATE: &str = r#"
     const received = liveIngestion.durably_received || {};
     const applied = liveIngestion.learner_applied || {};
     const backlog = liveIngestion.backlog || {};
+    const counterDelta = liveIngestion.counter_delta || {};
     const joinOpen = Math.max(0, bridge.join_attempts - bridge.join_hits - bridge.join_misses);
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
     const opportunityLag = backlog.events ?? bridge.opportunity_pending;
@@ -858,7 +859,9 @@ const TEMPLATE: &str = r#"
     const appliedTokens = applied.input_tokens ?? bridge.miner_request_tokens;
     const appliedRequests = applied.requests ?? bridge.miner_request_events;
     const appliedSequence = applied.sequence ?? bridge.opportunity_consumed_sequence;
-    const tokenLag = tokenLagComparable && opportunityLag > 0 ? Math.max(0, receivedTokens - appliedTokens) : 0;
+    const countersReconciled = liveIngestion.closed_prefix_reconciled === true;
+    const tokenLag = tokenLagComparable ? counterDelta.input_tokens ?? Math.max(0, receivedTokens - appliedTokens) : 0;
+    const requestCounterLag = tokenLagComparable ? counterDelta.requests ?? Math.max(0, receivedRequests - appliedRequests) : 0;
     text("ingestion-received", number.format(receivedTokens));
     text("ingestion-received-events", `${number.format(receivedRequests)} requests · seq ${number.format(receivedSequence)}`);
     text("ingestion-applied", number.format(appliedTokens));
@@ -867,9 +870,17 @@ const TEMPLATE: &str = r#"
     text("ingestion-inflight", `${number.format(backlog.inflight_events ?? bridge.opportunity_inflight)} inflight входят в durable backlog`);
     stateClass("ingestion-backlog-cell", `ingestion-cell backlog ${!tokenLagComparable ? "invalid" : opportunityLag === 0 ? "clear" : ""}`);
     text("ingestion-token-lag", tokenLagComparable ? number.format(tokenLag) : "НЕСОПОСТАВИМО");
-    text("ingestion-token-scope", tokenLagComparable ? opportunityLag > 0 ? "токены durable backlog одного process epoch" : "durable request backlog отсутствует" : "hot/cold перезапущены в разные моменты");
-    text("ingestion-epoch", tokenLagComparable ? `COMMON COUNTER EPOCH · AFTER SEQ ${number.format(bridge.producer_counter_started_after_sequence)}` : `COUNTER EPOCH SPLIT · HOT AFTER ${number.format(bridge.producer_counter_started_after_sequence)} / COLD AFTER ${number.format(bridge.consumer_counter_started_after_sequence)}`);
-    stateClass("ingestion-epoch", `overview-rule ${tokenLagComparable ? "good" : "warning"}`);
+    text("ingestion-token-scope", tokenLagComparable
+      ? tokenLag > 0
+        ? `${number.format(requestCounterLag)} request ещё не отражён в cold consumer counter`
+        : "producer и consumer counters совпадают"
+      : "hot/cold перезапущены в разные моменты");
+    text("ingestion-epoch", tokenLagComparable
+      ? countersReconciled
+        ? `COMMON COUNTER EPOCH · AFTER SEQ ${number.format(bridge.producer_counter_started_after_sequence)}`
+        : `COMMON COUNTER EPOCH · COUNTERS RECONCILING ${number.format(requestCounterLag)} REQUEST`
+      : `COUNTER EPOCH SPLIT · HOT AFTER ${number.format(bridge.producer_counter_started_after_sequence)} / COLD AFTER ${number.format(bridge.consumer_counter_started_after_sequence)}`);
+    stateClass("ingestion-epoch", `overview-rule ${tokenLagComparable && countersReconciled ? "good" : "warning"}`);
     text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses} · OPEN ${joinOpen}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures); text("historical-false-accepts", miner.historical_completed_false_accepts || 0); text("historical-parity-mismatches", miner.historical_completed_parity_failures || 0);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
@@ -1014,6 +1025,8 @@ mod tests {
         assert!(html.contains("miner completed history: false accepts"));
         assert!(html.contains("ПОЛУЧЕНО DURABLE"));
         assert!(html.contains("ПРИМЕНЕНО LEARNER"));
+        assert!(html.contains("TOKEN COUNTER DELTA"));
+        assert!(html.contains("COUNTERS RECONCILING"));
         assert!(html.contains("COMMON COUNTER EPOCH · AFTER SEQ"));
         assert!(html.contains("COUNTER EPOCH SPLIT · HOT AFTER"));
         assert!(html.contains("id=\"ingestion-backlog-cell\""));

@@ -1136,20 +1136,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let (legacy_total_input_tokens, legacy_cpu_input_tokens) =
         legacy_prior_epoch_token_totals(economics).unwrap_or((0, 0));
     let bridge = live_dashboard::bridge_view(&hot_health, &cold_health);
-    let opportunity_prefix_closed = bridge.opportunity_counter_epoch_match
-        && bridge.opportunity_pending == 0
-        && bridge.opportunity_inflight == 0
-        && bridge.opportunity_produced_sequence == bridge.opportunity_consumed_sequence;
-    let applied_request_tokens = if opportunity_prefix_closed {
-        bridge.request_tokens
-    } else {
-        bridge.miner_request_tokens
-    };
-    let applied_request_events = if opportunity_prefix_closed {
-        bridge.request_events
-    } else {
-        bridge.miner_request_events
-    };
+    let (opportunity_durable_prefix_closed, opportunity_counters_reconciled) =
+        opportunity_ingestion_reconciliation(&bridge);
     let admission = admission_status(&state.config);
     let admission_ready_cohorts = persisted_miner
         .pointer("/miner/admission_ready_cohorts")
@@ -1234,7 +1222,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "live_ingestion": {
                 "scope": "current_hot_cold_process_epoch",
                 "counter_epoch_match": bridge.opportunity_counter_epoch_match,
-                "closed_prefix_reconciled": opportunity_prefix_closed,
+                "durable_prefix_closed": opportunity_durable_prefix_closed,
+                "closed_prefix_reconciled": opportunity_counters_reconciled,
                 "producer_counter_started_after_sequence":
                     bridge.producer_counter_started_after_sequence,
                 "consumer_counter_started_after_sequence":
@@ -1245,9 +1234,17 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                     "sequence": bridge.opportunity_produced_sequence,
                 },
                 "learner_applied": {
-                    "input_tokens": applied_request_tokens,
-                    "requests": applied_request_events,
+                    "input_tokens": bridge.miner_request_tokens,
+                    "requests": bridge.miner_request_events,
                     "sequence": bridge.opportunity_consumed_sequence,
+                },
+                "counter_delta": {
+                    "input_tokens": bridge
+                        .request_tokens
+                        .saturating_sub(bridge.miner_request_tokens),
+                    "requests": bridge
+                        .request_events
+                        .saturating_sub(bridge.miner_request_events),
                 },
                 "backlog": {
                     "events": bridge.opportunity_pending,
@@ -1549,6 +1546,17 @@ fn legacy_prior_epoch_token_totals(economics: &Value) -> Option<(u64, u64)> {
         display_total.checked_sub(current_total)?,
         display_cpu.checked_sub(current_cpu)?,
     ))
+}
+
+fn opportunity_ingestion_reconciliation(bridge: &live_dashboard::BridgeView) -> (bool, bool) {
+    let durable_prefix_closed = bridge.opportunity_counter_epoch_match
+        && bridge.opportunity_pending == 0
+        && bridge.opportunity_inflight == 0
+        && bridge.opportunity_produced_sequence == bridge.opportunity_consumed_sequence;
+    let counters_reconciled = durable_prefix_closed
+        && bridge.request_events == bridge.miner_request_events
+        && bridge.request_tokens == bridge.miner_request_tokens;
+    (durable_prefix_closed, counters_reconciled)
 }
 
 fn exact_miner_opportunity<'a>(live: &'a Value, persisted: &'a Value) -> Option<&'a Value> {
@@ -1960,5 +1968,24 @@ mod tests {
             exact_miner_observed_tokens(&Value::Null, &unaccounted),
             None
         );
+    }
+
+    #[test]
+    fn closed_opportunity_prefix_does_not_mask_consumer_counter_delta() {
+        let mut bridge = live_dashboard::BridgeView {
+            opportunity_counter_epoch_match: true,
+            opportunity_produced_sequence: 44,
+            opportunity_consumed_sequence: 44,
+            request_events: 10,
+            miner_request_events: 9,
+            request_tokens: 1_000,
+            miner_request_tokens: 900,
+            ..Default::default()
+        };
+        assert_eq!(opportunity_ingestion_reconciliation(&bridge), (true, false));
+
+        bridge.miner_request_events = bridge.request_events;
+        bridge.miner_request_tokens = bridge.request_tokens;
+        assert_eq!(opportunity_ingestion_reconciliation(&bridge), (true, true));
     }
 }
