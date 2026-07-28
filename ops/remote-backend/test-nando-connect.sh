@@ -41,7 +41,7 @@ jq -e '
 ' <<<"${argv}" >/dev/null
 
 env_output="$("${CONNECTOR}" env)"
-rg -q '^export OPENAI_BASE_URL=http://192\.168\.3\.94:8787/v1$' <<<"${env_output}"
-rg -q '^export OPENAI_API_BASE=http://192\.168\.3\.94:8787/v1$' <<<"${env_output}"
+grep -Eq '^export OPENAI_BASE_URL=http://192\.168\.3\.94:8787/v1$' <<<"${env_output}"
+grep -Eq '^export OPENAI_API_BASE=http://192\.168\.3\.94:8787/v1$' <<<"${env_output}"
 
 printf '%s\n' "nando-connect tests: PASS"
