@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b029";
+const DASHBOARD_BUILD: &str = "2026.07.28-b030";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -161,6 +161,8 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
     let miner_window_unrecognized_tokens = initial
         .miner_window_total_tokens
         .saturating_sub(initial.miner_window_cpu_tokens);
+    let miner_window_llm_only_tokens =
+        miner_window_unrecognized_tokens.saturating_sub(initial.miner_window_unresolved_tokens);
     let (
         pipeline_title,
         admission_step_class,
@@ -262,6 +264,10 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         .replace(
             "__MINER_RESEARCHABLE__",
             &format_number(initial.miner_window_unresolved_tokens),
+        )
+        .replace(
+            "__MINER_LLM_ONLY__",
+            &format_number(miner_window_llm_only_tokens),
         )
         .replace(
             "__CEILING_VALUES__",
@@ -579,7 +585,7 @@ const TEMPLATE: &str = r#"
   <section class="live-band"><div class="live-inner">
     <h2 class="band-title">ЧТО МАЙНЕР ЕЩЁ НЕ РАСПОЗНАЛ</h2>
     <div class="scope-grid">
-      <div class="scope-metric unresolved"><div class="scope-label">ВСЕГО БЕЗ CPU-КЛАССА</div><div id="miner-unresolved-values" class="scope-value">__MINER_UNRESOLVED__</div><output id="miner-unresolved-share" class="scope-share">__MINER_UNRESOLVED_SHARE__</output><div id="miner-unresolved-note" class="scope-note">исследуемый остаток __MINER_RESEARCHABLE__; включает отдельно доказанный LLM-only трафик</div></div>
+      <div class="scope-metric unresolved"><div class="scope-label">ВСЕГО БЕЗ CPU-КЛАССА</div><div id="miner-unresolved-values" class="scope-value">__MINER_UNRESOLVED__</div><output id="miner-unresolved-share" class="scope-share">__MINER_UNRESOLVED_SHARE__</output><div id="miner-unresolved-note" class="scope-note">из них исследуемо __MINER_RESEARCHABLE__ · доказанно LLM-only __MINER_LLM_ONLY__</div></div>
       <div class="scope-metric ceiling"><div class="scope-label">ТЕОРЕТИЧЕСКИЙ ПОТОЛОК</div><div id="scope-ceiling-values" class="scope-value">__CEILING_VALUES__</div><output id="scope-ceiling-share" class="scope-share">__CEILING_SHARE__</output><div class="scope-note">ordinary минус доказанно irreducible; не CPU и не authority</div></div>
     </div>
     <div id="miner-class-ledger" class="ms3-note">Загрузка классов opportunity…</div>
@@ -712,6 +718,7 @@ const TEMPLATE: &str = r#"
     const minerCpuIntents = minerRecognized.intents ?? miner.cpu_verified_intents ?? 0;
     const minerUnresolved = minerUnresolvedOverview.input_tokens ?? miner.unresolved_tokens ?? 0;
     const minerUnrecognized = Math.max(0, minerTotal - minerCpu);
+    const minerLlmOnly = Math.max(0, minerUnrecognized - minerUnresolved);
     const optimisticTokens = miner.optimistic_upper_bound_tokens ?? snapshot.optimistic_upper_bound_tokens ?? 0;
     text("miner-window-total", number.format(minerTotal));
     text("miner-window-intents", `${number.format(minerIntents)} intents`);
@@ -722,7 +729,7 @@ const TEMPLATE: &str = r#"
     width("miner-recognized-bar", minerCpu, minerTotal);
     text("miner-unresolved-values", number.format(minerUnrecognized));
     text("miner-unresolved-share", ratio(minerUnrecognized, minerTotal, 1));
-    text("miner-unresolved-note", `исследуемый остаток ${number.format(minerUnresolved)}; включает отдельно доказанный LLM-only трафик`);
+    text("miner-unresolved-note", `из них исследуемо ${number.format(minerUnresolved)} · доказанно LLM-only ${number.format(minerLlmOnly)}`);
     text("scope-ceiling-values", `${number.format(optimisticTokens)} / ${number.format(minerTotal)}`);
     text("scope-ceiling-share", ratio(optimisticTokens, minerTotal, 1));
     const classRows = Object.entries(miner.classes || {})
@@ -991,7 +998,7 @@ mod tests {
         assert!(!html.contains("CPU работает на ${snapshot.response_package_count}"));
         assert!(html.contains("ВСЕГО БЕЗ CPU-КЛАССА"));
         assert!(html.contains("37 000 000"));
-        assert!(html.contains("исследуемый остаток 10 000 000"));
+        assert!(html.contains("из них исследуемо 10 000 000 · доказанно LLM-only 27 000 000"));
         assert!(html.contains("ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU"));
         assert!(html.contains("ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
