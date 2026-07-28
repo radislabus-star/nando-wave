@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVER_ORIGIN="${NANDO_SERVER_ORIGIN:-http://192.168.3.94:8787}"
+BASE_URL="${NANDO_SERVER_BASE_URL:-${SERVER_ORIGIN%/}/v1}"
+HEALTH_URL="${NANDO_SERVER_HEALTH_URL:-${SERVER_ORIGIN%/}/health}"
+CODEX_BIN="${NANDO_CONNECT_CODEX_BIN:-codex}"
+
+usage() {
+  printf '%s\n' \
+    "Usage:" \
+    "  nando-connect health" \
+    "  nando-connect url" \
+    "  nando-connect env" \
+    "  nando-connect codex [codex arguments...]" \
+    "  nando-connect [codex arguments...]"
+}
+
+check_transport() {
+  local body
+  body="$(
+    curl --silent --show-error --fail \
+      --connect-timeout "${NANDO_CONNECT_TIMEOUT_SECONDS:-2}" \
+      --max-time "${NANDO_CONNECT_TIMEOUT_SECONDS:-2}" \
+      "${HEALTH_URL}"
+  )"
+  case "${body}" in
+    *'"ok":true'*'"service":"nando-nginx-gateway"'*'"transport":"nginx"'*)
+      ;;
+    *)
+      printf 'Unexpected Nando health contract from %s\n' "${HEALTH_URL}" >&2
+      return 1
+      ;;
+  esac
+  printf '%s\n' "${body}"
+}
+
+run_codex() {
+  check_transport >/dev/null
+  exec "${CODEX_BIN}" \
+    -c 'model_provider="nando_remote"' \
+    -c 'model_providers.nando_remote.name="Nando Remote Gateway"' \
+    -c "model_providers.nando_remote.base_url=\"${BASE_URL}\"" \
+    -c 'model_providers.nando_remote.wire_api="responses"' \
+    -c 'model_providers.nando_remote.requires_openai_auth=true' \
+    -c 'model_providers.nando_remote.supports_websockets=false' \
+    "$@"
+}
+
+command_name="${1:-codex}"
+case "${command_name}" in
+  health)
+    check_transport
+    ;;
+  url)
+    printf '%s\n' "${BASE_URL}"
+    ;;
+  env)
+    printf 'export OPENAI_BASE_URL=%q\n' "${BASE_URL}"
+    printf 'export OPENAI_API_BASE=%q\n' "${BASE_URL}"
+    ;;
+  codex)
+    shift
+    run_codex "$@"
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    run_codex "$@"
+    ;;
+esac

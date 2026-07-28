@@ -25,6 +25,23 @@ http://192.168.3.94:8787/v1
 `/v2` aliases remain available for compatibility, while miner, MS3, runtime,
 and reconciliation endpoints stay internal.
 
+Users with an existing Codex login can connect without copying account data
+into a Nando config file:
+
+```bash
+ops/remote-backend/nando-connect codex
+```
+
+The connector checks the expected Nando health contract and supplies an
+ephemeral Codex provider override for `http://192.168.3.94:8787/v1`. Codex
+continues to own the user's local authentication. The connector neither reads
+nor persists tokens. Applications that already manage their own API key can
+print the required base URL environment with:
+
+```bash
+ops/remote-backend/nando-connect env
+```
+
 The first boot is fail-closed:
 
 ```text
