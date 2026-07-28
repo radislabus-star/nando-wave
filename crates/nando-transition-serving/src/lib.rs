@@ -3243,6 +3243,10 @@ fn evaluate_ms3_capture_health(
             captured_at_unix_ms: row.captured_at_unix_ms,
         })
         .collect::<Vec<_>>();
+    let durable_topology_observed_at_unix = new_topologies
+        .iter()
+        .filter_map(|row| row.captured_at_unix_ms.map(|value| value / 1_000))
+        .collect::<Vec<_>>();
     let sampled_at_unix = unix_now();
     let receipt = ms3_receipt_health::build_ms3_receipt_health_report_v1(
         sampled_at_unix,
@@ -3263,7 +3267,10 @@ fn evaluate_ms3_capture_health(
     Ok(ms3_capture_health::build_ms3_capture_health_report_v1(
         &contract,
         sampled_at_unix,
-        u64::try_from(current_topology_rows).unwrap_or(u64::MAX),
+        ms3_capture_health::Ms3CaptureTopologyProgressV1 {
+            current_rows: u64::try_from(current_topology_rows).unwrap_or(u64::MAX),
+            observed_at_unix: &durable_topology_observed_at_unix,
+        },
         acquisition_closed,
         evidence
             .as_ref()

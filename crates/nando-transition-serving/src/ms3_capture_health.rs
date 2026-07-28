@@ -29,6 +29,12 @@ pub(super) struct Ms3CaptureOperationalCountersV1 {
     pub(super) opportunity_consumer_failures: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct Ms3CaptureTopologyProgressV1<'a> {
+    pub(super) current_rows: u64,
+    pub(super) observed_at_unix: &'a [u64],
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct Ms3CaptureHealthReportV1 {
     pub(super) schema: &'static str,
@@ -61,7 +67,7 @@ pub(super) struct Ms3CaptureHealthReportV1 {
 pub(super) fn build_ms3_capture_health_report_v1(
     contract: &Ms3LinkedFrameAcquisitionContractV1,
     sampled_at_unix: u64,
-    current_topology_rows: u64,
+    topology: Ms3CaptureTopologyProgressV1<'_>,
     acquisition_closed: bool,
     opportunities: Option<&[OpportunityIntentAuditRowV1]>,
     counters: Ms3CaptureOperationalCountersV1,
@@ -76,27 +82,45 @@ pub(super) fn build_ms3_capture_health_report_v1(
             })
             .collect::<Vec<_>>()
     });
-    let ordinary_intents_observed = rows
+    let opportunity_intents_observed = rows
         .as_ref()
         .map_or(0, |rows| u64::try_from(rows.len()).unwrap_or(u64::MAX));
+    let topology_delta_rows = topology
+        .current_rows
+        .saturating_sub(contract.topology_watermark_rows);
+    let ordinary_intents_observed = opportunity_intents_observed.max(topology_delta_rows);
     let ordinary_input_tokens_observed = rows.as_ref().map_or(0, |rows| {
         rows.iter()
             .fold(0_u64, |total, row| total.saturating_add(row.input_tokens))
     });
-    let first_ordinary_observed_at_unix = rows
+    let opportunity_first_observed_at_unix = rows
         .as_ref()
         .and_then(|rows| rows.iter().map(|row| row.observed_at_unix).min());
-    let last_ordinary_observed_at_unix = rows
+    let opportunity_last_observed_at_unix = rows
         .as_ref()
         .and_then(|rows| rows.iter().map(|row| row.observed_at_unix).max());
-    let topology_delta_rows =
-        current_topology_rows.saturating_sub(contract.topology_watermark_rows);
+    let topology_first_observed_at_unix = topology.observed_at_unix.iter().copied().min();
+    let topology_last_observed_at_unix = topology.observed_at_unix.iter().copied().max();
+    let first_ordinary_observed_at_unix = [
+        opportunity_first_observed_at_unix,
+        topology_first_observed_at_unix,
+    ]
+    .into_iter()
+    .flatten()
+    .min();
+    let last_ordinary_observed_at_unix = [
+        opportunity_last_observed_at_unix,
+        topology_last_observed_at_unix,
+    ]
+    .into_iter()
+    .flatten()
+    .max();
     let ingestion_lag_seconds =
         first_ordinary_observed_at_unix.map_or(0, |first| sampled_at_unix.saturating_sub(first));
 
     // This guard diagnoses transport/capture reachability only. It cannot
     // mutate, complete, or overrule the frozen scientific acquisition.
-    let status = if opportunities.is_none() {
+    let status = if opportunities.is_none() && topology_delta_rows == 0 {
         Ms3CaptureHealthStatusV1::EvidenceUnavailable
     } else if acquisition_closed {
         Ms3CaptureHealthStatusV1::AcquisitionClosed
@@ -129,7 +153,7 @@ pub(super) fn build_ms3_capture_health_report_v1(
         first_ordinary_observed_at_unix,
         last_ordinary_observed_at_unix,
         topology_watermark_rows: contract.topology_watermark_rows,
-        current_topology_rows,
+        current_topology_rows: topology.current_rows,
         topology_delta_rows,
         ingestion_lag_seconds,
         structural_pending_records: counters.structural_pending_records,

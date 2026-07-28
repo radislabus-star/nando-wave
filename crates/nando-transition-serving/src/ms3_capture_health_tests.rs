@@ -26,12 +26,19 @@ fn receipt() -> Ms3ReceiptHealthReportV1 {
     build_ms3_receipt_health_report_v1(1_000, false, &[], &BTreeSet::new())
 }
 
+fn topology(current_rows: u64, observed_at_unix: &[u64]) -> Ms3CaptureTopologyProgressV1<'_> {
+    Ms3CaptureTopologyProgressV1 {
+        current_rows,
+        observed_at_unix,
+    }
+}
+
 #[test]
 fn traffic_without_topology_crosses_operational_stall_slo() {
     let report = build_ms3_capture_health_report_v1(
         &contract(),
         1_310,
-        10,
+        topology(10, &[]),
         false,
         Some(&[ordinary(1_010, 7)]),
         Ms3CaptureOperationalCountersV1::default(),
@@ -52,7 +59,7 @@ fn traffic_within_slo_waits_without_declaring_scientific_failure() {
     let report = build_ms3_capture_health_report_v1(
         &contract(),
         1_309,
-        10,
+        topology(10, &[]),
         false,
         Some(&[ordinary(1_010, 11)]),
         Ms3CaptureOperationalCountersV1::default(),
@@ -69,7 +76,7 @@ fn any_post_watermark_topology_is_capture_progress() {
     let report = build_ms3_capture_health_report_v1(
         &contract(),
         2_000,
-        11,
+        topology(11, &[1_010]),
         false,
         Some(&[ordinary(1_010, 13)]),
         Ms3CaptureOperationalCountersV1::default(),
@@ -88,7 +95,7 @@ fn pre_open_and_non_authoritative_rows_do_not_count_as_ordinary_traffic() {
     let report = build_ms3_capture_health_report_v1(
         &contract(),
         2_000,
-        10,
+        topology(10, &[]),
         false,
         Some(&[ordinary(999, 19), non_authoritative]),
         Ms3CaptureOperationalCountersV1::default(),
@@ -107,7 +114,7 @@ fn unavailable_evidence_and_closed_acquisition_are_not_capture_stalls() {
     let unavailable = build_ms3_capture_health_report_v1(
         &contract(),
         2_000,
-        10,
+        topology(10, &[]),
         false,
         None,
         Ms3CaptureOperationalCountersV1::default(),
@@ -116,7 +123,7 @@ fn unavailable_evidence_and_closed_acquisition_are_not_capture_stalls() {
     let closed = build_ms3_capture_health_report_v1(
         &contract(),
         2_000,
-        10,
+        topology(10, &[]),
         true,
         Some(&[ordinary(1_010, 23)]),
         Ms3CaptureOperationalCountersV1::default(),
@@ -134,4 +141,23 @@ fn unavailable_evidence_and_closed_acquisition_are_not_capture_stalls() {
         unavailable.receipt.status,
         Ms3ReceiptHealthStatusV1::WaitingForTopology
     );
+}
+
+#[test]
+fn durable_topology_proves_progress_before_opportunity_snapshot_checkpoint() {
+    let report = build_ms3_capture_health_report_v1(
+        &contract(),
+        1_020,
+        topology(11, &[1_010]),
+        false,
+        Some(&[]),
+        Ms3CaptureOperationalCountersV1::default(),
+        receipt(),
+    );
+
+    assert_eq!(report.status, Ms3CaptureHealthStatusV1::CaptureProgress);
+    assert_eq!(report.ordinary_intents_observed, 1);
+    assert_eq!(report.first_ordinary_observed_at_unix, Some(1_010));
+    assert_eq!(report.last_ordinary_observed_at_unix, Some(1_010));
+    assert_eq!(report.blocker, "");
 }
