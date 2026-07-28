@@ -16,6 +16,7 @@ pub const MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1: &str =
     "nando.ms3-generation-acquisition-failure.v1";
 pub const MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1: &str =
     "nando.ms3-generation-linked-acquisition-failure.v1";
+pub const MS3_CAPTURE_GAP_REPAIR_REQUIRED: &str = "ms3_capture_gap_repair_required";
 const MAX_MS3_GENERATION_REGISTRY_BYTES: usize = 12 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -227,6 +228,72 @@ impl Ms3GenerationRegistryV1 {
             closure_capture_sequence,
             generated_at_unix: report.generated_at_unix,
             blocker: report.blocker.clone(),
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        };
+        receipt.receipt_root_sha256 = receipt.expected_root()?;
+        self.linked_acquisition_failures.push(receipt.clone());
+        self.reseal()?;
+        Ok(receipt)
+    }
+
+    pub fn seal_linked_capture_gap_repair(
+        &mut self,
+        generation_sequence: u64,
+        report: &Ms3LinkedFrameAcquisitionReportV1,
+        closure_capture_sequence: u64,
+    ) -> Result<Ms3GenerationLinkedAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1> {
+        if !report.validate()
+            || report.verdict != Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+            || report.receipts.is_empty()
+            || report.receipts.iter().any(|receipt| {
+                receipt.gap_class != Some(super::RepresentationGapClassV1::CaptureGapA)
+            })
+            || generation_sequence == 0
+            || closure_capture_sequence == 0
+        {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if let Some(existing) = self
+            .linked_acquisition_failures
+            .iter()
+            .find(|receipt| receipt.generation_sequence == generation_sequence)
+        {
+            return (existing.acquisition_contract_root_sha256
+                == report.acquisition_contract.contract_root_sha256
+                && existing.acquisition_report_root_sha256 == report.report_root_sha256
+                && existing.blocker == MS3_CAPTURE_GAP_REPAIR_REQUIRED)
+                .then_some(existing.clone())
+                .ok_or(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if generation_sequence != self.next_generation_sequence()
+            || self
+                .generations
+                .iter()
+                .any(|entry| entry.generation_sequence == generation_sequence)
+        {
+            return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
+        }
+        self.require_successor_allowed(generation_sequence)?;
+        let mut receipt = Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
+            schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1.to_owned(),
+            receipt_root_sha256: String::new(),
+            generation_sequence,
+            acquisition_contract_root_sha256: report
+                .acquisition_contract
+                .contract_root_sha256
+                .clone(),
+            acquisition_report_root_sha256: report.report_root_sha256.clone(),
+            topology_prefix_root_sha256: report
+                .acquisition_contract
+                .topology_prefix_root_sha256
+                .clone(),
+            topology_watermark_rows: report.acquisition_contract.topology_watermark_rows,
+            evaluated_topology_rows: report.evaluated_topology_rows,
+            terminal_receipt_rows: report.terminal_receipt_rows,
+            closure_capture_sequence,
+            generated_at_unix: report.generated_at_unix,
+            blocker: MS3_CAPTURE_GAP_REPAIR_REQUIRED.to_owned(),
             authority_ready: false,
             phase_mutation_allowed: false,
         };
@@ -729,7 +796,10 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
             && self.terminal_receipt_rows >= self.evaluated_topology_rows
             && self.closure_capture_sequence > 0
             && self.generated_at_unix > 0
-            && self.blocker == MS3_LINKED_FRAME_ACQUISITION_FAIL
+            && matches!(
+                self.blocker.as_str(),
+                MS3_LINKED_FRAME_ACQUISITION_FAIL | MS3_CAPTURE_GAP_REPAIR_REQUIRED
+            )
             && !self.authority_ready
             && !self.phase_mutation_allowed
             && self

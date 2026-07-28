@@ -9,7 +9,8 @@ use nando_operator_kernel::{
     selector_denotes_continuation_handle,
 };
 
-pub const SOURCE_NEUTRAL_EXTRACTOR_VERSION: &str = "response-relation-extractor.v16";
+pub const SOURCE_NEUTRAL_EXTRACTOR_VERSION: &str = "response-relation-extractor.v17";
+const CONTINUATION_TOPOLOGY_EXTRACTOR_VERSION: &str = "response-relation-extractor.v16";
 const CAPABILITY_EXTRACTOR_VERSION: &str = "response-relation-extractor.v15";
 const TURN_REPLAY_EXTRACTOR_VERSION: &str = "response-relation-extractor.v14";
 const ACTIVE_TURN_EXTRACTOR_VERSION: &str = "response-relation-extractor.v13";
@@ -27,6 +28,7 @@ pub fn is_source_neutral_relation_frame(frame: &RelationFrame) -> bool {
         && matches!(
             frame.extractor_version.as_str(),
             SOURCE_NEUTRAL_EXTRACTOR_VERSION
+                | CONTINUATION_TOPOLOGY_EXTRACTOR_VERSION
                 | CAPABILITY_EXTRACTOR_VERSION
                 | TURN_REPLAY_EXTRACTOR_VERSION
                 | ACTIVE_TURN_EXTRACTOR_VERSION

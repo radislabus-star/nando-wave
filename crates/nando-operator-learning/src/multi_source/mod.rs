@@ -86,7 +86,7 @@ pub use marginal::{
     build_coverage_opportunity_snapshot_v1,
 };
 pub use ms3_generation_registry_v1::{
-    MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1,
+    MS3_CAPTURE_GAP_REPAIR_REQUIRED, MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1,
     MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1, MS3_GENERATION_REGISTRY_SCHEMA_V1,
     MS3_GENERATION_TERMINAL_SCHEMA_V1, Ms3GenerationAcquisitionFailureReceiptV1,
     Ms3GenerationEntryV1, Ms3GenerationLinkedAcquisitionFailureReceiptV1,

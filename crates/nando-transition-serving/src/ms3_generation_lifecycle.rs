@@ -1105,6 +1105,116 @@ mod tests {
     }
 
     #[test]
+    fn capture_gap_repair_closes_generation_before_fresh_successor() {
+        let root = test_root("capture-gap-repair-rollover");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock");
+        let opened_at_unix = now.as_secs();
+        let opened_at_ms = u64::try_from(now.as_millis()).expect("milliseconds");
+        let topology_root = root.join("topologies");
+        let mut topology_archive =
+            MultiSourceTopologyArchive::open(&topology_root).expect("topology archive");
+        let (mut lifecycle, mut generation_one) = Ms3GenerationLifecycleRuntime::open(
+            &root,
+            &topology_archive,
+            opened_at_unix,
+            256,
+            86_400,
+        )
+        .expect("generation one");
+        let mut support = topology(
+            "capture-gap",
+            "request-capture-gap",
+            "capture-gap-lineage",
+            1,
+            opened_at_ms,
+        );
+        support.structure.topology.role_witnesses[0].value_sha256 =
+            hash("pre-action-role-omitted-by-old-extractor");
+        support.commit = PreActionTopologyCommitV1::seal(
+            &support.structure,
+            MultiSourceEvidenceOriginV1::FreshLive,
+            hash("old-extractor"),
+            hash("config"),
+            1,
+        )
+        .expect("re-sealed topology commit");
+        topology_archive.append(&support).expect("support topology");
+        let frame = completed_frame(
+            "capture-gap",
+            "action-capture-gap",
+            "capture-gap-lineage",
+            opened_at_ms.saturating_add(500),
+            true,
+        );
+        let support_terminal = terminal(
+            "request-capture-gap",
+            opened_at_ms,
+            opened_at_ms.saturating_add(250),
+        );
+        let report = generation_one
+            .acquisition
+            .evaluate(
+                opened_at_unix,
+                vec![support],
+                vec![frame],
+                vec![support_terminal],
+            )
+            .expect("linked capture gap");
+        assert_eq!(
+            report.verdict,
+            nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+        );
+        assert!(report.receipts.iter().all(|receipt| {
+            receipt.gap_class
+                == Some(
+                    nando_operator_learning::multi_source::RepresentationGapClassV1::CaptureGapA,
+                )
+        }));
+
+        let closure = generation_one
+            .frozen
+            .seal_linked_capture_gap_repair(&report, topology_archive.max_bridge_sequence())
+            .expect("durable capture-gap closure");
+        assert_eq!(
+            closure.blocker,
+            nando_operator_learning::multi_source::MS3_CAPTURE_GAP_REPAIR_REQUIRED
+        );
+        let generation_two = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                opened_at_unix.saturating_add(1),
+                &generation_one.acquisition,
+                &generation_one.frozen,
+            )
+            .expect("fresh successor");
+        assert_eq!(generation_two.acquisition.generation_sequence(), 2);
+        assert_eq!(
+            generation_two
+                .acquisition
+                .contract()
+                .topology_watermark_rows,
+            1
+        );
+        assert!(generation_two.frozen.envelope().is_none());
+        assert!(!lifecycle.manifest().authority_ready);
+        assert!(!lifecycle.manifest().phase_mutation_allowed);
+
+        let (restored, restored_generation) = Ms3GenerationLifecycleRuntime::open(
+            &root,
+            &topology_archive,
+            opened_at_unix.saturating_add(2),
+            256,
+            86_400,
+        )
+        .expect("restart");
+        assert_eq!(restored.manifest(), lifecycle.manifest());
+        assert_eq!(restored_generation.acquisition.generation_sequence(), 2);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn future_pass_does_not_create_a_successor() {
         let root = test_root("pass");
         let (topology_archive, mut lifecycle, generation_one) =

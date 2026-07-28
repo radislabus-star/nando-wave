@@ -621,6 +621,35 @@ impl Ms3FrozenVersionSpaceRuntime {
         Ok(receipt)
     }
 
+    pub(super) fn seal_linked_capture_gap_repair(
+        &mut self,
+        report: &nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionReportV1,
+        closure_capture_sequence: u64,
+    ) -> Result<
+        nando_operator_learning::multi_source::Ms3GenerationLinkedAcquisitionFailureReceiptV1,
+        String,
+    > {
+        if self.envelope.is_some() || self.independent_future.is_some() {
+            return Err("ms3_linked_capture_gap_repair_after_freeze".to_owned());
+        }
+        let mut generation_registry = self.generation_registry.clone();
+        let receipt = generation_registry
+            .seal_linked_capture_gap_repair(
+                self.generation_sequence,
+                report,
+                closure_capture_sequence,
+            )
+            .map_err(|error| {
+                format!("ms3_generation_registry_linked_capture_gap_repair:{error:?}")
+            })?;
+        let registry_bytes = generation_registry
+            .canonical_bytes()
+            .map_err(|error| format!("ms3_generation_registry_encode:{error:?}"))?;
+        write_atomic(&self.generation_registry_path, &registry_bytes)?;
+        self.generation_registry = generation_registry;
+        Ok(receipt)
+    }
+
     pub(super) const fn independent_future(&self) -> Option<&Ms3IndependentFutureEnvelopeV1> {
         self.independent_future.as_ref()
     }

@@ -2754,6 +2754,17 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
         report.verdict
             == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
     });
+    let linked_capture_gap_repair = acquisition.terminal_report().filter(|report| {
+        report.verdict
+            == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+            && !report.receipts.is_empty()
+            && report.receipts.iter().all(|receipt| {
+                receipt.gap_class
+                    == Some(
+                        nando_operator_learning::multi_source::RepresentationGapClassV1::CaptureGapA,
+                    )
+            })
+    });
     let terminal_contradiction = frozen.independent_future().is_some_and(|future| {
         future.receipt.verdict
             == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
@@ -2764,7 +2775,11 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
             report.verdict
                 == nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail
         });
-    if linked_acquisition_failure.is_none() && !terminal_contradiction && !applicability_failed {
+    if linked_acquisition_failure.is_none()
+        && linked_capture_gap_repair.is_none()
+        && !terminal_contradiction
+        && !applicability_failed
+    {
         return Ok(false);
     }
     if applicability_failed && !terminal_contradiction {
@@ -2775,6 +2790,9 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
         .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
     if let Some(report) = linked_acquisition_failure.as_ref() {
         frozen.seal_linked_acquisition_failure(report, topology_archive.max_bridge_sequence())?;
+    }
+    if let Some(report) = linked_capture_gap_repair.as_ref() {
+        frozen.seal_linked_capture_gap_repair(report, topology_archive.max_bridge_sequence())?;
     }
     let mut lifecycle = lifecycle
         .lock()
