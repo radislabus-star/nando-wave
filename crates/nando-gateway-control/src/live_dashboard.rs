@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b041";
+const DASHBOARD_BUILD: &str = "2026.07.28-b042";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -534,7 +534,7 @@ const TEMPLATE: &str = r#"
   <section class="live-band"><div class="live-inner">
     <div class="overview-head">
       <h2 class="band-title">ЧЕТЫРЕ ГЛАВНЫЕ ЦИФРЫ</h2>
-      <div class="overview-rule">ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU</div>
+      <div class="overview-rule">РАЗДЕЛЬНЫЕ SCOPE · SERVER HISTORY / MINER WINDOW / EXECUTION RECEIPTS</div>
     </div>
     <div class="traffic-grid">
       <article class="traffic-stage">
@@ -570,7 +570,7 @@ const TEMPLATE: &str = r#"
         <div id="current-v4-execution" class="stage-scope">V4 __EPOCH_CPU__ / __EPOCH_TOTAL__ · __EPOCH_CPU_SHARE__ · __EPOCH_CPU_ACCEPTS__ accepts</div>
       </article>
     </div>
-    <div class="scope-alert"><strong>ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА.</strong> Второй блок показывает последний опубликованный classification window, а отдельный live-ingestion блок ниже — durable вход и очередь текущего process epoch. Процент распознавания считается только внутри опубликованного корпуса майнера.</div>
+    <div class="scope-alert"><strong>ЭТО НЕ ОДНА ПОСЛЕДОВАТЕЛЬНАЯ ВОРОНКА.</strong> Server history, miner classification window и live process epoch имеют разные watermark и периоды: между ними нельзя считать остаток или процент. CPU share в четвёртом блоке относится только к server accounting; recognition share — только к опубликованному корпусу майнера.</div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <div class="overview-head">
@@ -880,7 +880,7 @@ const TEMPLATE: &str = r#"
         ? `COMMON COUNTER EPOCH · AFTER SEQ ${number.format(bridge.producer_counter_started_after_sequence)}`
         : `COMMON COUNTER EPOCH · COUNTERS RECONCILING ${number.format(requestCounterLag)} REQUEST`
       : `COUNTER EPOCH SPLIT · HOT AFTER ${number.format(bridge.producer_counter_started_after_sequence)} / COLD AFTER ${number.format(bridge.consumer_counter_started_after_sequence)}`);
-    stateClass("ingestion-epoch", `overview-rule ${tokenLagComparable && countersReconciled ? "good" : "warning"}`);
+    stateClass("ingestion-epoch", `overview-rule ${tokenLagComparable ? countersReconciled ? "good" : "" : "warning"}`);
     text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses} · OPEN ${joinOpen}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures); text("historical-false-accepts", miner.historical_completed_false_accepts || 0); text("historical-parity-mismatches", miner.historical_completed_parity_failures || 0);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
@@ -1038,8 +1038,10 @@ mod tests {
         assert!(html.contains("АРХИВНАЯ PARTITION · УЖЕ ВКЛЮЧЕНА В SERVER TOTAL"));
         assert!(html.contains("37 000 000"));
         assert!(html.contains("из них исследуемо 10 000 000 · доказанно LLM-only 27 000 000"));
-        assert!(html.contains("ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU"));
-        assert!(html.contains("ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА"));
+        assert!(
+            html.contains("РАЗДЕЛЬНЫЕ SCOPE · SERVER HISTORY / MINER WINDOW / EXECUTION RECEIPTS")
+        );
+        assert!(html.contains("ЭТО НЕ ОДНА ПОСЛЕДОВАТЕЛЬНАЯ ВОРОНКА"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
