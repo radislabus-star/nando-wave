@@ -1,0 +1,114 @@
+{
+  "schema": "nando.remote-backend-deployment.v1",
+  "deployed_at_utc": "2026-07-28T21:40:26Z",
+  "host": {
+    "hostname": "e-MEGA-MINI-M1-13th",
+    "lan_address": "192.168.3.94",
+    "scope": "private_lan"
+  },
+  "source": {
+    "commit": "8e020d422aa7c0a6b69fd52336060fa93e6e6e33",
+    "parent_commit": "a737a625d22ae2813189dad6b1c33eec86781e30",
+    "branch": "main",
+    "github_origin_main_pushed": true,
+    "remote_checkout_matches_commit": true
+  },
+  "toolchain": {
+    "cargo": "1.97.0 (c980f4866 2026-06-30)",
+    "rustc": "1.97.0 (2d8144b78 2026-07-07)"
+  },
+  "endpoints": {
+    "lan_edge": "http://192.168.3.94:8787",
+    "hot_serving": "http://127.0.0.1:18789",
+    "cold_learning": "http://127.0.0.1:18790",
+    "control": "http://127.0.0.1:18788"
+  },
+  "authority": {
+    "gate_verdict": "PASS",
+    "eligible_for_local_accept": true,
+    "effective_local_accept": true,
+    "gateway_mode": "CPU",
+    "registry_revision": 733761651879438659,
+    "active_packages": 2,
+    "registry_sha256": "732096b45e102a1a0a15542d3b690cb0686030cdb89163b5023a4156ba3ae0",
+    "authority_env_sha256": "d40b7262ff6d744a393b0fc03a5d06610d01728aa2f4603199ca8567189ec88f",
+    "authority_receipt_sha256": "fd4302e05e13545941f9b0197681dcd75142c10caa86c3939926f7fa2c257f41",
+    "runtime_revocation_state_valid": true,
+    "runtime_revocations_unresolved_active": 0
+  },
+  "artifacts": {
+    "nando_transition_serving_sha256": "99cb0251585379bebea6a789a70bfcbe2212dc290eb59079fa22515eb5b17d30",
+    "nando_gateway_control_sha256": "00cdef9f39173a43eaf04e918ae20147bf5a414ccc871ee84cf7044121ecaae1",
+    "nando_cli_sha256": "eea707bab67de3d082789ae7e3ec6a3d56782cea1335d65aab38a93bb40b15be",
+    "nando_live_transition_gate_sha256": "5b6028c34da2e88942486591143cc3abb7a153ca557bf1ba90e12796efeada2b"
+  },
+  "configuration": {
+    "nginx_sha256": "72dc08b79c3a936c3b719a9a51260b1cfc9835cd9a03ebdfea022243a692a958",
+    "transition_serving_unit_sha256": "6e9d2fe41b1db95f94768d1ab41dffce1f15be92e2f774832c7fe392bb77b135",
+    "response_learning_unit_sha256": "c4b351c5afcdb1e8c4fcfa0ed42020f89c62f21af6dc0c9271efb8fe61ff6e1d",
+    "gateway_control_unit_sha256": "250d6a11157b8304a8c8eaaadd573377574c14d1651b585056e746c51d17912f",
+    "transport_gateway_unit_sha256": "b37c110b493a388ab1b64639407604737f53258430be03931502239f9082bc4b",
+    "transition_serving_role_sha256": "1169244b3cb6cc1555cf9531c9671e4f483fe9be3bc3662638421250940d8e6b",
+    "response_learning_role_sha256": "ec1fc427ca877f3b4603dd9c99da164095654e3ec6b83dab34a9b8407d6ce3b7",
+    "gateway_control_role_sha256": "cecbe2a2503e22630bd1bef5011645be64f02444a237109be879378a22f0b7f6"
+  },
+  "services": {
+    "nando_transition_serving": {
+      "state": "active",
+      "nrestarts": 0
+    },
+    "nando_response_learning": {
+      "state": "active",
+      "nrestarts": 0
+    },
+    "nando_gateway_control": {
+      "state": "active",
+      "nrestarts": 0
+    },
+    "nando_transport_gateway": {
+      "state": "active",
+      "nrestarts": 0
+    }
+  },
+  "verification": {
+    "workspace_tests": {
+      "verdict": "PASS",
+      "registered_tests": 1395
+    },
+    "m3_adversarial_tests": {
+      "verdict": "PASS",
+      "passed": 18,
+      "failed": 0
+    },
+    "gateway_control_clippy": "PASS",
+    "workspace_clippy": {
+      "verdict": "BASELINE_FAIL",
+      "warning_count": 62,
+      "scope": "pre-existing nando-cli lints under Rust 1.97.0"
+    },
+    "cargo_fmt": "PASS",
+    "nginx_config": "PASS",
+    "systemd_units": "PASS",
+    "graphify": {
+      "verdict": "PASS",
+      "nodes": 31075,
+      "edges": 71567,
+      "communities": 1410
+    },
+    "streaming_smoke": {
+      "verdict": "PASS",
+      "marker": "REMOTE_NANDO_BACKEND_OK",
+      "route": "hot_418_then_upstream_200"
+    }
+  },
+  "containerization": {
+    "status": "NOT_BUILT",
+    "planned_runtime_base": "gcr.io/distroless/cc-debian12:nonroot",
+    "boundary": "package the proven backend after state, health, and authority mounts are specified"
+  },
+  "rollback": {
+    "first_action": "ops/remote-backend/reconcile-authority.sh disable",
+    "source_commit": "a737a625d22ae2813189dad6b1c33eec86781e30",
+    "requires_state_backup": true
+  }
+}
