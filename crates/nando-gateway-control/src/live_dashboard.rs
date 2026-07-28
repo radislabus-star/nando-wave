@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b033";
+const DASHBOARD_BUILD: &str = "2026.07.28-b034";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -775,6 +775,7 @@ const TEMPLATE: &str = r#"
     const futureVerdict = ms3.effective_verdict || ms3.verdict || "not_evaluated";
     const activeFreezeBlocker = lifecycleStatus.active_freeze_blocker || "";
     const futureBlocker = ms3.effective_blocker || ms3.blocker || activeFreezeBlocker || "";
+    const acquisitionBlocker = acquisition.blocker || "";
     const lawFrozen = Boolean(lifecycleStatus.active_frozen_envelope_root_sha256);
     const futureFrozen = Boolean(lifecycleStatus.active_future_envelope_root_sha256);
     const authorityReady = lifecycleStatus.authority_ready === true || ms3.authority_ready === true;
@@ -824,7 +825,8 @@ const TEMPLATE: &str = r#"
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
-    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)} · blocker ${futureBlocker || "none"} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
+    const currentBlocker = lawFrozen ? futureBlocker : acquisitionBlocker || futureBlocker;
+    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)} · blocker ${currentBlocker || "none"} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
     text("next-route", authorityReady
       ? "ordinary CPU receipt → avoided upstream call"
       : futureVerdict === "future_pass"
@@ -1025,6 +1027,9 @@ mod tests {
         assert!(html.contains("capture_gap_repair"));
         assert!(html.contains("linked_evidence_reuse"));
         assert!(html.contains("active_freeze_blocker"));
+        assert!(
+            html.contains("const currentBlocker = lawFrozen ? futureBlocker : acquisitionBlocker")
+        );
         assert!(html.contains("TERMINAL / RELEVANT / LINKED"));
         assert!(html.contains("FUTURE APPLICABILITY"));
         assert!(html.contains("DURABLE / ACTIVE PREDICTIONS"));
