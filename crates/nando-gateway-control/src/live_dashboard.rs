@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b035";
+const DASHBOARD_BUILD: &str = "2026.07.28-b036";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -355,6 +355,8 @@ const TEMPLATE: &str = r#"
 .overview-head { display:flex; justify-content:space-between; align-items:baseline; gap:18px; margin-bottom:15px; }
 .overview-head .band-title { margin:0; }
 .overview-rule { color:var(--amber); font-size:12px; font-weight:800; text-align:right; }
+.overview-rule.good { color:var(--green); }
+.overview-rule.warning { color:var(--red); }
 .traffic-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--line); }
 .traffic-stage { min-width:0; min-height:230px; padding:18px 20px; border-right:1px solid var(--line); border-top:3px solid #59636a; background:#111518; }
 .traffic-stage:last-child { border-right:0; }
@@ -866,7 +868,8 @@ const TEMPLATE: &str = r#"
     stateClass("ingestion-backlog-cell", `ingestion-cell backlog ${!tokenLagComparable ? "invalid" : opportunityLag === 0 ? "clear" : ""}`);
     text("ingestion-token-lag", tokenLagComparable ? number.format(tokenLag) : "НЕСОПОСТАВИМО");
     text("ingestion-token-scope", tokenLagComparable ? opportunityLag > 0 ? "токены durable backlog одного process epoch" : "durable request backlog отсутствует" : "hot/cold перезапущены в разные моменты");
-    text("ingestion-epoch", tokenLagComparable ? `COUNTER ORIGIN ${number.format(bridge.producer_counter_started_after_sequence)}` : `COUNTER ORIGIN SPLIT ${number.format(bridge.producer_counter_started_after_sequence)} / ${number.format(bridge.consumer_counter_started_after_sequence)}`);
+    text("ingestion-epoch", tokenLagComparable ? `COMMON COUNTER EPOCH · AFTER SEQ ${number.format(bridge.producer_counter_started_after_sequence)}` : `COUNTER EPOCH SPLIT · HOT AFTER ${number.format(bridge.producer_counter_started_after_sequence)} / COLD AFTER ${number.format(bridge.consumer_counter_started_after_sequence)}`);
+    stateClass("ingestion-epoch", `overview-rule ${tokenLagComparable ? "good" : "warning"}`);
     text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses} · OPEN ${joinOpen}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
@@ -1009,6 +1012,8 @@ mod tests {
         assert!(html.contains("ЖИВОЙ ВХОД МАЙНЕРА"));
         assert!(html.contains("ПОЛУЧЕНО DURABLE"));
         assert!(html.contains("ПРИМЕНЕНО LEARNER"));
+        assert!(html.contains("COMMON COUNTER EPOCH · AFTER SEQ"));
+        assert!(html.contains("COUNTER EPOCH SPLIT · HOT AFTER"));
         assert!(html.contains("id=\"ingestion-backlog-cell\""));
         assert!(html.contains("opportunityLag === 0 ? \"clear\""));
         assert!(html.contains("const applied = liveIngestion.learner_applied || {}"));
