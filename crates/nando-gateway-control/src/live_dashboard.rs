@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b020";
+const DASHBOARD_BUILD: &str = "2026.07.28-b029";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -79,7 +79,12 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         pointer_u64(cold, "/durable_structure/consumer/last_sequence");
     let structural_pending = pointer_u64(hot, "/durable_structure/pending_records")
         .max(pointer_u64(cold, "/durable_structure/pending_records"));
-    let opportunity_pending = pointer_u64(hot, "/opportunity/pending_events");
+    // The consumer owns acknowledgement and unlinks pending spool files. The
+    // producer's process-local counter only catches up on periodic reconcile.
+    let opportunity_pending = cold
+        .pointer("/opportunity/pending_events")
+        .and_then(Value::as_u64)
+        .unwrap_or_else(|| pointer_u64(hot, "/opportunity/pending_events"));
     let opportunity_inflight = pointer_u64(cold, "/opportunity/consumer_inflight_events");
     let hot_started_at_unix_ms = pointer_u64(hot, "/process/started_at_unix_ms");
     let cold_started_at_unix_ms = pointer_u64(cold, "/process/started_at_unix_ms");
@@ -153,6 +158,9 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
 }
 
 pub(crate) fn render(initial: InitialMetrics) -> String {
+    let miner_window_unrecognized_tokens = initial
+        .miner_window_total_tokens
+        .saturating_sub(initial.miner_window_cpu_tokens);
     let (
         pipeline_title,
         admission_step_class,
@@ -189,6 +197,10 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
             &format_number(initial.server_total_tokens),
         )
         .replace("__SERVER_CPU__", &format_number(initial.server_cpu_tokens))
+        .replace(
+            "__SERVER_CPU_SHARE__",
+            &format_percent(initial.server_cpu_tokens, initial.server_total_tokens, 1),
+        )
         .replace(
             "__EPOCH_TOTAL__",
             &format_number(initial.epoch_total_tokens),
@@ -237,15 +249,19 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         )
         .replace(
             "__MINER_UNRESOLVED__",
-            &format_number(initial.miner_window_unresolved_tokens),
+            &format_number(miner_window_unrecognized_tokens),
         )
         .replace(
             "__MINER_UNRESOLVED_SHARE__",
             &format_percent(
-                initial.miner_window_unresolved_tokens,
+                miner_window_unrecognized_tokens,
                 initial.miner_window_total_tokens,
                 1,
             ),
+        )
+        .replace(
+            "__MINER_RESEARCHABLE__",
+            &format_number(initial.miner_window_unresolved_tokens),
         )
         .replace(
             "__CEILING_VALUES__",
@@ -369,6 +385,8 @@ const TEMPLATE: &str = r#"
 .ingestion-value { margin-top:8px; color:var(--cyan); font-size:20px; font-weight:800; overflow-wrap:anywhere; }
 .ingestion-cell.applied .ingestion-value { color:var(--green); }
 .ingestion-cell.backlog .ingestion-value { color:var(--amber); }
+.ingestion-cell.backlog.clear .ingestion-value { color:var(--green); }
+.ingestion-cell.backlog.invalid .ingestion-value { color:var(--red); }
 .ingestion-note { margin-top:6px; color:var(--muted); font-size:10px; line-height:1.35; }
 .legacy-strip { display:flex; justify-content:center; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 24px; border-top:1px solid var(--line); color:var(--muted); text-align:center; font-size:12px; font-weight:700; }
 .legacy-strip b { color:#dce2e6; }
@@ -538,8 +556,8 @@ const TEMPLATE: &str = r#"
       <article class="traffic-stage cpu">
         <div class="stage-index">4 · EXECUTION RECEIPTS</div>
         <div class="stage-label">РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU</div>
-        <div class="stage-value-row"><output id="server-cpu-token-count" class="stage-value">__SERVER_CPU__</output></div>
-        <div class="stage-unit">НАКОПЛЕННЫХ ВХОДНЫХ ТОКЕНОВ БЕЗ LLM</div>
+        <div class="stage-value-row"><output id="server-cpu-token-count" class="stage-value">__SERVER_CPU__</output><output id="server-cpu-share" class="stage-share">__SERVER_CPU_SHARE__</output></div>
+        <div class="stage-unit">НАКОПЛЕННЫХ ВХОДНЫХ ТОКЕНОВ БЕЗ LLM · ДОЛЯ ОТ ВСЕГО SERVER ACCOUNTING</div>
         <div id="server-cpu-breakdown" class="stage-meta">V3 __LEGACY_CPU__ + V4 __EPOCH_CPU__</div>
         <div id="current-v4-execution" class="stage-scope">V4 __EPOCH_CPU__ / __EPOCH_TOTAL__ · __EPOCH_CPU_SHARE__ · __EPOCH_CPU_ACCEPTS__ accepts</div>
       </article>
@@ -554,14 +572,14 @@ const TEMPLATE: &str = r#"
     <div class="ingestion-grid">
       <div class="ingestion-cell"><div class="ingestion-label">ПОЛУЧЕНО DURABLE</div><div id="ingestion-received" class="ingestion-value">—</div><div id="ingestion-received-events" class="ingestion-note">hot producer</div></div>
       <div class="ingestion-cell applied"><div class="ingestion-label">ПРИМЕНЕНО LEARNER</div><div id="ingestion-applied" class="ingestion-value">—</div><div id="ingestion-applied-events" class="ingestion-note">cold consumer</div></div>
-      <div class="ingestion-cell backlog"><div class="ingestion-label">DURABLE BACKLOG</div><div id="ingestion-backlog" class="ingestion-value">—</div><div id="ingestion-inflight" class="ingestion-note">inflight является частью backlog</div></div>
+      <div id="ingestion-backlog-cell" class="ingestion-cell backlog"><div class="ingestion-label">DURABLE BACKLOG</div><div id="ingestion-backlog" class="ingestion-value">—</div><div id="ingestion-inflight" class="ingestion-note">inflight является частью backlog</div></div>
       <div class="ingestion-cell"><div class="ingestion-label">TOKEN LAG</div><div id="ingestion-token-lag" class="ingestion-value">—</div><div id="ingestion-token-scope" class="ingestion-note">только при общем process epoch</div></div>
     </div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <h2 class="band-title">ЧТО МАЙНЕР ЕЩЁ НЕ РАСПОЗНАЛ</h2>
     <div class="scope-grid">
-      <div class="scope-metric unresolved"><div class="scope-label">ЕЩЁ НЕ РАЗРЕШЕНО</div><div id="miner-unresolved-values" class="scope-value">__MINER_UNRESOLVED__</div><output id="miner-unresolved-share" class="scope-share">__MINER_UNRESOLVED_SHARE__</output><div class="scope-note">классы без доказанного CPU-оператора</div></div>
+      <div class="scope-metric unresolved"><div class="scope-label">ВСЕГО БЕЗ CPU-КЛАССА</div><div id="miner-unresolved-values" class="scope-value">__MINER_UNRESOLVED__</div><output id="miner-unresolved-share" class="scope-share">__MINER_UNRESOLVED_SHARE__</output><div id="miner-unresolved-note" class="scope-note">исследуемый остаток __MINER_RESEARCHABLE__; включает отдельно доказанный LLM-only трафик</div></div>
       <div class="scope-metric ceiling"><div class="scope-label">ТЕОРЕТИЧЕСКИЙ ПОТОЛОК</div><div id="scope-ceiling-values" class="scope-value">__CEILING_VALUES__</div><output id="scope-ceiling-share" class="scope-share">__CEILING_SHARE__</output><div class="scope-note">ordinary минус доказанно irreducible; не CPU и не authority</div></div>
     </div>
     <div id="miner-class-ledger" class="ms3-note">Загрузка классов opportunity…</div>
@@ -579,6 +597,7 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">DURABLE / ACTIVE PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">INDEPENDENT FUTURE</div><div id="ms3-future" class="ms3-value watch">НЕ ОЦЕНЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">AUTHORITY</div><div id="ms3-authority" class="ms3-value locked">FALSE</div></div>
+      <div class="ms3-cell"><div class="ms3-label">CAPTURE / RECEIPT HEALTH</div><div id="ms3-operational-health" class="ms3-value watch">ЗАГРУЗКА</div><div id="ms3-operational-note" class="scope-note">operational guard</div></div>
     </div>
     <div id="ms3-note" class="ms3-note">Загрузка generation lifecycle и frozen acquisition…</div>
   </div></section>
@@ -600,7 +619,7 @@ const TEMPLATE: &str = r#"
     <div class="activity"><span class="activity-label">ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С</span><div id="activity-bars" class="activity-bars"></div></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
-    <div class="window-head"><h2 class="band-title">ЖИВЫЕ ОКНА</h2><div id="window-summary" class="window-summary">NANDO — / MIXED — / OUTSIDE — / IDLE —</div></div>
+    <div class="window-head"><h2 class="band-title">ЖИВЫЕ ОКНА</h2><div id="window-summary" class="window-summary">ROUTES · NANDO — / MIXED — / DIRECT — / NO SOCKET —</div></div>
     <div class="window-scroll"><div class="window-table"><div class="window-row header"><span>ОКНО</span><span>СЕССИЯ</span><span>КОНФИГ</span><span>СТАТУС</span><span>КОНЕЧНАЯ ТОЧКА</span></div><div id="window-rows"></div></div></div>
   </div></section>
   <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span id="next-route" class="next-route">relation evidence → circuit → future proof → admission</span></span><span>false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · bridge failures <b id="bridge-failures">0</b></span></div></footer>
@@ -620,16 +639,22 @@ const TEMPLATE: &str = r#"
   const ratio = (part, total, digits) => total > 0 ? `${(part * 100 / total).toFixed(digits).replace(".", ",")}%` : `0,${"0".repeat(digits)}%`;
   const width = (id, part, total) => { const target = node(id); if (target) target.style.width = total > 0 ? `${Math.max(0.25, part * 100 / total)}%` : "0"; };
   const localTime = (unix) => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short", timeStyle:"medium"}) : "—";
-  const duration = (seconds) => { const value = Math.max(0, seconds); const hours = Math.floor(value / 3600); const minutes = Math.floor((value % 3600) / 60); return `${hours} ч ${minutes} мин`; };
+  const duration = (seconds) => { const value = Math.max(0, seconds); const hours = Math.floor(value / 3600); const minutes = Math.floor((value % 3600) / 60); return hours > 0 ? `${hours} ч ${minutes} мин` : minutes > 0 ? `${minutes} мин` : `${Math.floor(value)} с`; };
   const routeLabel = (window) => window.route === "nando" ? "NANDO" : window.route === "mixed" ? "СМЕШАННО" : window.route === "outside_nando" ? "ВНЕ NANDO" : "ОЖИДАНИЕ";
+  const routeEndpoints = (window) => {
+    if (!window.configured_for_nando || window.route !== "nando") return window.remote_endpoints.join(", ") || "—";
+    const api = window.remote_endpoints.filter(value => value === "127.0.0.1:8787" || value === "[::1]:8787");
+    const authOpen = window.remote_endpoints.some(value => value.endsWith(":443"));
+    return `${api.join(", ") || "nando_nginx contract"}${authOpen ? " · HTTPS auth (не API)" : ""}`;
+  };
   const renderWindows = (snapshot) => {
-    text("window-summary", `NANDO ${snapshot.active_nando} / MIXED ${snapshot.active_mixed} / OUTSIDE ${snapshot.active_outside_nando} / IDLE ${snapshot.idle}`);
+    text("window-summary", `ROUTES · NANDO ${snapshot.active_nando} / MIXED ${snapshot.active_mixed} / DIRECT ${snapshot.active_outside_nando} / NO SOCKET ${snapshot.idle}`);
     const rows = node("window-rows");
     if (!rows) return;
     rows.replaceChildren();
     for (const window of snapshot.windows) {
       const row = document.createElement("div"); row.className = "window-row";
-      const values = [window.project.toUpperCase(), window.session.startsWith("pid-") ? window.session : window.session.slice(0, 8), window.configured_for_nando ? "nando_nginx" : "default", routeLabel(window), window.remote_endpoints.join(", ") || "—"];
+      const values = [window.project.toUpperCase(), window.session.startsWith("pid-") ? window.session : window.session.slice(0, 8), window.configured_for_nando ? "nando_nginx" : "default", routeLabel(window), routeEndpoints(window)];
       values.forEach((value, index) => { const cell = document.createElement("span"); cell.textContent = value; if (index === 3) cell.className = `window-status ${window.route}`; row.appendChild(cell); });
       rows.appendChild(row);
     }
@@ -664,10 +689,12 @@ const TEMPLATE: &str = r#"
     const priorTotal = serverPrior.input_tokens ?? legacy.input_tokens ?? Math.max(0, serverTotal - epochTotal);
     const priorCpu = serverPrior.cpu_verified_input_tokens ?? legacy.cpu_tokens ?? Math.max(0, serverCpu - epochCpu);
     sourceGeneratedAt = accounting.generated_at_unix || 0;
+    text("source-age", sourceGeneratedAt > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - sourceGeneratedAt) : "—");
     text("server-total-token-count", number.format(serverTotal));
     text("server-total-breakdown", `V3 ${number.format(priorTotal)} + V4 ${number.format(epochTotal)}`);
     text("server-total-scope", `ВСЯ СОХРАНЁННАЯ ИСТОРИЯ УЧЁТА · ТЕКУЩАЯ V4: ${number.format(epochEvents)} ЗАПРОСОВ`);
     text("server-cpu-token-count", number.format(serverCpu));
+    text("server-cpu-share", ratio(serverCpu, serverTotal, 1));
     text("server-cpu-breakdown", `V3 ${number.format(priorCpu)} + V4 ${number.format(epochCpu)}`);
     const completedWindows = Array.isArray(accounting.completed_m3_windows) ? accounting.completed_m3_windows : [];
     let m3Streak = 0;
@@ -684,6 +711,7 @@ const TEMPLATE: &str = r#"
     const minerCpu = minerRecognized.input_tokens ?? miner.cpu_verified_tokens ?? snapshot.verified_window_cpu_input_tokens ?? 0;
     const minerCpuIntents = minerRecognized.intents ?? miner.cpu_verified_intents ?? 0;
     const minerUnresolved = minerUnresolvedOverview.input_tokens ?? miner.unresolved_tokens ?? 0;
+    const minerUnrecognized = Math.max(0, minerTotal - minerCpu);
     const optimisticTokens = miner.optimistic_upper_bound_tokens ?? snapshot.optimistic_upper_bound_tokens ?? 0;
     text("miner-window-total", number.format(minerTotal));
     text("miner-window-intents", `${number.format(minerIntents)} intents`);
@@ -692,15 +720,16 @@ const TEMPLATE: &str = r#"
     text("miner-window-cpu-intents", `${number.format(minerCpuIntents)} verified intents`);
     text("miner-window-cpu-share", ratio(minerCpu, minerTotal, 1));
     width("miner-recognized-bar", minerCpu, minerTotal);
-    text("miner-unresolved-values", number.format(minerUnresolved));
-    text("miner-unresolved-share", ratio(minerUnresolved, minerTotal, 1));
+    text("miner-unresolved-values", number.format(minerUnrecognized));
+    text("miner-unresolved-share", ratio(minerUnrecognized, minerTotal, 1));
+    text("miner-unresolved-note", `исследуемый остаток ${number.format(minerUnresolved)}; включает отдельно доказанный LLM-only трафик`);
     text("scope-ceiling-values", `${number.format(optimisticTokens)} / ${number.format(minerTotal)}`);
     text("scope-ceiling-share", ratio(optimisticTokens, minerTotal, 1));
     const classRows = Object.entries(miner.classes || {})
       .filter(([name]) => name !== "CPU_VERIFIED")
       .sort((left, right) => (right[1]?.input_tokens || 0) - (left[1]?.input_tokens || 0))
       .map(([name, row]) => `${name} ${number.format(row?.input_tokens || 0)}`);
-    text("miner-class-ledger", classRows.length > 0 ? `НЕЗАКРЫТЫЕ КЛАССЫ: ${classRows.join(" · ")}` : "НЕЗАКРЫТЫЕ КЛАССЫ: НЕТ ДАННЫХ");
+    text("miner-class-ledger", classRows.length > 0 ? `КЛАССЫ БЕЗ CPU: ${classRows.join(" · ")}` : "КЛАССЫ БЕЗ CPU: НЕТ ДАННЫХ");
 
     text("legacy-values", `${number.format(legacy.input_tokens || 0)} вход / ${number.format(legacy.cpu_tokens || 0)} CPU`);
 
@@ -708,6 +737,8 @@ const TEMPLATE: &str = r#"
     const lifecycleStatus = snapshot.ms3_lifecycle || {};
     const lifecycle = lifecycleStatus.lifecycle || {};
     const acquisition = snapshot.ms3_acquisition || {};
+    const captureHealth = snapshot.ms3_capture_health || {};
+    const receiptHealth = captureHealth.receipt || {};
     const acquisitionContract = acquisition.acquisition_contract || {};
     const generations = lifecycleStatus.registry?.generations || [];
     const linkedAcquisitionFailures = lifecycleStatus.registry?.linked_acquisition_failures || [];
@@ -767,12 +798,21 @@ const TEMPLATE: &str = r#"
     text("ms3-predictions", `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}`);
     text("ms3-future", futureVerdict === "future_pass" ? "PASS" : futureVerdict === "contradiction" ? "CONTRADICTION" : futureAcquisitionFailed ? "ACQUISITION FAIL" : activePredictions > 0 ? "OUTCOME PENDING" : futureFrozen ? futureVerdict.toUpperCase() : "НЕ ОЦЕНЕН");
     text("ms3-authority", authorityReady ? "TRUE" : "FALSE");
+    const captureStatus = captureHealth.status || "NOT_EVALUATED";
+    const receiptStatus = receiptHealth.status || "NOT_EVALUATED";
+    const receiptInflight = receiptHealth.in_flight_rows || 0;
+    const receiptStalled = receiptHealth.stalled_rows || 0;
+    const receiptLag = receiptHealth.oldest_uncovered_lag_seconds || 0;
+    const receiptSlo = receiptHealth.receipt_lag_slo_seconds || 0;
+    text("ms3-operational-health", `${captureStatus} · ${receiptStatus}${receiptInflight > 0 ? ` ${number.format(receiptInflight)}` : ""}`);
+    text("ms3-operational-note", `oldest ${duration(receiptLag)} · SLO ${duration(receiptSlo)} · stalled ${number.format(receiptStalled)}`);
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
     stateClass("ms3-future-applicability", `ms3-value ${futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-law", `ms3-value ${futureVerdict === "future_pass" ? "good" : lawFrozen ? "watch" : "locked"}`);
     stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
+    stateClass("ms3-operational-health", `ms3-value ${captureStatus === "CAPTURE_STALLED" || receiptStatus === "RECEIPT_STALLED" || captureStatus === "NOT_EVALUATED" ? "locked" : receiptStatus === "IN_FLIGHT" ? "watch" : "good"}`);
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
@@ -790,27 +830,29 @@ const TEMPLATE: &str = r#"
             : "linked evidence → version space → unique law freeze");
 
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
+    const joinOpen = Math.max(0, bridge.join_attempts - bridge.join_hits - bridge.join_misses);
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
     const opportunityLag = bridge.opportunity_pending;
     const tokenLagComparable = bridge.opportunity_counter_epoch_match === true;
-    const tokenLag = tokenLagComparable ? Math.max(0, bridge.request_tokens - bridge.miner_request_tokens) : 0;
+    const tokenLag = tokenLagComparable && opportunityLag > 0 ? Math.max(0, bridge.request_tokens - bridge.miner_request_tokens) : 0;
     text("ingestion-received", number.format(bridge.request_tokens));
     text("ingestion-received-events", `${number.format(bridge.request_events)} requests · seq ${number.format(bridge.opportunity_produced_sequence)}`);
     text("ingestion-applied", number.format(bridge.miner_request_tokens));
     text("ingestion-applied-events", `${number.format(bridge.miner_request_events)} requests · seq ${number.format(bridge.opportunity_consumed_sequence)}`);
     text("ingestion-backlog", `${number.format(opportunityLag)} events`);
     text("ingestion-inflight", `${number.format(bridge.opportunity_inflight)} inflight входят в durable backlog`);
+    stateClass("ingestion-backlog-cell", `ingestion-cell backlog ${!tokenLagComparable ? "invalid" : opportunityLag === 0 ? "clear" : ""}`);
     text("ingestion-token-lag", tokenLagComparable ? number.format(tokenLag) : "НЕСОПОСТАВИМО");
-    text("ingestion-token-scope", tokenLagComparable ? "разница счётчиков одного process epoch" : "hot/cold перезапущены в разные моменты");
+    text("ingestion-token-scope", tokenLagComparable ? opportunityLag > 0 ? "токены durable backlog одного process epoch" : "durable request backlog отсутствует" : "hot/cold перезапущены в разные моменты");
     text("ingestion-epoch", tokenLagComparable ? `COUNTER ORIGIN ${number.format(bridge.producer_counter_started_after_sequence)}` : `COUNTER ORIGIN SPLIT ${number.format(bridge.producer_counter_started_after_sequence)} / ${number.format(bridge.consumer_counter_started_after_sequence)}`);
-    text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
+    text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses} · OPEN ${joinOpen}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
     const crystallizedInput = snapshot.controller_crystallized_candidates || 0; const crystallizedAdmissible = snapshot.controller_crystallized_admissible_candidates || 0; const crystallizedHeld = snapshot.controller_crystallized_held_candidates || 0; const semanticGuardHeld = snapshot.controller_crystallized_held_semantic_guard_candidates || 0; const generationDelta = snapshot.controller_generation_delta_packages || 0;
-    text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-candidate", controllerInput); text("pipe-crystallizer", `ВХОД ${crystallizedInput} · ДОПУЩЕНО ${crystallizedAdmissible} · HELD ${crystallizedHeld}`);
+    text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · OPEN ${joinOpen} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-candidate", controllerInput); text("pipe-crystallizer", `ВХОД ${crystallizedInput} · ДОПУЩЕНО ${crystallizedAdmissible} · HELD ${crystallizedHeld}`);
     text("pipe-package", `DELTA ${generationDelta} · ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("pipeline-title", snapshot.cpu_allowed ? "МАРШРУТ ДО CPU" : "ПОЧЕМУ CPU НЕ РАСТЁТ"); text("pipeline-note-label", snapshot.cpu_allowed ? "РАЗВИТИЕ ПОКРЫТИЯ" : "ТЕКУЩИЙ РАЗРЫВ");
     stateClass("pipeline-note", `blocker ${snapshot.cpu_allowed ? "coverage" : "critical"}`); stateClass("pipe-discovery-step", `pipe-step ${snapshot.admission_ready_cohorts > 0 ? "good" : "watch"}`); stateClass("pipe-candidate-step", `pipe-step ${controllerInput > 0 ? "good" : "watch"}`); stateClass("pipe-crystallizer-step", `pipe-step ${crystallizedAdmissible > 0 ? "good" : crystallizedHeld > 0 ? "watch" : "block"}`); stateClass("pipe-package-step", `pipe-step ${snapshot.response_package_count > 0 ? "good" : "block"}`); stateClass("pipe-admission-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "locked"}`); stateClass("pipe-cpu-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "muted"}`);
-    text("blocker-text", semanticGuardHeld > 0 ? `CPU работает на ${snapshot.response_package_count} ACTIVE; ${semanticGuardHeld} кандидат HELD: semantic_applicability_guard_missing; generation delta ${generationDelta}` : controllerInput > 0 && crystallizedInput === 0 ? `ТЕКУЩИЙ РАЗРЫВ: INPUT ${controllerInput} → CRYST 0. Legacy candidate: ${snapshot.controller_blocker}` : controllerInput === 0 ? `discovery → candidate export: ${snapshot.controller_blocker}` : crystallizedInput > 0 && !snapshot.cpu_allowed ? `crystallized operator готов, admission закрыт: ${snapshot.controller_blocker}` : snapshot.cpu_allowed ? "маршрут до CPU открыт" : snapshot.controller_blocker);
+    text("blocker-text", semanticGuardHeld > 0 ? `CPU-маршрут открыт · ACTIVE packages ${snapshot.response_package_count}; HELD candidates ${semanticGuardHeld}: semantic_applicability_guard_missing; generation delta ${generationDelta}` : controllerInput > 0 && crystallizedInput === 0 ? `ТЕКУЩИЙ РАЗРЫВ: INPUT ${controllerInput} → CRYST 0. Legacy candidate: ${snapshot.controller_blocker}` : controllerInput === 0 ? `discovery → candidate export: ${snapshot.controller_blocker}` : crystallizedInput > 0 && !snapshot.cpu_allowed ? `crystallized operator готов, admission закрыт: ${snapshot.controller_blocker}` : snapshot.cpu_allowed ? "маршрут до CPU открыт" : snapshot.controller_blocker);
     renderActivity(bridge.request_events); lastSuccess = Date.now();
   };
   const refresh = async () => {
@@ -895,6 +937,26 @@ mod tests {
     }
 
     #[test]
+    fn opportunity_backlog_uses_consumer_owned_counter() {
+        let hot = json!({
+            "ok": true,
+            "opportunity": {
+                "pending_events": 2,
+                "producer_last_sequence": 44
+            }
+        });
+        let cold = json!({
+            "ok": true,
+            "opportunity": {
+                "pending_events": 0,
+                "consumer_last_sequence": 44
+            }
+        });
+        let view = bridge_view(&hot, &cold);
+        assert_eq!(view.opportunity_pending, 0);
+    }
+
+    #[test]
     fn render_leads_with_total_server_miner_recognition_and_cpu() {
         let html = render(InitialMetrics {
             server_total_tokens: 5_948_645_890,
@@ -916,17 +978,29 @@ mod tests {
         assert!(html.contains("ЧЕТЫРЕ ГЛАВНЫЕ ЦИФРЫ"));
         assert!(html.contains("ВЕСЬ ТРАФИК СЕРВЕРА"));
         assert!(html.contains("РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU"));
+        assert!(html.contains("id=\"server-cpu-share\" class=\"stage-share\">1,5%"));
+        assert!(html.contains("ДОЛЯ ОТ ВСЕГО SERVER ACCOUNTING"));
         assert!(html.contains("МАЙНЕР УЖЕ ПРИМЕНИЛ"));
         assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
         assert!(html.contains("ЖИВОЙ ВХОД МАЙНЕРА"));
         assert!(html.contains("ПОЛУЧЕНО DURABLE"));
         assert!(html.contains("ПРИМЕНЕНО LEARNER"));
+        assert!(html.contains("id=\"ingestion-backlog-cell\""));
+        assert!(html.contains("opportunityLag === 0 ? \"clear\""));
+        assert!(html.contains("CPU-маршрут открыт · ACTIVE packages"));
+        assert!(!html.contains("CPU работает на ${snapshot.response_package_count}"));
+        assert!(html.contains("ВСЕГО БЕЗ CPU-КЛАССА"));
+        assert!(html.contains("37 000 000"));
+        assert!(html.contains("исследуемый остаток 10 000 000"));
         assert!(html.contains("ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU"));
         assert!(html.contains("ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
         assert!(html.contains("SUPPORT / LINKED ACQUISITION"));
+        assert!(html.contains("CAPTURE / RECEIPT HEALTH"));
+        assert!(html.contains("RECEIPT_STALLED"));
+        assert!(html.contains("· OPEN ${joinOpen}"));
         assert!(html.contains("linked_acquisition_failures"));
         assert!(html.contains("linked_acquisition_fail"));
         assert!(html.contains("capture_gap_repair"));
@@ -943,6 +1017,8 @@ mod tests {
         assert!(html.contains("DELTA 0 · ACTIVE 0"));
         assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
         assert!(html.contains("ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С"));
+        assert!(html.contains("ROUTES · NANDO"));
+        assert!(html.contains("HTTPS auth (не API)"));
         assert!(html.contains("5 948 645 890"));
         assert!(html.contains("V3 5 748 645 890 + V4 200 000 000"));
         assert!(html.contains("90 515 297"));

@@ -36,6 +36,8 @@ const COLD_MS3_GENERATION_REGISTRY_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/ms3-generation-registry";
 const COLD_MS3_LINKED_FRAME_ACQUISITION_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/ms3-linked-frame-acquisition";
+const COLD_MS3_CAPTURE_HEALTH_URL: &str =
+    "http://127.0.0.1:18790/v2/multi-source/ms3-capture-health";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -1061,13 +1063,22 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let response_registry = read_json(&state.config.response_registry_path);
     let response_admission_controller =
         read_json(&state.config.response_admission_controller_report_path);
-    let (live, hot_health, cold_health, ms3_future, ms3_lifecycle, ms3_acquisition) = tokio::join!(
+    let (
+        live,
+        hot_health,
+        cold_health,
+        ms3_future,
+        ms3_lifecycle,
+        ms3_acquisition,
+        ms3_capture_health,
+    ) = tokio::join!(
         read_live_miner_report(),
         read_live_json(HOT_SERVING_HEALTH_URL),
         read_live_json(COLD_LEARNING_HEALTH_URL),
         read_live_json(COLD_MS3_FUTURE_APPLICABILITY_URL),
         read_live_json(COLD_MS3_GENERATION_REGISTRY_URL),
         read_live_json(COLD_MS3_LINKED_FRAME_ACQUISITION_URL),
+        read_live_json(COLD_MS3_CAPTURE_HEALTH_URL),
     );
     let economics = live
         .get("economics")
@@ -1118,10 +1129,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let online_opportunity = miner_opportunity;
-    let response_package_count = response_registry
-        .get("packages")
-        .and_then(Value::as_array)
-        .map_or(0, |packages| packages.len() as u64);
+    let response_package_count = active_response_package_count(&response_registry);
     let controller_relation_candidates =
         metric_u64(&response_admission_controller, "relation_candidates");
     let controller_collection_candidates =
@@ -1218,7 +1226,15 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                     "inflight_events": bridge.opportunity_inflight,
                     "input_tokens": bridge
                         .opportunity_counter_epoch_match
-                        .then(|| bridge.request_tokens.saturating_sub(bridge.miner_request_tokens)),
+                        .then(|| {
+                            if bridge.opportunity_pending == 0 {
+                                0
+                            } else {
+                                bridge
+                                    .request_tokens
+                                    .saturating_sub(bridge.miner_request_tokens)
+                            }
+                        }),
                 },
             },
         },
@@ -1297,6 +1313,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "ms3": ms3_future,
             "ms3_lifecycle": ms3_lifecycle,
             "ms3_acquisition": ms3_acquisition,
+            "ms3_capture_health": ms3_capture_health,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
             "controller_relation_candidates": controller_relation_candidates,
@@ -1426,6 +1443,18 @@ fn collection_blockers_text(status: &Value) -> String {
 
 fn metric_u64(metrics: &Value, key: &str) -> u64 {
     metrics.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn active_response_package_count(registry: &Value) -> u64 {
+    registry
+        .get("packages")
+        .and_then(Value::as_array)
+        .map_or(0, |packages| {
+            packages
+                .iter()
+                .filter(|package| package.get("state").and_then(Value::as_str) == Some("active"))
+                .count() as u64
+        })
 }
 
 fn metric_u64_any(metrics: &Value, keys: &[&str]) -> u64 {
@@ -1794,6 +1823,19 @@ mod tests {
         assert!(!should_auto_promote(GatewayMode::Shadow, false));
         assert!(!should_auto_promote(GatewayMode::Bypass, true));
         assert!(!should_auto_promote(GatewayMode::Cpu, true));
+    }
+
+    #[test]
+    fn dashboard_active_package_count_excludes_non_active_registry_rows() {
+        let registry = json!({
+            "packages": [
+                {"package_id": "active", "state": "active"},
+                {"package_id": "revoked", "state": "revoked"},
+                {"package_id": "held", "state": "held"},
+                {"package_id": "missing-state"}
+            ]
+        });
+        assert_eq!(active_response_package_count(&registry), 1);
     }
 
     #[test]
