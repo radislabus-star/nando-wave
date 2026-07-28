@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b038";
+const DASHBOARD_BUILD: &str = "2026.07.28-b039";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -546,10 +546,10 @@ const TEMPLATE: &str = r#"
         <div id="server-total-scope" class="stage-scope">ВСЯ СОХРАНЁННАЯ ИСТОРИЯ УЧЁТА · ТЕКУЩАЯ V4: __EPOCH_EVENTS__ ЗАПРОСОВ</div>
       </article>
       <article class="traffic-stage miner">
-        <div class="stage-index">2 · LEARNER APPLIED CORPUS</div>
-        <div class="stage-label">МАЙНЕР УЖЕ ПРИМЕНИЛ</div>
+        <div class="stage-index">2 · MINER CLASSIFICATION WINDOW</div>
+        <div class="stage-label">ОПУБЛИКОВАННЫЙ КОРПУС КЛАССИФИКАЦИИ</div>
         <div class="stage-value-row"><output id="miner-window-total" class="stage-value">__MINER_TOTAL__</output></div>
-        <div class="stage-unit">ВХОДНЫХ ТОКЕНОВ В LEARNER STATE</div>
+        <div class="stage-unit">ВХОДНЫХ ТОКЕНОВ В OPPORTUNITY-BOARD.V3</div>
         <div id="miner-window-intents" class="stage-meta">__MINER_INTENTS__ intents</div>
         <div id="miner-window-start" class="stage-scope">СВОЙ WATERMARK И ПЕРИОД</div>
       </article>
@@ -570,7 +570,7 @@ const TEMPLATE: &str = r#"
         <div id="current-v4-execution" class="stage-scope">V4 __EPOCH_CPU__ / __EPOCH_TOTAL__ · __EPOCH_CPU_SHARE__ · __EPOCH_CPU_ACCEPTS__ accepts</div>
       </article>
     </div>
-    <div class="scope-alert"><strong>ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА.</strong> Второй блок показывает уже применённый learner state, а отдельный live-ingestion блок ниже — durable вход и очередь. Процент распознавания считается только внутри корпуса майнера.</div>
+    <div class="scope-alert"><strong>ПЕРВОЕ ЧИСЛО — ВЕСЬ НАКОПЛЕННЫЙ ТРАФИК СЕРВЕРА.</strong> Второй блок показывает последний опубликованный classification window, а отдельный live-ingestion блок ниже — durable вход и очередь текущего process epoch. Процент распознавания считается только внутри опубликованного корпуса майнера.</div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <div class="overview-head">
@@ -1007,7 +1007,7 @@ mod tests {
         assert!(html.contains("ДОЛЯ ОТ ВСЕГО SERVER ACCOUNTING"));
         assert!(html.contains("PRODUCT M3 ${productM3}"));
         assert!(html.contains("CURRENT WINDOW ${currentM3}"));
-        assert!(html.contains("МАЙНЕР УЖЕ ПРИМЕНИЛ"));
+        assert!(html.contains("ОПУБЛИКОВАННЫЙ КОРПУС КЛАССИФИКАЦИИ"));
         assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
         assert!(html.contains("ЖИВОЙ ВХОД МАЙНЕРА"));
         assert!(html.contains("NANDO INGRESS REQUESTS · ПОСЛЕДНИЕ 60 С"));
