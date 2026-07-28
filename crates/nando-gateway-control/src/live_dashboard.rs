@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b036";
+const DASHBOARD_BUILD: &str = "2026.07.28-b037";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -398,7 +398,7 @@ const TEMPLATE: &str = r#"
 .ingestion-note { margin-top:6px; color:var(--muted); font-size:10px; line-height:1.35; }
 .legacy-strip { display:flex; justify-content:center; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 24px; border-top:1px solid var(--line); color:var(--muted); text-align:center; font-size:12px; font-weight:700; }
 .legacy-strip b { color:#dce2e6; }
-.legacy-warning { color:var(--red); }
+.legacy-scope { color:var(--amber); }
 .ms3-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .ms3-cell { min-width:0; padding:14px 18px; border-right:1px solid var(--line); }
 .ms3-cell:nth-child(4n) { border-right:0; }
@@ -591,7 +591,7 @@ const TEMPLATE: &str = r#"
       <div class="scope-metric ceiling"><div class="scope-label">ТЕОРЕТИЧЕСКИЙ ПОТОЛОК</div><div id="scope-ceiling-values" class="scope-value">__CEILING_VALUES__</div><output id="scope-ceiling-share" class="scope-share">__CEILING_SHARE__</output><div class="scope-note">ordinary минус доказанно irreducible; не CPU и не authority</div></div>
     </div>
     <div id="miner-class-ledger" class="ms3-note">Загрузка классов opportunity…</div>
-    <div class="legacy-strip"><span>АРХИВ V3: <b id="legacy-values">__LEGACY_VALUES__</b></span><span class="legacy-warning">ОТДЕЛЬНАЯ ACCOUNTING PARTITION · ВХОДИТ В SERVER TOTAL · EXACT SHARE СЧИТАЕТСЯ В V4</span></div>
+    <div class="legacy-strip"><span>АРХИВ V3: <b id="legacy-values">__LEGACY_VALUES__</b></span><span class="legacy-scope">АРХИВНАЯ PARTITION · УЖЕ ВКЛЮЧЕНА В SERVER TOTAL · ТЕКУЩАЯ ДОЛЯ ПОКАЗАНА ОТДЕЛЬНО ДЛЯ V4</span></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <h2 class="band-title">АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3</h2>
@@ -1020,6 +1020,7 @@ mod tests {
         assert!(html.contains("CPU-маршрут открыт · ACTIVE packages"));
         assert!(!html.contains("CPU работает на ${snapshot.response_package_count}"));
         assert!(html.contains("ВСЕГО БЕЗ CPU-КЛАССА"));
+        assert!(html.contains("АРХИВНАЯ PARTITION · УЖЕ ВКЛЮЧЕНА В SERVER TOTAL"));
         assert!(html.contains("37 000 000"));
         assert!(html.contains("из них исследуемо 10 000 000 · доказанно LLM-only 27 000 000"));
         assert!(html.contains("ВЕСЬ СЕРВЕР → DURABLE ВХОД → КОРПУС → РАСПОЗНАНО → CPU"));
@@ -1063,7 +1064,7 @@ mod tests {
         assert!(html.contains("940 verified intents"));
         assert!(html.contains("24,0%"));
         assert!(html.contains("5 748 645 890 вход / 42 515 297 CPU"));
-        assert!(html.contains("ВХОДИТ В SERVER TOTAL"));
+        assert!(html.contains("УЖЕ ВКЛЮЧЕНА В SERVER TOTAL"));
         assert!(
             html.find("ПОЧЕМУ CPU НЕ РАСТЁТ").unwrap_or(usize::MAX)
                 < html.find("ЖИВЫЕ ОКНА").unwrap_or(usize::MAX)
