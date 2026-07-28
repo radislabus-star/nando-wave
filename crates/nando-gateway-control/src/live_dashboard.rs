@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b034";
+const DASHBOARD_BUILD: &str = "2026.07.28-b035";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -705,7 +705,9 @@ const TEMPLATE: &str = r#"
     const completedWindows = Array.isArray(accounting.completed_m3_windows) ? accounting.completed_m3_windows : [];
     let m3Streak = 0;
     for (let index = completedWindows.length - 1; index >= 0 && completedWindows[index]?.pass === true; index -= 1) m3Streak += 1;
-    text("current-v4-execution", `ТЕКУЩАЯ V4: ${number.format(epochCpu)} / ${number.format(epochTotal)} · ${ratio(epochCpu, epochTotal, 1)} · ${number.format(epochAccepts)} ACCEPTS · M3 ${m3Streak}/${accounting.m3_required_consecutive_windows || 3}`);
+    const productM3 = accounting.product_m3_pass === true ? "PASS" : "WATCH";
+    const currentM3 = accounting.m3_current_window_pass === true ? "PASS" : "WATCH";
+    text("current-v4-execution", `ТЕКУЩАЯ V4: ${number.format(epochCpu)} / ${number.format(epochTotal)} · ${ratio(epochCpu, epochTotal, 1)} · ${number.format(epochAccepts)} ACCEPTS · PRODUCT M3 ${productM3} · COMPLETED ${m3Streak}/${accounting.m3_required_consecutive_windows || 3} · CURRENT WINDOW ${currentM3}`);
 
     const miner = snapshot.miner_window || {};
     const minerOverview = overview.miner || {};
@@ -1000,6 +1002,8 @@ mod tests {
         assert!(html.contains("РЕАЛЬНО ВОСПРОИЗВЕДЕНО НА CPU"));
         assert!(html.contains("id=\"server-cpu-share\" class=\"stage-share\">1,5%"));
         assert!(html.contains("ДОЛЯ ОТ ВСЕГО SERVER ACCOUNTING"));
+        assert!(html.contains("PRODUCT M3 ${productM3}"));
+        assert!(html.contains("CURRENT WINDOW ${currentM3}"));
         assert!(html.contains("МАЙНЕР УЖЕ ПРИМЕНИЛ"));
         assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
         assert!(html.contains("ЖИВОЙ ВХОД МАЙНЕРА"));
