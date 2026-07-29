@@ -64,11 +64,13 @@ fn topology_row(
                 local_role_id: 0,
                 value_sha256: root(&format!("value:{action_event}")),
                 request_reference_ordinal: Some(0),
+                request_reference_ordinal_candidates: Vec::new(),
             },
             MultiSourceRoleWitnessV1 {
                 local_role_id: 1,
                 value_sha256: root(&format!("other:{action_event}")),
                 request_reference_ordinal: None,
+                request_reference_ordinal_candidates: Vec::new(),
             },
         ],
         relations: vec![
@@ -249,6 +251,7 @@ fn t1_continuation_topology_row(
                 local_role_id: 1,
                 value_sha256: root(&format!("historical:{request_event}")),
                 request_reference_ordinal: None,
+                request_reference_ordinal_candidates: Vec::new(),
             });
         row.structure
             .topology
@@ -764,6 +767,83 @@ fn acquisition_contract(
     .expect("acquisition contract")
 }
 
+fn acquisition_contract_v2(
+    max_eligible_topology_rows: u64,
+    max_raw_topology_rows: u64,
+) -> Ms3LinkedFrameAcquisitionContractV1 {
+    Ms3LinkedFrameAcquisitionContractV1::seal_v2(
+        root("topology-prefix-v2"),
+        1_832,
+        1,
+        max_eligible_topology_rows,
+        max_raw_topology_rows,
+        60,
+        5,
+    )
+    .expect("V2 acquisition contract")
+}
+
+fn unattributed_topology_row(
+    intent: &str,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    captured_at_unix_ms: u64,
+) -> PreActionTopologyAuditRowV1 {
+    let mut row = t1_topology_row(
+        intent,
+        request_event,
+        session,
+        capture_sequence,
+        captured_at_unix_ms,
+    );
+    row.structure.provider_bound_turn_identity = false;
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("unattributed topology commit");
+    row
+}
+
+fn censored_topology_row(
+    intent: &str,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    captured_at_unix_ms: u64,
+) -> PreActionTopologyAuditRowV1 {
+    let mut row = t1_topology_row(
+        intent,
+        request_event,
+        session,
+        capture_sequence,
+        captured_at_unix_ms,
+    );
+    row.structure.topology = PreActionMultiSourceTopologyV1 {
+        extraction_status: MultiSourceExtractionStatusV1::Censored {
+            reason: "ambiguous_request_reference".to_owned(),
+        },
+        grounded_output_count: 0,
+        output_part_count: 0,
+        roles: Vec::new(),
+        role_witnesses: Vec::new(),
+        relations: Vec::new(),
+    };
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("censored topology commit");
+    row
+}
+
 fn frozen_unique_law_fixture(
     label: &str,
     session: &str,
@@ -1254,6 +1334,155 @@ fn linked_frame_acquisition_collects_then_fails_at_the_sealed_row_budget() {
     assert_eq!(failed.blocker, MS3_LINKED_FRAME_ACQUISITION_FAIL);
     assert!(!failed.phase_update_allowed);
     assert!(!failed.authority_ready);
+}
+
+#[test]
+fn linked_frame_acquisition_counts_only_eligible_rows_toward_the_budget() {
+    let eligible_a = t1_topology_row("eligible-a", "request-eligible-a", "session-a", 2, 2_000);
+    let eligible_b = t1_topology_row("eligible-b", "request-eligible-b", "session-b", 4, 4_000);
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract_v2(2, 4),
+        10,
+        vec![
+            unattributed_topology_row(
+                "unattributed-a",
+                "request-unattributed-a",
+                "session-u-a",
+                1,
+                1_000,
+            ),
+            eligible_a,
+            unattributed_topology_row(
+                "unattributed-b",
+                "request-unattributed-b",
+                "session-u-b",
+                3,
+                3_000,
+            ),
+            eligible_b,
+        ],
+        Vec::new(),
+        vec![
+            terminal("request-eligible-a", 1_990, 2_100),
+            terminal("request-eligible-b", 3_990, 4_100),
+        ],
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.raw_scanned_topology_rows, 4);
+    assert_eq!(report.eligible_topology_rows, 2);
+    assert_eq!(report.evaluated_topology_rows, 2);
+    assert_eq!(report.censored_unattributed_rows, 2);
+    assert_eq!(report.consumed_topology_cursor_rows, 1_836);
+    assert_eq!(report.consumed_capture_sequence, 4);
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+    );
+}
+
+#[test]
+fn unattributed_raw_budget_closes_as_censor_and_restarts_byte_identically() {
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract(4, 60),
+        400,
+        vec![
+            t1_topology_row("eligible-a", "request-eligible-a", "session-a", 1, 1_000),
+            t1_topology_row("eligible-b", "request-eligible-b", "session-b", 2, 2_000),
+            unattributed_topology_row(
+                "unattributed-a",
+                "request-unattributed-a",
+                "session-u-a",
+                3,
+                3_000,
+            ),
+            unattributed_topology_row(
+                "unattributed-b",
+                "request-unattributed-b",
+                "session-u-b",
+                4,
+                4_000,
+            ),
+        ],
+        Vec::new(),
+        vec![
+            terminal("request-eligible-a", 990, 1_100),
+            terminal("request-eligible-b", 1_990, 2_100),
+        ],
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe
+    );
+    assert_eq!(report.blocker, MS3_CENSORED_UNATTRIBUTED_PROBE);
+    assert_eq!(report.raw_scanned_topology_rows, 4);
+    assert_eq!(report.eligible_topology_rows, 2);
+    assert_eq!(report.terminal_receipt_rows, 2);
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
+
+    let mut registry = Ms3GenerationRegistryV1::new();
+    let receipt = registry
+        .seal_unattributed_probe_censor(1, &report, report.consumed_capture_sequence)
+        .expect("durable unattributed censor");
+    assert_eq!(receipt.blocker, MS3_CENSORED_UNATTRIBUTED_PROBE);
+    assert_eq!(
+        receipt.consumed_topology_cursor_rows,
+        report.consumed_topology_cursor_rows
+    );
+    assert!(!receipt.phase_mutation_allowed);
+    assert!(!receipt.authority_ready);
+    let bytes = registry.canonical_bytes().expect("registry bytes");
+    let restored = Ms3GenerationRegistryV1::from_canonical_bytes(&bytes).expect("registry restore");
+    assert_eq!(restored.canonical_bytes().expect("restored bytes"), bytes);
+    assert_eq!(restored, registry);
+}
+
+#[test]
+fn mixed_unattributed_and_topology_censors_are_operational_not_scientific_failure() {
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract_v2(4, 4),
+        10,
+        vec![
+            t1_topology_row("eligible-a", "request-eligible-a", "session-a", 1, 1_000),
+            t1_topology_row("eligible-b", "request-eligible-b", "session-b", 2, 2_000),
+            unattributed_topology_row(
+                "unattributed",
+                "request-unattributed",
+                "session-u",
+                3,
+                3_000,
+            ),
+            censored_topology_row("censored", "request-censored", "session-c", 4, 4_000),
+        ],
+        Vec::new(),
+        vec![
+            terminal("request-eligible-a", 990, 1_100),
+            terminal("request-eligible-b", 1_990, 2_100),
+        ],
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::CensoredIneligibleProbe
+    );
+    assert_eq!(report.blocker, MS3_CENSORED_INELIGIBLE_PROBE);
+    assert_eq!(report.censored_unattributed_rows, 1);
+    assert_eq!(report.censored_topology_rows, 1);
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
+
+    let mut registry = Ms3GenerationRegistryV1::new();
+    let receipt = registry
+        .seal_ineligible_probe_censor(1, &report, report.consumed_capture_sequence)
+        .expect("durable mixed censor");
+    assert_eq!(receipt.blocker, MS3_CENSORED_INELIGIBLE_PROBE);
+    assert_eq!(receipt.censored_unattributed_rows, 1);
+    assert_eq!(receipt.censored_topology_rows, 1);
+    assert!(receipt.validate());
 }
 
 #[test]
@@ -3095,6 +3324,7 @@ fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
                 local_role_id: 2,
                 value_sha256: root(&format!("latest-other:{request}")),
                 request_reference_ordinal: None,
+                request_reference_ordinal_candidates: Vec::new(),
             });
         row.structure.topology.output_part_count = 3;
         row.structure

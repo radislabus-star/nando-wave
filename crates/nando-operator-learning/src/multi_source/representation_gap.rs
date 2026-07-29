@@ -521,6 +521,7 @@ mod tests {
                         local_role_id: u16::try_from(index).expect("role id"),
                         value_sha256: root(value),
                         request_reference_ordinal: None,
+                        request_reference_ordinal_candidates: Vec::new(),
                     },
                 )
                 .collect(),

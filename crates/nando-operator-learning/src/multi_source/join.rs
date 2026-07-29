@@ -150,7 +150,7 @@ impl MultiSourceJoinLedgerV1 {
 
         let mut eligible = Vec::new();
         for row in topologies {
-            match validate_topology_row(row) {
+            match validate_pre_action_topology_join_eligibility_v1(row) {
                 Ok(()) => eligible.push(row),
                 Err(reason) => ledger.censor(reason),
             }
@@ -308,7 +308,7 @@ impl BlindThenRevealJoinedTransitionV1 {
     }
 }
 
-fn validate_topology_row(
+pub fn validate_pre_action_topology_join_eligibility_v1(
     row: &PreActionTopologyAuditRowV1,
 ) -> Result<(), MultiSourceJoinCensoredReasonV1> {
     if !row.physical_order_proven {
@@ -516,7 +516,7 @@ pub(super) fn join_explicit_topology_to_frame(
     topology: &PreActionTopologyAuditRowV1,
     frame: &RelationFrame,
 ) -> Result<BlindThenRevealJoinedTransitionV1, MultiSourceJoinCensoredReasonV1> {
-    validate_topology_row(topology)?;
+    validate_pre_action_topology_join_eligibility_v1(topology)?;
     let (action, outcome) = completed_refs(frame)?;
     if !topology_matches_frame(topology, &action) {
         return Err(MultiSourceJoinCensoredReasonV1::IdentityMismatch);

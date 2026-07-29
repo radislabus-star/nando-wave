@@ -26,6 +26,7 @@ mod multi_source_topology_archive;
 mod nginx_terminal;
 mod opportunity_bridge;
 mod provider_capture;
+pub mod remote_evidence_spool;
 mod request_identity;
 mod request_learning;
 mod runtime_policy;
@@ -34,6 +35,7 @@ mod session_stream;
 mod stream_evidence;
 mod terminal_receipt_archive;
 pub use session_stream::{
+    SessionStreamMetrics, VerifiedRelationFrameSink, spawn_verified_relation_frame_stream,
     verified_capture_bound_training_cases_from_sessions,
     verified_collection_observations_from_session, verified_relation_frames_from_session,
     verified_relation_frames_from_session_tail, verified_session_identity_sha256_candidates,
@@ -110,7 +112,7 @@ use provider_capture::{
 use request_identity::ProviderRequestIdentityV1;
 use request_learning::RequestLearningIndex;
 use runtime_policy::{RuntimePolicyCache, spawn_runtime_policy_watch};
-use session_stream::{SessionMinerBridge, SessionStreamMetrics, spawn_session_stream};
+use session_stream::{SessionMinerBridge, spawn_session_stream};
 use stream_evidence::{SessionEvidenceLedger, StreamingEvidenceLedger};
 
 const OBSERVATION_REQUEST_SCHEMA: &str = "nando.transition-observation.v1";
@@ -183,6 +185,9 @@ pub struct ServingConfig {
     pub ms3_linked_frame_acquisition_path: PathBuf,
     pub ms3_linked_frame_acquisition_max_topologies: u64,
     pub ms3_linked_frame_acquisition_max_seconds: u64,
+    pub remote_evidence_spool_enabled: bool,
+    pub remote_evidence_spool_path: PathBuf,
+    pub remote_evidence_client_keys_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -410,6 +415,16 @@ impl ServingConfig {
                 86_400,
             )
             .clamp(60, 7 * 24 * 60 * 60),
+            remote_evidence_spool_enabled: env_flag("NANDO_REMOTE_EVIDENCE_SPOOL_ENABLED"),
+            remote_evidence_spool_path: env_path_join(
+                "NANDO_REMOTE_EVIDENCE_SPOOL",
+                &state_dir,
+                "multi-source-live-v2/remote-evidence-spool-v1",
+            ),
+            remote_evidence_client_keys_path: env_path(
+                "NANDO_REMOTE_EVIDENCE_CLIENT_KEYS",
+                "/etc/nando-wave/evidence-clients",
+            ),
         })
     }
 }
@@ -687,6 +702,7 @@ struct AppState {
         Option<Arc<Mutex<ms3_linked_frame_acquisition::Ms3LinkedFrameAcquisitionRuntime>>>,
     ms3_frozen_version_space:
         Option<Arc<Mutex<ms3_frozen_version_space::Ms3FrozenVersionSpaceRuntime>>>,
+    remote_evidence_spool: Option<Arc<Mutex<remote_evidence_spool::RemoteEvidenceSpoolRuntime>>>,
 }
 
 #[derive(Default)]
@@ -852,6 +868,19 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     } else {
         None
     };
+    let remote_evidence_spool = if config.remote_evidence_spool_enabled {
+        if multi_source_frame_archive.is_none() {
+            return Err("remote_evidence_spool_requires_frame_archive".to_owned());
+        }
+        Some(Arc::new(Mutex::new(
+            remote_evidence_spool::RemoteEvidenceSpoolRuntime::open(
+                config.remote_evidence_spool_path.clone(),
+                config.remote_evidence_client_keys_path.clone(),
+            )?,
+        )))
+    } else {
+        None
+    };
     let multi_source_topology_archive = if config.learning_structure_bridge_consumer_enabled {
         let mut archive = multi_source_topology_archive::MultiSourceTopologyArchive::open(
             &config.multi_source_topology_archive_path,
@@ -935,6 +964,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         ms3_generation_lifecycle,
         ms3_linked_frame_acquisition,
         ms3_frozen_version_space,
+        remote_evidence_spool,
     };
     if state.ms3_generation_lifecycle.is_some() {
         rollover_ms3_generation_if_terminal(&state)?;
@@ -984,6 +1014,12 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/ms3-capture-health",
             get(ms3_capture_health_report),
+        )
+        .route(
+            remote_evidence_spool::REMOTE_EVIDENCE_ENDPOINT_V1,
+            post(ingest_remote_evidence).layer(DefaultBodyLimit::max(
+                remote_evidence_spool::REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1,
+            )),
         )
         .route("/v1/transitions/execute", post(execute_transition))
         .route("/v2/transitions/execute", post(execute_transition))
@@ -1336,6 +1372,7 @@ async fn health(State(state): State<AppState>) -> Response {
         "raw_payload_persisted": false,
     });
     let (
+        session_source_files,
         turn_graphs_finalized,
         turn_graphs_rejected_overflow,
         censored_invalid_session_identities,
@@ -1355,6 +1392,7 @@ async fn health(State(state): State<AppState>) -> Response {
         "censored_invalid_session_identity": censored_invalid_session_identities,
         "censored_invalid_utf8_rows": censored_invalid_utf8_rows,
         "session_watcher_alive": session_watcher_alive,
+        "session_source_files": session_source_files,
         "session_watcher_events": session_watcher_events,
         "session_watcher_last_event_unix": session_watcher_last_event_unix,
     });
@@ -1365,6 +1403,18 @@ async fn health(State(state): State<AppState>) -> Response {
         .and_then(MinerWorkerHandle::collection_snapshot)
         .or_else(|| collection_snapshot_without_worker(collection_miner.as_ref()));
     let collection_busy = collection_miner.is_some() && collection_snapshot.is_none();
+    let remote_evidence = remote_evidence_status(&state);
+    let local_session_learning_ready =
+        session_watcher_alive && session_source_files > 0 && turn_graphs_finalized > 0;
+    let learning_closed_loop_ready =
+        remote_evidence.learning_closed_loop_ready || local_session_learning_ready;
+    let learning_blocker = if learning_closed_loop_ready {
+        Value::Null
+    } else if session_source_files == 0 && remote_evidence.accepted_frames == 0 {
+        json!("NO_LIVE_POST_ACTION_EVIDENCE_SOURCE")
+    } else {
+        json!("LIVE_POST_ACTION_EVIDENCE_NOT_YET_VERIFIED")
+    };
     let mut collection_status = collection_snapshot.as_ref().map_or_else(
         || json!({}),
         |value| serde_json::to_value(&value.status).unwrap_or_else(|_| json!({})),
@@ -1442,6 +1492,33 @@ async fn health(State(state): State<AppState>) -> Response {
     let response_cpu_by_package_valid =
         response_cpu_by_package_lock_valid && response_cpu_by_package_overflow == 0;
     if let Some(object) = health.as_object_mut() {
+        object.insert(
+            "remote_evidence".to_owned(),
+            serde_json::to_value(&remote_evidence).unwrap_or_else(|_| json!({})),
+        );
+        object.insert(
+            "learning_closed_loop_ready".to_owned(),
+            json!(learning_closed_loop_ready),
+        );
+        object.insert(
+            "learning_health".to_owned(),
+            json!({
+                "serving_healthy": true,
+                "local_session_source_files": session_source_files,
+                "local_session_watcher_alive": session_watcher_alive,
+                "local_verified_graphs": turn_graphs_finalized,
+                "remote_spool_enabled": remote_evidence.enabled,
+                "remote_configured_clients": remote_evidence.configured_clients,
+                "remote_active_clients": remote_evidence.active_clients,
+                "remote_accepted_batches": remote_evidence.accepted_batches,
+                "remote_accepted_frames": remote_evidence.accepted_frames,
+                "learning_closed_loop_ready": learning_closed_loop_ready,
+                "blocker": learning_blocker,
+                "authority_ready": false,
+                "phase_mutation_allowed": false,
+                "raw_session_payload_persisted": false,
+            }),
+        );
         object.insert(
             "response_cpu_by_package_valid".to_owned(),
             json!(response_cpu_by_package_valid),
@@ -1547,6 +1624,115 @@ async fn health(State(state): State<AppState>) -> Response {
         );
     }
     json_response(StatusCode::OK, health)
+}
+
+async fn ingest_remote_evidence(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let Some(runtime) = state.remote_evidence_spool.as_ref() else {
+        return json_response(
+            StatusCode::NOT_FOUND,
+            json!({"ok":false,"error":"remote_evidence_spool_disabled"}),
+        );
+    };
+    let Some(client_id) = header_text(&headers, "x-nando-evidence-client") else {
+        return json_response(
+            StatusCode::UNAUTHORIZED,
+            json!({"ok":false,"error":"remote_evidence_auth_missing"}),
+        );
+    };
+    let Some(timestamp_unix) = header_text(&headers, "x-nando-evidence-timestamp")
+        .and_then(|value| value.parse::<u64>().ok())
+    else {
+        return json_response(
+            StatusCode::UNAUTHORIZED,
+            json!({"ok":false,"error":"remote_evidence_auth_missing"}),
+        );
+    };
+    let Some(signature) = header_text(&headers, "x-nando-evidence-signature") else {
+        return json_response(
+            StatusCode::UNAUTHORIZED,
+            json!({"ok":false,"error":"remote_evidence_auth_missing"}),
+        );
+    };
+    let Some(frame_archive) = state.multi_source_frame_archive.as_ref() else {
+        return json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({"ok":false,"error":"remote_evidence_frame_archive_unavailable"}),
+        );
+    };
+    let mut runtime = match runtime.lock() {
+        Ok(runtime) => runtime,
+        Err(_) => {
+            return json_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                json!({"ok":false,"error":"remote_evidence_spool_busy"}),
+            );
+        }
+    };
+    let mut frame_archive = match frame_archive.lock() {
+        Ok(archive) => archive,
+        Err(_) => {
+            return json_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                json!({"ok":false,"error":"remote_evidence_frame_archive_busy"}),
+            );
+        }
+    };
+    match runtime.ingest(
+        client_id,
+        timestamp_unix,
+        signature,
+        &body,
+        unix_now(),
+        &mut frame_archive,
+    ) {
+        Ok(ack) => json_response(
+            StatusCode::OK,
+            serde_json::to_value(ack).unwrap_or_else(|_| json!({"ok":true})),
+        ),
+        Err(error) => {
+            let status = if error.starts_with("remote_evidence_auth") {
+                StatusCode::UNAUTHORIZED
+            } else if error.contains("sequence_conflict") || error.contains("rebound") {
+                StatusCode::CONFLICT
+            } else if error.contains("write")
+                || error.contains("archive")
+                || error.contains("directory")
+                || error.contains("publish")
+            {
+                StatusCode::SERVICE_UNAVAILABLE
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            json_response(status, json!({"ok":false,"error":bounded_reason(&error)}))
+        }
+    }
+}
+
+fn remote_evidence_status(state: &AppState) -> remote_evidence_spool::RemoteEvidenceSpoolStatusV1 {
+    state.remote_evidence_spool.as_ref().map_or_else(
+        || remote_evidence_spool::RemoteEvidenceSpoolStatusV1 {
+            enabled: false,
+            ..remote_evidence_spool::RemoteEvidenceSpoolStatusV1::default()
+        },
+        |runtime| {
+            runtime.lock().map_or_else(
+                |_| remote_evidence_spool::RemoteEvidenceSpoolStatusV1 {
+                    enabled: true,
+                    rejected_batches: 1,
+                    ..remote_evidence_spool::RemoteEvidenceSpoolStatusV1::default()
+                },
+                |runtime| runtime.status(state.multi_source_frame_archive.is_some()),
+            )
+        },
+    )
+}
+
+fn header_text<'a>(headers: &'a HeaderMap, name: &'static str) -> Option<&'a str> {
+    headers.get(name)?.to_str().ok()
 }
 
 #[derive(Default)]
@@ -2816,6 +3002,13 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
         report.verdict
             == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
     });
+    let linked_ineligible_probe_censor = acquisition.terminal_report().filter(|report| {
+        matches!(
+            report.verdict,
+            nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe
+                | nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredIneligibleProbe
+        )
+    });
     let linked_capture_gap_repair = acquisition.terminal_report().filter(|report| {
         report.verdict
             == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
@@ -2851,6 +3044,7 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
                 == nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail
         });
     if linked_acquisition_failure.is_none()
+        && linked_ineligible_probe_censor.is_none()
         && linked_capture_gap_repair.is_none()
         && linked_evidence_reuse.is_none()
         && !terminal_contradiction
@@ -2865,13 +3059,28 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
         .lock()
         .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
     if let Some(report) = linked_acquisition_failure.as_ref() {
-        frozen.seal_linked_acquisition_failure(report, topology_archive.max_bridge_sequence())?;
+        frozen.seal_linked_acquisition_failure(
+            report,
+            linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
+        )?;
+    }
+    if let Some(report) = linked_ineligible_probe_censor.as_ref() {
+        frozen.seal_ineligible_probe_censor(
+            report,
+            linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
+        )?;
     }
     if let Some(report) = linked_capture_gap_repair.as_ref() {
-        frozen.seal_linked_capture_gap_repair(report, topology_archive.max_bridge_sequence())?;
+        frozen.seal_linked_capture_gap_repair(
+            report,
+            linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
+        )?;
     }
     if let Some(report) = linked_evidence_reuse.as_ref() {
-        frozen.seal_linked_evidence_reuse(report, topology_archive.max_bridge_sequence())?;
+        frozen.seal_linked_evidence_reuse(
+            report,
+            linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
+        )?;
     }
     let mut lifecycle = lifecycle
         .lock()
@@ -2886,6 +3095,30 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     *acquisition = runtimes.acquisition;
     *frozen = runtimes.frozen;
     Ok(true)
+}
+
+fn linked_acquisition_closure_capture_sequence(
+    report: &nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionReportV1,
+    topology_archive: &multi_source_topology_archive::MultiSourceTopologyArchive,
+) -> Result<u64, String> {
+    let consumed_cursor = if report.consumed_topology_cursor_rows > 0 {
+        report.consumed_topology_cursor_rows
+    } else {
+        report
+            .acquisition_contract
+            .topology_watermark_rows
+            .checked_add(report.evaluated_topology_rows)
+            .ok_or_else(|| "ms3_acquisition_consumed_cursor_overflow".to_owned())?
+    };
+    let archive_sequence = topology_archive.bridge_sequence_at_cursor(
+        usize::try_from(consumed_cursor)
+            .map_err(|_| "ms3_acquisition_consumed_cursor_range".to_owned())?,
+    )?;
+    if report.consumed_capture_sequence > 0 && report.consumed_capture_sequence != archive_sequence
+    {
+        return Err("ms3_acquisition_consumed_sequence_mismatch".to_owned());
+    }
+    Ok(archive_sequence)
 }
 
 fn evaluate_ms3_frozen_version_space(
@@ -2917,7 +3150,7 @@ fn evaluate_ms3_frozen_version_space(
         ));
     }
     let linked_receipt = no_gap_receipts[0];
-    let (watermark_rows, evaluated_rows) = {
+    let (watermark_rows, evaluated_rows, consumed_cursor_rows) = {
         let acquisition_runtime = state
             .ms3_linked_frame_acquisition
             .as_ref()
@@ -2929,6 +3162,9 @@ fn evaluate_ms3_frozen_version_space(
             acquisition_runtime
                 .frozen_evaluated_topology_rows()
                 .ok_or_else(|| "ms3_acquisition_denominator_not_frozen".to_owned())?,
+            acquisition_runtime
+                .consumed_topology_cursor_rows()
+                .ok_or_else(|| "ms3_acquisition_consumed_cursor_not_frozen".to_owned())?,
         )
     };
     let frozen_topologies = {
@@ -2938,12 +3174,25 @@ fn evaluate_ms3_frozen_version_space(
             .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
             .lock()
             .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
-        let mut rows = archive.rows_after(
+        let rows = archive.rows_between(
             usize::try_from(watermark_rows)
                 .map_err(|_| "ms3_version_space_watermark_range".to_owned())?,
+            usize::try_from(consumed_cursor_rows)
+                .map_err(|_| "ms3_version_space_consumed_cursor_range".to_owned())?,
         )?;
-        rows.truncate(usize::try_from(evaluated_rows).unwrap_or(usize::MAX));
-        rows
+        let eligible = rows
+            .into_iter()
+            .filter(|row| {
+                nando_operator_learning::multi_source::validate_pre_action_topology_join_eligibility_v1(
+                    row,
+                )
+                .is_ok()
+            })
+            .collect::<Vec<_>>();
+        if u64::try_from(eligible.len()).unwrap_or(u64::MAX) != evaluated_rows {
+            return Err("ms3_version_space_eligible_denominator_mismatch".to_owned());
+        }
+        eligible
     };
     if !frozen_topologies.iter().any(|topology| {
         topology.commit.commitment_root_sha256 == linked_receipt.topology_commitment_root_sha256
@@ -7299,6 +7548,9 @@ mod tests {
                 .join("multi-source-live-v2/linked-frame-acquisition-v1"),
             ms3_linked_frame_acquisition_max_topologies: 256,
             ms3_linked_frame_acquisition_max_seconds: 86_400,
+            remote_evidence_spool_enabled: false,
+            remote_evidence_spool_path: root.join("remote-evidence-spool-v1"),
+            remote_evidence_client_keys_path: root.join("remote-evidence-keys"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -7365,6 +7617,7 @@ mod tests {
             ms3_generation_lifecycle: None,
             ms3_linked_frame_acquisition: None,
             ms3_frozen_version_space: None,
+            remote_evidence_spool: None,
         };
         refresh_response_executor(&state);
         state
@@ -8442,11 +8695,14 @@ mod tests {
     #[test]
     fn ms3_freeze_waits_for_terminal_linked_evidence() {
         use nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::{
-            AcquisitionFail, Collecting, LinkedFrameObserved,
+            AcquisitionFail, CensoredIneligibleProbe, CensoredUnattributedProbe, Collecting,
+            LinkedFrameObserved,
         };
 
         assert!(!ms3_acquisition_allows_freeze(Collecting));
         assert!(!ms3_acquisition_allows_freeze(AcquisitionFail));
+        assert!(!ms3_acquisition_allows_freeze(CensoredUnattributedProbe));
+        assert!(!ms3_acquisition_allows_freeze(CensoredIneligibleProbe));
         assert!(ms3_acquisition_allows_freeze(LinkedFrameObserved));
     }
 

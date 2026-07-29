@@ -17,8 +17,9 @@ const MAX_RELEVANT_OUTPUTS_V1: usize = 8;
 struct CollectedRole {
     node: MultiSourceRoleNodeV1,
     value_sha256: String,
-    request_position: Option<u16>,
+    request_positions: Vec<u16>,
     request_reference_ordinal: Option<u16>,
+    request_reference_ordinal_candidates: Vec<u16>,
     json_path_sha256: [u8; 32],
     continuation_handle: bool,
 }
@@ -43,8 +44,9 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
                     source_ordinal + 1 == outputs.len(),
                 ),
                 value_sha256: role.value_sha256.clone(),
-                request_position: role.request_position,
+                request_positions: role.request_position_candidates.clone(),
                 request_reference_ordinal: None,
+                request_reference_ordinal_candidates: Vec::new(),
                 json_path_sha256: role.json_path_sha256,
                 continuation_handle: role.role_class == ObservedScalarRoleClass::ContinuationHandle,
             });
@@ -53,17 +55,8 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
             return censored("role_budget_exceeded");
         }
     }
-    let mut referenced = collected
-        .iter()
-        .enumerate()
-        .filter_map(|(index, role)| role.request_position.map(|position| (position, index)))
-        .collect::<Vec<_>>();
-    referenced.sort_unstable();
-    if referenced.windows(2).any(|pair| pair[0].0 == pair[1].0) {
-        return censored("request_role_ordinal_ambiguous");
-    }
-    for (ordinal, (_, index)) in referenced.into_iter().enumerate() {
-        collected[index].request_reference_ordinal = u16::try_from(ordinal).ok();
+    if let Err(reason) = assign_request_reference_ordinals(&mut collected) {
+        return censored(reason);
     }
     collected.sort_by_key(|role| {
         (
@@ -75,6 +68,7 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
             role.node.structural_flags,
             role.continuation_handle,
             role.request_reference_ordinal,
+            role.request_reference_ordinal_candidates.clone(),
             role.node.value_ordinal,
             role.json_path_sha256,
         )
@@ -92,6 +86,7 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
             local_role_id: role.node.local_role_id,
             value_sha256: role.value_sha256.clone(),
             request_reference_ordinal: role.request_reference_ordinal,
+            request_reference_ordinal_candidates: role.request_reference_ordinal_candidates.clone(),
         })
         .collect::<Vec<_>>();
     let mut relations = Vec::new();
@@ -142,6 +137,49 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
     }
 }
 
+fn assign_request_reference_ordinals(collected: &mut [CollectedRole]) -> Result<(), &'static str> {
+    let referenced = collected
+        .iter()
+        .enumerate()
+        .filter(|(_, role)| !role.request_positions.is_empty())
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if referenced.len() > 16 {
+        return Err("request_role_ordinal_budget");
+    }
+    for index in &referenced {
+        let positions = collected[*index].request_positions.clone();
+        let mut ordinals = std::collections::BTreeSet::new();
+        for position in &positions {
+            let mut forced_before = 0_u16;
+            let mut possible_before = 0_u16;
+            for other_index in &referenced {
+                if other_index == index {
+                    continue;
+                }
+                let other = &collected[*other_index].request_positions;
+                if other.iter().all(|candidate| candidate < position) {
+                    forced_before = forced_before.saturating_add(1);
+                    possible_before = possible_before.saturating_add(1);
+                } else if other.iter().any(|candidate| candidate <= position) {
+                    possible_before = possible_before.saturating_add(1);
+                }
+            }
+            ordinals.extend(forced_before..=possible_before);
+        }
+        if ordinals.is_empty() || ordinals.iter().any(|ordinal| *ordinal > 15) {
+            return Err("request_role_ordinal_budget");
+        }
+        let ambiguous = positions.len() > 1 || ordinals.len() > 1;
+        if ambiguous {
+            collected[*index].request_reference_ordinal_candidates = ordinals.into_iter().collect();
+        } else {
+            collected[*index].request_reference_ordinal = ordinals.into_iter().next();
+        }
+    }
+    Ok(())
+}
+
 fn provider_outputs(payload: &Value) -> Vec<Value> {
     payload
         .get("input")
@@ -186,15 +224,15 @@ fn select_relevant_outputs(
     let mut references = std::collections::BTreeMap::<u16, Vec<(usize, usize)>>::new();
     for (output_index, (_, _, roles)) in metadata.iter().enumerate() {
         for (role_index, role) in roles.iter().enumerate() {
-            if let Some(position) = role.request_position {
+            for position in &role.request_position_candidates {
                 references
-                    .entry(position)
+                    .entry(*position)
                     .or_default()
                     .push((output_index, role_index));
             }
         }
     }
-    for matches in references.values() {
+    for (position, matches) in &references {
         if matches.len() <= 1 {
             continue;
         }
@@ -203,19 +241,24 @@ fn select_relevant_outputs(
             .copied()
             .filter(|(output_index, _)| metadata[*output_index].0 == latest_ordinal)
             .collect::<Vec<_>>();
-        if latest.len() > 1 {
-            return Err("request_role_path_ambiguous");
-        }
         for (output_index, role_index) in matches {
-            if latest.first().copied() != Some((*output_index, *role_index)) {
-                metadata[*output_index].2[*role_index].request_position = None;
+            if !latest.contains(&(*output_index, *role_index)) {
+                metadata[*output_index].2[*role_index]
+                    .request_position_candidates
+                    .retain(|candidate| candidate != position);
+                let candidates =
+                    &metadata[*output_index].2[*role_index].request_position_candidates;
+                metadata[*output_index].2[*role_index].request_position =
+                    (candidates.len() == 1).then(|| candidates[0]);
             }
         }
     }
     let mut metadata = metadata
         .into_iter()
         .map(|(ordinal, output, roles)| {
-            let request_referenced = roles.iter().any(|role| role.request_position.is_some());
+            let request_referenced = roles
+                .iter()
+                .any(|role| !role.request_position_candidates.is_empty());
             (ordinal, output, roles, request_referenced)
         })
         .collect::<Vec<_>>();
@@ -283,7 +326,8 @@ fn role_node(
             MultiSourceTemporalClassV1::Historical
         },
         depth_bucket: role.depth_bucket,
-        structural_flags: u16::from(role.request_position.is_some()) * FLAG_REQUEST_REFERENCED,
+        structural_flags: u16::from(!role.request_position_candidates.is_empty())
+            * FLAG_REQUEST_REFERENCED,
     }
 }
 
@@ -415,6 +459,33 @@ mod tests {
                 .count()
                 >= 2
         );
+    }
+
+    #[test]
+    fn repeated_request_mention_is_preserved_as_typed_ambiguity() {
+        let topology = extract_pre_action_multi_source_topology_v1(
+            &json!({"input":[{
+                "type":"function_call_output",
+                "output":{"session_id":93139}
+            }]}),
+            "compare session_id with the previous session_id",
+        );
+
+        assert!(matches!(
+            topology.extraction_status,
+            MultiSourceExtractionStatusV1::Complete
+        ));
+        topology.validate().expect("typed ambiguity is canonical");
+        let witness = topology.role_witnesses.first().expect("role witness");
+        assert_eq!(witness.request_reference_ordinal, None);
+        assert_eq!(witness.request_reference_ordinal_candidates, vec![0]);
+        assert!(topology.relations.iter().any(|edge| {
+            edge.relation == MultiSourceRelationKindV1::RequestReferencesRole
+                && edge.source_role_id == witness.local_role_id
+        }));
+        let encoded = serde_json::to_string(&topology).expect("encode");
+        assert!(!encoded.contains("session_id"));
+        assert!(!encoded.contains("93139"));
     }
 
     #[test]

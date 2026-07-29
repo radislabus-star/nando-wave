@@ -4,9 +4,10 @@ use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    FrozenVersionSpaceEnvelopeV1, MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL,
-    MS3_LINKED_FRAME_ACQUISITION_FAIL, Ms3FutureApplicabilityReportV1,
-    Ms3FutureApplicabilityVerdictV1, Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureVerdictV1,
+    FrozenVersionSpaceEnvelopeV1, MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_UNATTRIBUTED_PROBE,
+    MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL, MS3_LINKED_FRAME_ACQUISITION_FAIL,
+    Ms3FutureApplicabilityReportV1, Ms3FutureApplicabilityVerdictV1,
+    Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureVerdictV1,
     Ms3LinkedFrameAcquisitionReportV1, Ms3LinkedFrameAcquisitionVerdictV1,
 };
 
@@ -16,6 +17,8 @@ pub const MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1: &str =
     "nando.ms3-generation-acquisition-failure.v1";
 pub const MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1: &str =
     "nando.ms3-generation-linked-acquisition-failure.v1";
+pub const MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2: &str =
+    "nando.ms3-generation-linked-acquisition-failure.v2";
 pub const MS3_CAPTURE_GAP_REPAIR_REQUIRED: &str = "ms3_capture_gap_repair_required";
 pub const MS3_LINKED_EVIDENCE_REUSE: &str = "MS3_LINKED_EVIDENCE_REUSE";
 const MAX_MS3_GENERATION_REGISTRY_BYTES: usize = 12 * 1024 * 1024;
@@ -73,6 +76,38 @@ pub struct Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
     pub blocker: String,
     pub authority_ready: bool,
     pub phase_mutation_allowed: bool,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub raw_scanned_topology_rows: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub eligible_topology_rows: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub censored_unattributed_rows: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub censored_topology_rows: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub consumed_topology_cursor_rows: u64,
+}
+
+#[derive(Serialize)]
+struct Ms3GenerationLinkedAcquisitionClosureDigestV2<'a> {
+    schema: &'static str,
+    generation_sequence: u64,
+    acquisition_contract_root_sha256: &'a str,
+    acquisition_report_root_sha256: &'a str,
+    topology_prefix_root_sha256: &'a str,
+    topology_watermark_rows: u64,
+    evaluated_topology_rows: u64,
+    terminal_receipt_rows: u64,
+    closure_capture_sequence: u64,
+    generated_at_unix: u64,
+    blocker: &'a str,
+    authority_ready: bool,
+    phase_mutation_allowed: bool,
+    raw_scanned_topology_rows: u64,
+    eligible_topology_rows: u64,
+    censored_unattributed_rows: u64,
+    censored_topology_rows: u64,
+    consumed_topology_cursor_rows: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -151,7 +186,7 @@ impl Ms3GenerationRegistryV1 {
         }
         if generation_sequence > 1 {
             let closure_sequence = self
-                .closure_capture_sequence(generation_sequence - 1)
+                .generation_closure_capture_sequence(generation_sequence - 1)
                 .ok_or(Ms3GenerationRegistryErrorV1::TerminalGenerationMissing)?;
             if frozen.contract.support_watermark <= closure_sequence
                 || frozen.contract.future_min_sequence <= closure_sequence
@@ -187,6 +222,8 @@ impl Ms3GenerationRegistryV1 {
             || report.blocker != MS3_LINKED_FRAME_ACQUISITION_FAIL
             || generation_sequence == 0
             || closure_capture_sequence == 0
+            || report.consumed_capture_sequence > 0
+                && closure_capture_sequence != report.consumed_capture_sequence
         {
             return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
         }
@@ -231,6 +268,107 @@ impl Ms3GenerationRegistryV1 {
             blocker: report.blocker.clone(),
             authority_ready: false,
             phase_mutation_allowed: false,
+            raw_scanned_topology_rows: 0,
+            eligible_topology_rows: 0,
+            censored_unattributed_rows: 0,
+            censored_topology_rows: 0,
+            consumed_topology_cursor_rows: 0,
+        };
+        receipt.receipt_root_sha256 = receipt.expected_root()?;
+        self.linked_acquisition_failures.push(receipt.clone());
+        self.reseal()?;
+        Ok(receipt)
+    }
+
+    pub fn seal_unattributed_probe_censor(
+        &mut self,
+        generation_sequence: u64,
+        report: &Ms3LinkedFrameAcquisitionReportV1,
+        closure_capture_sequence: u64,
+    ) -> Result<Ms3GenerationLinkedAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1> {
+        if report.verdict != Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        self.seal_ineligible_probe_censor(generation_sequence, report, closure_capture_sequence)
+    }
+
+    pub fn seal_ineligible_probe_censor(
+        &mut self,
+        generation_sequence: u64,
+        report: &Ms3LinkedFrameAcquisitionReportV1,
+        closure_capture_sequence: u64,
+    ) -> Result<Ms3GenerationLinkedAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1> {
+        let censor_matches = matches!(
+            (
+                report.verdict,
+                report.blocker.as_str(),
+                report.censored_topology_rows
+            ),
+            (
+                Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe,
+                MS3_CENSORED_UNATTRIBUTED_PROBE,
+                0
+            ) | (
+                Ms3LinkedFrameAcquisitionVerdictV1::CensoredIneligibleProbe,
+                MS3_CENSORED_INELIGIBLE_PROBE,
+                1..
+            )
+        );
+        if !report.validate()
+            || !censor_matches
+            || generation_sequence == 0
+            || closure_capture_sequence == 0
+            || closure_capture_sequence != report.consumed_capture_sequence
+        {
+            return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if let Some(existing) = self
+            .linked_acquisition_failures
+            .iter()
+            .find(|receipt| receipt.generation_sequence == generation_sequence)
+        {
+            return (existing.acquisition_contract_root_sha256
+                == report.acquisition_contract.contract_root_sha256
+                && existing.acquisition_report_root_sha256 == report.report_root_sha256
+                && existing.blocker == report.blocker)
+                .then_some(existing.clone())
+                .ok_or(Ms3GenerationRegistryErrorV1::InvalidFuture);
+        }
+        if generation_sequence != self.next_generation_sequence()
+            || self
+                .generations
+                .iter()
+                .any(|entry| entry.generation_sequence == generation_sequence)
+        {
+            return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
+        }
+        self.require_successor_allowed(generation_sequence)?;
+        let mut receipt = Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
+            schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2.to_owned(),
+            receipt_root_sha256: String::new(),
+            generation_sequence,
+            acquisition_contract_root_sha256: report
+                .acquisition_contract
+                .contract_root_sha256
+                .clone(),
+            acquisition_report_root_sha256: report.report_root_sha256.clone(),
+            topology_prefix_root_sha256: report
+                .acquisition_contract
+                .topology_prefix_root_sha256
+                .clone(),
+            topology_watermark_rows: report.acquisition_contract.topology_watermark_rows,
+            evaluated_topology_rows: report.evaluated_topology_rows,
+            terminal_receipt_rows: report.terminal_receipt_rows,
+            closure_capture_sequence,
+            generated_at_unix: report.generated_at_unix,
+            blocker: report.blocker.clone(),
+            authority_ready: false,
+            phase_mutation_allowed: false,
+            raw_scanned_topology_rows: report.raw_scanned_topology_rows,
+            eligible_topology_rows: report.eligible_topology_rows,
+            censored_unattributed_rows: report.censored_unattributed_rows,
+            censored_topology_rows: report.censored_topology_rows,
+            consumed_topology_cursor_rows: report.consumed_topology_cursor_rows,
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
         self.linked_acquisition_failures.push(receipt.clone());
@@ -252,6 +390,8 @@ impl Ms3GenerationRegistryV1 {
             })
             || generation_sequence == 0
             || closure_capture_sequence == 0
+            || report.consumed_capture_sequence > 0
+                && closure_capture_sequence != report.consumed_capture_sequence
         {
             return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
         }
@@ -297,6 +437,11 @@ impl Ms3GenerationRegistryV1 {
             blocker: MS3_CAPTURE_GAP_REPAIR_REQUIRED.to_owned(),
             authority_ready: false,
             phase_mutation_allowed: false,
+            raw_scanned_topology_rows: 0,
+            eligible_topology_rows: 0,
+            censored_unattributed_rows: 0,
+            censored_topology_rows: 0,
+            consumed_topology_cursor_rows: 0,
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
         self.linked_acquisition_failures.push(receipt.clone());
@@ -319,6 +464,8 @@ impl Ms3GenerationRegistryV1 {
                 .all(|receipt| self.linked_evidence_was_used(receipt))
             || generation_sequence == 0
             || closure_capture_sequence == 0
+            || report.consumed_capture_sequence > 0
+                && closure_capture_sequence != report.consumed_capture_sequence
         {
             return Err(Ms3GenerationRegistryErrorV1::InvalidFuture);
         }
@@ -364,6 +511,11 @@ impl Ms3GenerationRegistryV1 {
             blocker: MS3_LINKED_EVIDENCE_REUSE.to_owned(),
             authority_ready: false,
             phase_mutation_allowed: false,
+            raw_scanned_topology_rows: 0,
+            eligible_topology_rows: 0,
+            censored_unattributed_rows: 0,
+            censored_topology_rows: 0,
+            consumed_topology_cursor_rows: 0,
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
         self.linked_acquisition_failures.push(receipt.clone());
@@ -615,7 +767,7 @@ impl Ms3GenerationRegistryV1 {
         Ok(())
     }
 
-    fn closure_capture_sequence(&self, generation_sequence: u64) -> Option<u64> {
+    pub fn generation_closure_capture_sequence(&self, generation_sequence: u64) -> Option<u64> {
         self.generations
             .iter()
             .find(|entry| entry.generation_sequence == generation_sequence)
@@ -731,7 +883,7 @@ impl Ms3GenerationRegistryV1 {
                         .iter()
                         .find(|entry| entry.generation_sequence == sequence + 1)
                         .is_none_or(|next| {
-                            self.closure_capture_sequence(sequence)
+                            self.generation_closure_capture_sequence(sequence)
                                 .is_some_and(|closure| {
                                     next.support_watermark > closure
                                         && next.future_min_sequence > closure
@@ -885,8 +1037,11 @@ impl Ms3GenerationAcquisitionFailureReceiptV1 {
 impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
     #[must_use]
     pub fn validate(&self) -> bool {
-        self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1
-            && self.generation_sequence > 0
+        matches!(
+            self.schema.as_str(),
+            MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1
+                | MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
+        ) && self.generation_sequence > 0
             && valid_nonzero_sha256(&self.receipt_root_sha256)
             && valid_nonzero_sha256(&self.acquisition_contract_root_sha256)
             && valid_nonzero_sha256(&self.acquisition_report_root_sha256)
@@ -899,8 +1054,52 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
                 MS3_CAPTURE_GAP_REPAIR_REQUIRED | MS3_LINKED_EVIDENCE_REUSE => {
                     self.terminal_receipt_rows > 0
                 }
+                MS3_CENSORED_UNATTRIBUTED_PROBE => {
+                    self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
+                        && self.raw_scanned_topology_rows > self.eligible_topology_rows
+                        && self.eligible_topology_rows == self.evaluated_topology_rows
+                        && self.censored_unattributed_rows > 0
+                        && self.censored_topology_rows == 0
+                        && self.censored_unattributed_rows
+                            == self
+                                .raw_scanned_topology_rows
+                                .saturating_sub(self.eligible_topology_rows)
+                        && self.terminal_receipt_rows >= self.eligible_topology_rows
+                        && self.consumed_topology_cursor_rows
+                            == self
+                                .topology_watermark_rows
+                                .saturating_add(self.raw_scanned_topology_rows)
+                }
+                MS3_CENSORED_INELIGIBLE_PROBE => {
+                    self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
+                        && self.raw_scanned_topology_rows > self.eligible_topology_rows
+                        && self.eligible_topology_rows == self.evaluated_topology_rows
+                        && self.censored_topology_rows > 0
+                        && self
+                            .censored_unattributed_rows
+                            .saturating_add(self.censored_topology_rows)
+                            == self
+                                .raw_scanned_topology_rows
+                                .saturating_sub(self.eligible_topology_rows)
+                        && self.terminal_receipt_rows >= self.eligible_topology_rows
+                        && self.consumed_topology_cursor_rows
+                            == self
+                                .topology_watermark_rows
+                                .saturating_add(self.raw_scanned_topology_rows)
+                }
                 _ => false,
             }
+            && (self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1
+                && self.raw_scanned_topology_rows == 0
+                && self.eligible_topology_rows == 0
+                && self.censored_unattributed_rows == 0
+                && self.censored_topology_rows == 0
+                && self.consumed_topology_cursor_rows == 0
+                || self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
+                    && matches!(
+                        self.blocker.as_str(),
+                        MS3_CENSORED_UNATTRIBUTED_PROBE | MS3_CENSORED_INELIGIBLE_PROBE
+                    ))
             && self.closure_capture_sequence > 0
             && self.generated_at_unix > 0
             && !self.authority_ready
@@ -911,23 +1110,50 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
     }
 
     fn expected_root(&self) -> Result<String, Ms3GenerationRegistryErrorV1> {
-        canonical_json_sha256(&(
-            MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1,
-            self.generation_sequence,
-            self.acquisition_contract_root_sha256.as_str(),
-            self.acquisition_report_root_sha256.as_str(),
-            self.topology_prefix_root_sha256.as_str(),
-            self.topology_watermark_rows,
-            self.evaluated_topology_rows,
-            self.terminal_receipt_rows,
-            self.closure_capture_sequence,
-            self.generated_at_unix,
-            self.blocker.as_str(),
-            false,
-            false,
-        ))
-        .map_err(|_| Ms3GenerationRegistryErrorV1::Serialization)
+        let root = if self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2 {
+            canonical_json_sha256(&Ms3GenerationLinkedAcquisitionClosureDigestV2 {
+                schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2,
+                generation_sequence: self.generation_sequence,
+                acquisition_contract_root_sha256: &self.acquisition_contract_root_sha256,
+                acquisition_report_root_sha256: &self.acquisition_report_root_sha256,
+                topology_prefix_root_sha256: &self.topology_prefix_root_sha256,
+                topology_watermark_rows: self.topology_watermark_rows,
+                evaluated_topology_rows: self.evaluated_topology_rows,
+                terminal_receipt_rows: self.terminal_receipt_rows,
+                closure_capture_sequence: self.closure_capture_sequence,
+                generated_at_unix: self.generated_at_unix,
+                blocker: &self.blocker,
+                authority_ready: false,
+                phase_mutation_allowed: false,
+                raw_scanned_topology_rows: self.raw_scanned_topology_rows,
+                eligible_topology_rows: self.eligible_topology_rows,
+                censored_unattributed_rows: self.censored_unattributed_rows,
+                censored_topology_rows: self.censored_topology_rows,
+                consumed_topology_cursor_rows: self.consumed_topology_cursor_rows,
+            })
+        } else {
+            canonical_json_sha256(&(
+                MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1,
+                self.generation_sequence,
+                self.acquisition_contract_root_sha256.as_str(),
+                self.acquisition_report_root_sha256.as_str(),
+                self.topology_prefix_root_sha256.as_str(),
+                self.topology_watermark_rows,
+                self.evaluated_topology_rows,
+                self.terminal_receipt_rows,
+                self.closure_capture_sequence,
+                self.generated_at_unix,
+                self.blocker.as_str(),
+                false,
+                false,
+            ))
+        };
+        root.map_err(|_| Ms3GenerationRegistryErrorV1::Serialization)
     }
+}
+
+const fn is_zero(value: &u64) -> bool {
+    *value == 0
 }
 
 impl Ms3GenerationEntryV1 {

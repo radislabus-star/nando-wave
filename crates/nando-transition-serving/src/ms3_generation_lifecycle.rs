@@ -130,6 +130,9 @@ impl Ms3GenerationLifecycleRuntime {
     ) -> Result<Ms3ActiveGenerationRuntimes, String> {
         validate_runtime_binding(&self.manifest, current_acquisition, current_frozen)?;
         let registry = current_frozen.generation_registry();
+        let closure_capture_sequence = registry
+            .generation_closure_capture_sequence(self.manifest.active_generation_sequence)
+            .ok_or_else(|| "ms3_lifecycle_closure_sequence_missing".to_owned())?;
         let linked_failure =
             registry.linked_acquisition_failure(self.manifest.active_generation_sequence);
         let predecessor_terminal_root_sha256 = if let Some(failure) = linked_failure {
@@ -167,10 +170,28 @@ impl Ms3GenerationLifecycleRuntime {
             .ok_or_else(|| "ms3_lifecycle_generation_overflow".to_owned())?;
         let (acquisition_path, version_space_path) =
             generation_paths(&self.root, next_generation_sequence);
-        let acquisition = Ms3LinkedFrameAcquisitionRuntime::open_generation(
+        let successor_cursor_rows = if let Some(failure) =
+            linked_failure.filter(|failure| failure.consumed_topology_cursor_rows > 0)
+        {
+            let cursor = usize::try_from(failure.consumed_topology_cursor_rows)
+                .map_err(|_| "ms3_lifecycle_successor_cursor_range".to_owned())?;
+            if cursor > topology_archive.len()
+                || topology_archive.bridge_sequence_at_cursor(cursor)? != closure_capture_sequence
+            {
+                return Err("ms3_lifecycle_successor_cursor_binding_invalid".to_owned());
+            }
+            cursor
+        } else {
+            topology_archive.cursor_after_bridge_sequence(closure_capture_sequence)?
+        };
+        let acquisition = Ms3LinkedFrameAcquisitionRuntime::open_generation_at_cursor(
             &acquisition_path,
             next_generation_sequence,
             topology_archive,
+            Some(
+                u64::try_from(successor_cursor_rows)
+                    .map_err(|_| "ms3_lifecycle_successor_cursor_range".to_owned())?,
+            ),
             opened_at_unix,
             self.max_new_topology_rows,
             self.max_elapsed_seconds,
@@ -405,6 +426,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -468,6 +490,7 @@ mod tests {
                 local_role_id: 0,
                 value_sha256: hash(&format!("value:{action_event}")),
                 request_reference_ordinal: Some(0),
+                request_reference_ordinal_candidates: Vec::new(),
             }],
             relations: vec![MultiSourceRelationEdgeV1 {
                 relation: MultiSourceRelationKindV1::RequestReferencesRole,
@@ -1108,17 +1131,27 @@ mod tests {
         assert_eq!(failure.generation_sequence, 1);
         assert!(!failure.authority_ready);
         assert!(!failure.phase_mutation_allowed);
-        assert_eq!(
+        assert!(
             generation_one
                 .frozen
                 .seal_linked_acquisition_failure(
                     &failed,
                     topology_archive.max_bridge_sequence().saturating_add(100),
                 )
-                .expect("idempotent failure after capture advanced"),
-            failure
+                .is_err(),
+            "closure cannot move after the denominator was frozen"
         );
 
+        let support = topology(
+            "support-two",
+            "request-support-two",
+            "support-two-lineage",
+            2,
+            opened_at_ms.saturating_add(1_000),
+        );
+        topology_archive
+            .append(&support)
+            .expect("overflow support topology");
         let mut generation_two = lifecycle
             .prepare_successor(
                 &topology_archive,
@@ -1133,15 +1166,16 @@ mod tests {
             Some(failure.receipt_root_sha256.clone())
         );
         assert_eq!(generation_two.acquisition.generation_sequence(), 2);
+        assert_eq!(
+            generation_two
+                .acquisition
+                .contract()
+                .topology_watermark_rows,
+            1,
+            "successor starts at the consumed cursor, not the archive tail"
+        );
         assert!(generation_two.frozen.envelope().is_none());
 
-        let support = topology(
-            "support-two",
-            "request-support-two",
-            "support-two-lineage",
-            2,
-            opened_at_ms.saturating_add(1_000),
-        );
         let frame = completed_frame(
             "support-two",
             "action-support-two",
@@ -1154,7 +1188,6 @@ mod tests {
             opened_at_ms.saturating_add(900),
             opened_at_ms.saturating_add(1_100),
         );
-        topology_archive.append(&support).expect("support topology");
         let report = generation_two
             .acquisition
             .evaluate(
@@ -1274,11 +1307,7 @@ mod tests {
                 vec![support_terminal],
             )
             .expect("linked capture gap");
-        let mut report = report;
-        report.evaluated_topology_rows = report.evaluated_topology_rows.saturating_add(3);
-        report.new_topology_rows_seen = report.new_topology_rows_seen.saturating_add(3);
-        report.report_root_sha256 = report.expected_root();
-        assert!(report.validate(), "in-flight rows remain valid");
+        assert!(report.validate(), "capture-gap report remains canonical");
         assert_eq!(
             report.verdict,
             nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
@@ -1349,5 +1378,132 @@ mod tests {
         assert_eq!(lifecycle.manifest().active_generation_sequence, 1);
         assert!(!root.join(GENERATIONS_DIRECTORY).exists());
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    #[ignore = "requires NANDO_MS3_G16_FIXTURE pointing to a disposable live-state copy"]
+    fn frozen_g16_fixture_censors_unattributed_rows_without_losing_overflow() {
+        let fixture =
+            PathBuf::from(std::env::var("NANDO_MS3_G16_FIXTURE").expect("fixture directory"));
+        let topology_root = fixture.join("pre-action-topology-archive-v1");
+        let topology_archive =
+            MultiSourceTopologyArchive::open(&topology_root).expect("topology archive");
+        let learning_root = fixture.join("linked-frame-acquisition-v1");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_secs();
+        let (mut lifecycle, mut generation) = Ms3GenerationLifecycleRuntime::open(
+            &learning_root,
+            &topology_archive,
+            now,
+            256,
+            86_400,
+        )
+        .expect("G16 lifecycle");
+        assert_eq!(lifecycle.manifest().active_generation_sequence, 16);
+        let watermark = generation.acquisition.contract().topology_watermark_rows;
+        let new_topologies = topology_archive
+            .rows_after(usize::try_from(watermark).expect("watermark range"))
+            .expect("G16 topology tail");
+        let request_ids = new_topologies
+            .iter()
+            .map(|row| row.structure.request_event_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let intent_ids = new_topologies
+            .iter()
+            .map(|row| row.structure.turn_intent_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let frame_archive = crate::multi_source_frame_archive::MultiSourceFrameArchive::open(
+            &fixture.join("relation-frame-archive-v1"),
+        )
+        .expect("frame archive");
+        let terminal_archive = crate::terminal_receipt_archive::TerminalReceiptArchive::open(
+            &fixture.join("terminal-receipt-archive-v1"),
+        )
+        .expect("terminal archive");
+        let frames = frame_archive.frames_for_intents(&intent_ids);
+        let terminals = terminal_archive.receipts_for_requests(&request_ids);
+        let used_evidence_roots = generation
+            .frozen
+            .generation_registry()
+            .used_evidence_roots();
+        let report = generation
+            .acquisition
+            .evaluate_excluding_used_evidence(
+                now,
+                new_topologies,
+                frames,
+                terminals,
+                &used_evidence_roots,
+            )
+            .expect("G16 terminal report");
+        eprintln!("G16 replay report: {report:#?}");
+
+        assert_eq!(report.raw_scanned_topology_rows, 256);
+        assert_eq!(report.eligible_topology_rows, 155);
+        assert_eq!(report.terminal_receipt_rows, 155);
+        assert_eq!(report.censored_unattributed_rows, 12);
+        assert_eq!(report.censored_topology_rows, 89);
+        assert_eq!(report.linked_frame_rows, 0);
+        assert_eq!(
+            report.verdict,
+            nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredIneligibleProbe
+        );
+        assert!(!report.authority_ready);
+        assert!(!report.phase_update_allowed);
+
+        let consumed_cursor = report.consumed_topology_cursor_rows;
+        let consumed_sequence = report.consumed_capture_sequence;
+        let overflow_rows = u64::try_from(topology_archive.len())
+            .expect("archive rows")
+            .saturating_sub(consumed_cursor);
+        assert!(overflow_rows > 0, "fixture must contain post-G16 overflow");
+        generation
+            .frozen
+            .seal_ineligible_probe_censor(&report, consumed_sequence)
+            .expect("durable G16 censor");
+        let generation_17 = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                now.saturating_add(1),
+                &generation.acquisition,
+                &generation.frozen,
+            )
+            .expect("G17 successor");
+        assert_eq!(generation_17.acquisition.generation_sequence(), 17);
+        assert_eq!(
+            generation_17.acquisition.contract().topology_watermark_rows,
+            consumed_cursor
+        );
+        assert_eq!(
+            u64::try_from(topology_archive.len())
+                .expect("archive rows")
+                .saturating_sub(generation_17.acquisition.contract().topology_watermark_rows),
+            overflow_rows
+        );
+
+        let (restored, restored_generation) = Ms3GenerationLifecycleRuntime::open(
+            &learning_root,
+            &topology_archive,
+            now.saturating_add(2),
+            256,
+            86_400,
+        )
+        .expect("restart after G16 rollover");
+        assert_eq!(restored.manifest(), lifecycle.manifest());
+        assert_eq!(restored_generation.acquisition.generation_sequence(), 17);
+        assert!(
+            !restored_generation
+                .frozen
+                .generation_registry()
+                .authority_ready
+        );
+        assert!(
+            !restored_generation
+                .frozen
+                .generation_registry()
+                .phase_mutation_allowed
+        );
     }
 }

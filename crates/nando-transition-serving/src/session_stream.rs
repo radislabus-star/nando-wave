@@ -102,6 +102,10 @@ trait SessionMinerSink: Send + Sync {
     fn binds_collection_capture(&self) -> bool {
         false
     }
+
+    fn submit_failure_is_fatal(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Default)]
@@ -141,6 +145,32 @@ impl SessionMinerSink for MinerWorkerHandle {
     }
 
     fn binds_collection_capture(&self) -> bool {
+        true
+    }
+}
+
+pub trait VerifiedRelationFrameSink: Send + Sync {
+    fn append_verified_frame(&self, frame: RelationFrame) -> Result<(), String>;
+}
+
+struct VerifiedRelationFrameSinkAdapter {
+    sink: Arc<dyn VerifiedRelationFrameSink>,
+}
+
+impl SessionMinerSink for VerifiedRelationFrameSinkAdapter {
+    fn submit_frame_with_parity(
+        &self,
+        frame: RelationFrame,
+        _runtime_parity_case: Option<RuntimeParityCase>,
+    ) -> Result<(), String> {
+        self.sink.append_verified_frame(frame)
+    }
+
+    fn submit_collection(&self, _observation: OnlineCollectionObservation) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn submit_failure_is_fatal(&self) -> bool {
         true
     }
 }
@@ -240,6 +270,14 @@ impl SessionMinerSink for SessionMinerBridge {
     fn binds_collection_capture(&self) -> bool {
         true
     }
+
+    fn submit_failure_is_fatal(&self) -> bool {
+        self.worker
+            .read()
+            .ok()
+            .and_then(|worker| worker.clone())
+            .is_some_and(|worker| worker.submit_failure_is_fatal())
+    }
 }
 
 fn submit_miner_input(
@@ -256,6 +294,7 @@ fn submit_miner_input(
 
 #[derive(Default)]
 pub struct SessionStreamMetrics {
+    source_files: AtomicU64,
     finalized_graphs: AtomicU64,
     rejected_overflow_graphs: AtomicU64,
     censored_invalid_session_identities: AtomicU64,
@@ -267,8 +306,9 @@ pub struct SessionStreamMetrics {
 
 impl SessionStreamMetrics {
     #[must_use]
-    pub fn snapshot(&self) -> (u64, u64, u64, u64, bool, u64, u64) {
+    pub fn snapshot(&self) -> (u64, u64, u64, u64, u64, bool, u64, u64) {
         (
+            self.source_files.load(Ordering::Relaxed),
             self.finalized_graphs.load(Ordering::Relaxed),
             self.rejected_overflow_graphs.load(Ordering::Relaxed),
             self.censored_invalid_session_identities
@@ -279,6 +319,27 @@ impl SessionStreamMetrics {
             self.watcher_last_event_unix.load(Ordering::Relaxed),
         )
     }
+}
+
+pub fn spawn_verified_relation_frame_stream(
+    root: PathBuf,
+    evidence_root: PathBuf,
+    sink: Arc<dyn VerifiedRelationFrameSink>,
+    metrics: Arc<SessionStreamMetrics>,
+) -> Result<(), String> {
+    let evidence = Arc::new(Mutex::new(StreamingEvidenceLedger::open(
+        evidence_root,
+        EvidencePolicyV1::streaming_bounded(),
+    )?));
+    let bridge = Arc::new(SessionMinerBridge::new());
+    bridge.install_sink(Arc::new(VerifiedRelationFrameSinkAdapter { sink }))?;
+    spawn_session_stream(
+        root,
+        evidence,
+        bridge,
+        metrics,
+        Arc::new(RequestLearningIndex::default()),
+    )
 }
 
 #[derive(Clone)]
@@ -385,6 +446,10 @@ where
             }
         }
     }
+    metrics.source_files.store(
+        u64::try_from(states.len()).unwrap_or(u64::MAX),
+        Ordering::Release,
+    );
     thread::Builder::new()
         .name("nando-session-stream".to_owned())
         .spawn(move || {
@@ -427,6 +492,10 @@ where
                         state.replay_source_offset = resume_offset;
                         state.censor_until_turn_boundary = resume_offset.is_some();
                         states.insert(path.clone(), state);
+                        metrics.source_files.store(
+                            u64::try_from(states.len()).unwrap_or(u64::MAX),
+                            Ordering::Release,
+                        );
                     }
                     let Some(state) = states.get_mut(&path) else {
                         continue;
@@ -463,6 +532,10 @@ where
                             miner.submit_frame_with_parity(frame, runtime_parity_case)
                         {
                             eprintln!("nando-session-stream miner error: {error}");
+                            if miner.submit_failure_is_fatal() {
+                                metrics.watcher_alive.store(false, Ordering::Release);
+                                return;
+                            }
                             continue;
                         }
                     }

@@ -17,6 +17,7 @@ pub enum ObservedScalarRoleClass {
 #[doc(hidden)]
 pub struct ObservedJsonScalarRole {
     pub request_position: Option<u16>,
+    pub request_position_candidates: Vec<u16>,
     pub json_path_sha256: [u8; 32],
     pub value_sha256: String,
     pub value_type: AtomValueType,
@@ -37,7 +38,7 @@ pub fn observed_json_scalar_roles(
     let request_tokens = identifier_tokens(request);
     let mut path = Vec::new();
     let mut roles = Vec::new();
-    collect_json_scalar_roles(output, &request_tokens, &mut path, 0, None, &mut roles)?;
+    collect_json_scalar_roles(output, &request_tokens, &mut path, 0, &[], &mut roles)?;
     Ok(roles)
 }
 
@@ -50,6 +51,7 @@ pub fn observed_continuation_handle_role(
     let scalar = continuation_handle_scalar_from_output(output, AtomValueType::Identifier)?;
     Ok(ObservedJsonScalarRole {
         request_position: None,
+        request_position_candidates: Vec::new(),
         json_path_sha256: observed_json_path_digest(&["semantic:continuation_handle".to_owned()]),
         value_sha256: nando_operator_kernel::canonical_json_sha256(&scalar.value)?,
         value_type: AtomValueType::Identifier,
@@ -63,7 +65,7 @@ fn collect_json_scalar_roles(
     request_tokens: &[String],
     path: &mut Vec<String>,
     depth: usize,
-    request_position: Option<usize>,
+    request_positions: &[usize],
     output: &mut Vec<ObservedJsonScalarRole>,
 ) -> Result<(), &'static str> {
     if depth > 8 || output.len() >= 64 {
@@ -74,15 +76,15 @@ fn collect_json_scalar_roles(
             for (field, value) in object {
                 path.push(format!("k:{field}"));
                 let positions = request_identifier_positions(request_tokens, field);
-                if positions.len() > 1 {
-                    return Err("observed_json_role_mention_ambiguous");
+                if positions.len() > 16 {
+                    return Err("observed_json_role_mention_budget");
                 }
                 collect_json_scalar_roles(
                     value,
                     request_tokens,
                     path,
                     depth.saturating_add(1),
-                    positions.first().copied(),
+                    &positions,
                     output,
                 )?;
                 path.pop();
@@ -96,7 +98,7 @@ fn collect_json_scalar_roles(
                     request_tokens,
                     path,
                     depth.saturating_add(1),
-                    None,
+                    request_positions,
                     output,
                 )?;
                 path.pop();
@@ -107,9 +109,19 @@ fn collect_json_scalar_roles(
                 return Ok(());
             };
             output.push(ObservedJsonScalarRole {
-                request_position: request_position
+                request_position: if request_positions.len() == 1 {
+                    Some(
+                        u16::try_from(request_positions[0])
+                            .map_err(|_| "observed_json_role_request_position")?,
+                    )
+                } else {
+                    None
+                },
+                request_position_candidates: request_positions
+                    .iter()
+                    .copied()
                     .map(u16::try_from)
-                    .transpose()
+                    .collect::<Result<Vec<_>, _>>()
                     .map_err(|_| "observed_json_role_request_position")?,
                 json_path_sha256: observed_json_path_digest(path),
                 value_sha256: nando_operator_kernel::canonical_json_sha256(scalar)?,

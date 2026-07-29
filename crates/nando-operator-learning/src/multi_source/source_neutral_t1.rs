@@ -240,44 +240,58 @@ fn role_binding_options(
         .role_witnesses
         .iter()
         .filter(|witness| witness.value_sha256 == observation.value_root)
-        .filter_map(|witness| {
-            let role = role_for_witness(&joined.topology, witness)?;
-            role_type_matches(role.type_class, observation.value_type).then_some(())?;
-            let selector =
-                structural_selector_for_role(joined, role, witness, observation.value_type)?;
-            Some((role.local_role_id, selector))
+        .flat_map(|witness| {
+            let Some(role) = role_for_witness(&joined.topology, witness) else {
+                return Vec::new();
+            };
+            if !role_type_matches(role.type_class, observation.value_type) {
+                return Vec::new();
+            }
+            structural_selectors_for_role(joined, role, witness, observation.value_type)
+                .into_iter()
+                .map(|selector| (role.local_role_id, selector))
+                .collect::<Vec<_>>()
         })
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
 }
 
-fn structural_selector_for_role(
+fn structural_selectors_for_role(
     joined: &BlindThenRevealJoinedTransitionV1,
     role: &MultiSourceRoleNodeV1,
     witness: &MultiSourceRoleWitnessV1,
     value_type: AtomValueType,
-) -> Option<ResponseValueSelector> {
+) -> Vec<ResponseValueSelector> {
     if role_has_relation(
         &joined.topology,
         role.local_role_id,
         MultiSourceRelationKindV1::ContinuationHandle,
     ) {
-        Some(ResponseValueSelector::ContinuationHandle { value_type })
-    } else if let Some(ordinal) = witness.request_reference_ordinal {
-        Some(ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
-            ordinal,
-            value_type,
-        })
+        vec![ResponseValueSelector::ContinuationHandle { value_type }]
+    } else if witness.request_reference_ordinal.is_some()
+        || !witness.request_reference_ordinal_candidates.is_empty()
+    {
+        witness
+            .request_reference_ordinal
+            .into_iter()
+            .chain(witness.request_reference_ordinal_candidates.iter().copied())
+            .map(
+                |ordinal| ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                    ordinal,
+                    value_type,
+                },
+            )
+            .collect()
     } else if joined.topology.roles.len() == 1 {
-        Some(ResponseValueSelector::UniqueScalar { value_type })
+        vec![ResponseValueSelector::UniqueScalar { value_type }]
     } else if role.temporal_class == MultiSourceTemporalClassV1::Latest {
-        Some(ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+        vec![ResponseValueSelector::LatestTurnOutputScalarOrdinal {
             scalar_ordinal: role.value_ordinal,
             value_type,
-        })
+        }]
     } else {
-        None
+        Vec::new()
     }
 }
 
@@ -399,7 +413,11 @@ fn witness_for_selector<'a>(
             ordinal,
             value_type,
         } => unique_matching_witness(topology, |witness| {
-            witness.request_reference_ordinal == Some(*ordinal)
+            (witness.request_reference_ordinal == Some(*ordinal)
+                || witness
+                    .request_reference_ordinal_candidates
+                    .binary_search(ordinal)
+                    .is_ok())
                 && role_for_witness(topology, witness)
                     .is_some_and(|role| role_type_matches(role.type_class, *value_type))
         }),

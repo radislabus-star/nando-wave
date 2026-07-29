@@ -1,0 +1,28 @@
+[Unit]
+Description=Nando compact Codex evidence agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/nando-evidence-agent --server http://192.168.3.94:8787 --sessions-dir %h/.codex/sessions --key-file %h/.config/nando/evidence-agent.key --state-dir %h/.local/state/nando-evidence-agent --poll-ms 1000
+Restart=always
+RestartSec=2s
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadOnlyPaths=%h/.codex/sessions
+ReadOnlyPaths=%h/.config/nando/evidence-agent.key
+ReadWritePaths=%h/.local/state/nando-evidence-agent
+RestrictAddressFamilies=AF_INET AF_UNIX
+LockPersonality=true
+TasksMax=16
+MemoryMax=128M
+
+[Install]
+WantedBy=default.target

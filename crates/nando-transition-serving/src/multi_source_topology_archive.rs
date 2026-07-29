@@ -107,6 +107,46 @@ impl MultiSourceTopologyArchive {
             .unwrap_or(0)
     }
 
+    pub(super) fn bridge_sequence_at_cursor(&self, rows: usize) -> Result<u64, String> {
+        if rows == 0 || rows > self.append_order.len() {
+            return Err("multi_source_topology_archive_cursor_out_of_range".to_owned());
+        }
+        self.append_order[..rows]
+            .iter()
+            .filter_map(|root| self.by_commitment.get(root))
+            .filter_map(|row| row.bridge_sequence)
+            .max()
+            .filter(|sequence| *sequence > 0)
+            .ok_or_else(|| "multi_source_topology_archive_sequence_missing".to_owned())
+    }
+
+    pub(super) fn cursor_after_bridge_sequence(
+        &self,
+        closure_capture_sequence: u64,
+    ) -> Result<usize, String> {
+        if closure_capture_sequence == 0 {
+            return Err("multi_source_topology_archive_sequence_missing".to_owned());
+        }
+        let mut cursor = 0;
+        let mut previous = 0;
+        for root in &self.append_order {
+            let sequence = self
+                .by_commitment
+                .get(root)
+                .and_then(|row| row.bridge_sequence)
+                .ok_or_else(|| "multi_source_topology_archive_sequence_missing".to_owned())?;
+            if sequence <= previous {
+                return Err("multi_source_topology_archive_sequence_order_invalid".to_owned());
+            }
+            previous = sequence;
+            if sequence > closure_capture_sequence {
+                break;
+            }
+            cursor += 1;
+        }
+        Ok(cursor)
+    }
+
     pub(super) fn prefix_root(&self, rows: usize) -> Result<String, String> {
         if rows > self.append_order.len() {
             return Err("multi_source_topology_archive_prefix_out_of_range".to_owned());
@@ -129,6 +169,25 @@ impl MultiSourceTopologyArchive {
             return Err("multi_source_topology_archive_watermark_out_of_range".to_owned());
         }
         self.append_order[watermark_rows..]
+            .iter()
+            .map(|root| {
+                self.by_commitment
+                    .get(root)
+                    .cloned()
+                    .ok_or_else(|| "multi_source_topology_archive_index_invalid".to_owned())
+            })
+            .collect()
+    }
+
+    pub(super) fn rows_between(
+        &self,
+        start_rows: usize,
+        end_rows: usize,
+    ) -> Result<Vec<PreActionTopologyAuditRowV1>, String> {
+        if start_rows > end_rows || end_rows > self.append_order.len() {
+            return Err("multi_source_topology_archive_cursor_out_of_range".to_owned());
+        }
+        self.append_order[start_rows..end_rows]
             .iter()
             .map(|root| {
                 self.by_commitment

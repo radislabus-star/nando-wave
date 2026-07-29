@@ -81,6 +81,68 @@ Replay is bounded at `64 MiB`. The first `1 MiB` stays in memory; larger bodies
 spill into a private, unlinked file under the user runtime directory. Tokens,
 headers, and bodies are never logged or persisted after the request.
 
+## Compact Learning Evidence
+
+The connector remains a payload-transparent request relay. Post-action learning
+uses a separate local `nando-evidence-agent` because the remote backend cannot
+observe local Codex tool outcomes from HTTP response bytes alone.
+
+```text
+local append-only Codex session journal
+  -> incremental watcher starting at the current EOF
+  -> existing source-neutral RelationFrame extractor and verifier
+  -> private durable outbox of compact verified frames
+  -> HMAC-authenticated, hash-chained batches over the private LAN
+  -> exact Nginx cold-path route /_nando/evidence/v1/batches
+  -> remote learner archive, receipt, and client head
+  -> existing MS3 join and acquisition machine
+```
+
+Raw session rows, prompts, response bodies, authentication, and provider tokens
+remain on the client. The outbox and remote spool contain only bounded verified
+`RelationFrame` records and commitment roots. The server signs every ACK with
+the same per-client key; the agent advances its sequence only after verifying
+that signature. Acknowledged outbox segments are compacted only after the agent
+state and pending-file removal are durable.
+
+The current transport is authenticated but not encrypted. It is restricted to
+the private LAN listener and must not be exposed publicly. Later mTLS can add
+confidentiality without changing the evidence schema or MS3 authority boundary.
+
+Build both binaries on the mini-PC:
+
+```bash
+cargo build --release -p nando-transition-serving \
+  --bin nando-transition-serving \
+  --bin nando-evidence-agent
+```
+
+The raw 32-byte client key is created out of band with mode `0600` and is never
+printed. Enable the remote cold spool transactionally:
+
+```bash
+ops/remote-backend/install-remote-evidence-spool.sh \
+  --binary target/release/nando-transition-serving \
+  --client-key /secure/path/client.key
+```
+
+Only the cold learner stops during this operation. The installer snapshots its
+state and restores the binary, environment, key, and state automatically if
+readiness fails. Hot serving and the connector remain online.
+
+Install the client agent separately:
+
+```bash
+ops/remote-backend/install-evidence-agent.sh \
+  --binary /secure/path/nando-evidence-agent \
+  --server http://192.168.3.94:8787
+```
+
+The local installer does not start, stop, or reload `nando-connector`. Its
+systemd unit has read-only access to `~/.codex/sessions` and the client key,
+write access only to `~/.local/state/nando-evidence-agent`, a `128 MiB` memory
+limit, and automatic restart if the session watcher stops.
+
 Transport-only counters are available on loopback at
 `http://127.0.0.1:18786/metrics`: active, accepted and completed connections,
 uploaded/downloaded bytes, Nando responses, client fallback attempts,

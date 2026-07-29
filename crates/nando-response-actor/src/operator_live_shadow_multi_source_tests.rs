@@ -108,6 +108,7 @@ fn joined_row(
             local_role_id: 0,
             value_sha256: value_root,
             request_reference_ordinal: Some(0),
+            request_reference_ordinal_candidates: Vec::new(),
         }],
         relations: vec![
             MultiSourceRelationEdgeV1 {
@@ -307,11 +308,13 @@ fn joined_multi_row(
                 local_role_id: 0,
                 value_sha256: canonical_json_sha256(&json!(values.0)).expect("first root"),
                 request_reference_ordinal: Some(0),
+                request_reference_ordinal_candidates: Vec::new(),
             },
             MultiSourceRoleWitnessV1 {
                 local_role_id: 1,
                 value_sha256: canonical_json_sha256(&json!(values.1)).expect("second root"),
                 request_reference_ordinal: Some(1),
+                request_reference_ordinal_candidates: Vec::new(),
             },
         ],
         relations: vec![

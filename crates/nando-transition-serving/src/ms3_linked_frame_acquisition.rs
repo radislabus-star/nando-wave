@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 
 use nando_operator_kernel::RelationFrame;
 use nando_operator_learning::multi_source::{
-    Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
-    PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
+    MS3_RECEIPT_LAG_SLO_SECONDS_V1, Ms3LinkedFrameAcquisitionContractV1,
+    Ms3LinkedFrameAcquisitionReportV1, PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
     build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1,
 };
 use std::collections::BTreeSet;
@@ -19,6 +19,8 @@ use crate::multi_source_topology_archive::MultiSourceTopologyArchive;
 const CONTRACT_FILE: &str = "contract-v1.cbor";
 const TERMINAL_REPORT_FILE: &str = "terminal-report-v1.cbor";
 const MAX_STATE_BYTES: usize = 4 * 1024 * 1024;
+const RAW_SCAN_MULTIPLIER_V2: u64 = 16;
+const MAX_RAW_SCAN_ROWS_V2: u64 = 4_096;
 
 pub(super) struct Ms3LinkedFrameAcquisitionRuntime {
     generation_sequence: u64,
@@ -54,6 +56,27 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         max_new_topology_rows: u64,
         max_elapsed_seconds: u64,
     ) -> Result<Self, String> {
+        Self::open_generation_at_cursor(
+            directory,
+            generation_sequence,
+            topology_archive,
+            None,
+            opened_at_unix,
+            max_new_topology_rows,
+            max_elapsed_seconds,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn open_generation_at_cursor(
+        directory: &Path,
+        generation_sequence: u64,
+        topology_archive: &MultiSourceTopologyArchive,
+        topology_cursor_rows: Option<u64>,
+        opened_at_unix: u64,
+        max_new_topology_rows: u64,
+        max_elapsed_seconds: u64,
+    ) -> Result<Self, String> {
         if generation_sequence == 0 {
             return Err("ms3_acquisition_generation_invalid".to_owned());
         }
@@ -64,15 +87,22 @@ impl Ms3LinkedFrameAcquisitionRuntime {
             serde_cbor::from_slice::<Ms3LinkedFrameAcquisitionContractV1>(&bytes)
                 .map_err(|error| format!("ms3_acquisition_contract_decode:{error}"))?
         } else {
-            let watermark_rows =
-                u64::try_from(topology_archive.len()).map_err(|_| "ms3_acquisition_rows")?;
-            let prefix_root = topology_archive.prefix_root(topology_archive.len())?;
-            let contract = Ms3LinkedFrameAcquisitionContractV1::seal(
+            let watermark_rows = topology_cursor_rows.unwrap_or(
+                u64::try_from(topology_archive.len()).map_err(|_| "ms3_acquisition_rows")?,
+            );
+            let watermark = usize::try_from(watermark_rows).map_err(|_| "ms3_acquisition_rows")?;
+            let prefix_root = topology_archive.prefix_root(watermark)?;
+            let max_raw_topology_rows = max_new_topology_rows
+                .saturating_mul(RAW_SCAN_MULTIPLIER_V2)
+                .clamp(max_new_topology_rows, MAX_RAW_SCAN_ROWS_V2);
+            let contract = Ms3LinkedFrameAcquisitionContractV1::seal_v2(
                 prefix_root,
                 watermark_rows,
                 opened_at_unix,
                 max_new_topology_rows,
+                max_raw_topology_rows,
                 max_elapsed_seconds,
+                MS3_RECEIPT_LAG_SLO_SECONDS_V1.min(max_elapsed_seconds),
             )
             .map_err(str::to_owned)?;
             write_cbor_atomic(&contract_path, &contract)?;
@@ -132,6 +162,19 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         self.terminal_report
             .as_ref()
             .map(|report| report.evaluated_topology_rows)
+    }
+
+    pub(super) fn consumed_topology_cursor_rows(&self) -> Option<u64> {
+        self.terminal_report.as_ref().map(|report| {
+            if report.consumed_topology_cursor_rows > 0 {
+                report.consumed_topology_cursor_rows
+            } else {
+                report
+                    .acquisition_contract
+                    .topology_watermark_rows
+                    .saturating_add(report.evaluated_topology_rows)
+            }
+        })
     }
 
     #[cfg(test)]

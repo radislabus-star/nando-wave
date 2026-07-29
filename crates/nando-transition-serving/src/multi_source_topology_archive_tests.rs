@@ -90,3 +90,25 @@ fn archive_rejects_unproven_physical_order() {
     );
     std::fs::remove_dir_all(root).expect("cleanup");
 }
+
+#[test]
+fn archive_maps_closure_sequence_to_the_exact_consumed_cursor() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-topology-cursor-{}",
+        std::process::id()
+    ));
+    let mut archive = MultiSourceTopologyArchive::open(&root).expect("archive");
+    for index in 0..8 {
+        archive.append(&row(index)).expect("append");
+    }
+
+    assert_eq!(archive.bridge_sequence_at_cursor(4).expect("sequence"), 4);
+    assert_eq!(
+        archive
+            .cursor_after_bridge_sequence(4)
+            .expect("closure cursor"),
+        4
+    );
+    assert_eq!(archive.rows_between(2, 5).expect("bounded rows").len(), 3);
+    std::fs::remove_dir_all(root).expect("cleanup");
+}

@@ -60,6 +60,8 @@ pub struct MultiSourceRoleWitnessV1 {
     pub value_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_reference_ordinal: Option<u16>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub request_reference_ordinal_candidates: Vec<u16>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -131,14 +133,26 @@ impl PreActionMultiSourceTopologyV1 {
             && (self.role_witnesses.len() != self.roles.len()
                 || self.role_witnesses.iter().any(|witness| {
                     !valid_nonzero_sha256(&witness.value_sha256)
+                        || witness.request_reference_ordinal.is_some()
+                            && !witness.request_reference_ordinal_candidates.is_empty()
                         || witness
                             .request_reference_ordinal
                             .is_some_and(|ordinal| ordinal > 15)
+                        || witness.request_reference_ordinal_candidates.len() > 16
+                        || witness
+                            .request_reference_ordinal_candidates
+                            .iter()
+                            .any(|ordinal| *ordinal > 15)
+                        || !witness
+                            .request_reference_ordinal_candidates
+                            .windows(2)
+                            .all(|pair| pair[0] < pair[1])
                         || !self
                             .roles
                             .iter()
                             .any(|role| role.local_role_id == witness.local_role_id)
-                        || witness.request_reference_ordinal.is_some()
+                        || (witness.request_reference_ordinal.is_some()
+                            || !witness.request_reference_ordinal_candidates.is_empty())
                             != self.relations.iter().any(|edge| {
                                 edge.relation == MultiSourceRelationKindV1::RequestReferencesRole
                                     && edge.source_role_id == witness.local_role_id
@@ -146,6 +160,10 @@ impl PreActionMultiSourceTopologyV1 {
                             })
                 })
                 || {
+                    let has_ambiguous_reference = self
+                        .role_witnesses
+                        .iter()
+                        .any(|witness| !witness.request_reference_ordinal_candidates.is_empty());
                     let mut ordinals = self
                         .role_witnesses
                         .iter()
@@ -153,10 +171,11 @@ impl PreActionMultiSourceTopologyV1 {
                         .collect::<Vec<_>>();
                     ordinals.sort_unstable();
                     ordinals.dedup();
-                    ordinals
-                        .iter()
-                        .enumerate()
-                        .any(|(index, ordinal)| usize::from(*ordinal) != index)
+                    !has_ambiguous_reference
+                        && ordinals
+                            .iter()
+                            .enumerate()
+                            .any(|(index, ordinal)| usize::from(*ordinal) != index)
                 })
         {
             return Err("multi_source_role_witness_invalid");
