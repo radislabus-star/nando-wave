@@ -129,6 +129,13 @@ client_id="$(sha256sum "${CLIENT_KEY}")"
 client_id="${client_id%% *}"
 [[ "$(stat -c '%a' "${KEY_DIRECTORY}/${client_id}.key")" == "600" ]]
 
+"${INSTALLER}" \
+  --binary "${CANDIDATE_ONE}" \
+  --client-key "${KEY_DIRECTORY}/${client_id}.key" >/dev/null
+
+cmp -s "${CANDIDATE_ONE}" "${INSTALL_BINARY}"
+[[ -e "${SYSTEMCTL_STATE}/active" ]]
+
 cp -a "${INSTALL_BINARY}" "${WORK}/expected-binary"
 cp -a "${ROLE_ENV}" "${WORK}/expected-env"
 cp -a "${KEY_DIRECTORY}/${client_id}.key" "${WORK}/expected-key"

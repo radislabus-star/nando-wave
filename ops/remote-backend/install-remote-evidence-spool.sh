@@ -75,6 +75,10 @@ service_group="${service_group:-$(id -gn "${service_user}")}"
 client_id="$(sha256sum "${CLIENT_KEY_SOURCE}")"
 client_id="${client_id%% *}"
 key_path="${KEY_DIRECTORY}/${client_id}.key"
+client_key_already_installed=0
+if [[ -e "${key_path}" && "${CLIENT_KEY_SOURCE}" -ef "${key_path}" ]]; then
+  client_key_already_installed=1
+fi
 
 work="$(mktemp -d)"
 candidate_binary="${work}/nando-transition-serving"
@@ -183,8 +187,10 @@ fi
 
 rollback_armed=1
 sudo -n install -d -o root -g "${service_group}" -m 0750 "${KEY_DIRECTORY}"
-sudo -n install -o "${service_user}" -g "${service_group}" -m 0600 \
-  "${CLIENT_KEY_SOURCE}" "${key_path}"
+if [[ "${client_key_already_installed}" == "0" ]]; then
+  sudo -n install -o "${service_user}" -g "${service_group}" -m 0600 \
+    "${CLIENT_KEY_SOURCE}" "${key_path}"
+fi
 sudo -n install -m 0644 "${candidate_env}" "${ROLE_ENV}"
 sudo -n install -m 0755 "${candidate_binary}" "${INSTALL_BINARY}.candidate.$$"
 sudo -n mv -f "${INSTALL_BINARY}.candidate.$$" "${INSTALL_BINARY}"
