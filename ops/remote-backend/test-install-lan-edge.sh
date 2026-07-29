@@ -83,6 +83,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 grep -Fq "resolver ${NANDO_TEST_EXPECTED_RESOLVERS} " "${config}"
+grep -Fq "client_fallback_route" "${config}"
+grep -Fq "location ^~ /_nando/local/" "${config}"
 EOF
 
 cat >"${BIN}/systemctl" <<'EOF'
@@ -138,6 +140,9 @@ export NANDO_REMOTE_NGINX_DIR="${NGINX_DIR}"
 export NANDO_REMOTE_SYSTEMD_DIR="${SYSTEMD_DIR}"
 export NANDO_TEST_STATE="${STATE}"
 export NANDO_TEST_EXPECTED_RESOLVERS="127.0.0.53"
+export NANDO_REMOTE_UPSTREAM_IPV4S="192.0.2.10 192.0.2.11"
+export NANDO_REMOTE_READINESS_ATTEMPTS=1
+export NANDO_REMOTE_READINESS_SLEEP_SECONDS=0
 
 printf '%s\n' "old config" >"${NGINX_DIR}/nginx.conf"
 printf '%s\n' "old unit" >"${SYSTEMD_DIR}/nando-transport-gateway.service"
@@ -149,6 +154,7 @@ printf '%s\n' "old unit" >"${SYSTEMD_DIR}/nando-transport-gateway.service"
   --resolver 127.0.0.53 >/dev/null
 
 grep -Fq "resolver 127.0.0.53 " "${NGINX_DIR}/nginx.conf"
+grep -Fq "proxy_intercept_errors off;" "${NGINX_DIR}/nginx.conf"
 [[ "$(wc -l <"${STATE}/reloads")" == "1" ]]
 if compgen -G "${NGINX_DIR}/.nginx.conf.rollback.*" >/dev/null; then
   printf '%s\n' "installer left a rollback file after success" >&2

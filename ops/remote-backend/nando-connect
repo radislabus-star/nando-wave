@@ -5,7 +5,6 @@ SERVER_ORIGIN="${NANDO_SERVER_ORIGIN:-http://192.168.3.94:8787}"
 CONNECTOR_ORIGIN="${NANDO_CONNECTOR_ORIGIN:-http://127.0.0.1:8787}"
 BASE_URL="${NANDO_CONNECTOR_BASE_URL:-${CONNECTOR_ORIGIN%/}/v1}"
 HEALTH_URL="${NANDO_CONNECTOR_HEALTH_URL:-${CONNECTOR_ORIGIN%/}/health}"
-CPU_HEALTH_URL="${NANDO_CONNECTOR_CPU_HEALTH_URL:-${CONNECTOR_ORIGIN%/}/cpu-health}"
 REMOTE_HEALTH_URL="${NANDO_REMOTE_HEALTH_URL:-${SERVER_ORIGIN%/}/health}"
 REMOTE_CPU_HEALTH_URL="${NANDO_REMOTE_CPU_HEALTH_URL:-${SERVER_ORIGIN%/}/cpu-health}"
 METRICS_URL="${NANDO_CONNECTOR_METRICS_URL:-http://127.0.0.1:18786/metrics}"
@@ -118,6 +117,14 @@ render_status() {
       "UPLOAD BYTES       " + ((.upload_bytes // 0) | tostring),
       "DOWNLOAD BYTES     " + ((.download_bytes // 0) | tostring),
       "RELAY FAILURES     " + ((.relay_failures // 0) | tostring),
+      "HTTP REQUESTS      " + ((.http_requests // 0) | tostring),
+      "NANDO RESPONSES    " + ((.nando_responses // 0) | tostring),
+      "CLIENT FALLBACKS   " + ((.client_fallback_successes // 0) | tostring)
+        + " / " + ((.client_fallback_attempts // 0) | tostring),
+      "FALLBACK FAILURES  " + ((.client_fallback_failures // 0) | tostring),
+      "ABSTAIN REPLAYS    " + ((.abstain_fallbacks // 0) | tostring),
+      "REMOTE FAILOVER    " + ((.remote_failure_fallbacks // 0) | tostring),
+      "REPLAY SPILLS      " + ((.replay_spills // 0) | tostring),
       "UPTIME SECONDS     " + ((.uptime_seconds // 0) | tostring)
     ' <<<"${metrics}"
   else

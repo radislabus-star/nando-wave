@@ -1,5 +1,9 @@
+mod http_fallback;
+mod tls;
+
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::thread;
@@ -10,6 +14,77 @@ pub const DEFAULT_METRICS_LISTEN: &str = "127.0.0.1:18786";
 pub const DEFAULT_UPSTREAM: &str = "192.168.3.94:8787";
 pub const DEFAULT_MAX_CONNECTIONS: usize = 128;
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+pub const DEFAULT_FALLBACK_HOST: &str = "chatgpt.com";
+pub const DEFAULT_FALLBACK_PORT: u16 = 443;
+pub const DEFAULT_FALLBACK_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+pub const DEFAULT_FALLBACK_IO_TIMEOUT: Duration = Duration::from_secs(3600);
+pub const DEFAULT_MAX_REPLAY_BODY_BYTES: u64 = 64 * 1024 * 1024;
+pub const DEFAULT_REPLAY_MEMORY_BYTES: usize = 1024 * 1024;
+pub const DEFAULT_REMOTE_LOCAL_PREFIX: &str = "/_nando/local";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientFallbackConfig {
+    pub host: String,
+    pub port: u16,
+    pub connect_timeout: Duration,
+    pub io_timeout: Duration,
+    pub max_replay_body_bytes: u64,
+    pub replay_memory_bytes: usize,
+    pub spool_dir: PathBuf,
+    pub remote_local_prefix: String,
+}
+
+impl ClientFallbackConfig {
+    pub fn new(spool_dir: PathBuf) -> Result<Self, String> {
+        if spool_dir.as_os_str().is_empty() {
+            return Err("replay spool directory must not be empty".to_owned());
+        }
+        Ok(Self {
+            host: DEFAULT_FALLBACK_HOST.to_owned(),
+            port: DEFAULT_FALLBACK_PORT,
+            connect_timeout: DEFAULT_FALLBACK_CONNECT_TIMEOUT,
+            io_timeout: DEFAULT_FALLBACK_IO_TIMEOUT,
+            max_replay_body_bytes: DEFAULT_MAX_REPLAY_BODY_BYTES,
+            replay_memory_bytes: DEFAULT_REPLAY_MEMORY_BYTES,
+            spool_dir,
+            remote_local_prefix: DEFAULT_REMOTE_LOCAL_PREFIX.to_owned(),
+        })
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.host.trim().is_empty() {
+            return Err("fallback host must not be empty".to_owned());
+        }
+        if self.port == 0 {
+            return Err("fallback port must be greater than zero".to_owned());
+        }
+        if self.connect_timeout.is_zero() {
+            return Err("fallback connect timeout must be greater than zero".to_owned());
+        }
+        if self.io_timeout.is_zero() {
+            return Err("fallback I/O timeout must be greater than zero".to_owned());
+        }
+        if self.max_replay_body_bytes == 0 {
+            return Err("maximum replay body size must be greater than zero".to_owned());
+        }
+        if self.replay_memory_bytes == 0 {
+            return Err("replay memory threshold must be greater than zero".to_owned());
+        }
+        if self.spool_dir.as_os_str().is_empty() {
+            return Err("replay spool directory must not be empty".to_owned());
+        }
+        if !self.remote_local_prefix.starts_with('/')
+            || self.remote_local_prefix.ends_with('/')
+            || self.remote_local_prefix.contains('?')
+        {
+            return Err(
+                "remote local prefix must start with '/', contain no query, and have no trailing '/'"
+                    .to_owned(),
+            );
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectorConfig {
@@ -18,6 +93,7 @@ pub struct ConnectorConfig {
     pub upstream: String,
     pub max_connections: usize,
     pub connect_timeout: Duration,
+    pub client_fallback: Option<ClientFallbackConfig>,
 }
 
 impl ConnectorConfig {
@@ -59,7 +135,17 @@ impl ConnectorConfig {
             upstream,
             max_connections,
             connect_timeout,
+            client_fallback: None,
         })
+    }
+
+    pub fn with_client_fallback(
+        mut self,
+        client_fallback: ClientFallbackConfig,
+    ) -> Result<Self, String> {
+        client_fallback.validate()?;
+        self.client_fallback = Some(client_fallback);
+        Ok(self)
     }
 }
 
@@ -75,6 +161,7 @@ impl Default for ConnectorConfig {
             upstream: DEFAULT_UPSTREAM.to_owned(),
             max_connections: DEFAULT_MAX_CONNECTIONS,
             connect_timeout: DEFAULT_CONNECT_TIMEOUT,
+            client_fallback: None,
         }
     }
 }
@@ -130,36 +217,77 @@ pub fn serve(
 }
 
 pub fn check_upstream(config: &ConnectorConfig) -> io::Result<()> {
+    let health = fetch_upstream_contract(config, "/health")?;
+    let valid = health.starts_with("HTTP/1.1 200") || health.starts_with("HTTP/1.0 200");
+    if !valid
+        || !health.contains("\"ok\":true")
+        || !health.contains("\"service\":\"nando-nginx-gateway\"")
+        || !health.contains("\"transport\":\"nginx\"")
+    {
+        return Err(io::Error::other(
+            "upstream returned an unexpected Nando health contract",
+        ));
+    }
+    if config.client_fallback.is_some() {
+        let fallback = fetch_upstream_contract(config, "/client-fallback-health")?;
+        let valid = fallback.starts_with("HTTP/1.1 200") || fallback.starts_with("HTTP/1.0 200");
+        if !valid
+            || !fallback.contains("\"client_fallback_route\":true")
+            || !fallback.contains("\"contract\":\"nando.client-fallback.v1\"")
+        {
+            return Err(io::Error::other(
+                "upstream does not expose the required client fallback contract",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn fetch_upstream_contract(config: &ConnectorConfig, path: &str) -> io::Result<String> {
     let mut upstream = connect_upstream(&config.upstream, config.connect_timeout)?;
     upstream.set_read_timeout(Some(config.connect_timeout))?;
     upstream.set_write_timeout(Some(config.connect_timeout))?;
-    upstream
-        .write_all(b"GET /health HTTP/1.1\r\nHost: nando-remote\r\nConnection: close\r\n\r\n")?;
+    write!(
+        upstream,
+        "GET {path} HTTP/1.1\r\nHost: nando-remote\r\nConnection: close\r\n\r\n"
+    )?;
 
     let mut response = Vec::with_capacity(1024);
     upstream.take(16 * 1024).read_to_end(&mut response)?;
-    let response = String::from_utf8_lossy(&response);
-    let valid = response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200");
-    if valid
-        && response.contains("\"ok\":true")
-        && response.contains("\"service\":\"nando-nginx-gateway\"")
-        && response.contains("\"transport\":\"nginx\"")
-    {
-        return Ok(());
-    }
-    Err(io::Error::other(
-        "upstream returned an unexpected Nando health contract",
-    ))
+    Ok(String::from_utf8_lossy(&response).into_owned())
 }
 
 fn relay_connection(
+    client: TcpStream,
+    config: &ConnectorConfig,
+    stats: &ConnectorStats,
+) -> io::Result<()> {
+    if let Some(fallback) = &config.client_fallback {
+        return http_fallback::relay_connection(client, config, fallback, stats);
+    }
+    relay_raw_connection(client, config, stats)
+}
+
+fn relay_raw_connection(
     mut client: TcpStream,
     config: &ConnectorConfig,
     stats: &ConnectorStats,
 ) -> io::Result<()> {
+    relay_raw_connection_with_prefix(&mut client, config, stats, &[])
+}
+
+pub(crate) fn relay_raw_connection_with_prefix(
+    client: &mut TcpStream,
+    config: &ConnectorConfig,
+    stats: &ConnectorStats,
+    prefix: &[u8],
+) -> io::Result<()> {
     client.set_nodelay(true)?;
     let mut upstream = connect_upstream(&config.upstream, config.connect_timeout)?;
     upstream.set_nodelay(true)?;
+    if !prefix.is_empty() {
+        upstream.write_all(prefix)?;
+    }
 
     let mut client_upload = client.try_clone()?;
     let mut upstream_upload = upstream.try_clone()?;
@@ -169,7 +297,7 @@ fn relay_connection(
         result
     });
 
-    let download_result = io::copy(&mut upstream, &mut client);
+    let download_result = io::copy(&mut upstream, client);
     let _ = client.shutdown(Shutdown::Write);
     let upload_result = upload
         .join()
@@ -182,11 +310,11 @@ fn relay_connection(
         .fetch_add(download_bytes, Ordering::Relaxed);
     stats
         .upload_bytes
-        .fetch_add(upload_bytes, Ordering::Relaxed);
+        .fetch_add(upload_bytes + prefix.len() as u64, Ordering::Relaxed);
     Ok(())
 }
 
-fn connect_upstream(upstream: &str, timeout: Duration) -> io::Result<TcpStream> {
+pub(crate) fn connect_upstream(upstream: &str, timeout: Duration) -> io::Result<TcpStream> {
     let mut last_error = None;
     let addresses = upstream.to_socket_addrs()?;
     for address in addresses {
@@ -203,7 +331,7 @@ fn connect_upstream(upstream: &str, timeout: Duration) -> io::Result<TcpStream> 
     }))
 }
 
-struct ConnectorStats {
+pub(crate) struct ConnectorStats {
     started_at: Instant,
     active_connections: AtomicUsize,
     accepted_connections: AtomicU64,
@@ -213,6 +341,15 @@ struct ConnectorStats {
     relay_failures: AtomicU64,
     upload_bytes: AtomicU64,
     download_bytes: AtomicU64,
+    http_requests: AtomicU64,
+    nando_responses: AtomicU64,
+    client_fallback_attempts: AtomicU64,
+    client_fallback_successes: AtomicU64,
+    client_fallback_failures: AtomicU64,
+    abstain_fallbacks: AtomicU64,
+    remote_failure_fallbacks: AtomicU64,
+    replayed_request_bytes: AtomicU64,
+    replay_spills: AtomicU64,
 }
 
 impl ConnectorStats {
@@ -227,6 +364,15 @@ impl ConnectorStats {
             relay_failures: AtomicU64::new(0),
             upload_bytes: AtomicU64::new(0),
             download_bytes: AtomicU64::new(0),
+            http_requests: AtomicU64::new(0),
+            nando_responses: AtomicU64::new(0),
+            client_fallback_attempts: AtomicU64::new(0),
+            client_fallback_successes: AtomicU64::new(0),
+            client_fallback_failures: AtomicU64::new(0),
+            abstain_fallbacks: AtomicU64::new(0),
+            remote_failure_fallbacks: AtomicU64::new(0),
+            replayed_request_bytes: AtomicU64::new(0),
+            replay_spills: AtomicU64::new(0),
         }
     }
 
@@ -237,7 +383,12 @@ impl ConnectorStats {
                 "\"uptime_seconds\":{},\"active_connections\":{},",
                 "\"accepted_connections\":{},\"completed_connections\":{},",
                 "\"rejected_connections\":{},\"accept_failures\":{},",
-                "\"relay_failures\":{},\"upload_bytes\":{},\"download_bytes\":{}}}"
+                "\"relay_failures\":{},\"upload_bytes\":{},\"download_bytes\":{},",
+                "\"http_requests\":{},\"nando_responses\":{},",
+                "\"client_fallback_attempts\":{},\"client_fallback_successes\":{},",
+                "\"client_fallback_failures\":{},\"abstain_fallbacks\":{},",
+                "\"remote_failure_fallbacks\":{},\"replayed_request_bytes\":{},",
+                "\"replay_spills\":{}}}"
             ),
             self.started_at.elapsed().as_secs(),
             self.active_connections.load(Ordering::Relaxed),
@@ -248,6 +399,15 @@ impl ConnectorStats {
             self.relay_failures.load(Ordering::Relaxed),
             self.upload_bytes.load(Ordering::Relaxed),
             self.download_bytes.load(Ordering::Relaxed),
+            self.http_requests.load(Ordering::Relaxed),
+            self.nando_responses.load(Ordering::Relaxed),
+            self.client_fallback_attempts.load(Ordering::Relaxed),
+            self.client_fallback_successes.load(Ordering::Relaxed),
+            self.client_fallback_failures.load(Ordering::Relaxed),
+            self.abstain_fallbacks.load(Ordering::Relaxed),
+            self.remote_failure_fallbacks.load(Ordering::Relaxed),
+            self.replayed_request_bytes.load(Ordering::Relaxed),
+            self.replay_spills.load(Ordering::Relaxed),
         )
     }
 }
@@ -298,6 +458,7 @@ mod tests {
             upstream: upstream.to_string(),
             max_connections: 4,
             connect_timeout: Duration::from_secs(2),
+            client_fallback: None,
         }
     }
 
@@ -398,7 +559,8 @@ mod tests {
                 "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),
                 body
-            )
+            )?;
+            stream.shutdown(Shutdown::Write)
         });
 
         check_upstream(&config)?;

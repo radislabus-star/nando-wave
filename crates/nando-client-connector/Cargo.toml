@@ -4,7 +4,7 @@ edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 rust-version.workspace = true
-version = "0.2.0"
+version = "0.3.1"
 
 [lib]
 path = "src/lib.rs"
@@ -12,6 +12,11 @@ path = "src/lib.rs"
 [[bin]]
 name = "nando-connector"
 path = "src/main.rs"
+
+[dependencies]
+httparse = "1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
 
 [lints]
 workspace = true

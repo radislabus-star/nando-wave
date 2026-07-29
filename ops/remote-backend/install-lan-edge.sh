@@ -99,6 +99,22 @@ discover_upstream_ipv4s() {
     | paste -sd ' ' -
 }
 
+wait_http_ready() {
+  local url="$1"
+  local attempt
+  local attempts="${NANDO_REMOTE_READINESS_ATTEMPTS:-20}"
+  local sleep_seconds="${NANDO_REMOTE_READINESS_SLEEP_SECONDS:-0.25}"
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if curl -fsS --max-time 1 "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "${sleep_seconds}"
+  done
+  printf 'HTTP readiness timed out: %s\n' "${url}" >&2
+  return 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --bind)
@@ -301,9 +317,10 @@ else
   sudo -n systemctl enable --now nando-transport-gateway.service
 fi
 
-curl -fsS --max-time 3 "http://${LAN_BIND}/health" >/dev/null
-curl -fsS --max-time 3 "http://${LAN_BIND}/cpu-health" >/dev/null
-curl -fsS --max-time 3 "http://${LAN_BIND}/control-health" >/dev/null
+wait_http_ready "http://${LAN_BIND}/health"
+wait_http_ready "http://${LAN_BIND}/client-fallback-health"
+wait_http_ready "http://${LAN_BIND}/cpu-health"
+wait_http_ready "http://${LAN_BIND}/control-health"
 dns_query_works "${DNS_RESOLVERS%% *}"
 curl -sS -o /dev/null --connect-timeout 5 --max-time 10 \
   "https://${DNS_PROBE_NAME}/"

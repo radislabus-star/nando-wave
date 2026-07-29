@@ -6,13 +6,19 @@ edge.
 
 ```text
 LAN client
-  -> Nginx :8787
-     -> nando-transition-serving :18789
-        -> upstream fallback when the CPU operator abstains
+  -> nando-connector
+     -> mini-PC Nginx :8787
+        -> nando-transition-serving :18789
+           -> CPU response
+           -> 418 ABSTAIN
 
 Private loopback roles
   -> nando-response-learning :18790
   -> nando-gateway-control :18788
+
+Client fallback
+  -> original request replayed by nando-connector
+  -> TLS chatgpt.com through the client's network route
 ```
 
 The public client base URL uses the standard OpenAI-compatible prefix:
@@ -51,15 +57,36 @@ nando-connect    manages and monitors the connector service
 nando-connector  forwards the local byte stream to the Nando server
 ```
 
-`nando-connector` does not parse OpenAI or Codex payloads. Unknown routes,
-headers, body fields, and streaming frames pass through unchanged, so normal
-Codex releases do not require a connector release. Rebuild it only when the
-Nando transport or security contract changes.
+`nando-connector` does not parse OpenAI or Codex JSON payloads. In client
+fallback mode it parses only HTTP/1.1 framing, the `/v1` or `/v2` route, and the
+LAN response status. Bodies remain opaque and replay byte-for-byte. Unknown
+routes and protocols retain the transparent relay path, and streaming response
+bytes pass through unchanged. Normal Codex payload changes therefore do not
+require a connector release; only a transport or security contract change
+does.
+
+The mini-PC exposes `/_nando/local/v1/...` and `/_nando/local/v2/...` only on
+the private LAN listener. These routes never perform server-side fallback.
+`418`, `502`, `503`, `504`, or failure before a response head causes one
+client-side replay to `https://chatgpt.com/backend-api/codex/...`. Once any
+response head is delivered, the connector never retries the request.
+
+Installation must first pass `nando-connector --check --client-fallback`,
+which verifies the remote `nando.client-fallback.v1` contract. The installed
+unit may then use `--allow-degraded-start`: if the already-verified mini-PC is
+offline during a later connector restart, existing clients still receive
+client-side fallback instead of losing the local listener.
+
+Replay is bounded at `64 MiB`. The first `1 MiB` stays in memory; larger bodies
+spill into a private, unlinked file under the user runtime directory. Tokens,
+headers, and bodies are never logged or persisted after the request.
 
 Transport-only counters are available on loopback at
 `http://127.0.0.1:18786/metrics`: active, accepted and completed connections,
-uploaded/downloaded bytes, rejections and relay failures. A connection is not
-reported as a Codex window because Codex may reuse or multiply TCP connections.
+uploaded/downloaded bytes, Nando responses, client fallback attempts,
+successful replays, failures, fallback reasons, and replay spills. A connection
+is not reported as a Codex window because Codex may reuse or multiply TCP
+connections.
 
 The distributed user service listens directly on `127.0.0.1:8787`. The
 `nando-client-connector.compatibility.override.conf` file is only for a machine
@@ -96,10 +123,10 @@ are transactional: the candidate config is validated before replacement, an
 active gateway receives only a graceful reload, and any failed DNS, HTTPS, CPU,
 control, or edge health check restores the previous config and unit.
 
-Fallback traffic uses a two-address IPv4 upstream pool with persistent
-connections. Request bodies up to `1 MiB` stay in the Nginx buffer; larger
-bodies spill to bounded runtime storage under `/run/nando-gateway`, preserving
-replay after a local `418` without putting ordinary request bodies on disk.
+Legacy clients still use the mini-PC two-address fallback pool. Client-fallback
+connectors bypass that pool after an abstain, so a TrustTunnel outage on the
+mini-PC cannot break their external fallback. The legacy route remains during
+the drain period and can be removed after every client has migrated.
 
 Start it explicitly after the internal health checks pass:
 

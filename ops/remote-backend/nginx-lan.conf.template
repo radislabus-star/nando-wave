@@ -52,11 +52,11 @@ http {
     resolver_timeout 5s;
 
     upstream nando_chatgpt {
-        server @NANDO_CHATGPT_IPV4_PRIMARY@:443 max_fails=3 fail_timeout=5s;
-        server @NANDO_CHATGPT_IPV4_SECONDARY@:443 max_fails=3 fail_timeout=5s;
+        server @NANDO_CHATGPT_IPV4_PRIMARY@:443 max_fails=0;
+        server @NANDO_CHATGPT_IPV4_SECONDARY@:443 max_fails=0;
         keepalive 64;
         keepalive_requests 1000;
-        keepalive_timeout 60s;
+        keepalive_timeout 300s;
     }
 
     server {
@@ -83,6 +83,12 @@ http {
             default_type application/json;
             add_header Cache-Control "no-store" always;
             return 200 '{"ok":true,"service":"nando-nginx-gateway","transport":"nginx","scope":"private_lan","python_transport":false}';
+        }
+
+        location = /client-fallback-health {
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            return 200 '{"ok":true,"service":"nando-nginx-gateway","client_fallback_route":true,"contract":"nando.client-fallback.v1"}';
         }
 
         location = /control-health {
@@ -142,6 +148,23 @@ http {
             proxy_connect_timeout 100ms;
             proxy_send_timeout 2s;
             proxy_read_timeout 2s;
+        }
+
+        location ^~ /_nando/local/ {
+            rewrite ^/_nando/local/(v[12]/.*)$ /$1 break;
+            proxy_pass http://127.0.0.1:18789;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1;
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_set_header X-Nando-Request-Id $request_id;
+            proxy_request_buffering on;
+            proxy_buffering off;
+            proxy_intercept_errors off;
+            proxy_connect_timeout 100ms;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 300ms;
+            add_header X-Nando-Fallback-Authority client always;
         }
 
         location /v2/ {

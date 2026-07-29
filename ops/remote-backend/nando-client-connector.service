@@ -1,13 +1,15 @@
 [Unit]
-Description=Nando protocol-transparent client connector
+Description=Nando payload-transparent client connector
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/nando-connector --listen 127.0.0.1:8787 --upstream 192.168.3.94:8787 --max-connections 64
+ExecStart=%h/.local/bin/nando-connector --listen 127.0.0.1:8787 --upstream 192.168.3.94:8787 --max-connections 64 --client-fallback --allow-degraded-start --spool-dir %t/nando-connector
 Restart=always
 RestartSec=1s
+RuntimeDirectory=nando-connector
+RuntimeDirectoryMode=0700
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -15,7 +17,7 @@ ProtectHome=read-only
 RestrictAddressFamilies=AF_INET AF_INET6
 LockPersonality=true
 CPUQuota=10%
-MemoryMax=64M
+MemoryMax=128M
 TasksMax=192
 
 [Install]
