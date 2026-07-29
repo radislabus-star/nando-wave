@@ -15,6 +15,7 @@ members = [
     "crates/nando-transition-serving",
     "crates/nando-response-actor",
     "crates/nando-expression-runtime",
+    "crates/nando-client-connector",
 ]
 resolver = "3"
 
