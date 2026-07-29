@@ -25,6 +25,7 @@ EOF
 
 cat >"${WORK}/bin/systemctl-test" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >>"${NANDO_TEST_SYSTEMCTL_LOG}"
 case "$*" in
   *is-active*) printf '%s\n' active ;;
 esac
@@ -37,6 +38,7 @@ export NANDO_CONNECT_SYSTEMCTL_BIN="${WORK}/bin/systemctl-test"
 export NANDO_SERVER_ORIGIN="http://192.168.3.94:8787"
 export NANDO_CONNECTOR_ORIGIN="http://127.0.0.1:8787"
 export NANDO_CONNECT_SKIP_LEGACY_MIGRATION=1
+export NANDO_TEST_SYSTEMCTL_LOG="${WORK}/systemctl.log"
 
 [[ "$("${CONNECTOR}" url)" == "http://127.0.0.1:8787/v1" ]]
 [[ "$("${CONNECTOR}" server-url)" == "http://192.168.3.94:8787/v1" ]]
@@ -62,6 +64,11 @@ grep -Fq 'REMOTE FAILOVER    1' <<<"${status}"
 
 watch="$(NANDO_CONNECT_WATCH_ONCE=1 "${CONNECTOR}")"
 grep -Fq 'Ctrl+C closes this monitor' <<<"${watch}"
+grep -Fq -- '--user start nando-client-connector.service' "${NANDO_TEST_SYSTEMCTL_LOG}"
+if grep -Fq -- '--user restart nando-client-connector.service' "${NANDO_TEST_SYSTEMCTL_LOG}"; then
+  printf '%s\n' "default nando-connect unexpectedly restarted the connector" >&2
+  exit 1
+fi
 
 restart="$(NANDO_CONNECT_WATCH_ONCE=1 "${CONNECTOR}" restart)"
 grep -Fq 'LOCAL CONNECTOR  active' <<<"${restart}"

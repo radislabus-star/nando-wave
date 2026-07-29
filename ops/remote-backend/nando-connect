@@ -19,7 +19,7 @@ COMPATIBILITY_DROPIN="${NANDO_CONNECTOR_COMPATIBILITY_DROPIN:-${HOME}/.config/sy
 usage() {
   printf '%s\n' \
     "Usage:" \
-    "  nando-connect                  Restart connector and show live status" \
+    "  nando-connect                  Start if needed and show live status" \
     "  nando-connect status           Show status once" \
     "  nando-connect start|stop" \
     "  nando-connect health" \
@@ -151,7 +151,7 @@ command_name="${1:-console}"
 case "${command_name}" in
   console)
     migrate_legacy_shim
-    "${SYSTEMCTL}" --user restart "${SERVICE}"
+    start_connector
     watch_status already-started
     ;;
   watch)
