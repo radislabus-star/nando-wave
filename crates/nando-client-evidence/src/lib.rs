@@ -290,9 +290,7 @@ impl NandoRouteReceiptIndex {
                 self.offset = record_offset;
                 break;
             }
-            self.offset = self
-                .offset
-                .saturating_add(u64::try_from(read).unwrap_or(u64::MAX));
+            let next_offset = record_offset.saturating_add(u64::try_from(read).unwrap_or(u64::MAX));
             line.pop();
             if line.is_empty() || line.len() > MAX_ROUTE_RECEIPT_BYTES {
                 return Err("route_receipt_record_budget".to_owned());
@@ -322,6 +320,7 @@ impl NandoRouteReceiptIndex {
                 ))
                 .or_default()
                 .push(receipt);
+            self.offset = next_offset;
             accepted = accepted.saturating_add(1);
         }
         Ok(accepted)
@@ -571,5 +570,37 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn refresh_never_skips_a_complete_invalid_record() {
+        let root = temporary_root("invalid-complete");
+        let path = root.join("route-receipts-v1.jsonl");
+        let mut ledger =
+            NandoRouteReceiptLedger::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .expect("ledger");
+        ledger
+            .append(&identity(), sha256_bytes(b"valid"), 200, 100, 150)
+            .expect("valid receipt");
+        drop(ledger);
+
+        let mut index = NandoRouteReceiptIndex::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+            .expect("index");
+        let valid_offset = index.offset;
+        let mut raw = OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("append invalid");
+        raw.write_all(b"{}\n").expect("write invalid");
+        raw.sync_data().expect("sync invalid");
+        drop(raw);
+
+        assert!(index.refresh().is_err());
+        assert_eq!(index.offset, valid_offset);
+        assert_eq!(index.len(), 1);
+        assert!(index.refresh().is_err());
+        assert_eq!(index.offset, valid_offset);
+        assert_eq!(index.len(), 1);
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }
