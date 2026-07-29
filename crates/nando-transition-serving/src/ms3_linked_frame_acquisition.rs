@@ -95,7 +95,7 @@ impl Ms3LinkedFrameAcquisitionRuntime {
             let max_raw_topology_rows = max_new_topology_rows
                 .saturating_mul(RAW_SCAN_MULTIPLIER_V2)
                 .clamp(max_new_topology_rows, MAX_RAW_SCAN_ROWS_V2);
-            let contract = Ms3LinkedFrameAcquisitionContractV1::seal_v2(
+            let contract = Ms3LinkedFrameAcquisitionContractV1::seal_v3(
                 prefix_root,
                 watermark_rows,
                 opened_at_unix,

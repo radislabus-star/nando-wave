@@ -3554,8 +3554,20 @@ fn evaluate_ms3_capture_health(
             new_topologies,
             &terminals,
         );
-    let eligible_request_ids = selection
-        .eligible_topologies
+    // Receipt health observes every structurally eligible row in the raw frozen
+    // scan. Terminal availability is the edge being measured, so it must not be
+    // used to filter that denominator.
+    let receipt_topologies = selection
+        .raw_topologies
+        .iter()
+        .filter(|row| {
+            nando_operator_learning::multi_source::validate_pre_action_topology_join_eligibility_v1(
+                row,
+            )
+            .is_ok()
+        })
+        .collect::<Vec<_>>();
+    let receipt_request_ids = receipt_topologies
         .iter()
         .map(|row| row.structure.request_event_id_sha256.as_str())
         .collect::<BTreeSet<_>>();
@@ -3565,12 +3577,11 @@ fn evaluate_ms3_capture_health(
             receipt.validate()
                 && receipt.completed_at_unix_nanos
                     <= contract.deadline_unix.saturating_mul(1_000_000_000)
-                && eligible_request_ids.contains(receipt.request_event_id_sha256.as_str())
+                && receipt_request_ids.contains(receipt.request_event_id_sha256.as_str())
         })
         .map(|receipt| receipt.request_event_id_sha256)
         .collect::<BTreeSet<_>>();
-    let receipt_observations = selection
-        .eligible_topologies
+    let receipt_observations = receipt_topologies
         .iter()
         .map(|row| ms3_receipt_health::Ms3ReceiptTopologyObservationV1 {
             topology_root_sha256: row.commit.commitment_root_sha256.clone(),

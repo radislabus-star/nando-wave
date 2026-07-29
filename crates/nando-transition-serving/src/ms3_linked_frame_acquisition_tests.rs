@@ -12,6 +12,14 @@ fn contract_and_terminal_failure_restart_byte_identically() {
     let mut runtime = Ms3LinkedFrameAcquisitionRuntime::open(&root, &topology_archive, 100, 4, 60)
         .expect("runtime");
     let contract = runtime.contract().clone();
+    assert_eq!(
+        contract.schema,
+        nando_operator_learning::multi_source::MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3
+    );
+    assert_eq!(
+        contract.eligibility_policy.as_deref(),
+        Some(nando_operator_learning::multi_source::MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1)
+    );
     let collecting = runtime
         .evaluate(100, Vec::new(), Vec::new(), Vec::new())
         .expect("collecting");

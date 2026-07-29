@@ -13,6 +13,10 @@ pub const MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V1: &str =
     "nando.ms3-linked-frame-acquisition-contract.v1";
 pub const MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2: &str =
     "nando.ms3-linked-frame-acquisition-contract.v2";
+pub const MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3: &str =
+    "nando.ms3-linked-frame-acquisition-contract.v3";
+pub const MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1: &str =
+    "nando.ms3-provider-bound-topology-eligibility.v1";
 pub const MS3_LINKED_FRAME_RECEIPT_SCHEMA_V1: &str = "nando.ms3-linked-frame-receipt.v1";
 pub const MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1: &str =
     "nando.ms3-linked-frame-acquisition-report.v1";
@@ -52,6 +56,8 @@ pub struct Ms3LinkedFrameAcquisitionContractV1 {
     pub max_raw_topology_rows: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_lag_slo_seconds: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eligibility_policy: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -174,6 +180,7 @@ impl Ms3LinkedFrameAcquisitionContractV1 {
             authority_ready: false,
             max_raw_topology_rows: None,
             receipt_lag_slo_seconds: None,
+            eligibility_policy: None,
         };
         contract.contract_root_sha256 = contract.expected_root();
         contract
@@ -217,6 +224,51 @@ impl Ms3LinkedFrameAcquisitionContractV1 {
             authority_ready: false,
             max_raw_topology_rows: Some(max_raw_topology_rows),
             receipt_lag_slo_seconds: Some(receipt_lag_slo_seconds),
+            eligibility_policy: None,
+        };
+        contract.contract_root_sha256 = contract.expected_root();
+        contract
+            .validate()
+            .then_some(contract)
+            .ok_or("ms3_linked_frame_acquisition_contract_invalid")
+    }
+
+    pub fn seal_v3(
+        topology_prefix_root_sha256: String,
+        topology_watermark_rows: u64,
+        opened_at_unix: u64,
+        max_eligible_topology_rows: u64,
+        max_raw_topology_rows: u64,
+        max_elapsed_seconds: u64,
+        receipt_lag_slo_seconds: u64,
+    ) -> Result<Self, &'static str> {
+        if !valid_nonzero_sha256(&topology_prefix_root_sha256)
+            || opened_at_unix == 0
+            || !(1..=MAX_ACQUISITION_TOPOLOGIES).contains(&max_eligible_topology_rows)
+            || !(max_eligible_topology_rows..=MAX_ACQUISITION_TOPOLOGIES)
+                .contains(&max_raw_topology_rows)
+            || !(60..=MAX_ACQUISITION_SECONDS).contains(&max_elapsed_seconds)
+            || receipt_lag_slo_seconds == 0
+            || receipt_lag_slo_seconds > max_elapsed_seconds
+        {
+            return Err("ms3_linked_frame_acquisition_contract_invalid");
+        }
+        let deadline_unix = opened_at_unix
+            .checked_add(max_elapsed_seconds)
+            .ok_or("ms3_linked_frame_acquisition_contract_invalid")?;
+        let mut contract = Self {
+            schema: MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3.to_owned(),
+            contract_root_sha256: String::new(),
+            topology_prefix_root_sha256,
+            topology_watermark_rows,
+            opened_at_unix,
+            deadline_unix,
+            max_new_topology_rows: max_eligible_topology_rows,
+            classifier_version: REPRESENTATION_GAP_CLASSIFIER_VERSION_V1.to_owned(),
+            authority_ready: false,
+            max_raw_topology_rows: Some(max_raw_topology_rows),
+            receipt_lag_slo_seconds: Some(receipt_lag_slo_seconds),
+            eligibility_policy: Some(MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1.to_owned()),
         };
         contract.contract_root_sha256 = contract.expected_root();
         contract
@@ -244,7 +296,22 @@ impl Ms3LinkedFrameAcquisitionContractV1 {
 
     #[must_use]
     pub fn expected_root(&self) -> String {
-        if self.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2 {
+        if self.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3 {
+            canonical_json_sha256(&(
+                MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3,
+                self.topology_prefix_root_sha256.as_str(),
+                self.topology_watermark_rows,
+                self.opened_at_unix,
+                self.deadline_unix,
+                self.max_new_topology_rows,
+                self.max_raw_topology_rows(),
+                self.receipt_lag_slo_seconds(),
+                self.classifier_version.as_str(),
+                self.eligibility_policy.as_deref(),
+                false,
+            ))
+            .expect("MS3 acquisition contract serializes")
+        } else if self.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2 {
             canonical_json_sha256(&(
                 MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2,
                 self.topology_prefix_root_sha256.as_str(),
@@ -279,6 +346,7 @@ impl Ms3LinkedFrameAcquisitionContractV1 {
             self.schema.as_str(),
             MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V1
                 | MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2
+                | MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3
         ) && valid_nonzero_sha256(&self.contract_root_sha256)
             && valid_nonzero_sha256(&self.topology_prefix_root_sha256)
             && self.opened_at_unix > 0
@@ -288,13 +356,24 @@ impl Ms3LinkedFrameAcquisitionContractV1 {
             && (self.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V1
                 && self.max_raw_topology_rows.is_none()
                 && self.receipt_lag_slo_seconds.is_none()
+                && self.eligibility_policy.is_none()
                 || self.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2
                     && self.max_raw_topology_rows.is_some_and(|rows| {
                         (self.max_new_topology_rows..=MAX_ACQUISITION_TOPOLOGIES).contains(&rows)
                     })
                     && self.receipt_lag_slo_seconds.is_some_and(|seconds| {
                         seconds > 0 && seconds <= self.max_elapsed_seconds()
-                    }))
+                    })
+                    && self.eligibility_policy.is_none()
+                || self.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3
+                    && self.max_raw_topology_rows.is_some_and(|rows| {
+                        (self.max_new_topology_rows..=MAX_ACQUISITION_TOPOLOGIES).contains(&rows)
+                    })
+                    && self.receipt_lag_slo_seconds.is_some_and(|seconds| {
+                        seconds > 0 && seconds <= self.max_elapsed_seconds()
+                    })
+                    && self.eligibility_policy.as_deref()
+                        == Some(MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1))
             && self.classifier_version == REPRESENTATION_GAP_CLASSIFIER_VERSION_V1
             && !self.authority_ready
             && self.contract_root_sha256 == self.expected_root()
@@ -446,6 +525,7 @@ pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
             .iter()
             .filter(|topology| {
                 match acquisition_topology_eligibility(
+                    &contract,
                     topology,
                     &terminal_request_ids,
                     generated_at_unix,
@@ -589,6 +669,7 @@ pub fn select_ms3_linked_frame_acquisition_topologies_v1(
             break;
         }
         match acquisition_topology_eligibility(
+            contract,
             &topology,
             &terminal_request_ids,
             generated_at_unix,
@@ -609,12 +690,16 @@ pub fn select_ms3_linked_frame_acquisition_topologies_v1(
 }
 
 fn acquisition_topology_eligibility(
+    contract: &Ms3LinkedFrameAcquisitionContractV1,
     topology: &PreActionTopologyAuditRowV1,
     terminal_request_ids: &BTreeSet<String>,
     generated_at_unix: u64,
     receipt_lag_slo_seconds: u64,
 ) -> Result<(), super::MultiSourceJoinCensoredReasonV1> {
     super::validate_pre_action_topology_join_eligibility_v1(topology)?;
+    if contract.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3 {
+        return Ok(());
+    }
     if !terminal_request_ids.contains(&topology.structure.request_event_id_sha256)
         && topology.captured_at_unix_ms.is_some_and(|captured_at| {
             generated_at_unix

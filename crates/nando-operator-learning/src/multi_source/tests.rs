@@ -783,6 +783,22 @@ fn acquisition_contract_v2(
     .expect("V2 acquisition contract")
 }
 
+fn acquisition_contract_v3(
+    max_eligible_topology_rows: u64,
+    max_raw_topology_rows: u64,
+) -> Ms3LinkedFrameAcquisitionContractV1 {
+    Ms3LinkedFrameAcquisitionContractV1::seal_v3(
+        root("topology-prefix-v3"),
+        1_832,
+        1,
+        max_eligible_topology_rows,
+        max_raw_topology_rows,
+        60,
+        5,
+    )
+    .expect("V3 acquisition contract")
+}
+
 fn unattributed_topology_row(
     intent: &str,
     request_event: &str,
@@ -1430,6 +1446,45 @@ fn stale_missing_terminal_is_censored_without_becoming_negative_evidence() {
         Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
     );
     assert_eq!(report.blocker, MS3_LINKED_FRAME_ACQUISITION_FAIL);
+    assert!(report.receipts.is_empty());
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
+}
+
+#[test]
+fn v3_missing_terminal_remains_in_the_frozen_eligible_denominator() {
+    let contract = acquisition_contract_v3(3, 4);
+    let canonical = serde_cbor::to_vec(&contract).expect("contract bytes");
+    assert_eq!(
+        serde_cbor::from_slice::<Ms3LinkedFrameAcquisitionContractV1>(&canonical)
+            .expect("contract restore"),
+        contract
+    );
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        contract,
+        10,
+        vec![
+            t1_topology_row("stalled", "request-stalled", "session-stalled", 1, 1_000),
+            t1_topology_row("eligible-a", "request-eligible-a", "session-a", 2, 2_000),
+            t1_topology_row("eligible-b", "request-eligible-b", "session-b", 3, 3_000),
+        ],
+        Vec::new(),
+        vec![
+            terminal("request-eligible-a", 1_990, 2_100),
+            terminal("request-eligible-b", 2_990, 3_100),
+        ],
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.raw_scanned_topology_rows, 3);
+    assert_eq!(report.eligible_topology_rows, 3);
+    assert_eq!(report.terminal_receipt_rows, 2);
+    assert_eq!(report.censored_topology_rows, 0);
+    assert!(report.ineligible_reason_counts.is_empty());
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::Collecting
+    );
     assert!(report.receipts.is_empty());
     assert!(!report.phase_update_allowed);
     assert!(!report.authority_ready);

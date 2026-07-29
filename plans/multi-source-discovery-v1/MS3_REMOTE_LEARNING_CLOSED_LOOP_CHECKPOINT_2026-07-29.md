@@ -188,6 +188,33 @@ verify timestamp + client key + request HMAC
 A crash at any boundary causes replay or fail-closed recovery, not a
 restart-valid phantom future.
 
+## Receipt Health Denominator
+
+The live G25 audit exposed 264 raw rows, 66 eligible rows, and 180 stale rows
+classified as `terminal_receipt_unavailable`. Receipt health incorrectly
+filtered those 180 rows before measuring the topology-to-terminal edge and
+therefore reported `COMPLETE`.
+
+The operational monitor now measures every structurally eligible row in the
+frozen raw scan. On the same immutable G25 contract it reports those missing
+terminal receipts as `RECEIPT_STALLED`; it does not alter the acquisition
+report, watermark, deadline, authority, or phase memory.
+
+New generations use acquisition contract V3:
+
+```text
+provider-bound, uncensored topology
+-> scientific eligible denominator
+-> terminal receipt health
+   |- below SLO        IN_FLIGHT
+   |- at/above SLO     RECEIPT_STALLED
+   `- present          terminally covered
+```
+
+V1 and V2 contracts retain their original byte identity and selection
+semantics. An active V2 generation is loaded from disk rather than silently
+recomputed under V3.
+
 ## Verification
 
 All Rust compilation, tests, and Clippy for the changed crates ran on the
@@ -198,7 +225,7 @@ All Rust compilation, tests, and Clippy for the changed crates ran on the
 cargo fmt --all -- --check                         PASS
 cargo check --workspace --all-targets               PASS
 cargo test -p nando-operator-learning
-  314 unit + 1 integration                          PASS
+  316 unit + 1 integration                          PASS
 cargo test -p nando-transition-serving
   160 unit PASS / 4 explicit ignored
   5 Evidence Agent tests                            PASS
@@ -250,7 +277,9 @@ release build on mini-PC                         DONE
 -> wait for active connector connections = 0    ACTIVE
 -> transactional connector activation           QUEUED
 -> observe first ordinary route-bound frame      PENDING
--> verify G16 immutable censor and G17 exact-cursor successor
+-> expose G25 stale terminal gaps as RECEIPT_STALLED
+                                                READY TO DEPLOY
+-> create V3 eligibility contract only at next successor
                                                 PENDING
 -> preserve authority=false until normal MS3 future proof
                                                 ENFORCED
