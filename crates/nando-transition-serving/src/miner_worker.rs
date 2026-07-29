@@ -1234,9 +1234,15 @@ fn publish_collection_snapshot(
     else {
         return;
     };
-    if let Ok(mut published) = target.write() {
-        *published = Some(snapshot);
-    }
+    let previous = if let Ok(mut published) = target.write() {
+        published.replace(snapshot)
+    } else {
+        return;
+    };
+    // ResponsePackage and admission-candidate payloads can be large. Dropping
+    // the previous diagnostic snapshot while holding the publication lock
+    // makes otherwise read-only health checks wait for allocator work.
+    drop(previous);
 }
 
 fn publish_multi_source_evidence(
