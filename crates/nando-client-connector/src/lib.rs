@@ -76,7 +76,7 @@ pub fn serve(listener: TcpListener, config: ConnectorConfig) -> io::Result<()> {
         let client = match incoming {
             Ok(client) => client,
             Err(error) => {
-                eprintln!("nando-connect: accept failed: {error}");
+                eprintln!("nando-connector: accept failed: {error}");
                 continue;
             }
         };
@@ -85,7 +85,7 @@ pub fn serve(listener: TcpListener, config: ConnectorConfig) -> io::Result<()> {
         if previous >= config.max_connections {
             active_connections.fetch_sub(1, Ordering::AcqRel);
             let _ = client.shutdown(Shutdown::Both);
-            eprintln!("nando-connect: connection limit reached");
+            eprintln!("nando-connector: connection limit reached");
             continue;
         }
 
@@ -94,7 +94,7 @@ pub fn serve(listener: TcpListener, config: ConnectorConfig) -> io::Result<()> {
         thread::spawn(move || {
             let _guard = ConnectionGuard(connection_count);
             if let Err(error) = relay_connection(client, &connection_config) {
-                eprintln!("nando-connect: relay failed: {error}");
+                eprintln!("nando-connector: relay failed: {error}");
             }
         });
     }

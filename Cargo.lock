@@ -519,6 +519,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "nando-client-connector"
+version = "0.1.0"
+
+[[package]]
 name = "nando-core"
 version = "0.1.0"
 dependencies = [

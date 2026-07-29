@@ -10,7 +10,7 @@ version.workspace = true
 path = "src/lib.rs"
 
 [[bin]]
-name = "nando-connect"
+name = "nando-connector"
 path = "src/main.rs"
 
 [lints]

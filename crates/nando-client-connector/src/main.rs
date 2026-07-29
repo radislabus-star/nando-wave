@@ -12,7 +12,7 @@ fn main() -> ExitCode {
     match execute(env::args().skip(1)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("nando-connect: {error}");
+            eprintln!("nando-connector: {error}");
             ExitCode::FAILURE
         }
     }
@@ -40,7 +40,7 @@ fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
             }
             "--check" => check_only = true,
             "--version" | "-V" => {
-                println!("nando-connect {VERSION}");
+                println!("nando-connector {VERSION}");
                 return Ok(());
             }
             "--help" | "-h" => {
@@ -85,13 +85,13 @@ fn parse_u64(value: &str) -> Result<u64, String> {
 
 fn print_help() {
     println!(
-        "nando-connect {VERSION}
+        "nando-connector {VERSION}
 
 Protocol-transparent client transport for Nando.
 
 Usage:
-  nando-connect [OPTIONS]
-  nando-connect --check [OPTIONS]
+  nando-connector [OPTIONS]
+  nando-connector --check [OPTIONS]
 
 Options:
   --listen ADDRESS             Loopback listener (default: {DEFAULT_LISTEN})

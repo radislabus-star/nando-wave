@@ -42,6 +42,25 @@ print the required base URL environment with:
 ops/remote-backend/nando-connect env
 ```
 
+The Linux transport is a separate static binary:
+
+```text
+nando-connect    launches/configures Codex
+nando-connector  forwards the local byte stream to the Nando server
+```
+
+`nando-connector` does not parse OpenAI or Codex payloads. Unknown routes,
+headers, body fields, and streaming frames pass through unchanged, so normal
+Codex releases do not require a connector release. Rebuild it only when the
+Nando transport or security contract changes.
+
+Build the portable x86-64 Linux artifact on the build host:
+
+```bash
+NANDO_CONNECTOR_CARGO_BIN="$HOME/.cargo/bin/cargo" \
+  ops/remote-backend/build-linux-connector.sh
+```
+
 The first boot is fail-closed:
 
 ```text
