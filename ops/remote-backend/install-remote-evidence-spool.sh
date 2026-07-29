@@ -11,8 +11,9 @@ SPOOL_DIRECTORY="${NANDO_REMOTE_EVIDENCE_SPOOL:-/var/lib/nando-wave/transition/m
 LEARNING_HEALTH="${NANDO_REMOTE_LEARNING_HEALTH:-http://127.0.0.1:18790/health}"
 HOT_HEALTH="${NANDO_REMOTE_HOT_HEALTH:-http://127.0.0.1:18789/health}"
 LEARNING_STATE="${NANDO_REMOTE_LEARNING_STATE:-/var/lib/nando-wave/transition/multi-source-live-v2}"
-READINESS_ATTEMPTS="${NANDO_REMOTE_EVIDENCE_READINESS_ATTEMPTS:-40}"
-READINESS_SLEEP_SECONDS="${NANDO_REMOTE_EVIDENCE_READINESS_SLEEP_SECONDS:-0.25}"
+READINESS_ATTEMPTS="${NANDO_REMOTE_EVIDENCE_READINESS_ATTEMPTS:-12}"
+READINESS_SLEEP_SECONDS="${NANDO_REMOTE_EVIDENCE_READINESS_SLEEP_SECONDS:-0.5}"
+LEARNING_HEALTH_TIMEOUT_SECONDS="${NANDO_REMOTE_EVIDENCE_HEALTH_TIMEOUT_SECONDS:-10}"
 
 usage() {
   cat <<'EOF'
@@ -100,7 +101,7 @@ set_env_value() {
 wait_learning_ready() {
   local _attempt
   for _attempt in $(seq 1 "${READINESS_ATTEMPTS}"); do
-    if curl -fsS --max-time 1 "${LEARNING_HEALTH}" \
+    if curl -fsS --max-time "${LEARNING_HEALTH_TIMEOUT_SECONDS}" "${LEARNING_HEALTH}" \
       | jq -e '
           .ok == true
           and .remote_evidence.enabled == true

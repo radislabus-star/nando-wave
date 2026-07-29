@@ -185,6 +185,11 @@ post-ACK outbox compaction to zero frames. Restart and outage replay were also
 tested against the same durable client/server state. Test-only services were
 stopped afterward.
 
+The production cold learner can legitimately take several seconds to answer
+while holding a learning-state lock. Its transactional installer therefore
+uses a separate bounded 10-second health probe instead of the hot serving
+timeout; hot health remains independently required before and after restart.
+
 ## Deployment Boundary
 
 The production order is intentionally narrow:
