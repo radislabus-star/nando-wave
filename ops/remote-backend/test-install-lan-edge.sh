@@ -85,6 +85,8 @@ done
 grep -Fq "resolver ${NANDO_TEST_EXPECTED_RESOLVERS} " "${config}"
 grep -Fq "client_fallback_route" "${config}"
 grep -Fq "location ^~ /_nando/local/" "${config}"
+grep -Fq "~^/_nando/local/v[12]/responses(?:\\?|$) 1;" "${config}"
+grep -Fq "~^/_nando/local/v[12]/chat/completions(?:\\?|$) 1;" "${config}"
 grep -Fq "location = /_nando/evidence/v1/batches" "${config}"
 grep -Fq "proxy_pass http://127.0.0.1:18790;" "${config}"
 EOF

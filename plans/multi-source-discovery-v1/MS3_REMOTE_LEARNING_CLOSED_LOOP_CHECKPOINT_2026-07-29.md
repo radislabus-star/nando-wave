@@ -219,6 +219,22 @@ V1 and V2 contracts retain their original byte identity and selection
 semantics. An active V2 generation is loaded from disk rather than silently
 recomputed under V3.
 
+The live operational root cause was the connector's hot-only route:
+
+```text
+connector
+-> /_nando/local/v1/responses
+-> hot Nando 200/418
+-> Nginx economics map did not select the internal route
+-> no terminal log row
+```
+
+The Nginx map now includes both `/_nando/local/v1` and
+`/_nando/local/v2` response/chat paths. A controlled request must append one
+real Nginx terminal row and one parsed archive record before the repair is
+accepted. The 180 historical G25 gaps remain censored operational history;
+they are not reconstructed or used as negative evidence.
+
 ## Verification
 
 All Rust compilation, tests, and Clippy for the changed crates ran on the
@@ -282,7 +298,8 @@ release build on mini-PC                         DONE
 -> transactional connector activation           QUEUED
 -> observe first ordinary route-bound frame      PENDING
 -> expose G25 stale terminal gaps as RECEIPT_STALLED
-                                                READY TO DEPLOY
+                                                DEPLOYED
+-> restore internal hot-only terminal logging    READY TO DEPLOY
 -> create V3 eligibility contract only at next successor
                                                 PENDING
 -> preserve authority=false until normal MS3 future proof
@@ -290,7 +307,7 @@ release build on mini-PC                         DONE
 ```
 
 The installed cold learner binary is SHA-256
-`fc14c05bb1a1ef2e60c7ff1deedd0694567dd9f34f3d91bec677195dc9db3b0b`.
+`0cfe51231deec05ca13bacbedfbbf18a256d0f84bbd1416ca76ba9b51b76c51d`.
 The installed local Evidence Agent is SHA-256
 `a849b3578ecaa87cf233082a543c8465cc1d0737b94a07a824b51c3536a1a667`.
 The staged static connector is SHA-256

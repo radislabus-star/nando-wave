@@ -32,6 +32,8 @@ http {
         default 0;
         ~^/v[12]/responses(?:\?|$) 1;
         ~^/v[12]/chat/completions(?:\?|$) 1;
+        ~^/_nando/local/v[12]/responses(?:\?|$) 1;
+        ~^/_nando/local/v[12]/chat/completions(?:\?|$) 1;
     }
 
     access_log /var/lib/nando-gateway/economics-access.jsonl nando_economics
