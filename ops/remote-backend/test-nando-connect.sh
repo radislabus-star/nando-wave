@@ -35,6 +35,12 @@ jq -e '
   and .transport == "nginx"
 ' <<<"${health}" >/dev/null
 
+argv="$("${CONNECTOR}")"
+jq -e '
+  index("model_provider=\"nando_remote\"") != null
+  and index("model_providers.nando_remote.base_url=\"http://127.0.0.1:8787/v1\"") != null
+' <<<"${argv}" >/dev/null
+
 argv="$("${CONNECTOR}" codex exec --ephemeral probe)"
 jq -e '
   index("model_provider=\"nando_remote\"") != null

@@ -65,7 +65,9 @@ case "${command_name}" in
     printf 'export OPENAI_API_BASE=%q\n' "${BASE_URL}"
     ;;
   codex)
-    shift
+    if (($# > 0)); then
+      shift
+    fi
     run_codex "$@"
     ;;
   -h|--help|help)
