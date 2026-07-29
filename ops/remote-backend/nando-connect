@@ -6,6 +6,8 @@ CONNECTOR_ORIGIN="${NANDO_CONNECTOR_ORIGIN:-http://127.0.0.1:8787}"
 BASE_URL="${NANDO_CONNECTOR_BASE_URL:-${CONNECTOR_ORIGIN%/}/v1}"
 HEALTH_URL="${NANDO_CONNECTOR_HEALTH_URL:-${CONNECTOR_ORIGIN%/}/health}"
 CPU_HEALTH_URL="${NANDO_CONNECTOR_CPU_HEALTH_URL:-${CONNECTOR_ORIGIN%/}/cpu-health}"
+REMOTE_HEALTH_URL="${NANDO_REMOTE_HEALTH_URL:-${SERVER_ORIGIN%/}/health}"
+REMOTE_CPU_HEALTH_URL="${NANDO_REMOTE_CPU_HEALTH_URL:-${SERVER_ORIGIN%/}/cpu-health}"
 METRICS_URL="${NANDO_CONNECTOR_METRICS_URL:-http://127.0.0.1:18786/metrics}"
 SERVICE="${NANDO_CONNECTOR_SERVICE:-nando-client-connector.service}"
 SYSTEMCTL="${NANDO_CONNECT_SYSTEMCTL_BIN:-systemctl}"
@@ -56,8 +58,8 @@ start_connector() {
 render_status() {
   local state transport cpu metrics
   state="$(service_state)"
-  transport="$(check_transport 2>/dev/null || true)"
-  cpu="$(fetch "${CPU_HEALTH_URL}" 2>/dev/null || true)"
+  transport="$(fetch "${REMOTE_HEALTH_URL}" 2>/dev/null || true)"
+  cpu="$(fetch "${REMOTE_CPU_HEALTH_URL}" 2>/dev/null || true)"
   metrics="$(fetch "${METRICS_URL}" 2>/dev/null || true)"
 
   printf 'NANDO CONNECT\n'
