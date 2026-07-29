@@ -75,11 +75,12 @@ pub use linked_frame_acquisition::{
     MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2, MS3_LINKED_FRAME_ACQUISITION_FAIL,
     MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1, MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2,
     MS3_LINKED_FRAME_RECEIPT_SCHEMA_V1, MS3_RECEIPT_LAG_SLO_SECONDS_V1,
-    Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
-    Ms3LinkedFrameAcquisitionVerdictV1, Ms3LinkedFrameReceiptV1,
+    Ms3AcquisitionTopologySelectionV1, Ms3LinkedFrameAcquisitionContractV1,
+    Ms3LinkedFrameAcquisitionReportV1, Ms3LinkedFrameAcquisitionVerdictV1, Ms3LinkedFrameReceiptV1,
     REPRESENTATION_GAP_CLASSIFIER_VERSION_V1,
     build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1,
     build_ms3_linked_frame_acquisition_report_v1,
+    select_ms3_linked_frame_acquisition_topologies_v1,
 };
 pub use live_snapshot::{
     LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3, LiveMultiSourceDiscoveryBlockerV1,

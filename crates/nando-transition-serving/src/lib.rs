@@ -3437,19 +3437,27 @@ fn evaluate_ms3_independent_future(
 fn evaluate_ms3_capture_health(
     state: &AppState,
 ) -> Result<ms3_capture_health::Ms3CaptureHealthReportV1, String> {
-    let (contract, acquisition_closed, frozen_evaluated_topology_rows) = {
+    let (contract, acquisition_closed, frozen_scanned_topology_rows) = {
         let runtime = state
             .ms3_linked_frame_acquisition
             .as_ref()
             .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?
             .lock()
             .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?;
+        let terminal_report = runtime.terminal_report();
         (
             runtime.contract().clone(),
             runtime.is_terminal(),
-            runtime.frozen_evaluated_topology_rows(),
+            terminal_report.map(|report| {
+                if report.raw_scanned_topology_rows > 0 {
+                    report.raw_scanned_topology_rows
+                } else {
+                    report.evaluated_topology_rows
+                }
+            }),
         )
     };
+    let sampled_at_unix = unix_now();
     let (current_topology_rows, new_topologies) = {
         let archive = state
             .multi_source_topology_archive
@@ -3460,31 +3468,50 @@ fn evaluate_ms3_capture_health(
         let watermark = usize::try_from(contract.topology_watermark_rows)
             .map_err(|_| "ms3_capture_health_watermark_range".to_owned())?;
         let mut new_topologies = archive.rows_after(watermark)?;
-        let denominator_rows =
-            frozen_evaluated_topology_rows.unwrap_or(contract.max_new_topology_rows);
-        new_topologies.truncate(usize::try_from(denominator_rows).unwrap_or(usize::MAX));
+        let scan_rows =
+            frozen_scanned_topology_rows.unwrap_or_else(|| contract.max_raw_topology_rows());
+        new_topologies.truncate(usize::try_from(scan_rows).unwrap_or(usize::MAX));
         (archive.len(), new_topologies)
     };
+    let durable_topology_observed_at_unix = new_topologies
+        .iter()
+        .filter_map(|row| row.captured_at_unix_ms.map(|value| value / 1_000))
+        .collect::<Vec<_>>();
     let request_ids = new_topologies
         .iter()
         .map(|row| row.structure.request_event_id_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let terminal_request_ids = state
+    let terminals = state
         .terminal_receipt_archive
         .as_ref()
         .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
         .lock()
         .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
-        .receipts_for_requests(&request_ids)
+        .receipts_for_requests(&request_ids);
+    let selection =
+        nando_operator_learning::multi_source::select_ms3_linked_frame_acquisition_topologies_v1(
+            &contract,
+            sampled_at_unix,
+            new_topologies,
+            &terminals,
+        );
+    let eligible_request_ids = selection
+        .eligible_topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let terminal_request_ids = terminals
         .into_iter()
         .filter(|receipt| {
             receipt.validate()
                 && receipt.completed_at_unix_nanos
                     <= contract.deadline_unix.saturating_mul(1_000_000_000)
+                && eligible_request_ids.contains(receipt.request_event_id_sha256.as_str())
         })
         .map(|receipt| receipt.request_event_id_sha256)
         .collect::<BTreeSet<_>>();
-    let receipt_observations = new_topologies
+    let receipt_observations = selection
+        .eligible_topologies
         .iter()
         .map(|row| ms3_receipt_health::Ms3ReceiptTopologyObservationV1 {
             topology_root_sha256: row.commit.commitment_root_sha256.clone(),
@@ -3492,11 +3519,6 @@ fn evaluate_ms3_capture_health(
             captured_at_unix_ms: row.captured_at_unix_ms,
         })
         .collect::<Vec<_>>();
-    let durable_topology_observed_at_unix = new_topologies
-        .iter()
-        .filter_map(|row| row.captured_at_unix_ms.map(|value| value / 1_000))
-        .collect::<Vec<_>>();
-    let sampled_at_unix = unix_now();
     let receipt = ms3_receipt_health::build_ms3_receipt_health_report_v1(
         sampled_at_unix,
         acquisition_closed,

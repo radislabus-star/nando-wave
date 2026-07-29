@@ -111,6 +111,13 @@ pub struct Ms3LinkedFrameAcquisitionReportV1 {
     pub consumed_capture_sequence: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Ms3AcquisitionTopologySelectionV1 {
+    pub raw_topologies: Vec<PreActionTopologyAuditRowV1>,
+    pub eligible_topologies: Vec<PreActionTopologyAuditRowV1>,
+    pub ineligible_reason_counts: BTreeMap<super::MultiSourceJoinCensoredReasonV1, u64>,
+}
+
 #[derive(Serialize)]
 struct Ms3LinkedFrameAcquisitionReportDigestV2<'a> {
     schema: &'static str,
@@ -325,35 +332,20 @@ pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
     let deadline_nanos = contract.deadline_unix.saturating_mul(1_000_000_000);
     terminals
         .retain(|receipt| receipt.validate() && receipt.completed_at_unix_nanos <= deadline_nanos);
+    let Ms3AcquisitionTopologySelectionV1 {
+        raw_topologies,
+        eligible_topologies,
+        ineligible_reason_counts,
+    } = select_ms3_linked_frame_acquisition_topologies_v1(
+        &contract,
+        generated_at_unix,
+        new_topologies,
+        &terminals,
+    );
     let terminal_request_ids = terminals
         .iter()
         .map(|receipt| receipt.request_event_id_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let mut raw_topologies = Vec::new();
-    let mut eligible_topologies = Vec::new();
-    let mut ineligible_reason_counts =
-        BTreeMap::<super::MultiSourceJoinCensoredReasonV1, u64>::new();
-    for topology in new_topologies {
-        if raw_topologies.len()
-            >= usize::try_from(contract.max_raw_topology_rows()).unwrap_or(usize::MAX)
-            || eligible_topologies.len()
-                >= usize::try_from(contract.max_new_topology_rows).unwrap_or(usize::MAX)
-        {
-            break;
-        }
-        match acquisition_topology_eligibility(
-            &topology,
-            &terminal_request_ids,
-            generated_at_unix,
-            contract.receipt_lag_slo_seconds(),
-        ) {
-            Ok(()) => eligible_topologies.push(topology.clone()),
-            Err(reason) => {
-                *ineligible_reason_counts.entry(reason).or_default() += 1;
-            }
-        }
-        raw_topologies.push(topology);
-    }
     let request_ids = eligible_topologies
         .iter()
         .map(|row| row.structure.request_event_id_sha256.as_str())
@@ -568,6 +560,51 @@ fn request_snapshot(
         evictions: 0,
         provider_bound_by_construction: true,
         pre_action_context_persisted: true,
+    }
+}
+
+#[must_use]
+pub fn select_ms3_linked_frame_acquisition_topologies_v1(
+    contract: &Ms3LinkedFrameAcquisitionContractV1,
+    generated_at_unix: u64,
+    new_topologies: Vec<PreActionTopologyAuditRowV1>,
+    terminals: &[TransportTerminalReceiptV1],
+) -> Ms3AcquisitionTopologySelectionV1 {
+    let deadline_nanos = contract.deadline_unix.saturating_mul(1_000_000_000);
+    let terminal_request_ids = terminals
+        .iter()
+        .filter(|receipt| receipt.validate() && receipt.completed_at_unix_nanos <= deadline_nanos)
+        .map(|receipt| receipt.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let mut raw_topologies = Vec::new();
+    let mut eligible_topologies = Vec::new();
+    let mut ineligible_reason_counts =
+        BTreeMap::<super::MultiSourceJoinCensoredReasonV1, u64>::new();
+    for topology in new_topologies {
+        if raw_topologies.len()
+            >= usize::try_from(contract.max_raw_topology_rows()).unwrap_or(usize::MAX)
+            || eligible_topologies.len()
+                >= usize::try_from(contract.max_new_topology_rows).unwrap_or(usize::MAX)
+        {
+            break;
+        }
+        match acquisition_topology_eligibility(
+            &topology,
+            &terminal_request_ids,
+            generated_at_unix,
+            contract.receipt_lag_slo_seconds(),
+        ) {
+            Ok(()) => eligible_topologies.push(topology.clone()),
+            Err(reason) => {
+                *ineligible_reason_counts.entry(reason).or_default() += 1;
+            }
+        }
+        raw_topologies.push(topology);
+    }
+    Ms3AcquisitionTopologySelectionV1 {
+        raw_topologies,
+        eligible_topologies,
+        ineligible_reason_counts,
     }
 }
 
