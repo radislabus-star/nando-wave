@@ -616,7 +616,7 @@ const TEMPLATE: &str = r#"
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
-      <div class="ms3-cell"><div class="ms3-label">TOPOLOGY / LINKED ACQUISITION</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div></div>
+      <div class="ms3-cell"><div class="ms3-label">ELIGIBLE / LINKED LIMIT</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div><div id="ms3-acquisition-raw" class="scope-note">RAW SCANNED — / 4096</div></div>
       <div class="ms3-cell"><div class="ms3-label">TERMINAL / RELEVANT / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">FUTURE APPLICABILITY</div><div id="ms3-future-applicability" class="ms3-value watch">0 / 256</div></div>
@@ -795,8 +795,11 @@ const TEMPLATE: &str = r#"
       ? linkedClosureVerdict(predecessorBlocker)
       : predecessorVerdict;
     const acquisitionVerdict = acquisition.verdict || "unavailable";
-    const topologyRows = acquisition.new_topology_rows_seen || 0;
+    const eligibleTopologyRows = acquisition.eligible_topology_rows ?? acquisition.evaluated_topology_rows ?? 0;
     const topologyLimit = acquisitionContract.max_new_topology_rows || 256;
+    const rawTopologyRows = acquisition.raw_scanned_topology_rows ?? acquisition.new_topology_rows_seen ?? 0;
+    const rawTopologyLimit = acquisitionContract.max_raw_topology_rows || 4096;
+    const censoredTopologyRows = acquisition.censored_topology_rows || 0;
     const terminalRows = acquisition.terminal_receipt_rows || 0;
     const relevantRows = acquisition.relevant_verified_frame_rows || 0;
     const linkedRows = acquisition.linked_frame_rows || 0;
@@ -828,7 +831,8 @@ const TEMPLATE: &str = r#"
               : acquisitionVerdict.toUpperCase();
     text("ms3-generation", activeGeneration > 0 ? `G${activeGeneration} · ${activePhase}` : "НЕТ ДАННЫХ");
     text("ms3-predecessor", predecessor ? `G${predecessor.generation_sequence} · ${effectivePredecessorVerdict.toUpperCase()}` : "НЕТ");
-    text("ms3-acquisition", `${number.format(topologyRows)} / ${number.format(topologyLimit)}`);
+    text("ms3-acquisition", `${number.format(eligibleTopologyRows)} / ${number.format(topologyLimit)}`);
+    text("ms3-acquisition-raw", `RAW SCANNED ${number.format(rawTopologyRows)} / ${number.format(rawTopologyLimit)} · CENSORED ${number.format(censoredTopologyRows)}`);
     text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(relevantRows)} / ${number.format(linkedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
     text("ms3-future-applicability", lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN");
@@ -1112,7 +1116,10 @@ mod tests {
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
-        assert!(html.contains("TOPOLOGY / LINKED ACQUISITION"));
+        assert!(html.contains("ELIGIBLE / LINKED LIMIT"));
+        assert!(html.contains("RAW SCANNED"));
+        assert!(html.contains("acquisition.eligible_topology_rows"));
+        assert!(html.contains("acquisitionContract.max_raw_topology_rows"));
         assert!(html.contains("CAPTURE / RECEIPT HEALTH"));
         assert!(html.contains("RECEIPT_STALLED"));
         assert!(html.contains("· OPEN ${joinOpen}"));
