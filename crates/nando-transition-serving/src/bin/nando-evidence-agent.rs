@@ -1098,6 +1098,7 @@ mod tests {
                 client_sha256_bytes(b"request"),
                 418,
                 1_600_000_000_000_000_000,
+                1_650_000_000_000_000_000,
             )
             .expect("route receipt");
         let mut bound = completed_frame("bound");

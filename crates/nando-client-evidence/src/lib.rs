@@ -34,7 +34,8 @@ pub struct NandoRouteReceiptV1 {
     pub session_id_sha256: String,
     pub request_body_sha256: String,
     pub remote_status: u16,
-    pub observed_at_unix_nanos: u64,
+    pub request_observed_at_unix_nanos: u64,
+    pub route_confirmed_at_unix_nanos: u64,
     pub receipt_root_sha256: String,
 }
 
@@ -47,7 +48,8 @@ struct RouteReceiptDigestV1<'a> {
     session_id_sha256: &'a str,
     request_body_sha256: &'a str,
     remote_status: u16,
-    observed_at_unix_nanos: u64,
+    request_observed_at_unix_nanos: u64,
+    route_confirmed_at_unix_nanos: u64,
 }
 
 pub struct NandoRouteReceiptLedger {
@@ -88,7 +90,8 @@ impl NandoRouteReceiptV1 {
         identity: &ClientRouteIdentityV1,
         request_body_sha256: String,
         remote_status: u16,
-        observed_at_unix_nanos: u64,
+        request_observed_at_unix_nanos: u64,
+        route_confirmed_at_unix_nanos: u64,
     ) -> Result<Self, String> {
         let mut receipt = Self {
             schema: NANDO_ROUTE_RECEIPT_SCHEMA_V1.to_owned(),
@@ -98,7 +101,8 @@ impl NandoRouteReceiptV1 {
             session_id_sha256: identity.session_id_sha256.clone(),
             request_body_sha256,
             remote_status,
-            observed_at_unix_nanos,
+            request_observed_at_unix_nanos,
+            route_confirmed_at_unix_nanos,
             receipt_root_sha256: String::new(),
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
@@ -112,7 +116,8 @@ impl NandoRouteReceiptV1 {
     pub fn validate(&self) -> bool {
         self.schema == NANDO_ROUTE_RECEIPT_SCHEMA_V1
             && self.sequence > 0
-            && self.observed_at_unix_nanos > 0
+            && self.request_observed_at_unix_nanos > 0
+            && self.route_confirmed_at_unix_nanos >= self.request_observed_at_unix_nanos
             && matches!(self.remote_status, 200 | 418)
             && [
                 self.previous_receipt_root_sha256.as_str(),
@@ -137,7 +142,8 @@ impl NandoRouteReceiptV1 {
             session_id_sha256: &self.session_id_sha256,
             request_body_sha256: &self.request_body_sha256,
             remote_status: self.remote_status,
-            observed_at_unix_nanos: self.observed_at_unix_nanos,
+            request_observed_at_unix_nanos: self.request_observed_at_unix_nanos,
+            route_confirmed_at_unix_nanos: self.route_confirmed_at_unix_nanos,
         })
         .map_err(|error| format!("route_receipt_encode:{error}"))?;
         Ok(sha256_bytes(&bytes))
@@ -193,7 +199,8 @@ impl NandoRouteReceiptLedger {
         identity: &ClientRouteIdentityV1,
         request_body_sha256: String,
         remote_status: u16,
-        observed_at_unix_nanos: u64,
+        request_observed_at_unix_nanos: u64,
+        route_confirmed_at_unix_nanos: u64,
     ) -> Result<NandoRouteReceiptV1, String> {
         let receipt = NandoRouteReceiptV1::seal(
             self.last_sequence.saturating_add(1),
@@ -201,7 +208,8 @@ impl NandoRouteReceiptLedger {
             identity,
             request_body_sha256,
             remote_status,
-            observed_at_unix_nanos,
+            request_observed_at_unix_nanos,
+            route_confirmed_at_unix_nanos,
         )?;
         let mut bytes = serde_json::to_vec(&receipt)
             .map_err(|error| format!("route_receipt_encode:{error}"))?;
@@ -219,6 +227,7 @@ impl NandoRouteReceiptLedger {
         self.file
             .write_all(&bytes)
             .and_then(|()| self.file.flush())
+            .and_then(|()| self.file.sync_data())
             .map_err(|error| format!("route_receipt_append:{error}"))?;
         self.bytes = next_bytes;
         self.last_sequence = receipt.sequence;
@@ -332,7 +341,7 @@ impl NandoRouteReceiptIndex {
             ))
             .and_then(|receipts| {
                 receipts.iter().rev().find(|receipt| {
-                    receipt.observed_at_unix_nanos <= frame_observed_at_unix_nanos
+                    receipt.request_observed_at_unix_nanos <= frame_observed_at_unix_nanos
                         && frame_observed_at_unix_nanos > 0
                 })
             })
@@ -449,6 +458,7 @@ mod tests {
                 sha256_bytes(b"body"),
                 502,
                 10,
+                20,
             )
             .is_err()
         );
@@ -459,6 +469,7 @@ mod tests {
             sha256_bytes(b"body"),
             418,
             10,
+            20,
         )
         .expect("receipt");
         receipt.remote_status = 200;
@@ -473,10 +484,10 @@ mod tests {
             NandoRouteReceiptLedger::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
                 .expect("ledger");
         let first = ledger
-            .append(&identity(), sha256_bytes(b"one"), 418, 100)
+            .append(&identity(), sha256_bytes(b"one"), 418, 100, 150)
             .expect("first");
         let second = ledger
-            .append(&identity(), sha256_bytes(b"two"), 200, 200)
+            .append(&identity(), sha256_bytes(b"two"), 200, 200, 250)
             .expect("second");
         drop(ledger);
 
@@ -507,6 +518,58 @@ mod tests {
                 .map(|receipt| receipt.sequence),
             Some(second.sequence)
         );
+        assert_eq!(
+            index
+                .receipt_for_frame(&first.turn_intent_id_sha256, &first.session_id_sha256, 175)
+                .map(|receipt| receipt.sequence),
+            Some(first.sequence)
+        );
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn request_time_proves_pre_action_even_when_route_confirmation_is_delayed() {
+        let root = temporary_root("pre-action");
+        let path = root.join("route-receipts-v1.jsonl");
+        let mut ledger =
+            NandoRouteReceiptLedger::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .expect("ledger");
+        let before_action = ledger
+            .append(&identity(), sha256_bytes(b"before"), 200, 100, 300)
+            .expect("before action");
+        ledger
+            .append(&identity(), sha256_bytes(b"after"), 200, 250, 350)
+            .expect("after action");
+        drop(ledger);
+
+        let index = NandoRouteReceiptIndex::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+            .expect("index");
+        assert_eq!(
+            index
+                .receipt_for_frame(
+                    &before_action.turn_intent_id_sha256,
+                    &before_action.session_id_sha256,
+                    200,
+                )
+                .map(|receipt| receipt.sequence),
+            Some(before_action.sequence)
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn receipt_rejects_confirmation_before_request_observation() {
+        assert!(
+            NandoRouteReceiptV1::seal(
+                1,
+                route_receipt_genesis_root(),
+                &identity(),
+                sha256_bytes(b"body"),
+                200,
+                20,
+                10,
+            )
+            .is_err()
+        );
     }
 }

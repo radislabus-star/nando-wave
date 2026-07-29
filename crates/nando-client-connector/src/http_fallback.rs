@@ -85,6 +85,7 @@ where
     }
     let route_identity = route_identity_for_request(&request, &mut body);
     let request_body_sha256 = body.sha256();
+    let request_observed_at_unix_nanos = unix_now_nanos();
 
     stats.http_requests.fetch_add(1, Ordering::Relaxed);
     stats
@@ -108,6 +109,7 @@ where
                                 identity,
                                 request_body_sha256.clone(),
                                 response.status,
+                                request_observed_at_unix_nanos,
                                 unix_now_nanos(),
                             )
                             .map(|_| ())
