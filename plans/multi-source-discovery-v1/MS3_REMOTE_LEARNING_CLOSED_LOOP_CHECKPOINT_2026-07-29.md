@@ -4,35 +4,57 @@ Date: 2026-07-29
 
 ## Verdict
 
-The source and isolated LAN integration now close the missing evidence route
-between local Codex experience and the remote learner. This checkpoint does not
-grant authority and does not claim a natural-law future pass.
+The source and remote cold learner now enforce the missing evidence route
+between local Codex experience and the remote learner. The local Evidence Agent
+is deployed. The route-receipt connector binary is staged and waiting for the
+three current client connections to drain; it has not interrupted them. This
+checkpoint does not grant authority and does not claim a natural-law future
+pass.
 
 ```text
 remote CPU serving                              PASS
-local connector                                 unchanged
-remote post-action evidence source              IMPLEMENTED
+remote cold learner                             DEPLOYED
+remote gateway control                          DEPLOYED
+local Evidence Agent                            DEPLOYED
+local connector process                         OLD VERSION, LIVE
+route-receipt connector activation              WAITING FOR DRAIN
+legacy remote frames                            79 UNPROVEN
+route-bound remote frames                       0
+learning_closed_loop_ready                      false
+learning blocker                                NO_ROUTE_BOUND_REMOTE_EVIDENCE
 raw Codex payload persisted remotely            false
 G16 ineligible-row adjudication                 PASS
 successor cursor preserves overflow             PASS
 typed ambiguity                                 PASS
-learning closed-loop integration                PASS
+learning closed-loop source/integration         PASS
+learning closed-loop live evidence              NOT YET OBSERVED
 MS3 natural-law authority                       false
 phase mutation                                  false
-production deployment                           NOT YET PERFORMED
 ```
 
 ## Architecture
 
 ```text
-Codex session journal on client
+Codex Responses request on client
+  |
+  v
+Local Connector
+  |- records only turn/session identity hashes
+  |- binds the exact request-body digest
+  |- commits only after confirmed remote 200 or 418
+  `- keeps a bounded 64 MiB hash-only route ledger
+  |
+  +-----------------------------+
+                                |
+Codex session journal on client |
   |
   v
 Incremental Session Stream
   |- starts existing files at current EOF
   |- reads only newly appended rows
   |- uses existing source-neutral extractor
-  `- emits only independently verified RelationFrames
+  |- emits only independently verified RelationFrames
+  `- requires an exact pre-action route receipt --------+
   |
   v
 Local Durable Evidence Outbox
@@ -67,9 +89,11 @@ Remote Durable Spool
 Existing MS3 Join / Acquisition / Version Space
 ```
 
-The connector carries provider traffic and fallback. The Evidence Agent carries
-compact post-action proof. Neither component owns admission or an
-`AuthorityLease`.
+The connector carries provider traffic and fallback and proves that a specific
+local turn actually crossed the Nando route. The Evidence Agent carries compact
+post-action proof only when that pre-action route receipt exists. Historical
+frames without this root remain decodable but can never become route-bound
+evidence. Neither component owns admission or an `AuthorityLease`.
 
 ## G16 Repair
 
@@ -163,9 +187,12 @@ cargo check --workspace --all-targets               PASS
 cargo test -p nando-operator-learning
   314 unit + 1 integration                          PASS
 cargo test -p nando-transition-serving
-  157 unit PASS / 3 explicit ignored
-  4 Evidence Agent tests                            PASS
+  159 unit PASS / 4 explicit ignored
+  5 Evidence Agent tests                            PASS
   remaining integration targets                    PASS
+connector tests 9/9                                PASS
+client route-receipt tests 3/3                     PASS
+gateway-control tests 48/48                        PASS
 G16 frozen live-state replay                        PASS
 full cargo test --workspace --all-targets           PASS / 0 FAIL
 changed-crate Clippy --all-targets -D warnings      PASS
@@ -173,6 +200,8 @@ Shellcheck for deployment scripts                   PASS
 LAN edge transaction + rollback                     PASS
 local agent transaction + rollback                  PASS
 remote spool transaction + rollback                 PASS
+gateway-control transaction + rollback              PASS
+drain-aware connector transaction + rollback        PASS
 ```
 
 Rust 1.97 full-workspace Clippy still exposes 62 pre-existing `nando-cli`
@@ -185,26 +214,42 @@ post-ACK outbox compaction to zero frames. Restart and outage replay were also
 tested against the same durable client/server state. Test-only services were
 stopped afterward.
 
-The production cold learner can legitimately take several seconds to answer
-while holding a learning-state lock. Its transactional installer therefore
-uses a separate bounded 10-second health probe instead of the hot serving
-timeout; hot health remains independently required before and after restart.
+The old production `/health` path recomputed
+`StreamingSelfTrainingState::report()` and took 5.4-5.8 seconds on the first
+request after a pause. A live stack trace identified the exact path. Health now
+uses the miner worker's published status. Two post-deployment pause-and-probe
+series returned the full 72.5 KiB status in 3.8-6.6 milliseconds. The cold
+installer still keeps a bounded 10-second startup probe; hot health remains
+independently required before and after restart.
 
 ## Deployment Boundary
 
 The production order is intentionally narrow:
 
 ```text
-release build on mini-PC
+release build on mini-PC                         DONE
 -> transactional cold learner binary/state install
--> verify learner health with authority=false
--> graceful Nginx reload for the exact evidence route
--> install local Evidence Agent without touching connector
--> observe first ordinary fresh frame
+                                                DONE
+-> verify learner health with authority=false   DONE
+-> install local Evidence Agent                 DONE
+-> update remote control scope                  DONE
+-> wait for active connector connections = 0    ACTIVE
+-> transactional connector activation           QUEUED
+-> observe first ordinary route-bound frame      PENDING
 -> verify G16 immutable censor and G17 exact-cursor successor
+                                                PENDING
 -> preserve authority=false until normal MS3 future proof
+                                                ENFORCED
 ```
 
-Any failed learner, edge, agent, or evidence health check restores the previous
-component. Hot serving, active connector connections, and current Codex windows
-must remain online throughout.
+The installed cold learner binary is SHA-256
+`bb3af0b4cc9115990683a0ec07c3d60a1ad92c2e0c779cc687bf3ab36787be68`.
+The staged static connector is SHA-256
+`201f17309ad2b88e70ef225f38622557bb8a33cd3bedd2ddfebe90368e843d02`.
+The active old connector PID remained `161091` throughout this checkpoint.
+
+Any failed learner, control, agent, or connector health check restores the
+previous component. The drain-aware connector job returns without modification
+when active connections remain and activates only after two zero-connection
+samples. Hot serving, active connector connections, and current Codex windows
+stay online throughout.
