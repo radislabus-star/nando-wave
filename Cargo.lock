@@ -544,8 +544,20 @@ name = "nando-client-connector"
 version = "0.3.1"
 dependencies = [
  "httparse",
+ "nando-client-evidence",
  "rustls",
+ "serde_json",
+ "sha2",
  "webpki-roots",
+]
+
+[[package]]
+name = "nando-client-evidence"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -612,6 +624,7 @@ dependencies = [
 name = "nando-operator-learning"
 version = "0.1.0"
 dependencies = [
+ "nando-client-evidence",
  "nando-core",
  "nando-operator-kernel",
  "nando-operator-proof",
@@ -712,6 +725,7 @@ dependencies = [
  "hmac",
  "memchr",
  "mimalloc",
+ "nando-client-evidence",
  "nando-expression-runtime",
  "nando-operator-admission",
  "nando-operator-kernel",

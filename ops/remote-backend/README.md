@@ -57,13 +57,14 @@ nando-connect    manages and monitors the connector service
 nando-connector  forwards the local byte stream to the Nando server
 ```
 
-`nando-connector` does not parse OpenAI or Codex JSON payloads. In client
-fallback mode it parses only HTTP/1.1 framing, the `/v1` or `/v2` route, and the
-LAN response status. Bodies remain opaque and replay byte-for-byte. Unknown
-routes and protocols retain the transparent relay path, and streaming response
-bytes pass through unchanged. Normal Codex payload changes therefore do not
-require a connector release; only a transport or security contract change
-does.
+`nando-connector` keeps request and response bodies byte-transparent. In client
+fallback mode it parses HTTP/1.1 framing and, for bounded `/v1/responses` or
+`/v2/responses` requests, reads only `client_metadata.turn_id` and
+`client_metadata.session_id`. It stores domain-separated identity hashes, the
+request-body hash, and a confirmed remote `200` or `418`, never the raw body.
+Unknown routes, chunked requests, and unknown protocols retain the transparent
+relay path without minting a route receipt. Streaming response bytes pass
+through unchanged.
 
 The mini-PC exposes `/_nando/local/v1/...` and `/_nando/local/v2/...` only on
 the private LAN listener. These routes never perform server-side fallback.
@@ -83,7 +84,7 @@ headers, and bodies are never logged or persisted after the request.
 
 ## Compact Learning Evidence
 
-The connector remains a payload-transparent request relay. Post-action learning
+The connector remains a byte-transparent request relay. Post-action learning
 uses a separate local `nando-evidence-agent` because the remote backend cannot
 observe local Codex tool outcomes from HTTP response bytes alone.
 
@@ -91,7 +92,8 @@ observe local Codex tool outcomes from HTTP response bytes alone.
 local append-only Codex session journal
   -> incremental watcher starting at the current EOF
   -> existing source-neutral RelationFrame extractor and verifier
-  -> private durable outbox of compact verified frames
+  -> exact pre-action connector route receipt
+  -> private durable outbox of compact route-bound verified frames
   -> HMAC-authenticated, hash-chained batches over the private LAN
   -> exact Nginx cold-path route /_nando/evidence/v1/batches
   -> remote learner archive, receipt, and client head
@@ -99,11 +101,13 @@ local append-only Codex session journal
 ```
 
 Raw session rows, prompts, response bodies, authentication, and provider tokens
-remain on the client. The outbox and remote spool contain only bounded verified
-`RelationFrame` records and commitment roots. The server signs every ACK with
-the same per-client key; the agent advances its sequence only after verifying
-that signature. Acknowledged outbox segments are compacted only after the agent
-state and pending-file removal are durable.
+remain on the client. The connector ledger contains only hashes and confirmed
+remote status. The outbox and remote spool contain bounded verified
+`RelationFrame` records plus route, verifier, and frame commitment roots. Frames
+without a pre-action route receipt are censored locally. The server signs every
+ACK with the same per-client key; the agent advances its sequence only after
+verifying that signature. Acknowledged outbox segments are compacted only after
+the agent state and pending-file removal are durable.
 
 The current transport is authenticated but not encrypted. It is restricted to
 the private LAN listener and must not be exposed publicly. Later mTLS can add
@@ -139,16 +143,17 @@ ops/remote-backend/install-evidence-agent.sh \
 ```
 
 The local installer does not start, stop, or reload `nando-connector`. Its
-systemd unit has read-only access to `~/.codex/sessions` and the client key,
-write access only to `~/.local/state/nando-evidence-agent`, a `128 MiB` memory
-limit, and automatic restart if the session watcher stops.
+systemd unit has read-only access to `~/.codex/sessions`, the client key, and
+the connector route-receipt runtime directory; write access only to
+`~/.local/state/nando-evidence-agent`; a `128 MiB` memory limit; and automatic
+restart if the session watcher stops.
 
 Transport-only counters are available on loopback at
 `http://127.0.0.1:18786/metrics`: active, accepted and completed connections,
 uploaded/downloaded bytes, Nando responses, client fallback attempts,
-successful replays, failures, fallback reasons, and replay spills. A connection
-is not reported as a Codex window because Codex may reuse or multiply TCP
-connections.
+successful replays, failures, fallback reasons, replay spills, route receipts,
+missing route identities, and receipt-write failures. A connection is not
+reported as a Codex window because Codex may reuse or multiply TCP connections.
 
 The distributed user service listens directly on `127.0.0.1:8787`. The
 `nando-client-connector.compatibility.override.conf` file is only for a machine
@@ -161,6 +166,19 @@ Build the portable x86-64 Linux artifact on the build host:
 NANDO_CONNECTOR_CARGO_BIN="$HOME/.cargo/bin/cargo" \
   ops/remote-backend/build-linux-connector.sh
 ```
+
+Activate a tested connector release with the drain-aware installer:
+
+```bash
+ops/remote-backend/install-client-connector.sh \
+  --binary dist/nando-connector/nando-connector-linux-x86_64
+```
+
+The installer validates the candidate and systemd unit before inspecting the
+live service. If any client connection is active it exits with status `75`
+without changing the binary, unit, or process. An activation from a drained
+state is health-checked and automatically rolls back both files and the service
+if readiness fails.
 
 The first boot is fail-closed:
 

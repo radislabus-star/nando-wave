@@ -7,6 +7,7 @@ use serde_json::json;
 fn connected_windows() -> ClientConnectionSnapshot {
     ClientConnectionSnapshot {
         generated_at_unix_ms: 1,
+        observer_scope: "processes_on_control_host".to_owned(),
         total_windows: 1,
         configured_for_nando: 1,
         active_nando: 1,

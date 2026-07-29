@@ -159,6 +159,25 @@ impl CollectionMinerPublishedSnapshot {
 }
 
 #[derive(Clone)]
+pub(crate) struct CollectionMinerHealthSnapshot {
+    pub(crate) status: OnlineCollectionStatus,
+    pub(crate) quarantine_packages: Result<usize, String>,
+}
+
+impl CollectionMinerHealthSnapshot {
+    fn from_published(snapshot: &CollectionMinerPublishedSnapshot) -> Self {
+        Self {
+            status: snapshot.status.clone(),
+            quarantine_packages: snapshot
+                .quarantine_packages
+                .as_ref()
+                .map(Vec::len)
+                .map_err(Clone::clone),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct MultiSourceMinerEvidenceSnapshotV1 {
     generation: u64,
     pub(crate) opportunities: Vec<OpportunityIntentAuditRowV1>,
@@ -511,6 +530,15 @@ impl MinerWorkerHandle {
             .read()
             .ok()
             .and_then(|snapshot| snapshot.clone())
+    }
+
+    #[must_use]
+    pub(crate) fn collection_health_snapshot(&self) -> Option<CollectionMinerHealthSnapshot> {
+        self.collection_snapshot.read().ok().and_then(|snapshot| {
+            snapshot
+                .as_ref()
+                .map(CollectionMinerHealthSnapshot::from_published)
+        })
     }
 
     #[must_use]
@@ -1309,6 +1337,23 @@ mod tests {
             CHECKPOINT_INTERVAL
         ));
         assert!(checkpoint_is_due(CHECKPOINT_EVENTS, Duration::from_secs(0)));
+    }
+
+    #[test]
+    fn collection_health_snapshot_keeps_only_status_and_package_count() {
+        let published = CollectionMinerPublishedSnapshot {
+            status: OnlineCollectionStatus {
+                observations_total: 37,
+                ..OnlineCollectionStatus::default()
+            },
+            quarantine_packages: Ok(Vec::new()),
+            admission_candidates: Err("diagnostic_payload_must_not_be_projected".to_owned()),
+        };
+
+        let health = CollectionMinerHealthSnapshot::from_published(&published);
+
+        assert_eq!(health.status.observations_total, 37);
+        assert_eq!(health.quarantine_packages, Ok(0));
     }
 
     #[test]

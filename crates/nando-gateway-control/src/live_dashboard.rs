@@ -645,7 +645,7 @@ const TEMPLATE: &str = r#"
     <div class="activity"><span class="activity-label">NANDO INGRESS REQUESTS · ПОСЛЕДНИЕ 60 С</span><div id="activity-bars" class="activity-bars"></div></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
-    <div class="window-head"><h2 class="band-title">ЖИВЫЕ ОКНА</h2><div id="window-summary" class="window-summary">ROUTES · NANDO — / MIXED — / DIRECT — / NO SOCKET —</div></div>
+    <div class="window-head"><h2 class="band-title">ПРОЦЕССЫ CODEX НА ХОСТЕ CONTROL</h2><div id="window-summary" class="window-summary">SCOPE CONTROL HOST · NANDO — / MIXED — / DIRECT — / NO SOCKET —</div></div>
     <div class="window-scroll"><div class="window-table"><div class="window-row header"><span>ОКНО</span><span>СЕССИЯ</span><span>КОНФИГ</span><span>СТАТУС</span><span>КОНЕЧНАЯ ТОЧКА</span></div><div id="window-rows"></div></div></div>
   </div></section>
   <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span id="next-route" class="next-route">relation evidence → circuit → future proof → admission</span></span><span>bridge current: false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · failures <b id="bridge-failures">0</b> · miner completed history: false accepts <b id="historical-false-accepts">0</b> · parity <b id="historical-parity-mismatches">0</b></span></div></footer>
@@ -674,7 +674,7 @@ const TEMPLATE: &str = r#"
     return `${api.join(", ") || "nando_nginx contract"}${authOpen ? " · HTTPS auth (не API)" : ""}`;
   };
   const renderWindows = (snapshot) => {
-    text("window-summary", `ROUTES · NANDO ${snapshot.active_nando} / MIXED ${snapshot.active_mixed} / DIRECT ${snapshot.active_outside_nando} / NO SOCKET ${snapshot.idle}`);
+    text("window-summary", `SCOPE CONTROL HOST · NANDO ${snapshot.active_nando} / MIXED ${snapshot.active_mixed} / DIRECT ${snapshot.active_outside_nando} / NO SOCKET ${snapshot.idle}`);
     const rows = node("window-rows");
     if (!rows) return;
     rows.replaceChildren();
@@ -682,6 +682,12 @@ const TEMPLATE: &str = r#"
       const row = document.createElement("div"); row.className = "window-row";
       const values = [window.project.toUpperCase(), window.session.startsWith("pid-") ? window.session : window.session.slice(0, 8), window.configured_for_nando ? "nando_nginx" : "default", routeLabel(window), routeEndpoints(window)];
       values.forEach((value, index) => { const cell = document.createElement("span"); cell.textContent = value; if (index === 3) cell.className = `window-status ${window.route}`; row.appendChild(cell); });
+      rows.appendChild(row);
+    }
+    if (snapshot.total_windows === 0) {
+      const row = document.createElement("div"); row.className = "window-row";
+      const values = ["CONTROL HOST", "—", "—", "НЕ НАБЛЮДАЕТСЯ", "Окна клиентов на других хостах не входят в этот process observer"];
+      values.forEach((value, index) => { const cell = document.createElement("span"); cell.textContent = value; if (index === 3) cell.className = "window-status idle"; row.appendChild(cell); });
       rows.appendChild(row);
     }
     if (snapshot.active_nando === 0 && snapshot.active_mixed === 0 && snapshot.active_outside_nando > 0) {
@@ -1131,7 +1137,7 @@ mod tests {
         assert!(html.contains("DELTA 0 · ACTIVE 0"));
         assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
         assert!(html.contains("NANDO INGRESS REQUESTS · ПОСЛЕДНИЕ 60 С"));
-        assert!(html.contains("ROUTES · NANDO"));
+        assert!(html.contains("SCOPE CONTROL HOST · NANDO"));
         assert!(html.contains("HTTPS auth (не API)"));
         assert!(html.contains("5 948 645 890"));
         assert!(html.contains("V3 5 748 645 890 + V4 200 000 000"));
@@ -1147,7 +1153,9 @@ mod tests {
         assert!(html.contains("УЖЕ ВКЛЮЧЕНА В SERVER TOTAL"));
         assert!(
             html.find("ПОЧЕМУ CPU НЕ РАСТЁТ").unwrap_or(usize::MAX)
-                < html.find("ЖИВЫЕ ОКНА").unwrap_or(usize::MAX)
+                < html
+                    .find("ПРОЦЕССЫ CODEX НА ХОСТЕ CONTROL")
+                    .unwrap_or(usize::MAX)
         );
         assert!(html.contains("72,6%"));
         assert!(html.contains("89,6%"));

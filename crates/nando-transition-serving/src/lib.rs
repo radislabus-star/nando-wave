@@ -104,7 +104,10 @@ use generation_shadow::{
 };
 use learning_evidence_bridge::LearningEvidenceBridgeRuntimeV1;
 use learning_structure_bridge::LearningStructureBridgeRuntimeV2;
-use miner_worker::{CollectionMinerPublishedSnapshot, MinerWorkerHandle, spawn_miner_worker};
+use miner_worker::{
+    CollectionMinerHealthSnapshot, CollectionMinerPublishedSnapshot, MinerWorkerHandle,
+    spawn_miner_worker,
+};
 use opportunity_bridge::OpportunityBridgeRuntime;
 use provider_capture::{
     ProviderCaptureConfigV3, ProviderCaptureIngressV3, ProviderCaptureRuntimeV3,
@@ -1400,18 +1403,26 @@ async fn health(State(state): State<AppState>) -> Response {
     let collection_miner = current_collection_miner(&state);
     let collection_snapshot = miner_worker_handle
         .as_ref()
-        .and_then(MinerWorkerHandle::collection_snapshot)
-        .or_else(|| collection_snapshot_without_worker(collection_miner.as_ref()));
+        .and_then(MinerWorkerHandle::collection_health_snapshot)
+        .or_else(|| collection_health_snapshot_without_worker(collection_miner.as_ref()));
     let collection_busy = collection_miner.is_some() && collection_snapshot.is_none();
-    let remote_evidence = remote_evidence_status(&state);
-    let local_session_learning_ready =
+    let mut remote_evidence = remote_evidence_status(&state);
+    let local_session_evidence_ready =
         session_watcher_alive && session_source_files > 0 && turn_graphs_finalized > 0;
-    let learning_closed_loop_ready =
-        remote_evidence.learning_closed_loop_ready || local_session_learning_ready;
+    let (frozen_generations, route_bound_frozen_generations) =
+        frozen_generation_evidence_status(&state);
+    remote_evidence.learning_closed_loop_ready =
+        remote_evidence.enabled && route_bound_frozen_generations > 0;
+    let learning_closed_loop_ready = remote_evidence.learning_closed_loop_ready
+        || !remote_evidence.enabled && local_session_evidence_ready && frozen_generations > 0;
     let learning_blocker = if learning_closed_loop_ready {
         Value::Null
     } else if session_source_files == 0 && remote_evidence.accepted_frames == 0 {
         json!("NO_LIVE_POST_ACTION_EVIDENCE_SOURCE")
+    } else if remote_evidence.enabled && remote_evidence.route_bound_frames == 0 {
+        json!("NO_ROUTE_BOUND_REMOTE_EVIDENCE")
+    } else if remote_evidence.enabled && route_bound_frozen_generations == 0 {
+        json!("NO_ROUTE_BOUND_TOPOLOGY_FRAME_TERMINAL_LINK")
     } else {
         json!("LIVE_POST_ACTION_EVIDENCE_NOT_YET_VERIFIED")
     };
@@ -1429,9 +1440,11 @@ async fn health(State(state): State<AppState>) -> Response {
         object.insert(
             "quarantine_packages".to_owned(),
             json!(
-                collection_snapshot
+                collection_snapshot.as_ref().map(|value| value
+                    .quarantine_packages
                     .as_ref()
-                    .map(|value| { value.quarantine_packages.as_ref().map_or(0, Vec::len) })
+                    .copied()
+                    .unwrap_or(0))
             ),
         );
         object.insert("raw_examples_persisted".to_owned(), json!(false));
@@ -1507,11 +1520,16 @@ async fn health(State(state): State<AppState>) -> Response {
                 "local_session_source_files": session_source_files,
                 "local_session_watcher_alive": session_watcher_alive,
                 "local_verified_graphs": turn_graphs_finalized,
+                "local_session_evidence_ready": local_session_evidence_ready,
                 "remote_spool_enabled": remote_evidence.enabled,
+                "remote_transport_ready": remote_evidence.transport_ready,
                 "remote_configured_clients": remote_evidence.configured_clients,
                 "remote_active_clients": remote_evidence.active_clients,
                 "remote_accepted_batches": remote_evidence.accepted_batches,
                 "remote_accepted_frames": remote_evidence.accepted_frames,
+                "remote_route_bound_frames": remote_evidence.route_bound_frames,
+                "frozen_generations": frozen_generations,
+                "route_bound_frozen_generations": route_bound_frozen_generations,
                 "learning_closed_loop_ready": learning_closed_loop_ready,
                 "blocker": learning_blocker,
                 "authority_ready": false,
@@ -1731,6 +1749,32 @@ fn remote_evidence_status(state: &AppState) -> remote_evidence_spool::RemoteEvid
     )
 }
 
+fn frozen_generation_evidence_status(state: &AppState) -> (u64, u64) {
+    let route_bound_frame_roots = state
+        .remote_evidence_spool
+        .as_ref()
+        .and_then(|runtime| runtime.lock().ok())
+        .map(|runtime| runtime.route_bound_frame_roots())
+        .unwrap_or_default();
+    let Some(runtime) = state.ms3_frozen_version_space.as_ref() else {
+        return (0, 0);
+    };
+    let Ok(runtime) = runtime.lock() else {
+        return (0, 0);
+    };
+    let generations = &runtime.generation_registry().generations;
+    (
+        u64::try_from(generations.len()).unwrap_or(u64::MAX),
+        u64::try_from(
+            generations
+                .iter()
+                .filter(|entry| route_bound_frame_roots.contains(&entry.frame_root_sha256))
+                .count(),
+        )
+        .unwrap_or(u64::MAX),
+    )
+}
+
 fn header_text<'a>(headers: &'a HeaderMap, name: &'static str) -> Option<&'a str> {
     headers.get(name)?.to_str().ok()
 }
@@ -1930,6 +1974,21 @@ fn collection_snapshot_without_worker(
                 quarantine_packages: miner.quarantine_packages(),
                 admission_candidates: miner.admission_candidates(),
             })
+    })
+}
+
+fn collection_health_snapshot_without_worker(
+    miner: Option<&Arc<Mutex<OnlineCollectionMiner>>>,
+) -> Option<CollectionMinerHealthSnapshot> {
+    miner.and_then(|miner| {
+        miner.try_lock().ok().map(|miner| {
+            let status = miner.status();
+            let quarantine_packages = miner.quarantine_packages().map(|packages| packages.len());
+            CollectionMinerHealthSnapshot {
+                status,
+                quarantine_packages,
+            }
+        })
     })
 }
 

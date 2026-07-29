@@ -1,11 +1,12 @@
 mod http_fallback;
 mod tls;
 
+use nando_client_evidence::{DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptLedger};
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -94,6 +95,7 @@ pub struct ConnectorConfig {
     pub max_connections: usize,
     pub connect_timeout: Duration,
     pub client_fallback: Option<ClientFallbackConfig>,
+    pub route_receipts_path: Option<PathBuf>,
 }
 
 impl ConnectorConfig {
@@ -136,6 +138,7 @@ impl ConnectorConfig {
             max_connections,
             connect_timeout,
             client_fallback: None,
+            route_receipts_path: None,
         })
     }
 
@@ -145,6 +148,14 @@ impl ConnectorConfig {
     ) -> Result<Self, String> {
         client_fallback.validate()?;
         self.client_fallback = Some(client_fallback);
+        Ok(self)
+    }
+
+    pub fn with_route_receipts(mut self, path: PathBuf) -> Result<Self, String> {
+        if path.as_os_str().is_empty() || path.parent().is_none() {
+            return Err("route receipt path must name a file in a directory".to_owned());
+        }
+        self.route_receipts_path = Some(path);
         Ok(self)
     }
 }
@@ -162,6 +173,7 @@ impl Default for ConnectorConfig {
             max_connections: DEFAULT_MAX_CONNECTIONS,
             connect_timeout: DEFAULT_CONNECT_TIMEOUT,
             client_fallback: None,
+            route_receipts_path: None,
         }
     }
 }
@@ -178,6 +190,16 @@ pub fn serve(
     config: ConnectorConfig,
 ) -> io::Result<()> {
     let stats = Arc::new(ConnectorStats::new());
+    let route_receipts = config
+        .route_receipts_path
+        .as_ref()
+        .map(|path| {
+            NandoRouteReceiptLedger::open(path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .map(Mutex::new)
+                .map(Arc::new)
+                .map_err(io::Error::other)
+        })
+        .transpose()?;
     let metrics_stats = Arc::clone(&stats);
     thread::spawn(move || serve_metrics(metrics_listener, metrics_stats));
 
@@ -203,9 +225,15 @@ pub fn serve(
 
         let connection_stats = Arc::clone(&stats);
         let connection_config = config.clone();
+        let connection_route_receipts = route_receipts.clone();
         thread::spawn(move || {
             let _guard = ConnectionGuard(Arc::clone(&connection_stats));
-            if let Err(error) = relay_connection(client, &connection_config, &connection_stats) {
+            if let Err(error) = relay_connection(
+                client,
+                &connection_config,
+                &connection_stats,
+                connection_route_receipts.as_ref(),
+            ) {
                 connection_stats
                     .relay_failures
                     .fetch_add(1, Ordering::Relaxed);
@@ -261,9 +289,10 @@ fn relay_connection(
     client: TcpStream,
     config: &ConnectorConfig,
     stats: &ConnectorStats,
+    route_receipts: Option<&Arc<Mutex<NandoRouteReceiptLedger>>>,
 ) -> io::Result<()> {
     if let Some(fallback) = &config.client_fallback {
-        return http_fallback::relay_connection(client, config, fallback, stats);
+        return http_fallback::relay_connection(client, config, fallback, stats, route_receipts);
     }
     relay_raw_connection(client, config, stats)
 }
@@ -350,6 +379,9 @@ pub(crate) struct ConnectorStats {
     remote_failure_fallbacks: AtomicU64,
     replayed_request_bytes: AtomicU64,
     replay_spills: AtomicU64,
+    route_receipts: AtomicU64,
+    route_identity_missing: AtomicU64,
+    route_receipt_failures: AtomicU64,
 }
 
 impl ConnectorStats {
@@ -373,6 +405,9 @@ impl ConnectorStats {
             remote_failure_fallbacks: AtomicU64::new(0),
             replayed_request_bytes: AtomicU64::new(0),
             replay_spills: AtomicU64::new(0),
+            route_receipts: AtomicU64::new(0),
+            route_identity_missing: AtomicU64::new(0),
+            route_receipt_failures: AtomicU64::new(0),
         }
     }
 
@@ -388,7 +423,8 @@ impl ConnectorStats {
                 "\"client_fallback_attempts\":{},\"client_fallback_successes\":{},",
                 "\"client_fallback_failures\":{},\"abstain_fallbacks\":{},",
                 "\"remote_failure_fallbacks\":{},\"replayed_request_bytes\":{},",
-                "\"replay_spills\":{}}}"
+                "\"replay_spills\":{},\"route_receipts\":{},",
+                "\"route_identity_missing\":{},\"route_receipt_failures\":{}}}"
             ),
             self.started_at.elapsed().as_secs(),
             self.active_connections.load(Ordering::Relaxed),
@@ -408,6 +444,9 @@ impl ConnectorStats {
             self.remote_failure_fallbacks.load(Ordering::Relaxed),
             self.replayed_request_bytes.load(Ordering::Relaxed),
             self.replay_spills.load(Ordering::Relaxed),
+            self.route_receipts.load(Ordering::Relaxed),
+            self.route_identity_missing.load(Ordering::Relaxed),
+            self.route_receipt_failures.load(Ordering::Relaxed),
         )
     }
 }
@@ -459,6 +498,7 @@ mod tests {
             max_connections: 4,
             connect_timeout: Duration::from_secs(2),
             client_fallback: None,
+            route_receipts_path: None,
         }
     }
 
@@ -497,7 +537,7 @@ mod tests {
         let connector = thread::spawn(move || -> io::Result<()> {
             let (client, _) = connector_listener.accept()?;
             let stats = ConnectorStats::new();
-            relay_connection(client, &config, &stats)?;
+            relay_connection(client, &config, &stats, None)?;
             assert_eq!(
                 stats.upload_bytes.load(Ordering::Relaxed),
                 b"FUTURE-CODEX/99\r\nUnknown-Field: preserved\r\n\r\npayload".len() as u64

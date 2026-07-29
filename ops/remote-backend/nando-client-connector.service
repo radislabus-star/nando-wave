@@ -5,11 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/nando-connector --listen 127.0.0.1:8787 --upstream 192.168.3.94:8787 --max-connections 64 --client-fallback --allow-degraded-start --spool-dir %t/nando-connector
+ExecStart=%h/.local/bin/nando-connector --listen 127.0.0.1:8787 --upstream 192.168.3.94:8787 --max-connections 64 --client-fallback --allow-degraded-start --spool-dir %t/nando-connector --route-receipts %t/nando-connector/route-receipts-v1.jsonl
 Restart=always
 RestartSec=1s
 RuntimeDirectory=nando-connector
 RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

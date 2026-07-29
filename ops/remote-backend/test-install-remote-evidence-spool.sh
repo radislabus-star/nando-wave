@@ -85,7 +85,7 @@ if [[ "${url}" == *":18790/health" ]]; then
     printf '%s\n' '{"ok":false}'
   else
     printf '%s\n' \
-      '{"ok":true,"remote_evidence":{"enabled":true,"configured_clients":1},"learning_health":{"serving_healthy":true,"authority_ready":false,"phase_mutation_allowed":false}}'
+      '{"ok":true,"remote_evidence":{"enabled":true,"transport_ready":true,"configured_clients":1,"learning_closed_loop_ready":false},"learning_health":{"serving_healthy":true,"authority_ready":false,"phase_mutation_allowed":false}}'
   fi
 elif [[ "${url}" == *":18789/health" ]]; then
   printf '%s\n' '{"ok":true}'

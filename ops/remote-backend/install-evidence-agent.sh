@@ -145,6 +145,7 @@ mkdir -m 0700 "${check_state}"
   --sessions-dir "${SESSIONS_DIR}" \
   --key-file "${KEY_FILE}" \
   --state-dir "${check_state}" \
+  --route-receipts "${work}/route-receipts-v1.jsonl" \
   --check >/dev/null
 systemd-analyze --user verify "${verify_unit}"
 

@@ -155,7 +155,7 @@ fn window_status(windows: &ClientConnectionSnapshot) -> (StageStatus, String) {
     if windows.total_windows == 0 {
         return (
             StageStatus::Watch,
-            "no live Codex window is observable".to_owned(),
+            "no Codex process is observable on the control host; client windows on other hosts are outside this observer".to_owned(),
         );
     }
     if windows.active_nando == 0 {

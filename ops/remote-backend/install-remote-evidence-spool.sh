@@ -105,6 +105,7 @@ wait_learning_ready() {
       | jq -e '
           .ok == true
           and .remote_evidence.enabled == true
+          and .remote_evidence.transport_ready == true
           and .remote_evidence.configured_clients >= 1
           and .learning_health.serving_healthy == true
           and .learning_health.authority_ready == false

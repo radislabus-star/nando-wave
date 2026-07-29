@@ -49,6 +49,7 @@ fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
     let mut spool_dir = env::var_os("NANDO_CONNECT_SPOOL_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(default_spool_dir);
+    let mut route_receipts_path = env::var_os("NANDO_CONNECT_ROUTE_RECEIPTS").map(PathBuf::from);
     let mut allow_degraded_start = env_flag("NANDO_CONNECT_ALLOW_DEGRADED_START")?;
     let mut check_only = false;
     let mut args = args.peekable();
@@ -94,6 +95,10 @@ fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
             "--spool-dir" => {
                 spool_dir = PathBuf::from(next_value(&mut args, "--spool-dir")?);
             }
+            "--route-receipts" => {
+                route_receipts_path =
+                    Some(PathBuf::from(next_value(&mut args, "--route-receipts")?));
+            }
             "--check" => check_only = true,
             "--version" | "-V" => {
                 println!("nando-connector {VERSION}");
@@ -123,6 +128,9 @@ fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
         fallback.max_replay_body_bytes = max_replay_body_bytes;
         fallback.replay_memory_bytes = replay_memory_bytes;
         config = config.with_client_fallback(fallback)?;
+    }
+    if let Some(path) = route_receipts_path {
+        config = config.with_route_receipts(path)?;
     }
     if check_only {
         check_upstream(&config).map_err(|error| format!("health check failed: {error}"))?;
@@ -230,8 +238,9 @@ Options:
   --fallback-io-timeout-ms MS  External stream timeout (default: 3600000)
   --max-replay-body-mib MIB    Maximum replayable body (default: 64)
   --replay-memory-kib KIB      Memory before tmpfs spill (default: 1024)
-  --spool-dir PATH             Private replay spool directory
-  --check                      Verify upstream health and exit
+	  --spool-dir PATH             Private replay spool directory
+	  --route-receipts FILE        Payload-free Nando route receipt ledger
+	  --check                      Verify upstream health and exit
   -V, --version                Print version
   -h, --help                   Print help"
     );

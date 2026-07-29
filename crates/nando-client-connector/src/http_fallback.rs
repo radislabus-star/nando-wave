@@ -2,12 +2,18 @@ use crate::{
     ClientFallbackConfig, ConnectorConfig, ConnectorStats, connect_upstream,
     relay_raw_connection_with_prefix,
 };
+use nando_client_evidence::{ClientRouteIdentityV1, NandoRouteReceiptLedger};
+use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::net::{Shutdown, TcpStream};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_HTTP_HEAD_BYTES: usize = 64 * 1024;
 const MAX_CHUNK_LINE_BYTES: usize = 8 * 1024;
@@ -24,8 +30,16 @@ pub(crate) fn relay_connection(
     config: &ConnectorConfig,
     fallback: &ClientFallbackConfig,
     stats: &ConnectorStats,
+    route_receipts: Option<&Arc<Mutex<NandoRouteReceiptLedger>>>,
 ) -> io::Result<()> {
-    relay_connection_with_dialer(client, config, fallback, stats, crate::tls::connect)
+    relay_connection_with_dialer(
+        client,
+        config,
+        fallback,
+        stats,
+        route_receipts,
+        crate::tls::connect,
+    )
 }
 
 fn relay_connection_with_dialer<F>(
@@ -33,6 +47,7 @@ fn relay_connection_with_dialer<F>(
     config: &ConnectorConfig,
     fallback: &ClientFallbackConfig,
     stats: &ConnectorStats,
+    route_receipts: Option<&Arc<Mutex<NandoRouteReceiptLedger>>>,
     fallback_dialer: F,
 ) -> io::Result<()>
 where
@@ -68,6 +83,8 @@ where
     if body.spilled() {
         stats.replay_spills.fetch_add(1, Ordering::Relaxed);
     }
+    let route_identity = route_identity_for_request(&request, &mut body);
+    let request_body_sha256 = body.sha256();
 
     stats.http_requests.fetch_add(1, Ordering::Relaxed);
     stats
@@ -76,6 +93,38 @@ where
 
     let remote_target = format!("{}{}", fallback.remote_local_prefix, request.target);
     let remote_response = attempt_remote_local(config, &request, &remote_target, &mut body);
+    if let Ok(response) = &remote_response
+        && matches!(response.status, 200 | 418)
+        && is_response_target(&request.target)
+    {
+        match (&route_identity, route_receipts) {
+            (Some(identity), Some(route_receipts)) => {
+                let result = route_receipts
+                    .lock()
+                    .map_err(|_| "route_receipt_lock_poisoned".to_owned())
+                    .and_then(|mut ledger| {
+                        ledger
+                            .append(
+                                identity,
+                                request_body_sha256.clone(),
+                                response.status,
+                                unix_now_nanos(),
+                            )
+                            .map(|_| ())
+                    });
+                if let Err(error) = result {
+                    stats.route_receipt_failures.fetch_add(1, Ordering::Relaxed);
+                    eprintln!("nando-connector: route receipt censored ({error})");
+                } else {
+                    stats.route_receipts.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            (None, Some(_)) => {
+                stats.route_identity_missing.fetch_add(1, Ordering::Relaxed);
+            }
+            (_, None) => {}
+        }
+    }
 
     match remote_response {
         Ok(response) if !requires_client_fallback(response.status) => {
@@ -273,6 +322,25 @@ fn codex_backend_target(target: &str) -> io::Result<String> {
 
 fn is_nando_api_target(target: &str) -> bool {
     matches!(target, "/v1" | "/v2") || target.starts_with("/v1/") || target.starts_with("/v2/")
+}
+
+fn is_response_target(target: &str) -> bool {
+    matches!(target, "/v1/responses" | "/v2/responses")
+}
+
+fn route_identity_for_request(
+    request: &RequestHead,
+    body: &mut ReplayBody,
+) -> Option<ClientRouteIdentityV1> {
+    if request.method != "POST"
+        || !is_response_target(&request.target)
+        || !matches!(request.framing, BodyFraming::ContentLength(_))
+    {
+        return None;
+    }
+    body.parse_json()
+        .ok()
+        .and_then(|payload| ClientRouteIdentityV1::from_payload(&payload))
 }
 
 enum CapturedRequest {
@@ -526,6 +594,7 @@ struct ReplayBody {
     max_len: u64,
     spool_dir: std::path::PathBuf,
     spilled: bool,
+    body_hasher: Sha256,
 }
 
 impl ReplayBody {
@@ -537,6 +606,7 @@ impl ReplayBody {
             max_len,
             spool_dir: spool_dir.to_path_buf(),
             spilled: false,
+            body_hasher: Sha256::new(),
         }
     }
 
@@ -560,6 +630,7 @@ impl ReplayBody {
             ReplayStorage::Memory(memory) => memory.extend_from_slice(bytes),
             ReplayStorage::File(file) => file.write_all(bytes)?,
         }
+        self.body_hasher.update(bytes);
         self.len = next_len;
         Ok(())
     }
@@ -604,6 +675,29 @@ impl ReplayBody {
     fn spilled(&self) -> bool {
         self.spilled
     }
+
+    fn sha256(&self) -> String {
+        format!("{:x}", self.body_hasher.clone().finalize())
+    }
+
+    fn parse_json(&mut self) -> Result<serde_json::Value, serde_json::Error> {
+        match &mut self.storage {
+            ReplayStorage::Memory(memory) => serde_json::from_slice(memory),
+            ReplayStorage::File(file) => {
+                file.seek(SeekFrom::Start(0))
+                    .map_err(serde_json::Error::io)?;
+                serde_json::from_reader(file)
+            }
+        }
+    }
+}
+
+fn unix_now_nanos() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| {
+            u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX)
+        })
 }
 
 fn read_response_head<R: Read + ?Sized>(stream: &mut R) -> io::Result<Vec<u8>> {
@@ -658,6 +752,10 @@ struct FallbackResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nando_client_evidence::{
+        DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptIndex,
+        evidence_client_intent_id_sha256, evidence_session_id_sha256,
+    };
     use std::net::TcpListener;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
@@ -676,6 +774,7 @@ mod tests {
             max_connections: 4,
             connect_timeout: Duration::from_secs(2),
             client_fallback: None,
+            route_receipts_path: None,
         }
     }
 
@@ -756,7 +855,7 @@ mod tests {
         let connector = thread::spawn(move || -> io::Result<ConnectorStats> {
             let (client, _) = connector_listener.accept()?;
             let stats = ConnectorStats::new();
-            relay_connection_with_dialer(client, &config, &fallback, &stats, |_| {
+            relay_connection_with_dialer(client, &config, &fallback, &stats, None, |_| {
                 Ok(Box::new(TcpStream::connect(fallback_address)?))
             })?;
             Ok(stats)
@@ -808,7 +907,7 @@ mod tests {
         let connector = thread::spawn(move || -> io::Result<()> {
             let (client, _) = connector_listener.accept()?;
             let stats = ConnectorStats::new();
-            relay_connection_with_dialer(client, &config, &fallback, &stats, |_| {
+            relay_connection_with_dialer(client, &config, &fallback, &stats, None, |_| {
                 connector_dial_count.fetch_add(1, AtomicOrdering::Relaxed);
                 Err(io::Error::other("external fallback must not be called"))
             })?;
@@ -828,6 +927,85 @@ mod tests {
         remote
             .join()
             .map_err(|_| io::Error::other("remote test thread panicked"))??;
+        Ok(())
+    }
+
+    #[test]
+    fn confirmed_nando_response_writes_payload_free_route_receipt() -> io::Result<()> {
+        let remote_listener = TcpListener::bind("127.0.0.1:0")?;
+        let remote_address = remote_listener.local_addr()?;
+        let connector_listener = TcpListener::bind("127.0.0.1:0")?;
+        let connector_address = connector_listener.local_addr()?;
+        let config = test_connector_config(remote_address);
+        let fallback = test_fallback_config("route-receipt")?;
+        let route_path = std::env::temp_dir().join(format!(
+            "nando-connector-route-receipt-{}.jsonl",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&route_path);
+        let route_receipts = Arc::new(Mutex::new(
+            NandoRouteReceiptLedger::open(&route_path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .map_err(io::Error::other)?,
+        ));
+
+        let remote = thread::spawn(move || -> io::Result<()> {
+            let (mut stream, _) = remote_listener.accept()?;
+            let _ = read_http_request(&mut stream)?;
+            stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nlocal",
+            )
+        });
+
+        let connector_route_receipts = Arc::clone(&route_receipts);
+        let connector = thread::spawn(move || -> io::Result<ConnectorStats> {
+            let (client, _) = connector_listener.accept()?;
+            let stats = ConnectorStats::new();
+            relay_connection_with_dialer(
+                client,
+                &config,
+                &fallback,
+                &stats,
+                Some(&connector_route_receipts),
+                |_| Err(io::Error::other("external fallback must not be called")),
+            )?;
+            Ok(stats)
+        });
+
+        let body =
+            br#"{"client_metadata":{"session_id":"session-a","turn_id":"turn-a"},"input":[]}"#;
+        let mut client = TcpStream::connect(connector_address)?;
+        write!(
+            client,
+            "POST /v1/responses HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\n\r\n",
+            body.len()
+        )?;
+        client.write_all(body)?;
+        let mut response = Vec::new();
+        client.read_to_end(&mut response)?;
+        assert!(response.ends_with(b"local"));
+
+        let stats = connector
+            .join()
+            .map_err(|_| io::Error::other("connector test thread panicked"))??;
+        assert_eq!(stats.route_receipts.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.route_identity_missing.load(Ordering::Relaxed), 0);
+        drop(route_receipts);
+        let index =
+            NandoRouteReceiptIndex::open(&route_path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .map_err(io::Error::other)?;
+        assert!(
+            index
+                .receipt_for_frame(
+                    &evidence_client_intent_id_sha256("turn-a"),
+                    &evidence_session_id_sha256("session-a"),
+                    u64::MAX,
+                )
+                .is_some()
+        );
+        remote
+            .join()
+            .map_err(|_| io::Error::other("remote test thread panicked"))??;
+        std::fs::remove_file(route_path)?;
         Ok(())
     }
 

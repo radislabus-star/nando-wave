@@ -36,11 +36,19 @@ pub struct RemoteEvidenceFrameV1 {
     pub schema: String,
     pub frame_root_sha256: String,
     pub verifier_receipt_root_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_receipt_root_sha256: Option<String>,
     pub session_id_sha256: String,
     pub turn_intent_id_sha256: String,
     pub action_event_id_sha256: String,
     pub observed_at_unix_nanos: u64,
     pub frame: RelationFrame,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RouteBoundEvidenceFrameV1 {
+    pub frame: RelationFrame,
+    pub route_receipt_root_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -85,10 +93,12 @@ struct RemoteEvidenceClientHeadV1 {
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct RemoteEvidenceSpoolStatusV1 {
     pub enabled: bool,
+    pub transport_ready: bool,
     pub configured_clients: u64,
     pub active_clients: u64,
     pub accepted_batches: u64,
     pub accepted_frames: u64,
+    pub route_bound_frames: u64,
     pub duplicate_batches: u64,
     pub auth_failures: u64,
     pub rejected_batches: u64,
@@ -113,6 +123,7 @@ pub(crate) struct RemoteEvidenceSpoolRuntime {
     keys_directory: PathBuf,
     heads: BTreeMap<String, RemoteEvidenceClientHeadV1>,
     configured_clients: u64,
+    route_bound_frame_roots: BTreeSet<String>,
     duplicate_batches: u64,
     auth_failures: u64,
     rejected_batches: u64,
@@ -120,6 +131,20 @@ pub(crate) struct RemoteEvidenceSpoolRuntime {
 
 impl RemoteEvidenceFrameV1 {
     pub fn seal(frame: RelationFrame) -> Result<Self, String> {
+        Self::seal_with_route_receipt(frame, None)
+    }
+
+    pub fn seal_route_bound(
+        frame: RelationFrame,
+        route_receipt_root_sha256: String,
+    ) -> Result<Self, String> {
+        Self::seal_with_route_receipt(frame, Some(route_receipt_root_sha256))
+    }
+
+    fn seal_with_route_receipt(
+        frame: RelationFrame,
+        route_receipt_root_sha256: Option<String>,
+    ) -> Result<Self, String> {
         let outcome = teacher_outcome_from_completed(&frame)
             .map_err(|error| format!("remote_evidence_verifier:{error:?}"))?;
         if !outcome.verifier.accepted
@@ -136,6 +161,7 @@ impl RemoteEvidenceFrameV1 {
             schema: REMOTE_EVIDENCE_FRAME_SCHEMA_V1.to_owned(),
             frame_root_sha256,
             verifier_receipt_root_sha256,
+            route_receipt_root_sha256,
             session_id_sha256: frame.session_id_sha256.clone(),
             turn_intent_id_sha256: frame.client_intent_id_sha256.clone(),
             action_event_id_sha256: frame.event_id_sha256.clone(),
@@ -163,6 +189,10 @@ impl RemoteEvidenceFrameV1 {
             ]
             .into_iter()
             .all(valid_nonzero_sha256)
+            || self
+                .route_receipt_root_sha256
+                .as_deref()
+                .is_some_and(|root| !valid_nonzero_sha256(root))
             || self.session_id_sha256 != self.frame.session_id_sha256
             || self.turn_intent_id_sha256 != self.frame.client_intent_id_sha256
             || self.action_event_id_sha256 != self.frame.event_id_sha256
@@ -180,6 +210,11 @@ impl RemoteEvidenceFrameV1 {
                     .is_ok_and(|root| root == self.verifier_receipt_root_sha256)
         })
     }
+
+    #[must_use]
+    pub const fn is_route_bound(&self) -> bool {
+        self.route_receipt_root_sha256.is_some()
+    }
 }
 
 impl RemoteEvidenceBatchV1 {
@@ -190,6 +225,49 @@ impl RemoteEvidenceBatchV1 {
         generated_at_unix: u64,
         frames: Vec<RelationFrame>,
     ) -> Result<Self, String> {
+        Self::seal_frames(
+            client_id_sha256,
+            sequence,
+            previous_batch_root_sha256,
+            generated_at_unix,
+            frames
+                .into_iter()
+                .map(RemoteEvidenceFrameV1::seal)
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    }
+
+    pub fn seal_route_bound(
+        client_id_sha256: String,
+        sequence: u64,
+        previous_batch_root_sha256: String,
+        generated_at_unix: u64,
+        frames: Vec<RouteBoundEvidenceFrameV1>,
+    ) -> Result<Self, String> {
+        Self::seal_frames(
+            client_id_sha256,
+            sequence,
+            previous_batch_root_sha256,
+            generated_at_unix,
+            frames
+                .into_iter()
+                .map(|bound| {
+                    RemoteEvidenceFrameV1::seal_route_bound(
+                        bound.frame,
+                        bound.route_receipt_root_sha256,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    }
+
+    fn seal_frames(
+        client_id_sha256: String,
+        sequence: u64,
+        previous_batch_root_sha256: String,
+        generated_at_unix: u64,
+        mut frames: Vec<RemoteEvidenceFrameV1>,
+    ) -> Result<Self, String> {
         if !valid_nonzero_sha256(&client_id_sha256)
             || !valid_nonzero_sha256(&previous_batch_root_sha256)
             || sequence == 0
@@ -199,10 +277,6 @@ impl RemoteEvidenceBatchV1 {
         {
             return Err("remote_evidence_batch_invalid".to_owned());
         }
-        let mut frames = frames
-            .into_iter()
-            .map(RemoteEvidenceFrameV1::seal)
-            .collect::<Result<Vec<_>, _>>()?;
         frames.sort_by(|left, right| left.frame_root_sha256.cmp(&right.frame_root_sha256));
         if frames
             .windows(2)
@@ -470,6 +544,7 @@ impl RemoteEvidenceSpoolRuntime {
         fs::create_dir_all(root.join("clients"))
             .map_err(|error| format!("remote_evidence_spool_directory:{error}"))?;
         let mut heads = BTreeMap::new();
+        let mut route_bound_frame_roots = BTreeSet::new();
         for entry in fs::read_dir(root.join("clients"))
             .map_err(|error| format!("remote_evidence_spool_scan:{error}"))?
         {
@@ -504,6 +579,7 @@ impl RemoteEvidenceSpoolRuntime {
             if canonical != bytes {
                 return Err("remote_evidence_head_invalid".to_owned());
             }
+            route_bound_frame_roots.extend(load_route_bound_frame_roots(&entry.path(), &head)?);
             heads.insert(client_id, head);
         }
         if heads.len() > REMOTE_EVIDENCE_MAX_CLIENTS_V1 {
@@ -515,6 +591,7 @@ impl RemoteEvidenceSpoolRuntime {
             keys_directory,
             heads,
             configured_clients,
+            route_bound_frame_roots,
             duplicate_batches: 0,
             auth_failures: 0,
             rejected_batches: 0,
@@ -630,6 +707,13 @@ impl RemoteEvidenceSpoolRuntime {
         let head_bytes = serde_cbor::to_vec(&next_head)
             .map_err(|error| format!("remote_evidence_head_encode:{error}"))?;
         write_atomic(&client_directory.join(HEAD_FILE), &head_bytes)?;
+        self.route_bound_frame_roots.extend(
+            batch
+                .frames
+                .iter()
+                .filter(|frame| frame.is_route_bound())
+                .map(|frame| frame.frame_root_sha256.clone()),
+        );
         self.heads.insert(client_id_sha256.to_owned(), next_head);
         RemoteEvidenceAckV1::seal(
             &key,
@@ -646,10 +730,13 @@ impl RemoteEvidenceSpoolRuntime {
         let accepted_frames = self.heads.values().map(|head| head.accepted_frames).sum();
         RemoteEvidenceSpoolStatusV1 {
             enabled: true,
+            transport_ready: frame_archive_ready && self.configured_clients > 0,
             configured_clients: self.configured_clients,
             active_clients: u64::try_from(self.heads.len()).unwrap_or(u64::MAX),
             accepted_batches,
             accepted_frames,
+            route_bound_frames: u64::try_from(self.route_bound_frame_roots.len())
+                .unwrap_or(u64::MAX),
             duplicate_batches: self.duplicate_batches,
             auth_failures: self.auth_failures,
             rejected_batches: self.rejected_batches,
@@ -659,10 +746,71 @@ impl RemoteEvidenceSpoolRuntime {
                 .map(|head| head.last_accepted_at_unix)
                 .max()
                 .unwrap_or(0),
-            learning_closed_loop_ready: frame_archive_ready && accepted_frames > 0,
+            learning_closed_loop_ready: false,
             raw_session_payload_persisted: false,
         }
     }
+
+    pub(crate) fn route_bound_frame_roots(&self) -> BTreeSet<String> {
+        self.route_bound_frame_roots.clone()
+    }
+}
+
+fn load_route_bound_frame_roots(
+    client_directory: &Path,
+    head: &RemoteEvidenceClientHeadV1,
+) -> Result<BTreeSet<String>, String> {
+    let mut batches = BTreeMap::new();
+    for entry in fs::read_dir(client_directory)
+        .map_err(|error| format!("remote_evidence_spool_scan:{error}"))?
+    {
+        let entry = entry.map_err(|error| format!("remote_evidence_spool_scan:{error}"))?;
+        if !entry
+            .file_type()
+            .map_err(|error| format!("remote_evidence_spool_scan:{error}"))?
+            .is_file()
+            || entry.file_name() == HEAD_FILE
+            || entry.path().extension().and_then(|value| value.to_str()) != Some("cbor")
+        {
+            continue;
+        }
+        let Some(bytes) = read_optional_bounded(&entry.path(), REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1)?
+        else {
+            continue;
+        };
+        let batch = RemoteEvidenceBatchV1::from_canonical_bytes(&bytes)?;
+        if batch.client_id_sha256 != head.client_id_sha256 {
+            return Err("remote_evidence_receipt_client_invalid".to_owned());
+        }
+        if batch.sequence <= head.sequence && batches.insert(batch.sequence, batch).is_some() {
+            return Err("remote_evidence_receipt_sequence_duplicate".to_owned());
+        }
+    }
+    let mut previous_root = remote_evidence_genesis_root(&head.client_id_sha256);
+    let mut accepted_frames = 0_u64;
+    let mut route_bound_frame_roots = BTreeSet::new();
+    for sequence in 1..=head.sequence {
+        let batch = batches
+            .get(&sequence)
+            .ok_or_else(|| "remote_evidence_receipt_missing".to_owned())?;
+        if batch.previous_batch_root_sha256 != previous_root {
+            return Err("remote_evidence_receipt_chain_invalid".to_owned());
+        }
+        previous_root.clone_from(&batch.batch_root_sha256);
+        accepted_frames =
+            accepted_frames.saturating_add(u64::try_from(batch.frames.len()).unwrap_or(u64::MAX));
+        route_bound_frame_roots.extend(
+            batch
+                .frames
+                .iter()
+                .filter(|frame| frame.is_route_bound())
+                .map(|frame| frame.frame_root_sha256.clone()),
+        );
+    }
+    if previous_root != head.batch_root_sha256 || accepted_frames != head.accepted_frames {
+        return Err("remote_evidence_receipt_head_invalid".to_owned());
+    }
+    Ok(route_bound_frame_roots)
 }
 
 fn count_configured_clients(directory: &Path) -> Result<u64, String> {
@@ -827,7 +975,8 @@ mod tests {
 
     use super::{
         REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1, RemoteEvidenceBatchV1, RemoteEvidenceSpoolRuntime,
-        remote_evidence_genesis_root, sign_remote_evidence_request_v1, write_atomic,
+        RouteBoundEvidenceFrameV1, remote_evidence_genesis_root, sign_remote_evidence_request_v1,
+        write_atomic,
     };
     use crate::multi_source_frame_archive::MultiSourceFrameArchive;
 
@@ -965,7 +1114,9 @@ mod tests {
         tampered_ack.accepted_frames = tampered_ack.accepted_frames.saturating_add(1);
         assert!(!tampered_ack.verify(&key));
         assert_eq!(archive.len(), 1);
-        assert!(runtime.status(true).learning_closed_loop_ready);
+        assert!(runtime.status(true).transport_ready);
+        assert_eq!(runtime.status(true).route_bound_frames, 0);
+        assert!(!runtime.status(true).learning_closed_loop_ready);
 
         drop(runtime);
         drop(archive);
@@ -987,7 +1138,56 @@ mod tests {
         assert!(replay.verify(&key));
         assert_eq!(restored_archive.len(), 1);
         assert_eq!(restored.status(true).accepted_frames, 1);
+        assert_eq!(restored.status(true).route_bound_frames, 0);
         assert_eq!(restored.status(true).duplicate_batches, 1);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn route_bound_frame_count_survives_restart_without_promoting_authority() {
+        let root = temporary_root("route-bound");
+        let spool_root = root.join("spool");
+        let key_root = root.join("keys");
+        let archive_root = root.join("frames");
+        let client_id = hash("client:route-bound");
+        let key = [13_u8; 32];
+        write_key(&key_root, &client_id, &key);
+        let batch = RemoteEvidenceBatchV1::seal_route_bound(
+            client_id.clone(),
+            1,
+            remote_evidence_genesis_root(&client_id),
+            1_700_000_000,
+            vec![RouteBoundEvidenceFrameV1 {
+                frame: completed_frame("route-bound"),
+                route_receipt_root_sha256: hash("route-receipt:route-bound"),
+            }],
+        )
+        .expect("route-bound batch");
+        let body = batch.canonical_bytes().expect("body");
+        let signature =
+            sign_remote_evidence_request_v1(&key, batch.generated_at_unix, &batch, &body)
+                .expect("signature");
+        let mut archive = MultiSourceFrameArchive::open(&archive_root).expect("archive");
+        let mut runtime =
+            RemoteEvidenceSpoolRuntime::open(spool_root.clone(), key_root.clone()).expect("spool");
+        runtime
+            .ingest(
+                &client_id,
+                batch.generated_at_unix,
+                &signature,
+                &body,
+                batch.generated_at_unix,
+                &mut archive,
+            )
+            .expect("ingest");
+        assert_eq!(runtime.status(true).route_bound_frames, 1);
+        assert!(!runtime.status(true).learning_closed_loop_ready);
+        drop(runtime);
+
+        let restored =
+            RemoteEvidenceSpoolRuntime::open(spool_root, key_root).expect("spool restore");
+        assert_eq!(restored.status(true).route_bound_frames, 1);
+        assert!(!restored.status(true).learning_closed_loop_ready);
         fs::remove_dir_all(root).expect("cleanup");
     }
 

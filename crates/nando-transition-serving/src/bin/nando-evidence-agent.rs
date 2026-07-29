@@ -5,16 +5,20 @@ use std::net::{TcpStream, ToSocketAddrs};
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use nando_client_evidence::{DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptIndex};
 use nando_operator_kernel::{RelationFrame, sha256_bytes};
 use nando_operator_learning::{FramedCborLedger, read_framed_cbor};
 use nando_transition_serving::remote_evidence_spool::{
     REMOTE_EVIDENCE_ENDPOINT_V1, REMOTE_EVIDENCE_MAX_FRAMES_V1, RemoteEvidenceAckV1,
-    RemoteEvidenceBatchV1, RemoteEvidenceFrameV1, parse_remote_evidence_key_v1,
-    remote_evidence_genesis_root, sign_remote_evidence_request_v1,
+    RemoteEvidenceBatchV1, RemoteEvidenceFrameV1, RouteBoundEvidenceFrameV1,
+    parse_remote_evidence_key_v1, remote_evidence_genesis_root, sign_remote_evidence_request_v1,
 };
 use nando_transition_serving::{
     SessionStreamMetrics, VerifiedRelationFrameSink, spawn_verified_relation_frame_stream,
@@ -22,10 +26,11 @@ use nando_transition_serving::{
 use serde::{Deserialize, Serialize};
 
 const AGENT_STATE_SCHEMA_V1: &str = "nando.local-evidence-agent-state.v1";
-const AGENT_PENDING_SCHEMA_V1: &str = "nando.local-evidence-agent-pending.v1";
-const OUTBOX_PREFIX: &str = "verified-relation-frame";
+const AGENT_PENDING_SCHEMA_V2: &str = "nando.local-evidence-agent-pending.v2";
+const ROUTE_BOUND_OUTBOX_SCHEMA_V1: &str = "nando.route-bound-evidence-outbox-frame.v1";
+const OUTBOX_PREFIX: &str = "route-bound-relation-frame";
 const STATE_FILE: &str = "state-v1.cbor";
-const PENDING_FILE: &str = "pending-v1.cbor";
+const PENDING_FILE: &str = "pending-v2.cbor";
 const MAX_OUTBOX_FRAMES: usize = 65_536;
 const MAX_OUTBOX_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_FRAME_BYTES: usize = 256 * 1024;
@@ -40,6 +45,7 @@ struct AgentConfig {
     remote_origin: String,
     key_file: PathBuf,
     state_directory: PathBuf,
+    route_receipts_path: PathBuf,
     poll_interval: Duration,
     once: bool,
     check_only: bool,
@@ -68,6 +74,14 @@ struct EvidenceAgentPendingV1 {
     frame_roots: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct RouteBoundOutboxFrameV1 {
+    schema: String,
+    route_receipt_root_sha256: String,
+    frame: RelationFrame,
+}
+
 #[derive(Clone, Debug)]
 struct HttpEndpoint {
     socket_host: String,
@@ -78,12 +92,14 @@ struct HttpEndpoint {
 
 struct LocalEvidenceOutbox {
     ledger: FramedCborLedger,
-    frames: BTreeMap<String, RelationFrame>,
+    frames: BTreeMap<String, RouteBoundOutboxFrameV1>,
     payload_bytes: u64,
 }
 
 struct OutboxSink {
     outbox: Arc<Mutex<LocalEvidenceOutbox>>,
+    route_receipts: Arc<Mutex<NandoRouteReceiptIndex>>,
+    route_metrics: Arc<RouteBindingMetrics>,
 }
 
 struct EvidenceAgent {
@@ -93,6 +109,15 @@ struct EvidenceAgent {
     state: EvidenceAgentStateV1,
     outbox: Arc<Mutex<LocalEvidenceOutbox>>,
     stream_metrics: Arc<SessionStreamMetrics>,
+    route_receipts: Arc<Mutex<NandoRouteReceiptIndex>>,
+    route_metrics: Arc<RouteBindingMetrics>,
+}
+
+#[derive(Default)]
+struct RouteBindingMetrics {
+    route_bound_frames: AtomicU64,
+    route_unbound_frames: AtomicU64,
+    route_receipt_refresh_failures: AtomicU64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -158,6 +183,8 @@ impl AgentConfig {
                 || home.join(".local/state/nando-evidence-agent"),
                 PathBuf::from,
             ),
+            route_receipts_path: std::env::var_os("NANDO_EVIDENCE_ROUTE_RECEIPTS")
+                .map_or_else(default_route_receipts_path, PathBuf::from),
             poll_interval: Duration::from_millis(DEFAULT_POLL_MILLIS),
             once: false,
             check_only: false,
@@ -180,6 +207,10 @@ impl AgentConfig {
                 }
                 Some("--state-dir") => {
                     config.state_directory =
+                        arguments.next().map(PathBuf::from).ok_or_else(usage)?;
+                }
+                Some("--route-receipts") => {
+                    config.route_receipts_path =
                         arguments.next().map(PathBuf::from).ok_or_else(usage)?;
                 }
                 Some("--poll-ms") => {
@@ -243,14 +274,21 @@ impl EvidenceAgent {
             }
         };
         let outbox = Arc::new(Mutex::new(LocalEvidenceOutbox::open(
-            &config.state_directory.join("outbox-v1"),
+            &config.state_directory.join("outbox-v2"),
         )?));
+        let route_receipts = Arc::new(Mutex::new(NandoRouteReceiptIndex::open(
+            &config.route_receipts_path,
+            DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES,
+        )?));
+        let route_metrics = Arc::new(RouteBindingMetrics::default());
         let stream_metrics = Arc::new(SessionStreamMetrics::default());
         spawn_verified_relation_frame_stream(
             config.sessions_directory.clone(),
             config.state_directory.join("session-capture-evidence-v1"),
             Arc::new(OutboxSink {
                 outbox: Arc::clone(&outbox),
+                route_receipts: Arc::clone(&route_receipts),
+                route_metrics: Arc::clone(&route_metrics),
             }),
             Arc::clone(&stream_metrics),
         )?;
@@ -262,6 +300,8 @@ impl EvidenceAgent {
             state,
             outbox,
             stream_metrics,
+            route_receipts,
+            route_metrics,
         })
     }
 
@@ -374,8 +414,14 @@ impl EvidenceAgent {
             return Ok(None);
         }
         let frame_roots = selected.iter().map(|(root, _)| root.clone()).collect();
-        let frames = selected.into_iter().map(|(_, frame)| frame).collect();
-        let batch = RemoteEvidenceBatchV1::seal(
+        let frames = selected
+            .into_iter()
+            .map(|(_, bound)| RouteBoundEvidenceFrameV1 {
+                frame: bound.frame,
+                route_receipt_root_sha256: bound.route_receipt_root_sha256,
+            })
+            .collect();
+        let batch = RemoteEvidenceBatchV1::seal_route_bound(
             self.state.client_id_sha256.clone(),
             self.state.next_sequence,
             self.state.previous_batch_root_sha256.clone(),
@@ -383,7 +429,7 @@ impl EvidenceAgent {
             frames,
         )?;
         let pending = EvidenceAgentPendingV1 {
-            schema: AGENT_PENDING_SCHEMA_V1.to_owned(),
+            schema: AGENT_PENDING_SCHEMA_V2.to_owned(),
             client_id_sha256: self.state.client_id_sha256.clone(),
             batch,
             frame_roots,
@@ -401,6 +447,11 @@ impl EvidenceAgent {
             .map_err(|_| "evidence_agent_outbox_lock_poisoned".to_owned())?
             .frames
             .len();
+        let route_receipts = self
+            .route_receipts
+            .lock()
+            .map_err(|_| "evidence_agent_route_receipt_lock_poisoned".to_owned())?
+            .len();
         serde_json::to_string(&serde_json::json!({
             "ok": true,
             "client_id_sha256": self.state.client_id_sha256,
@@ -412,6 +463,11 @@ impl EvidenceAgent {
             "censored_invalid_session_identities": censored_identities,
             "censored_invalid_utf8_rows": censored_utf8,
             "outbox_frames": outbox_frames,
+            "route_receipts": route_receipts,
+            "route_bound_frames": self.route_metrics.route_bound_frames.load(Ordering::Relaxed),
+            "route_unbound_frames": self.route_metrics.route_unbound_frames.load(Ordering::Relaxed),
+            "route_receipt_refresh_failures": self.route_metrics.route_receipt_refresh_failures.load(Ordering::Relaxed),
+            "route_provenance_required": true,
             "accepted_batches": self.state.accepted_batches,
             "accepted_frames": self.state.accepted_frames,
             "accepted_this_poll": accepted_this_poll,
@@ -444,9 +500,14 @@ impl EvidenceAgentStateV1 {
 
 impl EvidenceAgentPendingV1 {
     fn validate(&self, state: &EvidenceAgentStateV1) -> bool {
-        self.schema == AGENT_PENDING_SCHEMA_V1
+        self.schema == AGENT_PENDING_SCHEMA_V2
             && self.client_id_sha256 == state.client_id_sha256
             && self.batch.validate()
+            && self
+                .batch
+                .frames
+                .iter()
+                .all(RemoteEvidenceFrameV1::is_route_bound)
             && self.batch.client_id_sha256 == state.client_id_sha256
             && self.batch.sequence == state.next_sequence
             && self.batch.previous_batch_root_sha256 == state.previous_batch_root_sha256
@@ -462,14 +523,14 @@ impl EvidenceAgentPendingV1 {
 impl LocalEvidenceOutbox {
     fn open(directory: &Path) -> Result<Self, String> {
         let ledger = FramedCborLedger::open(directory, OUTBOX_PREFIX)?;
-        let persisted = read_framed_cbor::<RelationFrame>(directory, OUTBOX_PREFIX)?;
+        let persisted = read_framed_cbor::<RouteBoundOutboxFrameV1>(directory, OUTBOX_PREFIX)?;
         let mut frames = BTreeMap::new();
         let mut payload_bytes = 0_u64;
-        for frame in persisted {
-            let sealed = RemoteEvidenceFrameV1::seal(frame.clone())?;
-            let bytes = frame_bytes(&frame)?;
+        for bound in persisted {
+            let sealed = bound.seal()?;
+            let bytes = frame_bytes(&bound)?;
             match frames.get(&sealed.frame_root_sha256) {
-                Some(existing) if existing == &frame => continue,
+                Some(existing) if existing == &bound => continue,
                 Some(_) => return Err("evidence_agent_outbox_rebound".to_owned()),
                 None => {}
             }
@@ -479,7 +540,7 @@ impl LocalEvidenceOutbox {
                 return Err("evidence_agent_outbox_budget".to_owned());
             }
             payload_bytes = payload_bytes.saturating_add(bytes);
-            frames.insert(sealed.frame_root_sha256, frame);
+            frames.insert(sealed.frame_root_sha256, bound);
         }
         Ok(Self {
             ledger,
@@ -488,25 +549,34 @@ impl LocalEvidenceOutbox {
         })
     }
 
-    fn append(&mut self, frame: RelationFrame) -> Result<(), String> {
-        let sealed = RemoteEvidenceFrameV1::seal(frame.clone())?;
+    fn append(
+        &mut self,
+        frame: RelationFrame,
+        route_receipt_root_sha256: String,
+    ) -> Result<(), String> {
+        let bound = RouteBoundOutboxFrameV1 {
+            schema: ROUTE_BOUND_OUTBOX_SCHEMA_V1.to_owned(),
+            route_receipt_root_sha256,
+            frame,
+        };
+        let sealed = bound.seal()?;
         if let Some(existing) = self.frames.get(&sealed.frame_root_sha256) {
-            return if existing == &frame {
+            return if existing == &bound {
                 Ok(())
             } else {
                 Err("evidence_agent_outbox_rebound".to_owned())
             };
         }
-        let bytes = frame_bytes(&frame)?;
+        let bytes = frame_bytes(&bound)?;
         if self.frames.len() >= MAX_OUTBOX_FRAMES
             || self.payload_bytes.saturating_add(bytes) > MAX_OUTBOX_BYTES
         {
             return Err("evidence_agent_outbox_budget".to_owned());
         }
-        self.ledger.append(&frame)?;
+        self.ledger.append(&bound)?;
         self.ledger.sync()?;
         self.payload_bytes = self.payload_bytes.saturating_add(bytes);
-        self.frames.insert(sealed.frame_root_sha256, frame);
+        self.frames.insert(sealed.frame_root_sha256, bound);
         Ok(())
     }
 
@@ -520,10 +590,39 @@ impl LocalEvidenceOutbox {
 
 impl VerifiedRelationFrameSink for OutboxSink {
     fn append_verified_frame(&self, frame: RelationFrame) -> Result<(), String> {
+        let route_receipt_root_sha256 = {
+            let mut receipts = self
+                .route_receipts
+                .lock()
+                .map_err(|_| "evidence_agent_route_receipt_lock_poisoned".to_owned())?;
+            if let Err(error) = receipts.refresh() {
+                self.route_metrics
+                    .route_receipt_refresh_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                return Err(error);
+            }
+            receipts
+                .receipt_for_frame(
+                    &frame.client_intent_id_sha256,
+                    &frame.session_id_sha256,
+                    frame.observed_at_unix_nanos,
+                )
+                .map(|receipt| receipt.receipt_root_sha256.clone())
+        };
+        let Some(route_receipt_root_sha256) = route_receipt_root_sha256 else {
+            self.route_metrics
+                .route_unbound_frames
+                .fetch_add(1, Ordering::Relaxed);
+            return Ok(());
+        };
         self.outbox
             .lock()
             .map_err(|_| "evidence_agent_outbox_lock_poisoned".to_owned())?
-            .append(frame)
+            .append(frame, route_receipt_root_sha256)?;
+        self.route_metrics
+            .route_bound_frames
+            .fetch_add(1, Ordering::Relaxed);
+        Ok(())
     }
 }
 
@@ -683,7 +782,19 @@ fn decode_chunked_body(encoded: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
-fn frame_bytes(frame: &RelationFrame) -> Result<u64, String> {
+impl RouteBoundOutboxFrameV1 {
+    fn seal(&self) -> Result<RemoteEvidenceFrameV1, String> {
+        if self.schema != ROUTE_BOUND_OUTBOX_SCHEMA_V1 {
+            return Err("evidence_agent_outbox_schema_invalid".to_owned());
+        }
+        RemoteEvidenceFrameV1::seal_route_bound(
+            self.frame.clone(),
+            self.route_receipt_root_sha256.clone(),
+        )
+    }
+}
+
+fn frame_bytes<T: Serialize>(frame: &T) -> Result<u64, String> {
     let bytes = serde_cbor::to_vec(frame)
         .map_err(|error| format!("evidence_agent_outbox_encode:{error}"))?;
     if bytes.len() > MAX_FRAME_BYTES {
@@ -793,16 +904,30 @@ fn unix_now_nanos() -> Result<u64, String> {
         .map_err(|_| "evidence_agent_clock_before_epoch".to_owned())
 }
 
+fn default_route_receipts_path() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("nando-connector/route-receipts-v1.jsonl")
+}
+
 fn usage() -> String {
-    "usage: nando-evidence-agent [--sessions-dir PATH] [--server http://HOST:PORT] [--key-file PATH] [--state-dir PATH] [--poll-ms 100..60000] [--once] [--check]".to_owned()
+    "usage: nando-evidence-agent [--sessions-dir PATH] [--server http://HOST:PORT] [--key-file PATH] [--state-dir PATH] [--route-receipts FILE] [--poll-ms 100..60000] [--once] [--check]".to_owned()
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::sync::atomic::Ordering;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use nando_client_evidence::{
+        ClientRouteIdentityV1, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptIndex,
+        NandoRouteReceiptLedger, evidence_client_intent_id_sha256, evidence_session_id_sha256,
+        sha256_bytes as client_sha256_bytes,
+    };
     use nando_operator_kernel::{
         AtomSource, AtomValueType, RELATION_FRAME_SCHEMA, RelationAtom, RelationFrame,
         ResponseValueSelector, sha256_bytes,
@@ -810,7 +935,9 @@ mod tests {
     use nando_operator_learning::SOURCE_NEUTRAL_EXTRACTOR_VERSION;
 
     use super::{
-        HttpEndpoint, LocalEvidenceOutbox, decode_chunked_body, parse_http_response, retry_backoff,
+        HttpEndpoint, LocalEvidenceOutbox, OutboxSink, RouteBindingMetrics,
+        VerifiedRelationFrameSink, decode_chunked_body, parse_http_response, retry_backoff,
+        valid_root,
     };
 
     fn hash(value: &str) -> String {
@@ -918,7 +1045,9 @@ mod tests {
         let root = temporary_root("compact");
         let frame = completed_frame("compact");
         let mut outbox = LocalEvidenceOutbox::open(&root).expect("outbox");
-        outbox.append(frame).expect("append");
+        outbox
+            .append(frame, hash("route-receipt:compact"))
+            .expect("append");
         assert_eq!(outbox.frames.len(), 1);
         outbox.compact_all().expect("compact");
         assert!(outbox.frames.is_empty());
@@ -928,6 +1057,62 @@ mod tests {
         let restored = LocalEvidenceOutbox::open(&root).expect("restore");
         assert!(restored.frames.is_empty());
         assert_eq!(restored.payload_bytes, 0);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn outbox_accepts_only_pre_action_nando_route_bound_frames() {
+        let root = temporary_root("route-bound");
+        let route_path = root.join("route-receipts-v1.jsonl");
+        let outbox = Arc::new(Mutex::new(
+            LocalEvidenceOutbox::open(&root.join("outbox")).expect("outbox"),
+        ));
+        let route_index = Arc::new(Mutex::new(
+            NandoRouteReceiptIndex::open(&route_path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .expect("route index"),
+        ));
+        let metrics = Arc::new(RouteBindingMetrics::default());
+        let sink = OutboxSink {
+            outbox: Arc::clone(&outbox),
+            route_receipts: Arc::clone(&route_index),
+            route_metrics: Arc::clone(&metrics),
+        };
+
+        let mut unbound = completed_frame("unbound");
+        unbound.client_intent_id_sha256 = evidence_client_intent_id_sha256("turn-unbound");
+        unbound.session_id_sha256 = evidence_session_id_sha256("session-unbound");
+        sink.append_verified_frame(unbound).expect("censor unbound");
+        assert!(outbox.lock().expect("outbox lock").frames.is_empty());
+        assert_eq!(metrics.route_unbound_frames.load(Ordering::Relaxed), 1);
+
+        let identity = ClientRouteIdentityV1 {
+            turn_intent_id_sha256: evidence_client_intent_id_sha256("turn-bound"),
+            session_id_sha256: evidence_session_id_sha256("session-bound"),
+        };
+        let mut ledger =
+            NandoRouteReceiptLedger::open(&route_path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .expect("route ledger");
+        ledger
+            .append(
+                &identity,
+                client_sha256_bytes(b"request"),
+                418,
+                1_600_000_000_000_000_000,
+            )
+            .expect("route receipt");
+        let mut bound = completed_frame("bound");
+        bound.client_intent_id_sha256 = identity.turn_intent_id_sha256;
+        bound.session_id_sha256 = identity.session_id_sha256;
+        sink.append_verified_frame(bound).expect("append bound");
+        let outbox = outbox.lock().expect("outbox lock");
+        assert_eq!(outbox.frames.len(), 1);
+        assert!(
+            outbox
+                .frames
+                .values()
+                .all(|bound| valid_root(&bound.route_receipt_root_sha256))
+        );
+        assert_eq!(metrics.route_bound_frames.load(Ordering::Relaxed), 1);
         fs::remove_dir_all(root).expect("cleanup");
     }
 }

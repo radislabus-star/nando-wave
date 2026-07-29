@@ -12,6 +12,7 @@ bytes = "1"
 hmac = "0.12"
 memchr = "2"
 mimalloc = "0.1"
+nando-client-evidence = { path = "../nando-client-evidence" }
 nando-operator-admission = { path = "../nando-operator-admission" }
 nando-operator-kernel = { path = "../nando-operator-kernel" }
 nando-operator-learning = { path = "../nando-operator-learning" }

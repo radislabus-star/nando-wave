@@ -38,6 +38,7 @@ pub(crate) struct CodexWindowConnection {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(crate) struct ClientConnectionSnapshot {
     pub(crate) generated_at_unix_ms: u64,
+    pub(crate) observer_scope: String,
     pub(crate) total_windows: u64,
     pub(crate) configured_for_nando: u64,
     pub(crate) active_nando: u64,
@@ -148,6 +149,7 @@ pub(crate) fn snapshot() -> ClientConnectionSnapshot {
 
     ClientConnectionSnapshot {
         generated_at_unix_ms: unix_now_ms(),
+        observer_scope: "processes_on_control_host".to_owned(),
         total_windows,
         configured_for_nando,
         active_nando,
@@ -162,6 +164,7 @@ pub(crate) fn snapshot() -> ClientConnectionSnapshot {
 fn empty_snapshot() -> ClientConnectionSnapshot {
     ClientConnectionSnapshot {
         generated_at_unix_ms: unix_now_ms(),
+        observer_scope: "processes_on_control_host".to_owned(),
         total_windows: 0,
         configured_for_nando: 0,
         active_nando: 0,

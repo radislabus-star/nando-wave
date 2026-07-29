@@ -12,7 +12,7 @@ cat >"${WORK}/bin/curl" <<'EOF'
 #!/usr/bin/env bash
 case "${*: -1}" in
   */metrics)
-    printf '%s\n' '{"ok":true,"service":"nando-connector","uptime_seconds":30,"active_connections":2,"accepted_connections":7,"completed_connections":5,"rejected_connections":0,"accept_failures":0,"relay_failures":0,"upload_bytes":123,"download_bytes":456,"http_requests":6,"nando_responses":2,"client_fallback_attempts":4,"client_fallback_successes":4,"client_fallback_failures":0,"abstain_fallbacks":3,"remote_failure_fallbacks":1,"replayed_request_bytes":99,"replay_spills":1}'
+    printf '%s\n' '{"ok":true,"service":"nando-connector","uptime_seconds":30,"active_connections":2,"accepted_connections":7,"completed_connections":5,"rejected_connections":0,"accept_failures":0,"relay_failures":0,"upload_bytes":123,"download_bytes":456,"http_requests":6,"nando_responses":2,"client_fallback_attempts":4,"client_fallback_successes":4,"client_fallback_failures":0,"abstain_fallbacks":3,"remote_failure_fallbacks":1,"replayed_request_bytes":99,"replay_spills":1,"route_receipts":2,"route_identity_missing":4,"route_receipt_failures":0}'
     ;;
   */cpu-health)
     printf '%s\n' '{"ok":true,"mode":"CPU","admission_verdict":"PASS","response_active_profiles":2,"ordinary_response_local_accepts":78,"ordinary_response_local_accept_input_tokens":16227152,"requests":1011,"fallbacks":983,"transition_false_accepts":0}'
@@ -61,6 +61,9 @@ grep -Fq 'UPLOAD BYTES       123' <<<"${status}"
 grep -Fq 'CLIENT FALLBACKS   4 / 4' <<<"${status}"
 grep -Fq 'ABSTAIN REPLAYS    3' <<<"${status}"
 grep -Fq 'REMOTE FAILOVER    1' <<<"${status}"
+grep -Fq 'ROUTE RECEIPTS     2' <<<"${status}"
+grep -Fq 'ROUTE ID MISSING   4' <<<"${status}"
+grep -Fq 'RECEIPT FAILURES   0' <<<"${status}"
 
 watch="$(NANDO_CONNECT_WATCH_ONCE=1 "${CONNECTOR}")"
 grep -Fq 'Ctrl+C closes this monitor' <<<"${watch}"

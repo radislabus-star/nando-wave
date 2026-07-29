@@ -7,6 +7,7 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+nando-client-evidence = { path = "../nando-client-evidence" }
 nando-core = { path = "../nando-core" }
 nando-operator-kernel = { path = "../nando-operator-kernel" }
 nando-operator-proof = { path = "../nando-operator-proof" }

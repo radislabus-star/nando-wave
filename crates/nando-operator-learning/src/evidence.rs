@@ -419,12 +419,12 @@ pub fn evidence_payload_sha256(payload: &[u8]) -> String {
 
 #[must_use]
 pub fn evidence_session_id_sha256(session_id: &str) -> String {
-    domain_digest("nando.session-id.v1", session_id.as_bytes())
+    nando_client_evidence::evidence_session_id_sha256(session_id)
 }
 
 #[must_use]
 pub fn evidence_client_intent_id_sha256(client_intent_id: &str) -> String {
-    domain_digest("nando.client-intent-id.v1", client_intent_id.as_bytes())
+    nando_client_evidence::evidence_client_intent_id_sha256(client_intent_id)
 }
 
 #[derive(Serialize)]

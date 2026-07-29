@@ -125,6 +125,9 @@ render_status() {
       "ABSTAIN REPLAYS    " + ((.abstain_fallbacks // 0) | tostring),
       "REMOTE FAILOVER    " + ((.remote_failure_fallbacks // 0) | tostring),
       "REPLAY SPILLS      " + ((.replay_spills // 0) | tostring),
+      "ROUTE RECEIPTS     " + ((.route_receipts // 0) | tostring),
+      "ROUTE ID MISSING   " + ((.route_identity_missing // 0) | tostring),
+      "RECEIPT FAILURES   " + ((.route_receipt_failures // 0) | tostring),
       "UPTIME SECONDS     " + ((.uptime_seconds // 0) | tostring)
     ' <<<"${metrics}"
   else
