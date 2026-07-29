@@ -1,0 +1,56 @@
+{
+  "schema": "nando.client-connector-release.v1",
+  "version": "0.2.0",
+  "built_at_utc": "2026-07-29T07:32:51Z",
+  "source_commit": "530a473",
+  "toolchain": "rustc 1.97.0",
+  "target": "x86_64-unknown-linux-musl",
+  "artifact": {
+    "name": "nando-connector-linux-x86_64",
+    "size_bytes": 561792,
+    "sha256": "e1f6d774bb00827dfe57af0d4d97367c4548ecff5929c41654ed312ef56d3596",
+    "linkage": "static-pie",
+    "stripped": true
+  },
+  "compatibility_contract": {
+    "codex_payload_parsing": false,
+    "openai_payload_parsing": false,
+    "unknown_routes_preserved": true,
+    "unknown_headers_preserved": true,
+    "unknown_body_fields_preserved": true,
+    "streaming_bytes_preserved": true,
+    "codex_release_requires_connector_release": false
+  },
+  "metrics": {
+    "listen": "127.0.0.1:18786",
+    "protocol_content_parsing": false,
+    "counters": [
+      "active_connections",
+      "accepted_connections",
+      "completed_connections",
+      "rejected_connections",
+      "accept_failures",
+      "relay_failures",
+      "upload_bytes",
+      "download_bytes"
+    ]
+  },
+  "verification": {
+    "unit_tests": {
+      "passed": 4,
+      "failed": 0
+    },
+    "strict_clippy": "PASS",
+    "format": "PASS",
+    "shell_console_tests": "PASS",
+    "static_musl_release_build": "PASS"
+  },
+  "deployment": {
+    "host": "T480",
+    "binary_path": "/home/ubu/.local/bin/nando-connector",
+    "service": "nando-client-connector.service",
+    "listen": "127.0.0.1:18787",
+    "upstream": "192.168.3.94:8787",
+    "compatibility_shim": "127.0.0.1:8787 nginx"
+  }
+}

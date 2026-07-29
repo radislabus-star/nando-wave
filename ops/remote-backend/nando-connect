@@ -91,6 +91,8 @@ render_status() {
       "RELAY FAILURES     " + ((.relay_failures // 0) | tostring),
       "UPTIME SECONDS     " + ((.uptime_seconds // 0) | tostring)
     ' <<<"${metrics}"
+  else
+    printf '\nCONNECTOR TRAFFIC unavailable; run nando-connect restart after active Codex streams finish.\n'
   fi
 }
 
