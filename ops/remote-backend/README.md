@@ -96,6 +96,11 @@ are transactional: the candidate config is validated before replacement, an
 active gateway receives only a graceful reload, and any failed DNS, HTTPS, CPU,
 control, or edge health check restores the previous config and unit.
 
+Fallback traffic uses a two-address IPv4 upstream pool with persistent
+connections. Request bodies up to `1 MiB` stay in the Nginx buffer; larger
+bodies spill to bounded runtime storage under `/run/nando-gateway`, preserving
+replay after a local `418` without putting ordinary request bodies on disk.
+
 Start it explicitly after the internal health checks pass:
 
 ```bash

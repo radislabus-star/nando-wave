@@ -12,6 +12,7 @@ LAN_BIND="${NANDO_REMOTE_LAN_BIND:-}"
 LAN_ALLOW="${NANDO_REMOTE_LAN_ALLOW:-}"
 DNS_RESOLVERS="${NANDO_REMOTE_DNS_RESOLVERS:-}"
 DNS_PROBE_NAME="${NANDO_REMOTE_DNS_PROBE_NAME:-chatgpt.com}"
+UPSTREAM_IPV4S="${NANDO_REMOTE_UPSTREAM_IPV4S:-}"
 RESOLVED_STUB="${NANDO_REMOTE_RESOLVED_STUB:-/run/systemd/resolve/stub-resolv.conf}"
 RESOLVER_FILE="${NANDO_REMOTE_RESOLVER_FILE:-/run/systemd/resolve/resolv.conf}"
 
@@ -30,6 +31,7 @@ Environment:
                                 print the selected resolvers and exit
   NANDO_REMOTE_DNS_RESOLVERS    space-separated IPv4 resolvers
   NANDO_REMOTE_DNS_PROBE_NAME   default: chatgpt.com
+  NANDO_REMOTE_UPSTREAM_IPV4S   two space-separated upstream IPv4 addresses
   NANDO_REMOTE_NGINX_DIR        default: /etc/nando-gateway
   NANDO_REMOTE_SYSTEMD_DIR      default: /etc/systemd/system
 EOF
@@ -73,6 +75,27 @@ discover_dns_resolvers() {
     resolver_file="/etc/resolv.conf"
   fi
   awk '/^nameserver[[:space:]]+/ && !seen[$2]++ {print $2}' "${resolver_file}" \
+    | paste -sd ' ' -
+}
+
+discover_upstream_ipv4s() {
+  local resolver="$1"
+
+  if command -v dig >/dev/null 2>&1; then
+    dig "@${resolver}" "${DNS_PROBE_NAME}" A \
+      +short +time=2 +tries=1 2>/dev/null \
+      | awk '
+          count < 2 && /^[0-9]{1,3}(\.[0-9]{1,3}){3}$/ && !seen[$0]++ {
+            print
+            ++count
+          }
+        ' \
+      | paste -sd ' ' -
+    return
+  fi
+
+  getent ahostsv4 "${DNS_PROBE_NAME}" \
+    | awk 'count < 2 && !seen[$1]++ {print $1; ++count}' \
     | paste -sd ' ' -
 }
 
@@ -127,6 +150,17 @@ fi
 if [[ "${DISCOVER_DNS_ONLY}" == "1" ]]; then
   printf '%s\n' "${DNS_RESOLVERS}"
   exit 0
+fi
+if [[ -z "${UPSTREAM_IPV4S}" ]]; then
+  UPSTREAM_IPV4S="$(discover_upstream_ipv4s "${DNS_RESOLVERS%% *}")"
+fi
+read -r upstream_primary upstream_secondary upstream_extra <<<"${UPSTREAM_IPV4S}"
+if [[ -n "${upstream_extra:-}" ]] \
+  || [[ ! "${upstream_primary:-}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] \
+  || [[ ! "${upstream_secondary:-}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] \
+  || [[ "${upstream_primary}" == "${upstream_secondary}" ]]; then
+  printf '%s\n' "exactly two distinct upstream IPv4 addresses are required" >&2
+  exit 2
 fi
 if ! command -v nginx >/dev/null 2>&1; then
   echo "nginx is not installed" >&2
@@ -201,11 +235,19 @@ sed \
   -e "s#@NANDO_LAN_BIND@#${LAN_BIND}#g" \
   -e "s#@NANDO_LAN_CIDR@#${LAN_ALLOW}#g" \
   -e "s#@NANDO_DNS_RESOLVERS@#${DNS_RESOLVERS}#g" \
+  -e "s#@NANDO_CHATGPT_IPV4_PRIMARY@#${upstream_primary}#g" \
+  -e "s#@NANDO_CHATGPT_IPV4_SECONDARY@#${upstream_secondary}#g" \
+  -e "s#@NANDO_NGINX_DIR@#${NGINX_DIR}#g" \
   "${TEMPLATE}" > "${rendered}"
 
-sudo -n install -d -o root -g root -m 0755 "${NGINX_DIR}" "${SYSTEMD_DIR}"
+sudo -n install -d -o root -g root -m 0755 \
+  "${NGINX_DIR}" \
+  "${NGINX_DIR}/server.d" \
+  "${SYSTEMD_DIR}"
 sudo -n install -d -o www-data -g www-data -m 0750 \
   /run/nando-gateway \
+  /run/nando-gateway/client-body \
+  /run/nando-gateway/proxy \
   /var/lib/nando-gateway \
   /var/lib/nando-gateway/client-body \
   /var/lib/nando-gateway/proxy

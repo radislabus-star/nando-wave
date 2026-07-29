@@ -118,7 +118,7 @@ EOF
 
 cat >"${BIN}/dig" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' 192.0.2.10
+printf '%s\n' 192.0.2.10 192.0.2.11
 EOF
 
 cat >"${BIN}/curl" <<'EOF'

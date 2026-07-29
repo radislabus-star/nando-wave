@@ -24,7 +24,9 @@ http {
         '"upstream_status":"$upstream_status",'
         '"upstream_addr":"$upstream_addr",'
         '"upstream_connect_time":"$upstream_connect_time",'
-        '"upstream_response_time":"$upstream_response_time"}';
+        '"upstream_response_time":"$upstream_response_time",'
+        '"tls_client_verify":"$ssl_client_verify",'
+        '"tls_client_serial":"$ssl_client_serial"}';
 
     map $request_uri $nando_economics_request {
         default 0;
@@ -42,19 +44,24 @@ http {
 
     client_max_body_size 64m;
     client_body_timeout 3600s;
-    client_body_temp_path /var/lib/nando-gateway/client-body 1 2;
-    proxy_temp_path /var/lib/nando-gateway/proxy 1 2;
+    client_body_buffer_size 1m;
+    client_body_temp_path /run/nando-gateway/client-body 1 2;
+    proxy_temp_path /run/nando-gateway/proxy 1 2;
 
     resolver @NANDO_DNS_RESOLVERS@ ipv6=off valid=30s;
     resolver_timeout 5s;
 
-    map $http_upgrade $nando_connection_upgrade {
-        default upgrade;
-        "" close;
+    upstream nando_chatgpt {
+        server @NANDO_CHATGPT_IPV4_PRIMARY@:443 max_fails=3 fail_timeout=5s;
+        server @NANDO_CHATGPT_IPV4_SECONDARY@:443 max_fails=3 fail_timeout=5s;
+        keepalive 64;
+        keepalive_requests 1000;
+        keepalive_timeout 60s;
     }
 
     server {
         listen @NANDO_LAN_BIND@;
+        include @NANDO_NGINX_DIR@/server.d/*.conf;
         server_name _;
 
         allow @NANDO_LAN_CIDR@;
@@ -170,14 +177,12 @@ http {
         }
 
         location @nando_upstream_v2 {
-            set $nando_upstream https://chatgpt.com;
             rewrite ^/v2/(.*)$ /backend-api/codex/$1 break;
-            proxy_pass $nando_upstream;
+            proxy_pass https://nando_chatgpt;
 
             proxy_http_version 1.1;
             proxy_set_header Host chatgpt.com;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection $nando_connection_upgrade;
+            proxy_set_header Connection "";
             proxy_set_header X-Forwarded-For "";
             proxy_set_header X-Real-IP "";
             proxy_set_header Authorization $http_authorization;
@@ -196,18 +201,18 @@ http {
             proxy_connect_timeout 15s;
             proxy_send_timeout 3600s;
             proxy_read_timeout 3600s;
+            proxy_next_upstream error timeout http_502 http_503 http_504;
+            proxy_next_upstream_tries 2;
             send_timeout 3600s;
         }
 
         location @nando_upstream_v1 {
-            set $nando_upstream https://chatgpt.com;
             rewrite ^/v1/(.*)$ /backend-api/codex/$1 break;
-            proxy_pass $nando_upstream;
+            proxy_pass https://nando_chatgpt;
 
             proxy_http_version 1.1;
             proxy_set_header Host chatgpt.com;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection $nando_connection_upgrade;
+            proxy_set_header Connection "";
             proxy_set_header X-Forwarded-For "";
             proxy_set_header X-Real-IP "";
             proxy_set_header Authorization $http_authorization;
@@ -226,6 +231,8 @@ http {
             proxy_connect_timeout 15s;
             proxy_send_timeout 3600s;
             proxy_read_timeout 3600s;
+            proxy_next_upstream error timeout http_502 http_503 http_504;
+            proxy_next_upstream_tries 2;
             send_timeout 3600s;
         }
 
