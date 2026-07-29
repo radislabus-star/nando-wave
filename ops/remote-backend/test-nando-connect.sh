@@ -36,6 +36,7 @@ export PATH="${WORK}/bin:${PATH}"
 export NANDO_CONNECT_SYSTEMCTL_BIN="${WORK}/bin/systemctl-test"
 export NANDO_SERVER_ORIGIN="http://192.168.3.94:8787"
 export NANDO_CONNECTOR_ORIGIN="http://127.0.0.1:8787"
+export NANDO_CONNECT_SKIP_LEGACY_MIGRATION=1
 
 [[ "$("${CONNECTOR}" url)" == "http://127.0.0.1:8787/v1" ]]
 [[ "$("${CONNECTOR}" server-url)" == "http://192.168.3.94:8787/v1" ]]

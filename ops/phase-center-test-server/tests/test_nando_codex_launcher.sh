@@ -35,19 +35,19 @@ assert_argv() {
 
 assert_argv \
   "$(run_launcher exec --ephemeral probe)" \
-  '["-c","model_provider=\"nando_nginx\"","exec","--ephemeral","probe"]'
+  '["-c","model_provider=\"nando_remote\"","exec","--ephemeral","probe"]'
 
 assert_argv \
   "$(run_launcher resume session-id probe)" \
-  '["-c","model_provider=\"nando_nginx\"","resume","session-id","probe"]'
+  '["-c","model_provider=\"nando_remote\"","resume","session-id","probe"]'
 
 assert_argv \
   "$(run_launcher -m gpt-5.6-sol exec probe)" \
-  '["-m","gpt-5.6-sol","-c","model_provider=\"nando_nginx\"","exec","probe"]'
+  '["-m","gpt-5.6-sol","-c","model_provider=\"nando_remote\"","exec","probe"]'
 
 assert_argv \
   "$(run_launcher probe)" \
-  '["-c","model_provider=\"nando_nginx\"","probe"]'
+  '["-c","model_provider=\"nando_remote\"","probe"]'
 
 assert_argv \
   "$(NANDO_CODEX_FORCE_DIRECT=1 run_launcher exec probe)" \

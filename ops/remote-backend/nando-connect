@@ -11,6 +11,11 @@ REMOTE_CPU_HEALTH_URL="${NANDO_REMOTE_CPU_HEALTH_URL:-${SERVER_ORIGIN%/}/cpu-hea
 METRICS_URL="${NANDO_CONNECTOR_METRICS_URL:-http://127.0.0.1:18786/metrics}"
 SERVICE="${NANDO_CONNECTOR_SERVICE:-nando-client-connector.service}"
 SYSTEMCTL="${NANDO_CONNECT_SYSTEMCTL_BIN:-systemctl}"
+LEGACY_SHIM_SERVICE="${NANDO_LEGACY_SHIM_SERVICE:-nando-transport-gateway.service}"
+LEGACY_SHIM_UNIT="${NANDO_LEGACY_SHIM_UNIT:-/etc/systemd/system/nando-transport-gateway.service}"
+LEGACY_SHIM_DROPIN_DIR="${NANDO_LEGACY_SHIM_DROPIN_DIR:-/etc/systemd/system/nando-transport-gateway.service.d}"
+LEGACY_SHIM_DROPIN="${NANDO_LEGACY_SHIM_DROPIN:-${LEGACY_SHIM_DROPIN_DIR}/client-only.conf}"
+COMPATIBILITY_DROPIN="${NANDO_CONNECTOR_COMPATIBILITY_DROPIN:-${HOME}/.config/systemd/user/nando-client-connector.service.d/compatibility.conf}"
 
 usage() {
   printf '%s\n' \
@@ -53,6 +58,27 @@ service_state() {
 
 start_connector() {
   "${SYSTEMCTL}" --user start "${SERVICE}"
+}
+
+migrate_legacy_shim() {
+  [[ "${NANDO_CONNECT_SKIP_LEGACY_MIGRATION:-0}" != "1" ]] || return
+  [[ -e "${COMPATIBILITY_DROPIN}" ]] || return
+
+  printf 'Removing legacy local Nginx shim; connector will listen directly on 127.0.0.1:8787.\n'
+  sudo systemctl disable --now "${LEGACY_SHIM_SERVICE}"
+  unlink "${COMPATIBILITY_DROPIN}"
+  "${SYSTEMCTL}" --user daemon-reload
+
+  if [[ -e "${LEGACY_SHIM_DROPIN}" ]]; then
+    sudo unlink "${LEGACY_SHIM_DROPIN}"
+  fi
+  if [[ -d "${LEGACY_SHIM_DROPIN_DIR}" ]]; then
+    sudo rmdir "${LEGACY_SHIM_DROPIN_DIR}"
+  fi
+  if [[ -e "${LEGACY_SHIM_UNIT}" ]]; then
+    sudo unlink "${LEGACY_SHIM_UNIT}"
+  fi
+  sudo systemctl daemon-reload
 }
 
 render_status() {
@@ -116,6 +142,7 @@ watch_status() {
 command_name="${1:-console}"
 case "${command_name}" in
   console)
+    migrate_legacy_shim
     "${SYSTEMCTL}" --user restart "${SERVICE}"
     watch_status already-started
     ;;
