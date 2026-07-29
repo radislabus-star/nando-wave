@@ -59,6 +59,10 @@ grep -Fq 'UPLOAD BYTES       123' <<<"${status}"
 watch="$(NANDO_CONNECT_WATCH_ONCE=1 "${CONNECTOR}")"
 grep -Fq 'Ctrl+C closes this monitor' <<<"${watch}"
 
+restart="$(NANDO_CONNECT_WATCH_ONCE=1 "${CONNECTOR}" restart)"
+grep -Fq 'LOCAL CONNECTOR  active' <<<"${restart}"
+grep -Fq 'Ctrl+C closes this monitor' <<<"${restart}"
+
 if "${CONNECTOR}" codex >/dev/null 2>&1; then
   printf '%s\n' "nando-connect unexpectedly launched Codex" >&2
   exit 1

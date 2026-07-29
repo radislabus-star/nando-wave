@@ -99,7 +99,9 @@ render_status() {
 }
 
 watch_status() {
-  start_connector
+  if [[ "${1:-start}" == "start" ]]; then
+    start_connector
+  fi
   while :; do
     if [[ -t 1 ]]; then
       printf '\033[2J\033[H'
@@ -129,7 +131,7 @@ case "${command_name}" in
     ;;
   restart)
     "${SYSTEMCTL}" --user restart "${SERVICE}"
-    render_status
+    watch_status already-started
     ;;
   health)
     check_transport
