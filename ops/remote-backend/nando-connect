@@ -2,8 +2,9 @@
 set -euo pipefail
 
 SERVER_ORIGIN="${NANDO_SERVER_ORIGIN:-http://192.168.3.94:8787}"
-BASE_URL="${NANDO_SERVER_BASE_URL:-${SERVER_ORIGIN%/}/v1}"
-HEALTH_URL="${NANDO_SERVER_HEALTH_URL:-${SERVER_ORIGIN%/}/health}"
+CONNECTOR_ORIGIN="${NANDO_CONNECTOR_ORIGIN:-http://127.0.0.1:8787}"
+BASE_URL="${NANDO_CONNECTOR_BASE_URL:-${CONNECTOR_ORIGIN%/}/v1}"
+HEALTH_URL="${NANDO_CONNECTOR_HEALTH_URL:-${CONNECTOR_ORIGIN%/}/health}"
 CODEX_BIN="${NANDO_CONNECT_CODEX_BIN:-codex}"
 
 usage() {
@@ -11,6 +12,7 @@ usage() {
     "Usage:" \
     "  nando-connect health" \
     "  nando-connect url" \
+    "  nando-connect server-url" \
     "  nando-connect env" \
     "  nando-connect codex [codex arguments...]" \
     "  nando-connect [codex arguments...]"
@@ -54,6 +56,9 @@ case "${command_name}" in
     ;;
   url)
     printf '%s\n' "${BASE_URL}"
+    ;;
+  server-url)
+    printf '%s\n' "${SERVER_ORIGIN%/}/v1"
     ;;
   env)
     printf 'export OPENAI_BASE_URL=%q\n' "${BASE_URL}"

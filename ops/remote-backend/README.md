@@ -32,11 +32,12 @@ into a Nando config file:
 ops/remote-backend/nando-connect codex
 ```
 
-The connector checks the expected Nando health contract and supplies an
-ephemeral Codex provider override for `http://192.168.3.94:8787/v1`. Codex
-continues to own the user's local authentication. The connector neither reads
-nor persists tokens. Applications that already manage their own API key can
-print the required base URL environment with:
+The launcher checks the expected Nando health contract through the local
+connector and supplies an ephemeral Codex provider override for
+`http://127.0.0.1:8787/v1`. Codex continues to own the user's local
+authentication. The launcher neither reads nor persists tokens. Applications
+that already manage their own API key can print the required local base URL
+environment with:
 
 ```bash
 ops/remote-backend/nando-connect env
@@ -53,6 +54,11 @@ nando-connector  forwards the local byte stream to the Nando server
 headers, body fields, and streaming frames pass through unchanged, so normal
 Codex releases do not require a connector release. Rebuild it only when the
 Nando transport or security contract changes.
+
+The distributed user service listens directly on `127.0.0.1:8787`. The
+`nando-client-connector.compatibility.override.conf` file is only for a machine
+that must keep an existing Nginx listener on `8787` while forwarding through
+the connector on `18787`.
 
 Build the portable x86-64 Linux artifact on the build host:
 

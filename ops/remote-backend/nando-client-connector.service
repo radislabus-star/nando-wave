@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/nando-connector --listen 127.0.0.1:18787 --upstream 192.168.3.94:8787 --max-connections 64
+ExecStart=%h/.local/bin/nando-connector --listen 127.0.0.1:8787 --upstream 192.168.3.94:8787 --max-connections 64
 Restart=always
 RestartSec=1s
 NoNewPrivileges=true
