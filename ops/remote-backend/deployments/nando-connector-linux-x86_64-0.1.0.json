@@ -1,0 +1,48 @@
+{
+  "schema": "nando.client-connector-release.v1",
+  "version": "0.1.0",
+  "built_at_utc": "2026-07-29T00:17:16Z",
+  "source_commit": "41fe06a2de1c96ce65e49b4e37eda6cb81490557",
+  "toolchain": "rustc 1.97.0",
+  "target": "x86_64-unknown-linux-musl",
+  "artifact": {
+    "name": "nando-connector-linux-x86_64",
+    "size_bytes": 553600,
+    "sha256": "5e1a6a152c0b04da9824e1f2fbca9a834986dd9cdef75080bada691a3ac370e9",
+    "linkage": "static-pie",
+    "stripped": true
+  },
+  "compatibility_contract": {
+    "codex_payload_parsing": false,
+    "openai_payload_parsing": false,
+    "unknown_routes_preserved": true,
+    "unknown_headers_preserved": true,
+    "unknown_body_fields_preserved": true,
+    "streaming_bytes_preserved": true,
+    "codex_release_requires_connector_release": false,
+    "release_triggers": [
+      "nando_transport_contract_change",
+      "tls_or_auth_contract_change",
+      "connector_security_fix"
+    ]
+  },
+  "verification": {
+    "unit_tests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "strict_clippy": "PASS",
+    "format": "PASS",
+    "remote_health": "PASS",
+    "live_client_route": "PASS"
+  },
+  "deployment": {
+    "host": "T480",
+    "binary_path": "/home/ubu/.local/bin/nando-connector",
+    "service": "nando-client-connector.service",
+    "listen": "127.0.0.1:18787",
+    "upstream": "192.168.3.94:8787",
+    "compatibility_shim": "127.0.0.1:8787 nginx",
+    "future_direct_listen": "127.0.0.1:8787"
+  }
+}
