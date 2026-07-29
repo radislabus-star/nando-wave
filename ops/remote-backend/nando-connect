@@ -15,9 +15,9 @@ SYSTEMCTL="${NANDO_CONNECT_SYSTEMCTL_BIN:-systemctl}"
 usage() {
   printf '%s\n' \
     "Usage:" \
-    "  nando-connect                  Start connector and show live status" \
+    "  nando-connect                  Restart connector and show live status" \
     "  nando-connect status           Show status once" \
-    "  nando-connect start|stop|restart" \
+    "  nando-connect start|stop" \
     "  nando-connect health" \
     "  nando-connect url" \
     "  nando-connect server-url" \
@@ -94,7 +94,7 @@ render_status() {
       "UPTIME SECONDS     " + ((.uptime_seconds // 0) | tostring)
     ' <<<"${metrics}"
   else
-    printf '\nCONNECTOR TRAFFIC unavailable; run nando-connect restart after active Codex streams finish.\n'
+    printf '\nCONNECTOR TRAFFIC unavailable; rerun nando-connect after active Codex streams finish.\n'
   fi
 }
 
@@ -113,8 +113,12 @@ watch_status() {
   done
 }
 
-command_name="${1:-watch}"
+command_name="${1:-console}"
 case "${command_name}" in
+  console)
+    "${SYSTEMCTL}" --user restart "${SERVICE}"
+    watch_status already-started
+    ;;
   watch)
     watch_status
     ;;
