@@ -56,7 +56,7 @@ case "${url}" in
   *":18789/health")
     printf '%s\n' '{"ok":true}'
     ;;
-  *":8787/health")
+  "http://192.168.3.94:8787/health")
     printf '%s\n' '{"ok":true,"service":"nando-nginx-gateway"}'
     ;;
   *)
