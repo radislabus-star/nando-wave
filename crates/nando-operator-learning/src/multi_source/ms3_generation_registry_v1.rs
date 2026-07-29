@@ -247,8 +247,14 @@ impl Ms3GenerationRegistryV1 {
             return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
         }
         self.require_successor_allowed(generation_sequence)?;
+        let use_cursor_receipt = report.consumed_topology_cursor_rows > 0;
         let mut receipt = Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
-            schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1.to_owned(),
+            schema: if use_cursor_receipt {
+                MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
+            } else {
+                MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1
+            }
+            .to_owned(),
             receipt_root_sha256: String::new(),
             generation_sequence,
             acquisition_contract_root_sha256: report
@@ -268,11 +274,31 @@ impl Ms3GenerationRegistryV1 {
             blocker: report.blocker.clone(),
             authority_ready: false,
             phase_mutation_allowed: false,
-            raw_scanned_topology_rows: 0,
-            eligible_topology_rows: 0,
-            censored_unattributed_rows: 0,
-            censored_topology_rows: 0,
-            consumed_topology_cursor_rows: 0,
+            raw_scanned_topology_rows: if use_cursor_receipt {
+                report.raw_scanned_topology_rows
+            } else {
+                0
+            },
+            eligible_topology_rows: if use_cursor_receipt {
+                report.eligible_topology_rows
+            } else {
+                0
+            },
+            censored_unattributed_rows: if use_cursor_receipt {
+                report.censored_unattributed_rows
+            } else {
+                0
+            },
+            censored_topology_rows: if use_cursor_receipt {
+                report.censored_topology_rows
+            } else {
+                0
+            },
+            consumed_topology_cursor_rows: if use_cursor_receipt {
+                report.consumed_topology_cursor_rows
+            } else {
+                0
+            },
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
         self.linked_acquisition_failures.push(receipt.clone());
@@ -1037,69 +1063,68 @@ impl Ms3GenerationAcquisitionFailureReceiptV1 {
 impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
     #[must_use]
     pub fn validate(&self) -> bool {
-        matches!(
-            self.schema.as_str(),
-            MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1
-                | MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
-        ) && self.generation_sequence > 0
+        let schema_v1 = self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1;
+        let schema_v2 = self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2;
+        let cursor_receipt_valid = self.raw_scanned_topology_rows > 0
+            && self.raw_scanned_topology_rows >= self.eligible_topology_rows
+            && self.eligible_topology_rows == self.evaluated_topology_rows
+            && self
+                .censored_unattributed_rows
+                .saturating_add(self.censored_topology_rows)
+                == self
+                    .raw_scanned_topology_rows
+                    .saturating_sub(self.eligible_topology_rows)
+            && self.consumed_topology_cursor_rows
+                == self
+                    .topology_watermark_rows
+                    .saturating_add(self.raw_scanned_topology_rows);
+        let blocker_valid = match self.blocker.as_str() {
+            MS3_LINKED_FRAME_ACQUISITION_FAIL => {
+                self.terminal_receipt_rows >= self.evaluated_topology_rows
+                    && (schema_v1 || cursor_receipt_valid)
+            }
+            MS3_CAPTURE_GAP_REPAIR_REQUIRED | MS3_LINKED_EVIDENCE_REUSE => {
+                self.terminal_receipt_rows > 0
+            }
+            MS3_CENSORED_UNATTRIBUTED_PROBE => {
+                schema_v2
+                    && self.raw_scanned_topology_rows > self.eligible_topology_rows
+                    && self.censored_unattributed_rows > 0
+                    && self.censored_topology_rows == 0
+                    && self.terminal_receipt_rows >= self.eligible_topology_rows
+                    && cursor_receipt_valid
+            }
+            MS3_CENSORED_INELIGIBLE_PROBE => {
+                schema_v2
+                    && self.raw_scanned_topology_rows > self.eligible_topology_rows
+                    && self.censored_topology_rows > 0
+                    && self.terminal_receipt_rows >= self.eligible_topology_rows
+                    && cursor_receipt_valid
+            }
+            _ => false,
+        };
+        let schema_payload_valid = schema_v1
+            && self.raw_scanned_topology_rows == 0
+            && self.eligible_topology_rows == 0
+            && self.censored_unattributed_rows == 0
+            && self.censored_topology_rows == 0
+            && self.consumed_topology_cursor_rows == 0
+            || schema_v2
+                && matches!(
+                    self.blocker.as_str(),
+                    MS3_LINKED_FRAME_ACQUISITION_FAIL
+                        | MS3_CENSORED_UNATTRIBUTED_PROBE
+                        | MS3_CENSORED_INELIGIBLE_PROBE
+                );
+        (schema_v1 || schema_v2)
+            && self.generation_sequence > 0
             && valid_nonzero_sha256(&self.receipt_root_sha256)
             && valid_nonzero_sha256(&self.acquisition_contract_root_sha256)
             && valid_nonzero_sha256(&self.acquisition_report_root_sha256)
             && valid_nonzero_sha256(&self.topology_prefix_root_sha256)
             && self.evaluated_topology_rows > 0
-            && match self.blocker.as_str() {
-                MS3_LINKED_FRAME_ACQUISITION_FAIL => {
-                    self.terminal_receipt_rows >= self.evaluated_topology_rows
-                }
-                MS3_CAPTURE_GAP_REPAIR_REQUIRED | MS3_LINKED_EVIDENCE_REUSE => {
-                    self.terminal_receipt_rows > 0
-                }
-                MS3_CENSORED_UNATTRIBUTED_PROBE => {
-                    self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
-                        && self.raw_scanned_topology_rows > self.eligible_topology_rows
-                        && self.eligible_topology_rows == self.evaluated_topology_rows
-                        && self.censored_unattributed_rows > 0
-                        && self.censored_topology_rows == 0
-                        && self.censored_unattributed_rows
-                            == self
-                                .raw_scanned_topology_rows
-                                .saturating_sub(self.eligible_topology_rows)
-                        && self.terminal_receipt_rows >= self.eligible_topology_rows
-                        && self.consumed_topology_cursor_rows
-                            == self
-                                .topology_watermark_rows
-                                .saturating_add(self.raw_scanned_topology_rows)
-                }
-                MS3_CENSORED_INELIGIBLE_PROBE => {
-                    self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
-                        && self.raw_scanned_topology_rows > self.eligible_topology_rows
-                        && self.eligible_topology_rows == self.evaluated_topology_rows
-                        && self.censored_topology_rows > 0
-                        && self
-                            .censored_unattributed_rows
-                            .saturating_add(self.censored_topology_rows)
-                            == self
-                                .raw_scanned_topology_rows
-                                .saturating_sub(self.eligible_topology_rows)
-                        && self.terminal_receipt_rows >= self.eligible_topology_rows
-                        && self.consumed_topology_cursor_rows
-                            == self
-                                .topology_watermark_rows
-                                .saturating_add(self.raw_scanned_topology_rows)
-                }
-                _ => false,
-            }
-            && (self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1
-                && self.raw_scanned_topology_rows == 0
-                && self.eligible_topology_rows == 0
-                && self.censored_unattributed_rows == 0
-                && self.censored_topology_rows == 0
-                && self.consumed_topology_cursor_rows == 0
-                || self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
-                    && matches!(
-                        self.blocker.as_str(),
-                        MS3_CENSORED_UNATTRIBUTED_PROBE | MS3_CENSORED_INELIGIBLE_PROBE
-                    ))
+            && blocker_valid
+            && schema_payload_valid
             && self.closure_capture_sequence > 0
             && self.generated_at_unix > 0
             && !self.authority_ready

@@ -170,10 +170,25 @@ impl Ms3GenerationLifecycleRuntime {
             .ok_or_else(|| "ms3_lifecycle_generation_overflow".to_owned())?;
         let (acquisition_path, version_space_path) =
             generation_paths(&self.root, next_generation_sequence);
-        let successor_cursor_rows = if let Some(failure) =
-            linked_failure.filter(|failure| failure.consumed_topology_cursor_rows > 0)
-        {
-            let cursor = usize::try_from(failure.consumed_topology_cursor_rows)
+        let successor_cursor_rows = if let Some(failure) = linked_failure {
+            let terminal_report = current_acquisition
+                .terminal_report()
+                .ok_or_else(|| "ms3_lifecycle_successor_terminal_report_missing".to_owned())?;
+            if terminal_report.acquisition_contract.contract_root_sha256
+                != failure.acquisition_contract_root_sha256
+                || terminal_report.report_root_sha256 != failure.acquisition_report_root_sha256
+            {
+                return Err("ms3_lifecycle_successor_terminal_report_binding_invalid".to_owned());
+            }
+            let report_cursor = current_acquisition
+                .consumed_topology_cursor_rows()
+                .ok_or_else(|| "ms3_lifecycle_successor_cursor_missing".to_owned())?;
+            if failure.consumed_topology_cursor_rows > 0
+                && failure.consumed_topology_cursor_rows != report_cursor
+            {
+                return Err("ms3_lifecycle_successor_cursor_binding_invalid".to_owned());
+            }
+            let cursor = usize::try_from(report_cursor)
                 .map_err(|_| "ms3_lifecycle_successor_cursor_range".to_owned())?;
             if cursor > topology_archive.len()
                 || topology_archive.bridge_sequence_at_cursor(cursor)? != closure_capture_sequence
@@ -1378,6 +1393,67 @@ mod tests {
         assert_eq!(lifecycle.manifest().active_generation_sequence, 1);
         assert!(!root.join(GENERATIONS_DIRECTORY).exists());
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    #[ignore = "requires NANDO_MS3_TERMINAL_V1_FIXTURE pointing to a disposable live-state copy"]
+    fn terminal_v1_fixture_uses_its_bound_report_cursor_without_reordering_archive() {
+        let fixture = PathBuf::from(
+            std::env::var("NANDO_MS3_TERMINAL_V1_FIXTURE").expect("fixture directory"),
+        );
+        let topology_archive =
+            MultiSourceTopologyArchive::open(&fixture.join("pre-action-topology-archive-v1"))
+                .expect("topology archive");
+        let learning_root = fixture.join("linked-frame-acquisition-v1");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_secs();
+        let (mut lifecycle, generation) = Ms3GenerationLifecycleRuntime::open(
+            &learning_root,
+            &topology_archive,
+            now,
+            256,
+            86_400,
+        )
+        .expect("terminal lifecycle");
+        let active_generation = lifecycle.manifest().active_generation_sequence;
+        let failure = generation
+            .frozen
+            .generation_registry()
+            .linked_acquisition_failure(active_generation)
+            .expect("linked acquisition failure");
+        assert_eq!(
+            failure.consumed_topology_cursor_rows, 0,
+            "fixture must exercise the persisted V1 receipt"
+        );
+        let expected_cursor = generation
+            .acquisition
+            .consumed_topology_cursor_rows()
+            .expect("bound terminal report cursor");
+        let successor = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                now.saturating_add(1),
+                &generation.acquisition,
+                &generation.frozen,
+            )
+            .expect("successor from V1 receipt");
+        assert_eq!(
+            successor.acquisition.generation_sequence(),
+            active_generation.saturating_add(1)
+        );
+        assert_eq!(
+            successor.acquisition.contract().topology_watermark_rows,
+            expected_cursor
+        );
+        assert!(!successor.frozen.generation_registry().authority_ready);
+        assert!(
+            !successor
+                .frozen
+                .generation_registry()
+                .phase_mutation_allowed
+        );
     }
 
     #[test]

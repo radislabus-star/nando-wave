@@ -1379,6 +1379,22 @@ fn linked_frame_acquisition_counts_only_eligible_rows_toward_the_budget() {
         report.verdict,
         Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
     );
+    let mut registry = Ms3GenerationRegistryV1::new();
+    let receipt = registry
+        .seal_linked_acquisition_failure(1, &report, report.consumed_capture_sequence)
+        .expect("durable cursor-bound acquisition failure");
+    assert_eq!(
+        receipt.schema,
+        MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
+    );
+    assert_eq!(
+        receipt.consumed_topology_cursor_rows,
+        report.consumed_topology_cursor_rows
+    );
+    assert!(receipt.validate());
+    let bytes = registry.canonical_bytes().expect("registry bytes");
+    let restored = Ms3GenerationRegistryV1::from_canonical_bytes(&bytes).expect("registry restore");
+    assert_eq!(restored, registry);
 }
 
 #[test]

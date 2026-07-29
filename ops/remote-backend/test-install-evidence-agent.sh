@@ -64,9 +64,12 @@ cat >"${BIN}/systemd-analyze" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "${1:-}" == "--user" && "${2:-}" == "verify" ]]
-grep -Fq "nando-evidence-agent" "${3}"
-grep -Fq "ReadOnlyPaths=%h/.codex/sessions" "${3}"
-grep -Fq "ReadWritePaths=%h/.local/state/nando-evidence-agent" "${3}"
+unit="${3}"
+grep -Fq "nando-evidence-agent" "${unit}"
+grep -Fq "ReadOnlyPaths=%h/.codex/sessions" "${unit}"
+grep -Fq "ReadWritePaths=%h/.local/state/nando-evidence-agent" "${unit}"
+exec_path="$(sed -n 's/^ExecStart=\([^ ]*\).*/\1/p' "${unit}")"
+[[ -x "${exec_path}" ]]
 EOF
 
 chmod +x "${CANDIDATE}" "${BIN}/systemctl" "${BIN}/systemd-analyze"

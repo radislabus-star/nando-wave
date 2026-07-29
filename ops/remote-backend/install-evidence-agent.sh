@@ -79,6 +79,7 @@ install -d -m 0755 "$(dirname "${INSTALL_BIN}")"
 work="$(mktemp -d)"
 candidate_binary="${work}/nando-evidence-agent"
 candidate_unit="${work}/nando-evidence-agent.service"
+verify_unit="${work}/nando-evidence-agent.verify.service"
 check_state="${work}/check-state"
 backup_binary="${work}/previous-binary"
 backup_unit="${work}/previous-unit"
@@ -134,6 +135,9 @@ install -m 0755 "${BINARY_SOURCE}" "${candidate_binary}"
 sed \
   -e "s#http://192\\.168\\.3\\.94:8787#${REMOTE_ORIGIN}#g" \
   "${UNIT_SOURCE}" > "${candidate_unit}"
+sed \
+  -e "s#%h/.local/bin/nando-evidence-agent#${candidate_binary}#g" \
+  "${candidate_unit}" > "${verify_unit}"
 
 mkdir -m 0700 "${check_state}"
 "${candidate_binary}" \
@@ -142,7 +146,7 @@ mkdir -m 0700 "${check_state}"
   --key-file "${KEY_FILE}" \
   --state-dir "${check_state}" \
   --check >/dev/null
-systemd-analyze --user verify "${candidate_unit}"
+systemd-analyze --user verify "${verify_unit}"
 
 if [[ -f "${INSTALL_BIN}" ]]; then
   cp -a "${INSTALL_BIN}" "${backup_binary}"
