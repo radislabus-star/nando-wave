@@ -322,6 +322,13 @@ pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
     used_evidence_roots: &BTreeSet<String>,
 ) -> Ms3LinkedFrameAcquisitionReportV1 {
     let new_topology_rows_seen = u64::try_from(new_topologies.len()).unwrap_or(u64::MAX);
+    let deadline_nanos = contract.deadline_unix.saturating_mul(1_000_000_000);
+    terminals
+        .retain(|receipt| receipt.validate() && receipt.completed_at_unix_nanos <= deadline_nanos);
+    let terminal_request_ids = terminals
+        .iter()
+        .map(|receipt| receipt.request_event_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
     let mut raw_topologies = Vec::new();
     let mut eligible_topologies = Vec::new();
     let mut ineligible_reason_counts =
@@ -334,7 +341,12 @@ pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
         {
             break;
         }
-        match super::validate_pre_action_topology_join_eligibility_v1(&topology) {
+        match acquisition_topology_eligibility(
+            &topology,
+            &terminal_request_ids,
+            generated_at_unix,
+            contract.receipt_lag_slo_seconds(),
+        ) {
             Ok(()) => eligible_topologies.push(topology.clone()),
             Err(reason) => {
                 *ineligible_reason_counts.entry(reason).or_default() += 1;
@@ -350,7 +362,6 @@ pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
         .iter()
         .map(|row| row.structure.turn_intent_id_sha256.as_str())
         .collect::<BTreeSet<_>>();
-    let deadline_nanos = contract.deadline_unix.saturating_mul(1_000_000_000);
     frames.retain(|frame| {
         intent_ids.contains(frame.client_intent_id_sha256.as_str())
             && frame.observed_at_unix_nanos <= deadline_nanos
@@ -429,6 +440,12 @@ pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
         .get(&super::MultiSourceJoinCensoredReasonV1::TopologyCensored)
         .copied()
         .unwrap_or(0);
+    let censored_topology_rows = censored_topology_rows.saturating_add(
+        ineligible_reason_counts
+            .get(&super::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable)
+            .copied()
+            .unwrap_or(0),
+    );
     let ineligible_rows = raw_scanned_topology_rows.saturating_sub(eligible_topology_rows);
     let operationally_censored_rows =
         censored_unattributed_rows.saturating_add(censored_topology_rows);
@@ -436,18 +453,24 @@ pub fn build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
         raw_topologies
             .iter()
             .filter(|topology| {
-                matches!(
-                    super::validate_pre_action_topology_join_eligibility_v1(topology),
+                match acquisition_topology_eligibility(
+                    topology,
+                    &terminal_request_ids,
+                    generated_at_unix,
+                    contract.receipt_lag_slo_seconds(),
+                ) {
+                    Err(super::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable) => true,
                     Err(
                         super::MultiSourceJoinCensoredReasonV1::ProviderIdentityUnproven
-                            | super::MultiSourceJoinCensoredReasonV1::TopologyCensored
-                    )
-                ) && topology.captured_at_unix_ms.is_some_and(|captured_at| {
-                    generated_at_unix
-                        .saturating_mul(1_000)
-                        .saturating_sub(captured_at)
-                        >= contract.receipt_lag_slo_seconds().saturating_mul(1_000)
-                })
+                        | super::MultiSourceJoinCensoredReasonV1::TopologyCensored,
+                    ) => topology.captured_at_unix_ms.is_some_and(|captured_at| {
+                        generated_at_unix
+                            .saturating_mul(1_000)
+                            .saturating_sub(captured_at)
+                            >= contract.receipt_lag_slo_seconds().saturating_mul(1_000)
+                    }),
+                    _ => false,
+                }
             })
             .count(),
     )
@@ -546,6 +569,26 @@ fn request_snapshot(
         provider_bound_by_construction: true,
         pre_action_context_persisted: true,
     }
+}
+
+fn acquisition_topology_eligibility(
+    topology: &PreActionTopologyAuditRowV1,
+    terminal_request_ids: &BTreeSet<String>,
+    generated_at_unix: u64,
+    receipt_lag_slo_seconds: u64,
+) -> Result<(), super::MultiSourceJoinCensoredReasonV1> {
+    super::validate_pre_action_topology_join_eligibility_v1(topology)?;
+    if !terminal_request_ids.contains(&topology.structure.request_event_id_sha256)
+        && topology.captured_at_unix_ms.is_some_and(|captured_at| {
+            generated_at_unix
+                .saturating_mul(1_000)
+                .saturating_sub(captured_at)
+                >= receipt_lag_slo_seconds.saturating_mul(1_000)
+        })
+    {
+        return Err(super::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable);
+    }
+    Ok(())
 }
 
 impl Ms3LinkedFrameReceiptV1 {
@@ -792,6 +835,14 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
                         .get(&super::MultiSourceJoinCensoredReasonV1::TopologyCensored)
                         .copied()
                         .unwrap_or(0)
+                        .saturating_add(
+                            self.ineligible_reason_counts
+                                .get(
+                                    &super::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable,
+                                )
+                                .copied()
+                                .unwrap_or(0),
+                        )
                 && self.consumed_topology_cursor_rows
                     == self
                         .acquisition_contract

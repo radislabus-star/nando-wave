@@ -20,6 +20,7 @@ pub enum MultiSourceJoinCensoredReasonV1 {
     LegacyOrderingUnproven,
     ProviderIdentityUnproven,
     TopologyCensored,
+    TerminalReceiptUnavailable,
     MissingTeacherAction,
     MissingVerifierReceipt,
     IdentityMismatch,

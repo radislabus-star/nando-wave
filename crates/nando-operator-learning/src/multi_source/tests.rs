@@ -1398,6 +1398,44 @@ fn linked_frame_acquisition_counts_only_eligible_rows_toward_the_budget() {
 }
 
 #[test]
+fn stale_missing_terminal_is_censored_without_becoming_negative_evidence() {
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract_v2(2, 4),
+        10,
+        vec![
+            t1_topology_row("stalled", "request-stalled", "session-stalled", 1, 1_000),
+            t1_topology_row("eligible-a", "request-eligible-a", "session-a", 2, 2_000),
+            t1_topology_row("eligible-b", "request-eligible-b", "session-b", 3, 3_000),
+        ],
+        Vec::new(),
+        vec![
+            terminal("request-eligible-a", 1_990, 2_100),
+            terminal("request-eligible-b", 2_990, 3_100),
+        ],
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.raw_scanned_topology_rows, 3);
+    assert_eq!(report.eligible_topology_rows, 2);
+    assert_eq!(report.terminal_receipt_rows, 2);
+    assert_eq!(report.censored_topology_rows, 1);
+    assert_eq!(
+        report
+            .ineligible_reason_counts
+            .get(&MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable),
+        Some(&1)
+    );
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+    );
+    assert_eq!(report.blocker, MS3_LINKED_FRAME_ACQUISITION_FAIL);
+    assert!(report.receipts.is_empty());
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
+}
+
+#[test]
 fn unattributed_raw_budget_closes_as_censor_and_restarts_byte_identically() {
     let report = build_ms3_linked_frame_acquisition_report_v1(
         acquisition_contract(4, 60),
