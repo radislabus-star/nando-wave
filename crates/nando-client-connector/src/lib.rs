@@ -112,9 +112,7 @@ pub fn serve(
             eprintln!("nando-connector: connection limit reached");
             continue;
         }
-        stats
-            .accepted_connections
-            .fetch_add(1, Ordering::Relaxed);
+        stats.accepted_connections.fetch_add(1, Ordering::Relaxed);
 
         let connection_stats = Arc::clone(&stats);
         let connection_config = config.clone();
@@ -285,9 +283,7 @@ struct ConnectionGuard(Arc<ConnectorStats>);
 impl Drop for ConnectionGuard {
     fn drop(&mut self) {
         self.0.active_connections.fetch_sub(1, Ordering::AcqRel);
-        self.0
-            .completed_connections
-            .fetch_add(1, Ordering::Relaxed);
+        self.0.completed_connections.fetch_add(1, Ordering::Relaxed);
     }
 }
 
