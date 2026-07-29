@@ -5,7 +5,7 @@ use nando_operator_learning::{
 };
 use serde::Serialize;
 
-use crate::ms3_receipt_health::Ms3ReceiptHealthReportV1;
+use crate::ms3_receipt_health::{Ms3ReceiptHealthReportV1, Ms3ReceiptHealthStatusV1};
 
 pub(super) const MS3_CAPTURE_STALL_LAG_SECONDS_V1: u64 = 300;
 
@@ -18,6 +18,7 @@ pub(super) enum Ms3CaptureHealthStatusV1 {
     WaitingForTopology,
     CaptureProgress,
     CaptureStalled,
+    ReceiptStalled,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -124,6 +125,8 @@ pub(super) fn build_ms3_capture_health_report_v1(
         Ms3CaptureHealthStatusV1::EvidenceUnavailable
     } else if acquisition_closed {
         Ms3CaptureHealthStatusV1::AcquisitionClosed
+    } else if receipt.status == Ms3ReceiptHealthStatusV1::ReceiptStalled {
+        Ms3CaptureHealthStatusV1::ReceiptStalled
     } else if ordinary_intents_observed == 0 {
         Ms3CaptureHealthStatusV1::WaitingForOrdinaryTraffic
     } else if topology_delta_rows > 0 {
@@ -140,10 +143,11 @@ pub(super) fn build_ms3_capture_health_report_v1(
         Ms3CaptureHealthStatusV1::WaitingForTopology => "topology_ingestion_pending",
         Ms3CaptureHealthStatusV1::CaptureProgress => "",
         Ms3CaptureHealthStatusV1::CaptureStalled => "CAPTURE_STALLED",
+        Ms3CaptureHealthStatusV1::ReceiptStalled => "RECEIPT_STALLED",
     };
 
     Ms3CaptureHealthReportV1 {
-        schema: "nando.ms3-capture-health.v1",
+        schema: "nando.ms3-capture-health.v2",
         sampled_at_unix,
         acquisition_contract_root_sha256: contract.contract_root_sha256.clone(),
         acquisition_opened_at_unix: contract.opened_at_unix,
@@ -164,7 +168,10 @@ pub(super) fn build_ms3_capture_health_report_v1(
         receipt,
         status,
         blocker,
-        operational_repair_allowed: status == Ms3CaptureHealthStatusV1::CaptureStalled,
+        operational_repair_allowed: matches!(
+            status,
+            Ms3CaptureHealthStatusV1::CaptureStalled | Ms3CaptureHealthStatusV1::ReceiptStalled
+        ),
         scientific_verdict_unchanged: true,
         phase_update_allowed: false,
         authority_ready: false,

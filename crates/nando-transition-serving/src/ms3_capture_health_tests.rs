@@ -4,7 +4,9 @@ use nando_operator_kernel::sha256_bytes;
 use nando_operator_learning::{OpportunityIntentAuditRowV1, ReducibilityClass};
 
 use super::*;
-use crate::ms3_receipt_health::{Ms3ReceiptHealthStatusV1, build_ms3_receipt_health_report_v1};
+use crate::ms3_receipt_health::{
+    Ms3ReceiptHealthStatusV1, Ms3ReceiptTopologyObservationV1, build_ms3_receipt_health_report_v1,
+};
 
 fn contract() -> Ms3LinkedFrameAcquisitionContractV1 {
     Ms3LinkedFrameAcquisitionContractV1::seal(sha256_bytes(b"prefix"), 10, 1_000, 256, 86_400)
@@ -24,6 +26,19 @@ fn ordinary(observed_at_unix: u64, input_tokens: u64) -> OpportunityIntentAuditR
 
 fn receipt() -> Ms3ReceiptHealthReportV1 {
     build_ms3_receipt_health_report_v1(1_000, false, &[], &BTreeSet::new())
+}
+
+fn stalled_receipt() -> Ms3ReceiptHealthReportV1 {
+    build_ms3_receipt_health_report_v1(
+        1_310,
+        false,
+        &[Ms3ReceiptTopologyObservationV1 {
+            topology_root_sha256: sha256_bytes(b"stalled-topology"),
+            request_event_id_sha256: sha256_bytes(b"stalled-request"),
+            captured_at_unix_ms: Some(1_010_000),
+        }],
+        &BTreeSet::new(),
+    )
 }
 
 fn topology(current_rows: u64, observed_at_unix: &[u64]) -> Ms3CaptureTopologyProgressV1<'_> {
@@ -86,6 +101,31 @@ fn any_post_watermark_topology_is_capture_progress() {
     assert_eq!(report.status, Ms3CaptureHealthStatusV1::CaptureProgress);
     assert_eq!(report.topology_delta_rows, 1);
     assert_eq!(report.blocker, "");
+}
+
+#[test]
+fn receipt_stall_overrides_generic_capture_progress() {
+    let report = build_ms3_capture_health_report_v1(
+        &contract(),
+        1_310,
+        topology(11, &[1_010]),
+        false,
+        Some(&[ordinary(1_010, 13)]),
+        Ms3CaptureOperationalCountersV1::default(),
+        stalled_receipt(),
+    );
+
+    assert_eq!(report.schema, "nando.ms3-capture-health.v2");
+    assert_eq!(report.status, Ms3CaptureHealthStatusV1::ReceiptStalled);
+    assert_eq!(report.blocker, "RECEIPT_STALLED");
+    assert_eq!(
+        report.receipt.status,
+        Ms3ReceiptHealthStatusV1::ReceiptStalled
+    );
+    assert!(report.operational_repair_allowed);
+    assert!(report.scientific_verdict_unchanged);
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
 }
 
 #[test]

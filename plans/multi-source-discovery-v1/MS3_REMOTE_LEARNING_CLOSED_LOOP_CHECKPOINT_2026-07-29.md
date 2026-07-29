@@ -200,6 +200,10 @@ frozen raw scan. On the same immutable G25 contract it reports those missing
 terminal receipts as `RECEIPT_STALLED`; it does not alter the acquisition
 report, watermark, deadline, authority, or phase memory.
 
+Capture-health schema V2 also propagates that receipt status to its top-level
+status and `operational_repair_allowed` flag. A healthy topology counter can no
+longer mask a stalled topology-to-terminal edge as generic `CAPTURE_PROGRESS`.
+
 New generations use acquisition contract V3:
 
 ```text
@@ -227,7 +231,7 @@ cargo check --workspace --all-targets               PASS
 cargo test -p nando-operator-learning
   316 unit + 1 integration                          PASS
 cargo test -p nando-transition-serving
-  160 unit PASS / 4 explicit ignored
+  161 unit PASS / 4 explicit ignored
   5 Evidence Agent tests                            PASS
   remaining integration targets                    PASS
 connector tests 9/9                                PASS
