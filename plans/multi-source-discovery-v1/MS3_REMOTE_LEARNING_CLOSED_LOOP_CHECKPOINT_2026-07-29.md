@@ -235,6 +235,11 @@ real Nginx terminal row and one parsed archive record before the repair is
 accepted. The 180 historical G25 gaps remain censored operational history;
 they are not reconstructed or used as negative evidence.
 
+Live verification produced HTTP `418`, appended exactly one JSONL row, and
+grew the fixed-width terminal archive by exactly 82 bytes. The controlled
+request added zero topology rows. Nginx master PID `682430` and hot serving PID
+`699578` remained unchanged across the graceful reload.
+
 ## Verification
 
 All Rust compilation, tests, and Clippy for the changed crates ran on the
@@ -295,11 +300,11 @@ release build on mini-PC                         DONE
 -> deploy full route-receipt decoder            DONE
 -> update remote control scope                  DONE
 -> wait for active connector connections = 0    ACTIVE
--> transactional connector activation           QUEUED
+-> transactional connector activation           DONE
 -> observe first ordinary route-bound frame      PENDING
 -> expose G25 stale terminal gaps as RECEIPT_STALLED
                                                 DEPLOYED
--> restore internal hot-only terminal logging    READY TO DEPLOY
+-> restore internal hot-only terminal logging    DEPLOYED
 -> create V3 eligibility contract only at next successor
                                                 PENDING
 -> preserve authority=false until normal MS3 future proof
@@ -312,7 +317,8 @@ The installed local Evidence Agent is SHA-256
 `a849b3578ecaa87cf233082a543c8465cc1d0737b94a07a824b51c3536a1a667`.
 The staged static connector is SHA-256
 `af597b3ac93f06d2ba8d9968a62ce1b341b81514248c8908b07bd0c137c0b760`.
-The active old connector PID remained `161091` throughout this checkpoint.
+After all old streams drained naturally, that exact connector became active as
+PID `982927`. No live connection was stopped for activation.
 
 Any failed learner, control, agent, or connector health check restores the
 previous component. The drain-aware connector job returns without modification
