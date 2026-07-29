@@ -45,6 +45,7 @@ pub(crate) struct BridgeView {
     pub(crate) opportunity_produced_sequence: u64,
     pub(crate) opportunity_consumed_sequence: u64,
     pub(crate) opportunity_counter_epoch_match: bool,
+    pub(crate) opportunity_counter_epoch_reason: String,
     pub(crate) producer_counter_started_after_sequence: u64,
     pub(crate) consumer_counter_started_after_sequence: u64,
     pub(crate) hot_started_at_unix_ms: u64,
@@ -92,15 +93,30 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         pointer_u64(hot, "/opportunity/producer_counter_started_after_sequence");
     let consumer_counter_started_after_sequence =
         pointer_u64(cold, "/opportunity/consumer_counter_started_after_sequence");
-    let opportunity_counter_epoch_match = hot
+    let producer_counter_watermark_present = hot
         .pointer("/opportunity/producer_counter_started_after_sequence")
         .and_then(Value::as_u64)
-        .is_some()
-        && cold
-            .pointer("/opportunity/consumer_counter_started_after_sequence")
-            .and_then(Value::as_u64)
-            .is_some()
-        && producer_counter_started_after_sequence == consumer_counter_started_after_sequence;
+        .is_some();
+    let consumer_counter_watermark_present = cold
+        .pointer("/opportunity/consumer_counter_started_after_sequence")
+        .and_then(Value::as_u64)
+        .is_some();
+    let opportunity_produced_sequence = pointer_u64(hot, "/opportunity/producer_last_sequence");
+    let opportunity_consumed_sequence = pointer_u64(cold, "/opportunity/consumer_last_sequence");
+    let empty_spool_sequence_divergence = opportunity_pending == 0
+        && opportunity_inflight == 0
+        && opportunity_produced_sequence != opportunity_consumed_sequence;
+    let (opportunity_counter_epoch_match, opportunity_counter_epoch_reason) =
+        if !producer_counter_watermark_present || !consumer_counter_watermark_present {
+            (false, "counter_watermark_missing")
+        } else if producer_counter_started_after_sequence != consumer_counter_started_after_sequence
+        {
+            (false, "counter_watermark_mismatch")
+        } else if empty_spool_sequence_divergence {
+            (false, "empty_spool_sequence_divergence")
+        } else {
+            (true, "common_counter_epoch")
+        };
     BridgeView {
         hot_available,
         cold_available,
@@ -125,9 +141,10 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         join_attempts: pointer_u64(cold, "/request_learning/lookup_attempts"),
         join_hits: pointer_u64(cold, "/request_learning/lookup_hits"),
         join_misses: pointer_u64(cold, "/request_learning/lookup_misses"),
-        opportunity_produced_sequence: pointer_u64(hot, "/opportunity/producer_last_sequence"),
-        opportunity_consumed_sequence: pointer_u64(cold, "/opportunity/consumer_last_sequence"),
+        opportunity_produced_sequence,
+        opportunity_consumed_sequence,
         opportunity_counter_epoch_match,
+        opportunity_counter_epoch_reason: opportunity_counter_epoch_reason.to_owned(),
         producer_counter_started_after_sequence,
         consumer_counter_started_after_sequence,
         hot_started_at_unix_ms,
@@ -855,6 +872,7 @@ const TEMPLATE: &str = r#"
     const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
     const opportunityLag = backlog.events ?? bridge.opportunity_pending;
     const tokenLagComparable = liveIngestion.counter_epoch_match ?? bridge.opportunity_counter_epoch_match === true;
+    const counterEpochReason = liveIngestion.counter_epoch_reason ?? bridge.opportunity_counter_epoch_reason ?? "";
     const receivedTokens = received.input_tokens ?? bridge.request_tokens;
     const receivedRequests = received.requests ?? bridge.request_events;
     const receivedSequence = received.sequence ?? bridge.opportunity_produced_sequence;
@@ -866,8 +884,8 @@ const TEMPLATE: &str = r#"
     const requestCounterLag = tokenLagComparable ? counterDelta.requests ?? Math.max(0, receivedRequests - appliedRequests) : 0;
     text("ingestion-received", number.format(receivedTokens));
     text("ingestion-received-events", `${number.format(receivedRequests)} requests · seq ${number.format(receivedSequence)}`);
-    text("ingestion-applied", number.format(appliedTokens));
-    text("ingestion-applied-events", `${number.format(appliedRequests)} requests · seq ${number.format(appliedSequence)}`);
+    text("ingestion-applied", tokenLagComparable ? number.format(appliedTokens) : "НЕСОПОСТАВИМО");
+    text("ingestion-applied-events", tokenLagComparable ? `${number.format(appliedRequests)} requests · seq ${number.format(appliedSequence)}` : `consumer seq ${number.format(appliedSequence)} · отдельная эпоха`);
     text("ingestion-backlog", `${number.format(opportunityLag)} events`);
     text("ingestion-inflight", `${number.format(backlog.inflight_events ?? bridge.opportunity_inflight)} inflight входят в durable backlog`);
     stateClass("ingestion-backlog-cell", `ingestion-cell backlog ${!tokenLagComparable ? "invalid" : opportunityLag === 0 ? "clear" : ""}`);
@@ -876,12 +894,16 @@ const TEMPLATE: &str = r#"
       ? tokenLag > 0
         ? `${number.format(requestCounterLag)} request ещё не отражён в cold consumer counter`
         : "producer и consumer counters совпадают"
-      : "hot/cold перезапущены в разные моменты");
+      : counterEpochReason === "empty_spool_sequence_divergence"
+        ? "durable backlog пуст, cold counter потерял предыдущую эпоху при restart"
+        : "hot/cold counters принадлежат разным эпохам");
     text("ingestion-epoch", tokenLagComparable
       ? countersReconciled
         ? `COMMON COUNTER EPOCH · AFTER SEQ ${number.format(bridge.producer_counter_started_after_sequence)}`
         : `COMMON COUNTER EPOCH · COUNTERS RECONCILING ${number.format(requestCounterLag)} REQUEST`
-      : `COUNTER EPOCH SPLIT · HOT AFTER ${number.format(bridge.producer_counter_started_after_sequence)} / COLD AFTER ${number.format(bridge.consumer_counter_started_after_sequence)}`);
+      : counterEpochReason === "empty_spool_sequence_divergence"
+        ? `COUNTER EPOCH SPLIT · EMPTY-SPOOL RESTART · PRODUCER SEQ ${number.format(receivedSequence)} / CONSUMER SEQ ${number.format(appliedSequence)}`
+        : `COUNTER EPOCH SPLIT · HOT AFTER ${number.format(bridge.producer_counter_started_after_sequence)} / COLD AFTER ${number.format(bridge.consumer_counter_started_after_sequence)}`);
     stateClass("ingestion-epoch", `overview-rule ${tokenLagComparable ? countersReconciled ? "good" : "" : "warning"}`);
     text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses} · OPEN ${joinOpen}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures); text("historical-false-accepts", miner.historical_completed_false_accepts || 0); text("historical-parity-mismatches", miner.historical_completed_parity_failures || 0);
@@ -946,6 +968,7 @@ mod tests {
                 opportunity_produced_sequence: 45,
                 opportunity_consumed_sequence: 44,
                 opportunity_counter_epoch_match: true,
+                opportunity_counter_epoch_reason: "common_counter_epoch".to_owned(),
                 producer_counter_started_after_sequence: 21,
                 consumer_counter_started_after_sequence: 21,
                 hot_started_at_unix_ms: 1_000,
@@ -992,6 +1015,41 @@ mod tests {
         });
         let view = bridge_view(&hot, &cold);
         assert_eq!(view.opportunity_pending, 0);
+    }
+
+    #[test]
+    fn empty_spool_sequence_divergence_invalidates_counter_epoch() {
+        let hot = json!({
+            "ok": true,
+            "opportunity": {
+                "producer_last_sequence": 8_294,
+                "producer_counter_started_after_sequence": 0,
+                "producer_request_events": 4_147,
+                "producer_request_input_tokens": 775_498_232,
+                "pending_events": 0
+            }
+        });
+        let cold = json!({
+            "ok": true,
+            "opportunity": {
+                "consumer_last_sequence": 0,
+                "consumer_counter_started_after_sequence": 0,
+                "consumer_request_events": 0,
+                "consumer_request_input_tokens": 0,
+                "consumer_inflight_events": 0,
+                "pending_events": 0
+            }
+        });
+
+        let view = bridge_view(&hot, &cold);
+
+        assert!(!view.opportunity_counter_epoch_match);
+        assert_eq!(
+            view.opportunity_counter_epoch_reason,
+            "empty_spool_sequence_divergence"
+        );
+        assert_eq!(view.opportunity_pending, 0);
+        assert_eq!(view.opportunity_inflight, 0);
     }
 
     #[test]

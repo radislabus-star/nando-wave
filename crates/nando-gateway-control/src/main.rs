@@ -1220,8 +1220,13 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                 "input_tokens": miner_unresolved_tokens,
             },
             "live_ingestion": {
-                "scope": "current_hot_cold_process_epoch",
+                "scope": if bridge.opportunity_counter_epoch_match {
+                    "common_hot_cold_counter_epoch"
+                } else {
+                    "independent_hot_cold_process_counters"
+                },
                 "counter_epoch_match": bridge.opportunity_counter_epoch_match,
+                "counter_epoch_reason": bridge.opportunity_counter_epoch_reason.as_str(),
                 "durable_prefix_closed": opportunity_durable_prefix_closed,
                 "closed_prefix_reconciled": opportunity_counters_reconciled,
                 "producer_counter_started_after_sequence":
@@ -1239,12 +1244,16 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                     "sequence": bridge.opportunity_consumed_sequence,
                 },
                 "counter_delta": {
-                    "input_tokens": bridge
-                        .request_tokens
-                        .saturating_sub(bridge.miner_request_tokens),
-                    "requests": bridge
-                        .request_events
-                        .saturating_sub(bridge.miner_request_events),
+                    "input_tokens": bridge.opportunity_counter_epoch_match.then(|| {
+                        bridge
+                            .request_tokens
+                            .saturating_sub(bridge.miner_request_tokens)
+                    }),
+                    "requests": bridge.opportunity_counter_epoch_match.then(|| {
+                        bridge
+                            .request_events
+                            .saturating_sub(bridge.miner_request_events)
+                    }),
                 },
                 "backlog": {
                     "events": bridge.opportunity_pending,
