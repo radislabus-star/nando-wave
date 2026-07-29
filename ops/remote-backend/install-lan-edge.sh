@@ -7,9 +7,13 @@ UNIT_SOURCE="${ROOT_DIR}/ops/remote-backend/nando-transport-gateway.service"
 NGINX_DIR="${NANDO_REMOTE_NGINX_DIR:-/etc/nando-gateway}"
 SYSTEMD_DIR="${NANDO_REMOTE_SYSTEMD_DIR:-/etc/systemd/system}"
 INSTALL_ONLY="${NANDO_REMOTE_INSTALL_ONLY:-0}"
+DISCOVER_DNS_ONLY="${NANDO_REMOTE_DISCOVER_DNS_ONLY:-0}"
 LAN_BIND="${NANDO_REMOTE_LAN_BIND:-}"
 LAN_ALLOW="${NANDO_REMOTE_LAN_ALLOW:-}"
 DNS_RESOLVERS="${NANDO_REMOTE_DNS_RESOLVERS:-}"
+DNS_PROBE_NAME="${NANDO_REMOTE_DNS_PROBE_NAME:-chatgpt.com}"
+RESOLVED_STUB="${NANDO_REMOTE_RESOLVED_STUB:-/run/systemd/resolve/stub-resolv.conf}"
+RESOLVER_FILE="${NANDO_REMOTE_RESOLVER_FILE:-/run/systemd/resolve/resolv.conf}"
 
 usage() {
   cat <<'EOF'
@@ -22,10 +26,54 @@ Usage:
 
 Environment:
   NANDO_REMOTE_INSTALL_ONLY=1   install and validate without starting
+  NANDO_REMOTE_DISCOVER_DNS_ONLY=1
+                                print the selected resolvers and exit
   NANDO_REMOTE_DNS_RESOLVERS    space-separated IPv4 resolvers
+  NANDO_REMOTE_DNS_PROBE_NAME   default: chatgpt.com
   NANDO_REMOTE_NGINX_DIR        default: /etc/nando-gateway
   NANDO_REMOTE_SYSTEMD_DIR      default: /etc/systemd/system
 EOF
+}
+
+dns_query_works() {
+  local resolver="$1"
+  local answer
+
+  if command -v dig >/dev/null 2>&1; then
+    answer="$(
+      dig "@${resolver}" "${DNS_PROBE_NAME}" A \
+        +short +time=2 +tries=1 2>/dev/null
+    )" || return 1
+    grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' <<<"${answer}"
+    return
+  fi
+
+  if [[ "${resolver}" == "127.0.0.53" ]] \
+    && command -v resolvectl >/dev/null 2>&1; then
+    resolvectl query --type=A "${DNS_PROBE_NAME}" >/dev/null 2>&1
+    return
+  fi
+
+  return 1
+}
+
+discover_dns_resolvers() {
+  local resolver_file
+
+  if command -v systemctl >/dev/null 2>&1 \
+    && systemctl is-active --quiet systemd-resolved.service \
+    && [[ -r "${RESOLVED_STUB}" ]] \
+    && dns_query_works 127.0.0.53; then
+    printf '%s\n' "127.0.0.53"
+    return
+  fi
+
+  resolver_file="${RESOLVER_FILE}"
+  if [[ ! -r "${resolver_file}" ]]; then
+    resolver_file="/etc/resolv.conf"
+  fi
+  awk '/^nameserver[[:space:]]+/ && !seen[$2]++ {print $2}' "${resolver_file}" \
+    | paste -sd ' ' -
 }
 
 while [[ $# -gt 0 ]]; do
@@ -64,31 +112,7 @@ if [[ ! "${LAN_ALLOW}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$ ]]; then
 fi
 
 if [[ -z "${DNS_RESOLVERS}" ]]; then
-  default_dns_link=""
-  if command -v resolvectl >/dev/null 2>&1; then
-    default_dns_link="$(
-      resolvectl domain 2>/dev/null \
-        | sed -n 's/^Link [0-9][0-9]* (\([^)]*\)):.*~\..*$/\1/p' \
-        | head -n 1
-    )"
-  fi
-  if [[ -n "${default_dns_link}" ]]; then
-    DNS_RESOLVERS="$(
-      resolvectl dns "${default_dns_link}" 2>/dev/null \
-        | cut -d: -f2- \
-        | xargs
-    )"
-  fi
-  if [[ -z "${DNS_RESOLVERS}" ]]; then
-    resolver_file="/run/systemd/resolve/resolv.conf"
-    if [[ ! -r "${resolver_file}" ]]; then
-      resolver_file="/etc/resolv.conf"
-    fi
-    DNS_RESOLVERS="$(
-      awk '/^nameserver[[:space:]]+/ && !seen[$2]++ {print $2}' "${resolver_file}" \
-        | paste -sd ' ' -
-    )"
-  fi
+  DNS_RESOLVERS="$(discover_dns_resolvers)"
 fi
 for resolver in ${DNS_RESOLVERS}; do
   if [[ ! "${resolver}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
@@ -100,13 +124,79 @@ if [[ -z "${DNS_RESOLVERS}" ]]; then
   echo "no IPv4 DNS resolver found" >&2
   exit 2
 fi
+if [[ "${DISCOVER_DNS_ONLY}" == "1" ]]; then
+  printf '%s\n' "${DNS_RESOLVERS}"
+  exit 0
+fi
 if ! command -v nginx >/dev/null 2>&1; then
   echo "nginx is not installed" >&2
   exit 2
 fi
 
 rendered="$(mktemp)"
-trap 'rm -f "${rendered}"' EXIT
+candidate_config="${NGINX_DIR}/.nginx.conf.candidate.$$"
+candidate_unit="${SYSTEMD_DIR}/.nando-transport-gateway.service.candidate.$$"
+backup_config="${NGINX_DIR}/.nginx.conf.rollback.$$"
+backup_unit="${SYSTEMD_DIR}/.nando-transport-gateway.service.rollback.$$"
+had_config=0
+had_unit=0
+rollback_armed=0
+service_was_active=0
+service_was_enabled=0
+
+cleanup() {
+  set +e
+  sudo -n rm -f \
+    "${candidate_config}" \
+    "${candidate_unit}" \
+    "${backup_config}" \
+    "${backup_unit}"
+  rm -f "${rendered}"
+}
+
+rollback() {
+  local rc="${1:-1}"
+
+  trap - ERR INT TERM EXIT
+  set +e
+
+  if [[ "${rollback_armed}" == "1" ]]; then
+    if [[ "${service_was_active}" == "0" ]]; then
+      sudo -n systemctl stop nando-transport-gateway.service
+    fi
+    if [[ "${service_was_enabled}" == "0" ]]; then
+      sudo -n systemctl disable nando-transport-gateway.service
+    fi
+
+    if [[ "${had_config}" == "1" ]]; then
+      sudo -n mv -f "${backup_config}" "${NGINX_DIR}/nginx.conf"
+    else
+      sudo -n rm -f "${NGINX_DIR}/nginx.conf"
+    fi
+    if [[ "${had_unit}" == "1" ]]; then
+      sudo -n mv -f \
+        "${backup_unit}" \
+        "${SYSTEMD_DIR}/nando-transport-gateway.service"
+    else
+      sudo -n rm -f "${SYSTEMD_DIR}/nando-transport-gateway.service"
+    fi
+
+    sudo -n systemctl daemon-reload
+    if [[ "${service_was_active}" == "1" ]]; then
+      sudo -n systemctl reload nando-transport-gateway.service
+    fi
+    printf '%s\n' "LAN edge deployment failed; previous configuration restored" >&2
+  fi
+
+  cleanup
+  exit "${rc}"
+}
+
+trap 'rollback $?' ERR
+trap 'rollback 130' INT
+trap 'rollback 143' TERM
+trap cleanup EXIT
+
 sed \
   -e "s#@NANDO_LAN_BIND@#${LAN_BIND}#g" \
   -e "s#@NANDO_LAN_CIDR@#${LAN_ALLOW}#g" \
@@ -122,22 +212,61 @@ sudo -n install -d -o www-data -g www-data -m 0750 \
 sudo -n touch /var/lib/nando-gateway/economics-access.jsonl
 sudo -n chown www-data:www-data /var/lib/nando-gateway/economics-access.jsonl
 sudo -n chmod 0640 /var/lib/nando-gateway/economics-access.jsonl
-sudo -n install -m 0644 "${rendered}" "${NGINX_DIR}/nginx.conf"
+sudo -n install -m 0644 \
+  "${rendered}" \
+  "${candidate_config}"
 sudo -n install -m 0644 \
   "${UNIT_SOURCE}" \
-  "${SYSTEMD_DIR}/nando-transport-gateway.service"
-sudo -n -u www-data nginx -t -c "${NGINX_DIR}/nginx.conf"
-sudo -n rm -f /run/nando-gateway/nginx.pid
+  "${candidate_unit}"
+sudo -n -u www-data nginx -t -c "${candidate_config}"
 sudo -n chown www-data:www-data /run/nando-gateway
-sudo -n systemctl disable --now nginx.service >/dev/null 2>&1 || true
+
+if sudo -n test -e "${NGINX_DIR}/nginx.conf"; then
+  sudo -n cp -a "${NGINX_DIR}/nginx.conf" "${backup_config}"
+  had_config=1
+fi
+if sudo -n test -e "${SYSTEMD_DIR}/nando-transport-gateway.service"; then
+  sudo -n cp -a \
+    "${SYSTEMD_DIR}/nando-transport-gateway.service" \
+    "${backup_unit}"
+  had_unit=1
+fi
+if sudo -n systemctl is-active --quiet nando-transport-gateway.service; then
+  service_was_active=1
+fi
+if sudo -n systemctl is-enabled --quiet nando-transport-gateway.service; then
+  service_was_enabled=1
+fi
+
+rollback_armed=1
+sudo -n mv -f "${candidate_config}" "${NGINX_DIR}/nginx.conf"
+sudo -n mv -f \
+  "${candidate_unit}" \
+  "${SYSTEMD_DIR}/nando-transport-gateway.service"
 sudo -n systemctl daemon-reload
 
 if [[ "${INSTALL_ONLY}" == "1" ]]; then
+  rollback_armed=0
+  sudo -n rm -f "${backup_config}" "${backup_unit}"
   echo "LAN edge installed and validated; service start skipped"
   echo "DNS resolvers: ${DNS_RESOLVERS}"
   exit 0
 fi
 
-sudo -n systemctl enable --now nando-transport-gateway.service
-curl -fsS --max-time 2 "http://${LAN_BIND}/health" >/dev/null
+if [[ "${service_was_active}" == "1" ]]; then
+  sudo -n systemctl reload nando-transport-gateway.service
+else
+  sudo -n systemctl enable --now nando-transport-gateway.service
+fi
+
+curl -fsS --max-time 3 "http://${LAN_BIND}/health" >/dev/null
+curl -fsS --max-time 3 "http://${LAN_BIND}/cpu-health" >/dev/null
+curl -fsS --max-time 3 "http://${LAN_BIND}/control-health" >/dev/null
+dns_query_works "${DNS_RESOLVERS%% *}"
+curl -sS -o /dev/null --connect-timeout 5 --max-time 10 \
+  "https://${DNS_PROBE_NAME}/"
+
+rollback_armed=0
+sudo -n rm -f "${backup_config}" "${backup_unit}"
 echo "LAN edge ready: http://${LAN_BIND}"
+echo "DNS resolvers: ${DNS_RESOLVERS}"

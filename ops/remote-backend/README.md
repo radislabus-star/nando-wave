@@ -90,6 +90,12 @@ NANDO_REMOTE_INSTALL_ONLY=1 \
   --allow 192.168.3.0/24
 ```
 
+The installer prefers the healthy local `systemd-resolved` stub at
+`127.0.0.53`; an explicit `--resolver` remains available for recovery. Updates
+are transactional: the candidate config is validated before replacement, an
+active gateway receives only a graceful reload, and any failed DNS, HTTPS, CPU,
+control, or edge health check restores the previous config and unit.
+
 Start it explicitly after the internal health checks pass:
 
 ```bash
