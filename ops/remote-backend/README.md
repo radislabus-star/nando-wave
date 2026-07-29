@@ -62,6 +62,8 @@ fallback mode it parses HTTP/1.1 framing and, for bounded `/v1/responses` or
 `/v2/responses` requests, reads only `client_metadata.turn_id` and
 `client_metadata.session_id`. It stores domain-separated identity hashes, the
 request-body hash, and a confirmed remote `200` or `418`, never the raw body.
+The receipt seals separate request-observed and route-confirmed timestamps;
+both must precede the linked action frame.
 Unknown routes, chunked requests, and unknown protocols retain the transparent
 relay path without minting a route receipt. Streaming response bytes pass
 through unchanged.
@@ -90,7 +92,7 @@ observe local Codex tool outcomes from HTTP response bytes alone.
 
 ```text
 local append-only Codex session journal
-  -> incremental watcher starting at the current EOF
+  -> incremental watcher restoring its durable per-file offset
   -> existing source-neutral RelationFrame extractor and verifier
   -> exact pre-action connector route receipt
   -> private durable outbox of compact route-bound verified frames
@@ -103,11 +105,15 @@ local append-only Codex session journal
 Raw session rows, prompts, response bodies, authentication, and provider tokens
 remain on the client. The connector ledger contains only hashes and confirmed
 remote status. The outbox and remote spool contain bounded verified
-`RelationFrame` records plus route, verifier, and frame commitment roots. Frames
-without a pre-action route receipt are censored locally. The server signs every
-ACK with the same per-client key; the agent advances its sequence only after
-verifying that signature. Acknowledged outbox segments are compacted only after
-the agent state and pending-file removal are durable.
+`RelationFrame` records, the complete canonical route receipt, and route,
+verifier, and frame commitment roots. The remote spool independently checks the
+receipt root, turn/session identity, status, and
+`request <= confirmation <= action` order. Legacy root-only records remain
+decodable but are never considered route-bound. Frames without a pre-action
+route receipt are censored locally. The server signs every ACK with the same
+per-client key; the agent advances its sequence only after verifying that
+signature. Acknowledged outbox segments are compacted only after the agent state
+and pending-file removal are durable.
 
 The current transport is authenticated but not encrypted. It is restricted to
 the private LAN listener and must not be exposed publicly. Later mTLS can add

@@ -6,16 +6,17 @@ Date: 2026-07-29
 
 The source and remote cold learner now enforce the missing evidence route
 between local Codex experience and the remote learner. The local Evidence Agent
-is deployed. The route-receipt connector binary is staged and waiting for the
-three current client connections to drain; it has not interrupted them. This
-checkpoint does not grant authority and does not claim a natural-law future
-pass.
+and full-receipt remote decoder are deployed. The route-receipt connector binary
+is staged and waiting for the three current client connections to drain; it has
+not interrupted them. This checkpoint does not grant authority and does not
+claim a natural-law future pass.
 
 ```text
 remote CPU serving                              PASS
 remote cold learner                             DEPLOYED
 remote gateway control                          DEPLOYED
 local Evidence Agent                            DEPLOYED
+remote full-receipt validation                  DEPLOYED
 local connector process                         OLD VERSION, LIVE
 route-receipt connector activation              WAITING FOR DRAIN
 legacy remote frames                            79 UNPROVEN
@@ -41,7 +42,9 @@ Codex Responses request on client
 Local Connector
   |- records only turn/session identity hashes
   |- binds the exact request-body digest
+  |- records request observation before forwarding
   |- commits only after confirmed remote 200 or 418
+  |- seals request and confirmation timestamps separately
   `- keeps a bounded 64 MiB hash-only route ledger
   |
   +-----------------------------+
@@ -68,6 +71,7 @@ RemoteEvidenceBatchV1
   |- at most 32 frames / 256 KiB
   |- per-client monotonic sequence
   |- previous batch root
+  |- carries the complete canonical route receipt, not only its root
   |- request HMAC with fresh transport timestamp
   |- server ACK HMAC
   |- authority_ready=false
@@ -79,6 +83,7 @@ Private LAN Nginx exact route
   |
   v
 Remote Durable Spool
+  |- independently validates route receipt root, identity, status and time order
   |- pending batch fsync
   |- verified frame archive append
   |- immutable batch receipt publish
@@ -91,9 +96,17 @@ Existing MS3 Join / Acquisition / Version Space
 
 The connector carries provider traffic and fallback and proves that a specific
 local turn actually crossed the Nando route. The Evidence Agent carries compact
-post-action proof only when that pre-action route receipt exists. Historical
-frames without this root remain decodable but can never become route-bound
-evidence. Neither component owns admission or an `AuthorityLease`.
+post-action proof only when that pre-action route receipt exists. The remote
+spool requires
+`request_observed_at <= route_confirmed_at <= action_frame_observed_at` and
+rechecks the full receipt against the frame turn/session identity. Historical
+root-only frames remain decodable but can never become route-bound evidence.
+Neither component owns admission or an `AuthorityLease`.
+
+The route-ledger cursor advances only after canonical decode and chain
+validation. A complete invalid JSONL record remains blocking across every poll;
+it cannot be skipped by a second refresh. Connector append performs `sync_data`
+before publishing the receipt to the in-process head.
 
 ## G16 Repair
 
@@ -187,11 +200,11 @@ cargo check --workspace --all-targets               PASS
 cargo test -p nando-operator-learning
   314 unit + 1 integration                          PASS
 cargo test -p nando-transition-serving
-  159 unit PASS / 4 explicit ignored
+  160 unit PASS / 4 explicit ignored
   5 Evidence Agent tests                            PASS
   remaining integration targets                    PASS
 connector tests 9/9                                PASS
-client route-receipt tests 3/3                     PASS
+client route-receipt tests 6/6                     PASS
 gateway-control tests 48/48                        PASS
 G16 frozen live-state replay                        PASS
 full cargo test --workspace --all-targets           PASS / 0 FAIL
@@ -232,6 +245,7 @@ release build on mini-PC                         DONE
                                                 DONE
 -> verify learner health with authority=false   DONE
 -> install local Evidence Agent                 DONE
+-> deploy full route-receipt decoder            DONE
 -> update remote control scope                  DONE
 -> wait for active connector connections = 0    ACTIVE
 -> transactional connector activation           QUEUED
@@ -243,9 +257,11 @@ release build on mini-PC                         DONE
 ```
 
 The installed cold learner binary is SHA-256
-`bb3af0b4cc9115990683a0ec07c3d60a1ad92c2e0c779cc687bf3ab36787be68`.
+`fc14c05bb1a1ef2e60c7ff1deedd0694567dd9f34f3d91bec677195dc9db3b0b`.
+The installed local Evidence Agent is SHA-256
+`a849b3578ecaa87cf233082a543c8465cc1d0737b94a07a824b51c3536a1a667`.
 The staged static connector is SHA-256
-`201f17309ad2b88e70ef225f38622557bb8a33cd3bedd2ddfebe90368e843d02`.
+`af597b3ac93f06d2ba8d9968a62ce1b341b81514248c8908b07bd0c137c0b760`.
 The active old connector PID remained `161091` throughout this checkpoint.
 
 Any failed learner, control, agent, or connector health check restores the
