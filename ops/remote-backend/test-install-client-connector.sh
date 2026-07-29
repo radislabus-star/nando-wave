@@ -97,6 +97,8 @@ export PATH="${BIN}:/usr/bin:/bin"
 export NANDO_TEST_SYSTEMCTL_STATE="${SYSTEMCTL_STATE}"
 export NANDO_CONNECTOR_INSTALL_READINESS_ATTEMPTS=1
 export NANDO_CONNECTOR_INSTALL_READINESS_SLEEP_SECONDS=0
+export NANDO_CONNECTOR_INSTALL_DRAIN_POLL_SECONDS=0.01
+export NANDO_CONNECTOR_INSTALL_DRAIN_SAMPLE_SLEEP_SECONDS=0.01
 
 set +e
 "${INSTALLER}" --binary "${CANDIDATE}" >/dev/null 2>&1
@@ -107,8 +109,13 @@ grep -Fxq '# old binary' "${HOME_DIR}/.local/bin/nando-connector"
 grep -Fxq '# old unit' "${HOME_DIR}/.config/systemd/user/nando-client-connector.service"
 [[ -e "${SYSTEMCTL_STATE}/active" ]]
 
-rm -f "${SYSTEMCTL_STATE}/busy"
-"${INSTALLER}" --binary "${CANDIDATE}" >/dev/null
+(
+  sleep 0.05
+  rm -f "${SYSTEMCTL_STATE}/busy"
+) &
+drain_release_pid=$!
+"${INSTALLER}" --binary "${CANDIDATE}" --wait-for-drain 2 >/dev/null
+wait "${drain_release_pid}"
 cmp -s "${CANDIDATE}" "${HOME_DIR}/.local/bin/nando-connector"
 grep -Fq -- '--route-receipts %t/nando-connector/route-receipts-v1.jsonl' \
   "${HOME_DIR}/.config/systemd/user/nando-client-connector.service"

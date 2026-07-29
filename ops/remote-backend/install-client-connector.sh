@@ -11,13 +11,18 @@ METRICS_URL="${NANDO_CONNECTOR_INSTALL_METRICS_URL:-http://127.0.0.1:18786/metri
 HEALTH_URL="${NANDO_CONNECTOR_INSTALL_HEALTH_URL:-http://127.0.0.1:8787/health}"
 READINESS_ATTEMPTS="${NANDO_CONNECTOR_INSTALL_READINESS_ATTEMPTS:-30}"
 READINESS_SLEEP_SECONDS="${NANDO_CONNECTOR_INSTALL_READINESS_SLEEP_SECONDS:-0.25}"
+DRAIN_WAIT_SECONDS=0
+DRAIN_POLL_SECONDS="${NANDO_CONNECTOR_INSTALL_DRAIN_POLL_SECONDS:-0.25}"
+DRAIN_SAMPLE_SLEEP_SECONDS="${NANDO_CONNECTOR_INSTALL_DRAIN_SAMPLE_SLEEP_SECONDS:-0.1}"
 
 usage() {
   cat <<'EOF'
 Install a tested Nando connector only when the current connector is drained.
 
 Usage:
-  ops/remote-backend/install-client-connector.sh --binary /path/to/nando-connector
+  ops/remote-backend/install-client-connector.sh \
+    --binary /path/to/nando-connector \
+    [--wait-for-drain SECONDS]
 
 Exit 75 means active client connections prevented activation. No installed
 file or running process is changed in that case.
@@ -28,6 +33,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --binary)
       BINARY_SOURCE="${2:-}"
+      shift 2
+      ;;
+    --wait-for-drain)
+      DRAIN_WAIT_SECONDS="${2:-}"
       shift 2
       ;;
     --help)
@@ -44,6 +53,10 @@ done
 
 if [[ ! -x "${BINARY_SOURCE}" ]]; then
   printf 'connector binary is not executable: %s\n' "${BINARY_SOURCE}" >&2
+  exit 2
+fi
+if [[ ! "${DRAIN_WAIT_SECONDS}" =~ ^[0-9]+$ ]]; then
+  printf 'wait-for-drain must be a non-negative integer number of seconds\n' >&2
   exit 2
 fi
 
@@ -97,6 +110,38 @@ trap 'rollback 130' INT
 trap 'rollback 143' TERM
 trap cleanup EXIT
 
+active_connection_count() {
+  curl -fsS --max-time 2 "${METRICS_URL}" |
+    jq -er '.active_connections | select(type == "number" and . >= 0)'
+}
+
+wait_for_drain() {
+  local active_connections
+  local deadline=$((SECONDS + DRAIN_WAIT_SECONDS))
+  local _sample
+
+  while true; do
+    for _sample in 1 2; do
+      active_connections="$(active_connection_count)"
+      if [[ "${active_connections}" != "0" ]]; then
+        break
+      fi
+      if [[ "${_sample}" == "1" ]]; then
+        sleep "${DRAIN_SAMPLE_SLEEP_SECONDS}"
+      fi
+    done
+    if [[ "${active_connections}" == "0" ]]; then
+      return 0
+    fi
+    if [[ "${DRAIN_WAIT_SECONDS}" == "0" || "${SECONDS}" -ge "${deadline}" ]]; then
+      printf 'connector activation deferred: %s active connection(s)\n' \
+        "${active_connections}" >&2
+      return 75
+    fi
+    sleep "${DRAIN_POLL_SECONDS}"
+  done
+}
+
 install -m 0755 "${BINARY_SOURCE}" "${candidate_binary}"
 install -m 0644 "${UNIT_SOURCE}" "${candidate_unit}"
 sed \
@@ -115,18 +160,9 @@ systemd-analyze --user verify "${verify_unit}"
 
 if systemctl --user is-active --quiet "${SERVICE}"; then
   service_was_active=1
-  for _sample in 1 2; do
-    active_connections="$(
-      curl -fsS --max-time 2 "${METRICS_URL}" |
-        jq -er '.active_connections | select(type == "number" and . >= 0)'
-    )"
-    if [[ "${active_connections}" != "0" ]]; then
-      printf 'connector activation deferred: %s active connection(s)\n' \
-        "${active_connections}" >&2
-      exit 75
-    fi
-    sleep 0.1
-  done
+  if ! wait_for_drain; then
+    exit 75
+  fi
 fi
 if systemctl --user is-enabled --quiet "${SERVICE}"; then
   service_was_enabled=1
