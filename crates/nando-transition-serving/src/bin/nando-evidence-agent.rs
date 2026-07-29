@@ -12,7 +12,9 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use nando_client_evidence::{DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptIndex};
+use nando_client_evidence::{
+    DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptIndex, NandoRouteReceiptV1,
+};
 use nando_operator_kernel::{RelationFrame, sha256_bytes};
 use nando_operator_learning::{FramedCborLedger, read_framed_cbor};
 use nando_transition_serving::remote_evidence_spool::{
@@ -79,6 +81,7 @@ struct EvidenceAgentPendingV1 {
 struct RouteBoundOutboxFrameV1 {
     schema: String,
     route_receipt_root_sha256: String,
+    route_receipt: NandoRouteReceiptV1,
     frame: RelationFrame,
 }
 
@@ -418,7 +421,7 @@ impl EvidenceAgent {
             .into_iter()
             .map(|(_, bound)| RouteBoundEvidenceFrameV1 {
                 frame: bound.frame,
-                route_receipt_root_sha256: bound.route_receipt_root_sha256,
+                route_receipt: bound.route_receipt,
             })
             .collect();
         let batch = RemoteEvidenceBatchV1::seal_route_bound(
@@ -552,11 +555,12 @@ impl LocalEvidenceOutbox {
     fn append(
         &mut self,
         frame: RelationFrame,
-        route_receipt_root_sha256: String,
+        route_receipt: NandoRouteReceiptV1,
     ) -> Result<(), String> {
         let bound = RouteBoundOutboxFrameV1 {
             schema: ROUTE_BOUND_OUTBOX_SCHEMA_V1.to_owned(),
-            route_receipt_root_sha256,
+            route_receipt_root_sha256: route_receipt.receipt_root_sha256.clone(),
+            route_receipt,
             frame,
         };
         let sealed = bound.seal()?;
@@ -590,7 +594,7 @@ impl LocalEvidenceOutbox {
 
 impl VerifiedRelationFrameSink for OutboxSink {
     fn append_verified_frame(&self, frame: RelationFrame) -> Result<(), String> {
-        let route_receipt_root_sha256 = {
+        let route_receipt = {
             let mut receipts = self
                 .route_receipts
                 .lock()
@@ -607,9 +611,9 @@ impl VerifiedRelationFrameSink for OutboxSink {
                     &frame.session_id_sha256,
                     frame.observed_at_unix_nanos,
                 )
-                .map(|receipt| receipt.receipt_root_sha256.clone())
+                .cloned()
         };
-        let Some(route_receipt_root_sha256) = route_receipt_root_sha256 else {
+        let Some(route_receipt) = route_receipt else {
             self.route_metrics
                 .route_unbound_frames
                 .fetch_add(1, Ordering::Relaxed);
@@ -618,7 +622,7 @@ impl VerifiedRelationFrameSink for OutboxSink {
         self.outbox
             .lock()
             .map_err(|_| "evidence_agent_outbox_lock_poisoned".to_owned())?
-            .append(frame, route_receipt_root_sha256)?;
+            .append(frame, route_receipt)?;
         self.route_metrics
             .route_bound_frames
             .fetch_add(1, Ordering::Relaxed);
@@ -787,10 +791,7 @@ impl RouteBoundOutboxFrameV1 {
         if self.schema != ROUTE_BOUND_OUTBOX_SCHEMA_V1 {
             return Err("evidence_agent_outbox_schema_invalid".to_owned());
         }
-        RemoteEvidenceFrameV1::seal_route_bound(
-            self.frame.clone(),
-            self.route_receipt_root_sha256.clone(),
-        )
+        RemoteEvidenceFrameV1::seal_route_bound(self.frame.clone(), self.route_receipt.clone())
     }
 }
 
@@ -925,7 +926,8 @@ mod tests {
 
     use nando_client_evidence::{
         ClientRouteIdentityV1, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptIndex,
-        NandoRouteReceiptLedger, evidence_client_intent_id_sha256, evidence_session_id_sha256,
+        NandoRouteReceiptLedger, NandoRouteReceiptV1, evidence_client_intent_id_sha256,
+        evidence_session_id_sha256, route_receipt_genesis_root,
         sha256_bytes as client_sha256_bytes,
     };
     use nando_operator_kernel::{
@@ -1008,6 +1010,22 @@ mod tests {
         ))
     }
 
+    fn route_receipt_for_frame(frame: &RelationFrame) -> NandoRouteReceiptV1 {
+        NandoRouteReceiptV1::seal(
+            1,
+            route_receipt_genesis_root(),
+            &ClientRouteIdentityV1 {
+                turn_intent_id_sha256: frame.client_intent_id_sha256.clone(),
+                session_id_sha256: frame.session_id_sha256.clone(),
+            },
+            client_sha256_bytes(b"request"),
+            418,
+            frame.observed_at_unix_nanos.saturating_sub(2),
+            frame.observed_at_unix_nanos.saturating_sub(1),
+        )
+        .expect("route receipt")
+    }
+
     #[test]
     fn parses_lan_origin_without_response_api_prefix() {
         let endpoint = HttpEndpoint::parse("http://192.168.3.94:8787/").expect("endpoint");
@@ -1046,7 +1064,7 @@ mod tests {
         let frame = completed_frame("compact");
         let mut outbox = LocalEvidenceOutbox::open(&root).expect("outbox");
         outbox
-            .append(frame, hash("route-receipt:compact"))
+            .append(frame.clone(), route_receipt_for_frame(&frame))
             .expect("append");
         assert_eq!(outbox.frames.len(), 1);
         outbox.compact_all().expect("compact");
@@ -1107,12 +1125,11 @@ mod tests {
         sink.append_verified_frame(bound).expect("append bound");
         let outbox = outbox.lock().expect("outbox lock");
         assert_eq!(outbox.frames.len(), 1);
-        assert!(
-            outbox
-                .frames
-                .values()
-                .all(|bound| valid_root(&bound.route_receipt_root_sha256))
-        );
+        assert!(outbox.frames.values().all(|bound| {
+            valid_root(&bound.route_receipt_root_sha256)
+                && bound.route_receipt.validate()
+                && bound.route_receipt.receipt_root_sha256 == bound.route_receipt_root_sha256
+        }));
         assert_eq!(metrics.route_bound_frames.load(Ordering::Relaxed), 1);
         fs::remove_dir_all(root).expect("cleanup");
     }

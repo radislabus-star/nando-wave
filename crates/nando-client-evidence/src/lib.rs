@@ -341,6 +341,7 @@ impl NandoRouteReceiptIndex {
             .and_then(|receipts| {
                 receipts.iter().rev().find(|receipt| {
                     receipt.request_observed_at_unix_nanos <= frame_observed_at_unix_nanos
+                        && receipt.route_confirmed_at_unix_nanos <= frame_observed_at_unix_nanos
                         && frame_observed_at_unix_nanos > 0
                 })
             })
@@ -527,18 +528,21 @@ mod tests {
     }
 
     #[test]
-    fn request_time_proves_pre_action_even_when_route_confirmation_is_delayed() {
+    fn request_and_confirmation_must_both_precede_the_action_frame() {
         let root = temporary_root("pre-action");
         let path = root.join("route-receipts-v1.jsonl");
         let mut ledger =
             NandoRouteReceiptLedger::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
                 .expect("ledger");
         let before_action = ledger
-            .append(&identity(), sha256_bytes(b"before"), 200, 100, 300)
+            .append(&identity(), sha256_bytes(b"before"), 200, 100, 150)
             .expect("before action");
         ledger
-            .append(&identity(), sha256_bytes(b"after"), 200, 250, 350)
-            .expect("after action");
+            .append(&identity(), sha256_bytes(b"late-confirm"), 200, 110, 300)
+            .expect("late confirmation");
+        ledger
+            .append(&identity(), sha256_bytes(b"late-request"), 200, 250, 350)
+            .expect("late request");
         drop(ledger);
 
         let index = NandoRouteReceiptIndex::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)

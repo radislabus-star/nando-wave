@@ -8,6 +8,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use hmac::{Hmac, Mac};
+use nando_client_evidence::NandoRouteReceiptV1;
 use nando_operator_kernel::{
     RelationFrame, canonical_json_sha256, sha256_bytes, valid_nonzero_sha256,
 };
@@ -38,6 +39,8 @@ pub struct RemoteEvidenceFrameV1 {
     pub verifier_receipt_root_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_receipt_root_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_receipt: Option<NandoRouteReceiptV1>,
     pub session_id_sha256: String,
     pub turn_intent_id_sha256: String,
     pub action_event_id_sha256: String,
@@ -48,7 +51,7 @@ pub struct RemoteEvidenceFrameV1 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RouteBoundEvidenceFrameV1 {
     pub frame: RelationFrame,
-    pub route_receipt_root_sha256: String,
+    pub route_receipt: NandoRouteReceiptV1,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -136,14 +139,14 @@ impl RemoteEvidenceFrameV1 {
 
     pub fn seal_route_bound(
         frame: RelationFrame,
-        route_receipt_root_sha256: String,
+        route_receipt: NandoRouteReceiptV1,
     ) -> Result<Self, String> {
-        Self::seal_with_route_receipt(frame, Some(route_receipt_root_sha256))
+        Self::seal_with_route_receipt(frame, Some(route_receipt))
     }
 
     fn seal_with_route_receipt(
         frame: RelationFrame,
-        route_receipt_root_sha256: Option<String>,
+        route_receipt: Option<NandoRouteReceiptV1>,
     ) -> Result<Self, String> {
         let outcome = teacher_outcome_from_completed(&frame)
             .map_err(|error| format!("remote_evidence_verifier:{error:?}"))?;
@@ -157,11 +160,15 @@ impl RemoteEvidenceFrameV1 {
             .map_err(|error| format!("remote_evidence_frame_root:{error}"))?;
         let verifier_receipt_root_sha256 = canonical_json_sha256(&outcome.verifier)
             .map_err(|error| format!("remote_evidence_verifier_root:{error}"))?;
+        let route_receipt_root_sha256 = route_receipt
+            .as_ref()
+            .map(|receipt| receipt.receipt_root_sha256.clone());
         let receipt = Self {
             schema: REMOTE_EVIDENCE_FRAME_SCHEMA_V1.to_owned(),
             frame_root_sha256,
             verifier_receipt_root_sha256,
             route_receipt_root_sha256,
+            route_receipt,
             session_id_sha256: frame.session_id_sha256.clone(),
             turn_intent_id_sha256: frame.client_intent_id_sha256.clone(),
             action_event_id_sha256: frame.event_id_sha256.clone(),
@@ -193,6 +200,7 @@ impl RemoteEvidenceFrameV1 {
                 .route_receipt_root_sha256
                 .as_deref()
                 .is_some_and(|root| !valid_nonzero_sha256(root))
+            || !self.route_binding_is_valid()
             || self.session_id_sha256 != self.frame.session_id_sha256
             || self.turn_intent_id_sha256 != self.frame.client_intent_id_sha256
             || self.action_event_id_sha256 != self.frame.event_id_sha256
@@ -212,8 +220,28 @@ impl RemoteEvidenceFrameV1 {
     }
 
     #[must_use]
-    pub const fn is_route_bound(&self) -> bool {
-        self.route_receipt_root_sha256.is_some()
+    pub fn is_route_bound(&self) -> bool {
+        self.route_receipt.is_some() && self.route_binding_is_valid()
+    }
+
+    fn route_binding_is_valid(&self) -> bool {
+        match (
+            self.route_receipt_root_sha256.as_deref(),
+            self.route_receipt.as_ref(),
+        ) {
+            (None, None) => true,
+            // Root-only V1 frames remain decodable but are not proven route bindings.
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (Some(root), Some(receipt)) => {
+                receipt.validate()
+                    && root == receipt.receipt_root_sha256
+                    && receipt.turn_intent_id_sha256 == self.frame.client_intent_id_sha256
+                    && receipt.session_id_sha256 == self.frame.session_id_sha256
+                    && receipt.request_observed_at_unix_nanos <= self.frame.observed_at_unix_nanos
+                    && receipt.route_confirmed_at_unix_nanos <= self.frame.observed_at_unix_nanos
+            }
+        }
     }
 }
 
@@ -252,10 +280,7 @@ impl RemoteEvidenceBatchV1 {
             frames
                 .into_iter()
                 .map(|bound| {
-                    RemoteEvidenceFrameV1::seal_route_bound(
-                        bound.frame,
-                        bound.route_receipt_root_sha256,
-                    )
+                    RemoteEvidenceFrameV1::seal_route_bound(bound.frame, bound.route_receipt)
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         )
@@ -967,6 +992,10 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use nando_client_evidence::{
+        ClientRouteIdentityV1, NandoRouteReceiptV1, route_receipt_genesis_root,
+        sha256_bytes as client_sha256_bytes,
+    };
     use nando_operator_kernel::{
         AtomSource, AtomValueType, RELATION_FRAME_SCHEMA, RelationAtom, RelationFrame,
         ResponseValueSelector, sha256_bytes,
@@ -1046,6 +1075,26 @@ mod tests {
             "nando-remote-evidence-{label}-{}-{nonce}",
             std::process::id()
         ))
+    }
+
+    fn route_receipt_for_frame(
+        frame: &RelationFrame,
+        request_observed_at_unix_nanos: u64,
+        route_confirmed_at_unix_nanos: u64,
+    ) -> NandoRouteReceiptV1 {
+        NandoRouteReceiptV1::seal(
+            1,
+            route_receipt_genesis_root(),
+            &ClientRouteIdentityV1 {
+                turn_intent_id_sha256: frame.client_intent_id_sha256.clone(),
+                session_id_sha256: frame.session_id_sha256.clone(),
+            },
+            client_sha256_bytes(b"request"),
+            418,
+            request_observed_at_unix_nanos,
+            route_confirmed_at_unix_nanos,
+        )
+        .expect("route receipt")
     }
 
     fn write_key(directory: &std::path::Path, client_id: &str, key: &[u8]) {
@@ -1152,14 +1201,20 @@ mod tests {
         let client_id = hash("client:route-bound");
         let key = [13_u8; 32];
         write_key(&key_root, &client_id, &key);
+        let frame = completed_frame("route-bound");
+        let route_receipt = route_receipt_for_frame(
+            &frame,
+            frame.observed_at_unix_nanos.saturating_sub(2),
+            frame.observed_at_unix_nanos.saturating_sub(1),
+        );
         let batch = RemoteEvidenceBatchV1::seal_route_bound(
             client_id.clone(),
             1,
             remote_evidence_genesis_root(&client_id),
             1_700_000_000,
             vec![RouteBoundEvidenceFrameV1 {
-                frame: completed_frame("route-bound"),
-                route_receipt_root_sha256: hash("route-receipt:route-bound"),
+                frame,
+                route_receipt,
             }],
         )
         .expect("route-bound batch");
@@ -1189,6 +1244,34 @@ mod tests {
         assert_eq!(restored.status(true).route_bound_frames, 1);
         assert!(!restored.status(true).learning_closed_loop_ready);
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn route_binding_requires_the_full_pre_action_receipt() {
+        let frame = completed_frame("route-proof");
+        let receipt = route_receipt_for_frame(
+            &frame,
+            frame.observed_at_unix_nanos.saturating_sub(2),
+            frame.observed_at_unix_nanos.saturating_sub(1),
+        );
+        let sealed = super::RemoteEvidenceFrameV1::seal_route_bound(frame.clone(), receipt)
+            .expect("route-bound frame");
+        assert!(sealed.validate());
+        assert!(sealed.is_route_bound());
+
+        let mut legacy_root_only = sealed.clone();
+        legacy_root_only.route_receipt = None;
+        assert!(legacy_root_only.validate());
+        assert!(!legacy_root_only.is_route_bound());
+
+        let post_action_receipt = route_receipt_for_frame(
+            &frame,
+            frame.observed_at_unix_nanos.saturating_sub(1),
+            frame.observed_at_unix_nanos.saturating_add(1),
+        );
+        assert!(
+            super::RemoteEvidenceFrameV1::seal_route_bound(frame, post_action_receipt).is_err()
+        );
     }
 
     #[test]
