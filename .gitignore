@@ -1,5 +1,6 @@
 /target/
 crates/*/target/
+/dist/
 
 # Local editor and OS noise
 *~
