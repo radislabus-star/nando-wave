@@ -1300,13 +1300,13 @@ async fn health(State(state): State<AppState>) -> Response {
         expression_shadow_cache_status(&state);
     let response_miner = current_response_miner(&state);
     let miner_worker_handle = current_miner_worker(&state);
-    let online = response_miner
+    let online = miner_worker_handle
         .as_ref()
-        .and_then(|miner| miner.try_lock().ok().map(|miner| miner.status()))
+        .and_then(MinerWorkerHandle::response_status)
         .or_else(|| {
-            miner_worker_handle
+            response_miner
                 .as_ref()
-                .and_then(MinerWorkerHandle::response_status)
+                .and_then(|miner| miner.try_lock().ok().map(|miner| miner.status()))
         });
     let miner_worker = miner_worker_handle.as_ref().map(MinerWorkerHandle::status);
     let miner_warmup = state
