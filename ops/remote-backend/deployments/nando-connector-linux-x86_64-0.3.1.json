@@ -1,0 +1,87 @@
+{
+  "schema": "nando.client-connector-release.v2",
+  "version": "0.3.1",
+  "built_at_utc": "2026-07-29T10:54:25Z",
+  "source_commit": "c7d13c9",
+  "toolchain": "rustc 1.97.0",
+  "target": "x86_64-unknown-linux-musl",
+  "artifact": {
+    "name": "nando-connector-linux-x86_64",
+    "size_bytes": 2155248,
+    "sha256": "81648a12b200dcf5a51fe5830c8bc6e6d011f6120b50fe17c2332607cec47ac8",
+    "linkage": "static-pie",
+    "stripped": true
+  },
+  "compatibility_contract": {
+    "http_framing_parsed": true,
+    "codex_json_parsed": false,
+    "openai_json_parsed": false,
+    "unknown_routes_preserved": true,
+    "unknown_protocols_preserved": true,
+    "unknown_headers_preserved": true,
+    "unknown_body_fields_preserved": true,
+    "streaming_bytes_preserved": true,
+    "codex_payload_release_requires_connector_release": false
+  },
+  "fallback_contract": {
+    "remote_contract": "nando.client-fallback.v1",
+    "remote_local_prefix": "/_nando/local",
+    "fallback_statuses": [
+      418,
+      502,
+      503,
+      504
+    ],
+    "fallback_origin": "https://chatgpt.com",
+    "fallback_path_prefix": "/backend-api/codex",
+    "response_started_retry": false,
+    "max_replay_body_bytes": 67108864,
+    "memory_replay_bytes": 1048576,
+    "larger_body_storage": "private unlinked runtime file",
+    "degraded_start": true
+  },
+  "metrics": {
+    "listen": "127.0.0.1:18786",
+    "counters": [
+      "http_requests",
+      "nando_responses",
+      "client_fallback_attempts",
+      "client_fallback_successes",
+      "client_fallback_failures",
+      "abstain_fallbacks",
+      "remote_failure_fallbacks",
+      "replayed_request_bytes",
+      "replay_spills"
+    ]
+  },
+  "verification": {
+    "unit_tests": {
+      "passed": 8,
+      "failed": 0,
+      "repeat_runs": 5
+    },
+    "strict_clippy": "PASS",
+    "format": "PASS",
+    "shellcheck": "PASS",
+    "lan_edge_transaction_tests": "PASS",
+    "connector_console_tests": "PASS",
+    "static_musl_release_build": "PASS",
+    "degraded_remote_failure_smoke": {
+      "remote": "unreachable",
+      "fallback_http_status": 401,
+      "fallback_successes": 1,
+      "fallback_failures": 0,
+      "total_seconds": 0.289323
+    }
+  },
+  "deployment": {
+    "candidate_path": "/home/ubu/.local/lib/nando-connector-candidates/0.3.1/nando-connector",
+    "production_version": "0.3.0",
+    "production_path": "/home/ubu/.local/bin/nando-connector",
+    "service": "nando-client-connector.service",
+    "listen": "127.0.0.1:8787",
+    "upstream": "192.168.3.94:8787",
+    "candidate_deployed": false,
+    "reason": "live connector frozen after successful client-fallback activation"
+  }
+}
