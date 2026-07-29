@@ -25,19 +25,20 @@ http://192.168.3.94:8787/v1
 `/v2` aliases remain available for compatibility, while miner, MS3, runtime,
 and reconciliation endpoints stay internal.
 
-Users with an existing Codex login can connect without copying account data
-into a Nando config file:
+Start the local connector console with:
 
 ```bash
-ops/remote-backend/nando-connect codex
+ops/remote-backend/nando-connect
 ```
 
-The launcher checks the expected Nando health contract through the local
-connector and supplies an ephemeral Codex provider override for
-`http://127.0.0.1:8787/v1`. Codex continues to own the user's local
-authentication. The launcher neither reads nor persists tokens. Applications
-that already manage their own API key can print the required local base URL
-environment with:
+The console starts the user service when needed and shows live connector
+traffic counters plus remote CPU/admission status. Closing it leaves the
+connector running. Codex is launched separately with `codex`; the installed
+Codex wrapper checks the Nando health contract and supplies an ephemeral
+provider override for `http://127.0.0.1:8787/v1`. Codex continues to own the
+user's local authentication. Neither helper reads or persists tokens.
+Applications that already manage their own API key can print the required
+local base URL environment with:
 
 ```bash
 ops/remote-backend/nando-connect env
@@ -46,7 +47,7 @@ ops/remote-backend/nando-connect env
 The Linux transport is a separate static binary:
 
 ```text
-nando-connect    launches/configures Codex
+nando-connect    manages and monitors the connector service
 nando-connector  forwards the local byte stream to the Nando server
 ```
 
@@ -54,6 +55,11 @@ nando-connector  forwards the local byte stream to the Nando server
 headers, body fields, and streaming frames pass through unchanged, so normal
 Codex releases do not require a connector release. Rebuild it only when the
 Nando transport or security contract changes.
+
+Transport-only counters are available on loopback at
+`http://127.0.0.1:18786/metrics`: active, accepted and completed connections,
+uploaded/downloaded bytes, rejections and relay failures. A connection is not
+reported as a Codex window because Codex may reuse or multiply TCP connections.
 
 The distributed user service listens directly on `127.0.0.1:8787`. The
 `nando-client-connector.compatibility.override.conf` file is only for a machine

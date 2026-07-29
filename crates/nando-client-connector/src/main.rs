@@ -1,6 +1,6 @@
 use nando_client_connector::{
     ConnectorConfig, DEFAULT_CONNECT_TIMEOUT, DEFAULT_LISTEN, DEFAULT_MAX_CONNECTIONS,
-    DEFAULT_UPSTREAM, check_upstream, run,
+    DEFAULT_METRICS_LISTEN, DEFAULT_UPSTREAM, check_upstream, run,
 };
 use std::env;
 use std::process::ExitCode;
@@ -20,6 +20,8 @@ fn main() -> ExitCode {
 
 fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
     let mut listen = env::var("NANDO_CONNECT_LISTEN").unwrap_or_else(|_| DEFAULT_LISTEN.to_owned());
+    let mut metrics_listen = env::var("NANDO_CONNECT_METRICS_LISTEN")
+        .unwrap_or_else(|_| DEFAULT_METRICS_LISTEN.to_owned());
     let mut upstream =
         env::var("NANDO_CONNECT_UPSTREAM").unwrap_or_else(|_| DEFAULT_UPSTREAM.to_owned());
     let mut max_connections = DEFAULT_MAX_CONNECTIONS;
@@ -30,6 +32,7 @@ fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
     while let Some(argument) = args.next() {
         match argument.as_str() {
             "--listen" => listen = next_value(&mut args, "--listen")?,
+            "--metrics-listen" => metrics_listen = next_value(&mut args, "--metrics-listen")?,
             "--upstream" => upstream = next_value(&mut args, "--upstream")?,
             "--max-connections" => {
                 max_connections = parse_usize(&next_value(&mut args, "--max-connections")?)?;
@@ -51,7 +54,13 @@ fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
         }
     }
 
-    let config = ConnectorConfig::new(&listen, upstream, max_connections, connect_timeout)?;
+    let config = ConnectorConfig::new(
+        &listen,
+        &metrics_listen,
+        upstream,
+        max_connections,
+        connect_timeout,
+    )?;
     if check_only {
         check_upstream(&config).map_err(|error| format!("health check failed: {error}"))?;
         println!("NANDO_REMOTE_OK {}", config.upstream);
@@ -60,8 +69,8 @@ fn execute(args: impl Iterator<Item = String>) -> Result<(), String> {
 
     check_upstream(&config).map_err(|error| format!("startup health check failed: {error}"))?;
     eprintln!(
-        "nando-connect: listening on {} -> {} (max_connections={})",
-        config.listen, config.upstream, config.max_connections
+        "nando-connect: listening on {} -> {} (metrics={}, max_connections={})",
+        config.listen, config.upstream, config.metrics_listen, config.max_connections
     );
     run(config).map_err(|error| format!("connector stopped: {error}"))
 }
@@ -95,6 +104,7 @@ Usage:
 
 Options:
   --listen ADDRESS             Loopback listener (default: {DEFAULT_LISTEN})
+  --metrics-listen ADDRESS     Loopback metrics listener (default: {DEFAULT_METRICS_LISTEN})
   --upstream HOST:PORT         Nando server (default: {DEFAULT_UPSTREAM})
   --max-connections COUNT      Concurrent connection limit (default: {DEFAULT_MAX_CONNECTIONS})
   --connect-timeout-ms MS      Upstream connection timeout (default: 2000)

@@ -5,27 +5,35 @@ SERVER_ORIGIN="${NANDO_SERVER_ORIGIN:-http://192.168.3.94:8787}"
 CONNECTOR_ORIGIN="${NANDO_CONNECTOR_ORIGIN:-http://127.0.0.1:8787}"
 BASE_URL="${NANDO_CONNECTOR_BASE_URL:-${CONNECTOR_ORIGIN%/}/v1}"
 HEALTH_URL="${NANDO_CONNECTOR_HEALTH_URL:-${CONNECTOR_ORIGIN%/}/health}"
-CODEX_BIN="${NANDO_CONNECT_CODEX_BIN:-codex}"
+CPU_HEALTH_URL="${NANDO_CONNECTOR_CPU_HEALTH_URL:-${CONNECTOR_ORIGIN%/}/cpu-health}"
+METRICS_URL="${NANDO_CONNECTOR_METRICS_URL:-http://127.0.0.1:18786/metrics}"
+SERVICE="${NANDO_CONNECTOR_SERVICE:-nando-client-connector.service}"
+SYSTEMCTL="${NANDO_CONNECT_SYSTEMCTL_BIN:-systemctl}"
 
 usage() {
   printf '%s\n' \
     "Usage:" \
+    "  nando-connect                  Start connector and show live status" \
+    "  nando-connect status           Show status once" \
+    "  nando-connect start|stop|restart" \
     "  nando-connect health" \
     "  nando-connect url" \
     "  nando-connect server-url" \
     "  nando-connect env" \
-    "  nando-connect codex [codex arguments...]" \
-    "  nando-connect [codex arguments...]"
+    "" \
+    "Run Codex separately with: codex"
+}
+
+fetch() {
+  curl --silent --show-error --fail \
+    --connect-timeout "${NANDO_CONNECT_TIMEOUT_SECONDS:-2}" \
+    --max-time "${NANDO_CONNECT_TIMEOUT_SECONDS:-2}" \
+    "$1"
 }
 
 check_transport() {
   local body
-  body="$(
-    curl --silent --show-error --fail \
-      --connect-timeout "${NANDO_CONNECT_TIMEOUT_SECONDS:-2}" \
-      --max-time "${NANDO_CONNECT_TIMEOUT_SECONDS:-2}" \
-      "${HEALTH_URL}"
-  )"
+  body="$(fetch "${HEALTH_URL}")"
   case "${body}" in
     *'"ok":true'*'"service":"nando-nginx-gateway"'*'"transport":"nginx"'*)
       ;;
@@ -37,20 +45,88 @@ check_transport() {
   printf '%s\n' "${body}"
 }
 
-run_codex() {
-  check_transport >/dev/null
-  exec "${CODEX_BIN}" \
-    -c 'model_provider="nando_remote"' \
-    -c 'model_providers.nando_remote.name="Nando Remote Gateway"' \
-    -c "model_providers.nando_remote.base_url=\"${BASE_URL}\"" \
-    -c 'model_providers.nando_remote.wire_api="responses"' \
-    -c 'model_providers.nando_remote.requires_openai_auth=true' \
-    -c 'model_providers.nando_remote.supports_websockets=false' \
-    "$@"
+service_state() {
+  "${SYSTEMCTL}" --user is-active "${SERVICE}" 2>/dev/null || true
 }
 
-command_name="${1:-codex}"
+start_connector() {
+  "${SYSTEMCTL}" --user start "${SERVICE}"
+}
+
+render_status() {
+  local state transport cpu metrics
+  state="$(service_state)"
+  transport="$(check_transport 2>/dev/null || true)"
+  cpu="$(fetch "${CPU_HEALTH_URL}" 2>/dev/null || true)"
+  metrics="$(fetch "${METRICS_URL}" 2>/dev/null || true)"
+
+  printf 'NANDO CONNECT\n'
+  printf 'LOCAL CONNECTOR  %s\n' "${state:-unknown}"
+  printf 'ROUTE            %s -> %s\n' "${BASE_URL}" "${SERVER_ORIGIN%/}/v1"
+
+  if [[ -z "${transport}" || -z "${cpu}" ]] || ! command -v jq >/dev/null 2>&1; then
+    printf 'REMOTE           %s\n' "$([[ -n "${transport}" ]] && printf ONLINE || printf UNAVAILABLE)"
+    return
+  fi
+
+  jq -r '
+    "REMOTE           " + (if .ok then "ONLINE" else "UNAVAILABLE" end),
+    "CPU / ADMISSION  " + (.mode // "?") + " / " + (.admission_verdict // "?"),
+    "ACTIVE PROFILES  " + ((.response_active_profiles // 0) | tostring),
+    "ORDINARY ACCEPTS " + ((.ordinary_response_local_accepts // 0) | tostring),
+    "CPU INPUT TOKENS " + ((.ordinary_response_local_accept_input_tokens // 0) | tostring),
+    "REQUESTS         " + ((.requests // 0) | tostring),
+    "UPSTREAM FALLBACK " + ((.fallbacks // 0) | tostring),
+    "FALSE ACCEPTS    " + ((.transition_false_accepts // 0) | tostring)
+  ' <<<"${cpu}"
+
+  if [[ -n "${metrics}" ]]; then
+    printf '\nCONNECTOR TRAFFIC\n'
+    jq -r '
+      "ACTIVE CONNECTIONS " + ((.active_connections // 0) | tostring),
+      "CONNECTIONS TOTAL  " + ((.accepted_connections // 0) | tostring),
+      "CONNECTIONS DONE   " + ((.completed_connections // 0) | tostring),
+      "UPLOAD BYTES       " + ((.upload_bytes // 0) | tostring),
+      "DOWNLOAD BYTES     " + ((.download_bytes // 0) | tostring),
+      "RELAY FAILURES     " + ((.relay_failures // 0) | tostring),
+      "UPTIME SECONDS     " + ((.uptime_seconds // 0) | tostring)
+    ' <<<"${metrics}"
+  fi
+}
+
+watch_status() {
+  start_connector
+  while :; do
+    if [[ -t 1 ]]; then
+      printf '\033[2J\033[H'
+    fi
+    render_status
+    printf '\nCtrl+C closes this monitor; the connector keeps running.\n'
+    [[ "${NANDO_CONNECT_WATCH_ONCE:-0}" == "1" ]] && return
+    sleep "${NANDO_CONNECT_REFRESH_SECONDS:-2}"
+  done
+}
+
+command_name="${1:-watch}"
 case "${command_name}" in
+  watch)
+    watch_status
+    ;;
+  status)
+    render_status
+    ;;
+  start)
+    start_connector
+    render_status
+    ;;
+  stop)
+    "${SYSTEMCTL}" --user stop "${SERVICE}"
+    printf 'Nando connector stopped.\n'
+    ;;
+  restart)
+    "${SYSTEMCTL}" --user restart "${SERVICE}"
+    render_status
+    ;;
   health)
     check_transport
     ;;
@@ -65,15 +141,14 @@ case "${command_name}" in
     printf 'export OPENAI_API_BASE=%q\n' "${BASE_URL}"
     ;;
   codex)
-    if (($# > 0)); then
-      shift
-    fi
-    run_codex "$@"
+    printf 'nando-connect no longer launches Codex; run: codex\n' >&2
+    exit 2
     ;;
   -h|--help|help)
     usage
     ;;
   *)
-    run_codex "$@"
+    usage >&2
+    exit 2
     ;;
 esac
