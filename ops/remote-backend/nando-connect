@@ -61,12 +61,13 @@ start_connector() {
 }
 
 migrate_legacy_shim() {
-  [[ "${NANDO_CONNECT_SKIP_LEGACY_MIGRATION:-0}" != "1" ]] || return
-  [[ -e "${COMPATIBILITY_DROPIN}" ]] || return
+  [[ "${NANDO_CONNECT_SKIP_LEGACY_MIGRATION:-0}" != "1" ]] || return 0
+  [[ -e "${COMPATIBILITY_DROPIN}" ]] || return 0
 
   printf 'Removing legacy local Nginx shim; connector will listen directly on 127.0.0.1:8787.\n'
   sudo systemctl disable --now "${LEGACY_SHIM_SERVICE}"
   unlink "${COMPATIBILITY_DROPIN}"
+  rmdir "$(dirname "${COMPATIBILITY_DROPIN}")"
   "${SYSTEMCTL}" --user daemon-reload
 
   if [[ -e "${LEGACY_SHIM_DROPIN}" ]]; then
