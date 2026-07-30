@@ -791,7 +791,7 @@ const TEMPLATE: &str = r#"
         : blocker === "MS3_LINKED_EVIDENCE_REUSE"
           ? "linked_evidence_reuse"
           : blocker === "CENSORED_PRE_ROUTE_RECEIPT_EPOCH"
-            ? "pre_route_receipt_epoch_censored"
+            ? "pre-route epoch censored"
           : "linked_generation_close";
     const effectivePredecessorVerdict = predecessor?.linked_acquisition_failure
       ? linkedClosureVerdict(predecessorBlocker)
@@ -1132,7 +1132,7 @@ mod tests {
         assert!(html.contains("linked_acquisition_fail"));
         assert!(html.contains("capture_gap_repair"));
         assert!(html.contains("linked_evidence_reuse"));
-        assert!(html.contains("pre_route_receipt_epoch_censored"));
+        assert!(html.contains("pre-route epoch censored"));
         assert!(html.contains("censored_pre_route_receipt_rows"));
         assert!(html.contains("active_freeze_blocker"));
         assert!(
