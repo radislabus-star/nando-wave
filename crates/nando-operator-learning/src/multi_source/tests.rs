@@ -1452,7 +1452,99 @@ fn stale_missing_terminal_is_censored_without_becoming_negative_evidence() {
 }
 
 #[test]
-fn v3_missing_terminal_remains_in_the_frozen_eligible_denominator() {
+fn v2_stalled_rows_close_as_pre_route_receipt_epoch_without_authority() {
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract_v2(3, 4),
+        10,
+        vec![
+            t1_topology_row("stalled", "request-stalled", "session-stalled", 1, 1_000),
+            t1_topology_row("eligible-a", "request-eligible-a", "session-a", 2, 2_000),
+            t1_topology_row("eligible-b", "request-eligible-b", "session-b", 3, 3_000),
+        ],
+        Vec::new(),
+        vec![
+            terminal("request-eligible-a", 1_990, 2_100),
+            terminal("request-eligible-b", 2_990, 3_100),
+        ],
+    );
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::Collecting
+    );
+
+    let closed = close_ms3_pre_route_receipt_epoch_v1(report).expect("epoch closure");
+    assert!(closed.validate(), "{closed:#?}");
+    assert_eq!(
+        closed.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch
+    );
+    assert_eq!(closed.blocker, MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH);
+    assert_eq!(
+        closed
+            .ineligible_reason_counts
+            .get(&MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable),
+        Some(&1)
+    );
+    assert!(!closed.phase_update_allowed);
+    assert!(!closed.authority_ready);
+
+    let mut registry = Ms3GenerationRegistryV1::new();
+    let receipt = registry
+        .seal_ineligible_probe_censor(1, &closed, closed.consumed_capture_sequence)
+        .expect("durable epoch censor");
+    assert!(receipt.validate());
+    assert_eq!(
+        receipt.schema,
+        MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V3
+    );
+    assert_eq!(receipt.blocker, MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH);
+    assert_eq!(receipt.censored_topology_rows, 1);
+    assert_eq!(receipt.censored_pre_route_receipt_rows, 1);
+    assert!(!receipt.phase_mutation_allowed);
+    assert!(!receipt.authority_ready);
+}
+
+#[test]
+fn legacy_v3_provider_bound_policy_remains_byte_valid() {
+    let mut contract = acquisition_contract_v3(3, 4);
+    contract.eligibility_policy = Some(MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1.to_owned());
+    contract.contract_root_sha256 = contract.expected_root();
+    assert!(contract.validate());
+
+    let canonical = serde_cbor::to_vec(&contract).expect("legacy contract bytes");
+    assert_eq!(
+        serde_cbor::from_slice::<Ms3LinkedFrameAcquisitionContractV1>(&canonical)
+            .expect("legacy contract restore"),
+        contract
+    );
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        contract,
+        10,
+        vec![t1_topology_row(
+            "legacy",
+            "request-legacy",
+            "session-legacy",
+            1,
+            1_000,
+        )],
+        Vec::new(),
+        Vec::new(),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.schema, MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2);
+    assert_eq!(report.candidate_topology_rows, 0);
+    assert_eq!(report.eligible_topology_rows, 1);
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::Collecting
+    );
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
+}
+
+#[test]
+fn v3_provider_bound_topology_is_candidate_until_route_and_terminal_settle() {
     let contract = acquisition_contract_v3(3, 4);
     let canonical = serde_cbor::to_vec(&contract).expect("contract bytes");
     assert_eq!(
@@ -1477,7 +1569,8 @@ fn v3_missing_terminal_remains_in_the_frozen_eligible_denominator() {
 
     assert!(report.validate(), "{report:#?}");
     assert_eq!(report.raw_scanned_topology_rows, 3);
-    assert_eq!(report.eligible_topology_rows, 3);
+    assert_eq!(report.candidate_topology_rows, 3);
+    assert_eq!(report.eligible_topology_rows, 0);
     assert_eq!(report.terminal_receipt_rows, 2);
     assert_eq!(report.censored_topology_rows, 0);
     assert!(report.ineligible_reason_counts.is_empty());
@@ -1486,6 +1579,55 @@ fn v3_missing_terminal_remains_in_the_frozen_eligible_denominator() {
         Ms3LinkedFrameAcquisitionVerdictV1::Collecting
     );
     assert!(report.receipts.is_empty());
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
+}
+
+#[test]
+fn v3_scientific_denominator_requires_route_bound_frame_and_terminal() {
+    let topology = t1_topology_row("eligible-a", "request-eligible-a", "session-a", 1, 1_000);
+    let frame = t1_completed_frame("eligible-a", "action-eligible-a", "session-a", 1_500);
+    let frame_root = nando_operator_kernel::canonical_json_sha256(&frame).expect("frame root");
+    let report = build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
+        acquisition_contract_v3(3, 4),
+        10,
+        vec![
+            topology,
+            t1_topology_row(
+                "terminal-only",
+                "request-terminal-only",
+                "session-b",
+                2,
+                2_000,
+            ),
+            t1_topology_row(
+                "candidate-only",
+                "request-candidate-only",
+                "session-c",
+                3,
+                3_000,
+            ),
+        ],
+        vec![frame],
+        vec![
+            terminal("request-eligible-a", 990, 1_100),
+            terminal("request-terminal-only", 1_990, 2_100),
+        ],
+        &BTreeSet::from([root("session-a")]),
+        &BTreeSet::from([frame_root]),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.raw_scanned_topology_rows, 3);
+    assert_eq!(report.candidate_topology_rows, 3);
+    assert_eq!(report.terminal_receipt_rows, 2);
+    assert_eq!(report.eligible_topology_rows, 1);
+    assert_eq!(report.relevant_verified_frame_rows, 1);
+    assert_eq!(report.linked_frame_rows, 0);
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::Collecting
+    );
     assert!(!report.phase_update_allowed);
     assert!(!report.authority_ready);
 }

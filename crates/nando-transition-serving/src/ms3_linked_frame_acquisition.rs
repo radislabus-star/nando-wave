@@ -8,9 +8,11 @@ use std::path::{Path, PathBuf};
 
 use nando_operator_kernel::RelationFrame;
 use nando_operator_learning::multi_source::{
-    MS3_RECEIPT_LAG_SLO_SECONDS_V1, Ms3LinkedFrameAcquisitionContractV1,
-    Ms3LinkedFrameAcquisitionReportV1, PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
-    build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1,
+    MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2, MS3_RECEIPT_LAG_SLO_SECONDS_V1,
+    Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
+    PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
+    build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1,
+    close_ms3_pre_route_receipt_epoch_v1,
 };
 use std::collections::BTreeSet;
 
@@ -185,15 +187,21 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         frames: Vec<RelationFrame>,
         terminals: Vec<TransportTerminalReceiptV1>,
     ) -> Result<Ms3LinkedFrameAcquisitionReportV1, String> {
-        self.evaluate_excluding_used_evidence(
+        let route_bound_frame_roots = frames
+            .iter()
+            .filter_map(|frame| nando_operator_kernel::canonical_json_sha256(frame).ok())
+            .collect();
+        self.evaluate_with_route_bound_evidence(
             generated_at_unix,
             new_topologies,
             frames,
             terminals,
             &BTreeSet::new(),
+            &route_bound_frame_roots,
         )
     }
 
+    #[cfg(test)]
     pub(super) fn evaluate_excluding_used_evidence(
         &mut self,
         generated_at_unix: u64,
@@ -202,17 +210,45 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         terminals: Vec<TransportTerminalReceiptV1>,
         used_evidence_roots: &BTreeSet<String>,
     ) -> Result<Ms3LinkedFrameAcquisitionReportV1, String> {
+        self.evaluate_with_route_bound_evidence(
+            generated_at_unix,
+            new_topologies,
+            frames,
+            terminals,
+            used_evidence_roots,
+            &BTreeSet::new(),
+        )
+    }
+
+    pub(super) fn evaluate_with_route_bound_evidence(
+        &mut self,
+        generated_at_unix: u64,
+        new_topologies: Vec<PreActionTopologyAuditRowV1>,
+        frames: Vec<RelationFrame>,
+        terminals: Vec<TransportTerminalReceiptV1>,
+        used_evidence_roots: &BTreeSet<String>,
+        route_bound_frame_roots: &BTreeSet<String>,
+    ) -> Result<Ms3LinkedFrameAcquisitionReportV1, String> {
         if let Some(report) = &self.terminal_report {
             return Ok(report.clone());
         }
-        let report = build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1(
+        let report = build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
             self.contract.clone(),
             generated_at_unix,
             new_topologies,
             frames,
             terminals,
             used_evidence_roots,
+            route_bound_frame_roots,
         );
+        let report = if self.contract.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2 {
+            match close_ms3_pre_route_receipt_epoch_v1(report.clone()) {
+                Ok(closed) => closed,
+                Err(_) => report,
+            }
+        } else {
+            report
+        };
         if !report.validate() {
             return Err("ms3_acquisition_report_invalid".to_owned());
         }

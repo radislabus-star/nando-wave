@@ -616,7 +616,7 @@ const TEMPLATE: &str = r#"
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
-      <div class="ms3-cell"><div class="ms3-label">ELIGIBLE / LINKED LIMIT</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div><div id="ms3-acquisition-raw" class="scope-note">RAW SCANNED — / 4096</div></div>
+      <div class="ms3-cell"><div class="ms3-label">SCIENTIFIC / LINKED LIMIT</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div><div id="ms3-acquisition-raw" class="scope-note">CANDIDATE — · RAW — / 4096</div></div>
       <div class="ms3-cell"><div class="ms3-label">TERMINAL / RELEVANT / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">FUTURE APPLICABILITY</div><div id="ms3-future-applicability" class="ms3-value watch">0 / 256</div></div>
@@ -790,12 +790,16 @@ const TEMPLATE: &str = r#"
         ? "capture_gap_repair"
         : blocker === "MS3_LINKED_EVIDENCE_REUSE"
           ? "linked_evidence_reuse"
+          : blocker === "CENSORED_PRE_ROUTE_RECEIPT_EPOCH"
+            ? "pre_route_receipt_epoch_censored"
           : "linked_generation_close";
     const effectivePredecessorVerdict = predecessor?.linked_acquisition_failure
       ? linkedClosureVerdict(predecessorBlocker)
       : predecessorVerdict;
+    const predecessorPreRouteRows = predecessor?.linked_acquisition_failure?.censored_pre_route_receipt_rows || 0;
     const acquisitionVerdict = acquisition.verdict || "unavailable";
     const eligibleTopologyRows = acquisition.eligible_topology_rows ?? acquisition.evaluated_topology_rows ?? 0;
+    const candidateTopologyRows = acquisition.candidate_topology_rows ?? eligibleTopologyRows;
     const topologyLimit = acquisitionContract.max_new_topology_rows || 256;
     const rawTopologyRows = acquisition.raw_scanned_topology_rows ?? acquisition.new_topology_rows_seen ?? 0;
     const rawTopologyLimit = acquisitionContract.max_raw_topology_rows || 4096;
@@ -830,9 +834,9 @@ const TEMPLATE: &str = r#"
               ? "UNIQUE_LAW_FROZEN"
               : acquisitionVerdict.toUpperCase();
     text("ms3-generation", activeGeneration > 0 ? `G${activeGeneration} · ${activePhase}` : "НЕТ ДАННЫХ");
-    text("ms3-predecessor", predecessor ? `G${predecessor.generation_sequence} · ${effectivePredecessorVerdict.toUpperCase()}` : "НЕТ");
+    text("ms3-predecessor", predecessor ? `G${predecessor.generation_sequence} · ${effectivePredecessorVerdict.toUpperCase()}${predecessorPreRouteRows > 0 ? ` · ${number.format(predecessorPreRouteRows)}` : ""}` : "НЕТ");
     text("ms3-acquisition", `${number.format(eligibleTopologyRows)} / ${number.format(topologyLimit)}`);
-    text("ms3-acquisition-raw", `RAW SCANNED ${number.format(rawTopologyRows)} / ${number.format(rawTopologyLimit)} · CENSORED ${number.format(censoredTopologyRows)}`);
+    text("ms3-acquisition-raw", `CANDIDATE ${number.format(candidateTopologyRows)} · RAW ${number.format(rawTopologyRows)} / ${number.format(rawTopologyLimit)} · CENSORED ${number.format(censoredTopologyRows)}`);
     text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(relevantRows)} / ${number.format(linkedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
     text("ms3-future-applicability", lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN");
@@ -1116,9 +1120,10 @@ mod tests {
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
-        assert!(html.contains("ELIGIBLE / LINKED LIMIT"));
-        assert!(html.contains("RAW SCANNED"));
+        assert!(html.contains("SCIENTIFIC / LINKED LIMIT"));
+        assert!(html.contains("CANDIDATE"));
         assert!(html.contains("acquisition.eligible_topology_rows"));
+        assert!(html.contains("acquisition.candidate_topology_rows"));
         assert!(html.contains("acquisitionContract.max_raw_topology_rows"));
         assert!(html.contains("CAPTURE / RECEIPT HEALTH"));
         assert!(html.contains("RECEIPT_STALLED"));
@@ -1127,6 +1132,8 @@ mod tests {
         assert!(html.contains("linked_acquisition_fail"));
         assert!(html.contains("capture_gap_repair"));
         assert!(html.contains("linked_evidence_reuse"));
+        assert!(html.contains("pre_route_receipt_epoch_censored"));
+        assert!(html.contains("censored_pre_route_receipt_rows"));
         assert!(html.contains("active_freeze_blocker"));
         assert!(
             html.contains("const currentBlocker = lawFrozen ? futureBlocker : acquisitionBlocker")

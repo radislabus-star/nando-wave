@@ -70,19 +70,22 @@ pub use join::{
     validate_pre_action_topology_join_eligibility_v1,
 };
 pub use linked_frame_acquisition::{
-    MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_UNATTRIBUTED_PROBE,
-    MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V1,
+    MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH,
+    MS3_CENSORED_UNATTRIBUTED_PROBE, MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V1,
     MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2,
     MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3, MS3_LINKED_FRAME_ACQUISITION_FAIL,
     MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1, MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2,
-    MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1, MS3_LINKED_FRAME_RECEIPT_SCHEMA_V1,
+    MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3, MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1,
+    MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V2, MS3_LINKED_FRAME_RECEIPT_SCHEMA_V1,
     MS3_RECEIPT_LAG_SLO_SECONDS_V1, Ms3AcquisitionTopologySelectionV1,
     Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
     Ms3LinkedFrameAcquisitionVerdictV1, Ms3LinkedFrameReceiptV1,
     REPRESENTATION_GAP_CLASSIFIER_VERSION_V1,
     build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1,
     build_ms3_linked_frame_acquisition_report_v1,
-    select_ms3_linked_frame_acquisition_topologies_v1,
+    build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1,
+    close_ms3_pre_route_receipt_epoch_v1, select_ms3_linked_frame_acquisition_topologies_v1,
+    select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_v1,
 };
 pub use live_snapshot::{
     LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3, LiveMultiSourceDiscoveryBlockerV1,
@@ -97,7 +100,8 @@ pub use marginal::{
 pub use ms3_generation_registry_v1::{
     MS3_CAPTURE_GAP_REPAIR_REQUIRED, MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1,
     MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1,
-    MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2, MS3_GENERATION_REGISTRY_SCHEMA_V1,
+    MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2,
+    MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V3, MS3_GENERATION_REGISTRY_SCHEMA_V1,
     MS3_GENERATION_TERMINAL_SCHEMA_V1, MS3_LINKED_EVIDENCE_REUSE,
     Ms3GenerationAcquisitionFailureReceiptV1, Ms3GenerationEntryV1,
     Ms3GenerationLinkedAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1,

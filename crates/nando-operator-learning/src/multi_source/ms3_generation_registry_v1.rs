@@ -4,7 +4,8 @@ use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    FrozenVersionSpaceEnvelopeV1, MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_UNATTRIBUTED_PROBE,
+    FrozenVersionSpaceEnvelopeV1, MS3_CENSORED_INELIGIBLE_PROBE,
+    MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH, MS3_CENSORED_UNATTRIBUTED_PROBE,
     MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL, MS3_LINKED_FRAME_ACQUISITION_FAIL,
     Ms3FutureApplicabilityReportV1, Ms3FutureApplicabilityVerdictV1,
     Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureVerdictV1,
@@ -19,6 +20,8 @@ pub const MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1: &str =
     "nando.ms3-generation-linked-acquisition-failure.v1";
 pub const MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2: &str =
     "nando.ms3-generation-linked-acquisition-failure.v2";
+pub const MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V3: &str =
+    "nando.ms3-generation-linked-acquisition-failure.v3";
 pub const MS3_CAPTURE_GAP_REPAIR_REQUIRED: &str = "ms3_capture_gap_repair_required";
 pub const MS3_LINKED_EVIDENCE_REUSE: &str = "MS3_LINKED_EVIDENCE_REUSE";
 const MAX_MS3_GENERATION_REGISTRY_BYTES: usize = 12 * 1024 * 1024;
@@ -85,6 +88,8 @@ pub struct Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
     #[serde(default, skip_serializing_if = "is_zero")]
     pub censored_topology_rows: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
+    pub censored_pre_route_receipt_rows: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub consumed_topology_cursor_rows: u64,
 }
 
@@ -107,6 +112,29 @@ struct Ms3GenerationLinkedAcquisitionClosureDigestV2<'a> {
     eligible_topology_rows: u64,
     censored_unattributed_rows: u64,
     censored_topology_rows: u64,
+    consumed_topology_cursor_rows: u64,
+}
+
+#[derive(Serialize)]
+struct Ms3GenerationLinkedAcquisitionClosureDigestV3<'a> {
+    schema: &'static str,
+    generation_sequence: u64,
+    acquisition_contract_root_sha256: &'a str,
+    acquisition_report_root_sha256: &'a str,
+    topology_prefix_root_sha256: &'a str,
+    topology_watermark_rows: u64,
+    evaluated_topology_rows: u64,
+    terminal_receipt_rows: u64,
+    closure_capture_sequence: u64,
+    generated_at_unix: u64,
+    blocker: &'a str,
+    authority_ready: bool,
+    phase_mutation_allowed: bool,
+    raw_scanned_topology_rows: u64,
+    eligible_topology_rows: u64,
+    censored_unattributed_rows: u64,
+    censored_topology_rows: u64,
+    censored_pre_route_receipt_rows: u64,
     consumed_topology_cursor_rows: u64,
 }
 
@@ -294,6 +322,7 @@ impl Ms3GenerationRegistryV1 {
             } else {
                 0
             },
+            censored_pre_route_receipt_rows: 0,
             consumed_topology_cursor_rows: if use_cursor_receipt {
                 report.consumed_topology_cursor_rows
             } else {
@@ -338,6 +367,10 @@ impl Ms3GenerationRegistryV1 {
                 Ms3LinkedFrameAcquisitionVerdictV1::CensoredIneligibleProbe,
                 MS3_CENSORED_INELIGIBLE_PROBE,
                 1..
+            ) | (
+                Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch,
+                MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH,
+                1..
             )
         );
         if !report.validate()
@@ -369,8 +402,20 @@ impl Ms3GenerationRegistryV1 {
             return Err(Ms3GenerationRegistryErrorV1::ActiveGenerationExists);
         }
         self.require_successor_allowed(generation_sequence)?;
+        let censored_pre_route_receipt_rows = report
+            .ineligible_reason_counts
+            .get(&super::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable)
+            .copied()
+            .unwrap_or(0);
         let mut receipt = Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
-            schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2.to_owned(),
+            schema: if report.verdict
+                == Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch
+            {
+                MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V3
+            } else {
+                MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2
+            }
+            .to_owned(),
             receipt_root_sha256: String::new(),
             generation_sequence,
             acquisition_contract_root_sha256: report
@@ -394,6 +439,7 @@ impl Ms3GenerationRegistryV1 {
             eligible_topology_rows: report.eligible_topology_rows,
             censored_unattributed_rows: report.censored_unattributed_rows,
             censored_topology_rows: report.censored_topology_rows,
+            censored_pre_route_receipt_rows,
             consumed_topology_cursor_rows: report.consumed_topology_cursor_rows,
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
@@ -467,6 +513,7 @@ impl Ms3GenerationRegistryV1 {
             eligible_topology_rows: 0,
             censored_unattributed_rows: 0,
             censored_topology_rows: 0,
+            censored_pre_route_receipt_rows: 0,
             consumed_topology_cursor_rows: 0,
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
@@ -541,6 +588,7 @@ impl Ms3GenerationRegistryV1 {
             eligible_topology_rows: 0,
             censored_unattributed_rows: 0,
             censored_topology_rows: 0,
+            censored_pre_route_receipt_rows: 0,
             consumed_topology_cursor_rows: 0,
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
@@ -1065,6 +1113,7 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
     pub fn validate(&self) -> bool {
         let schema_v1 = self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V1;
         let schema_v2 = self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2;
+        let schema_v3 = self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V3;
         let cursor_receipt_valid = self.raw_scanned_topology_rows > 0
             && self.raw_scanned_topology_rows >= self.eligible_topology_rows
             && self.eligible_topology_rows == self.evaluated_topology_rows
@@ -1101,6 +1150,14 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
                     && self.terminal_receipt_rows >= self.eligible_topology_rows
                     && cursor_receipt_valid
             }
+            MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH => {
+                schema_v3
+                    && self.censored_topology_rows > 0
+                    && self.censored_pre_route_receipt_rows > 0
+                    && self.censored_pre_route_receipt_rows <= self.censored_topology_rows
+                    && self.terminal_receipt_rows <= self.eligible_topology_rows
+                    && cursor_receipt_valid
+            }
             _ => false,
         };
         let schema_payload_valid = schema_v1
@@ -1108,15 +1165,20 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
             && self.eligible_topology_rows == 0
             && self.censored_unattributed_rows == 0
             && self.censored_topology_rows == 0
+            && self.censored_pre_route_receipt_rows == 0
             && self.consumed_topology_cursor_rows == 0
             || schema_v2
+                && self.censored_pre_route_receipt_rows == 0
                 && matches!(
                     self.blocker.as_str(),
                     MS3_LINKED_FRAME_ACQUISITION_FAIL
                         | MS3_CENSORED_UNATTRIBUTED_PROBE
                         | MS3_CENSORED_INELIGIBLE_PROBE
-                );
-        (schema_v1 || schema_v2)
+                )
+            || schema_v3
+                && self.blocker == MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH
+                && self.censored_pre_route_receipt_rows > 0;
+        (schema_v1 || schema_v2 || schema_v3)
             && self.generation_sequence > 0
             && valid_nonzero_sha256(&self.receipt_root_sha256)
             && valid_nonzero_sha256(&self.acquisition_contract_root_sha256)
@@ -1135,7 +1197,29 @@ impl Ms3GenerationLinkedAcquisitionFailureReceiptV1 {
     }
 
     fn expected_root(&self) -> Result<String, Ms3GenerationRegistryErrorV1> {
-        let root = if self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2 {
+        let root = if self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V3 {
+            canonical_json_sha256(&Ms3GenerationLinkedAcquisitionClosureDigestV3 {
+                schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V3,
+                generation_sequence: self.generation_sequence,
+                acquisition_contract_root_sha256: &self.acquisition_contract_root_sha256,
+                acquisition_report_root_sha256: &self.acquisition_report_root_sha256,
+                topology_prefix_root_sha256: &self.topology_prefix_root_sha256,
+                topology_watermark_rows: self.topology_watermark_rows,
+                evaluated_topology_rows: self.evaluated_topology_rows,
+                terminal_receipt_rows: self.terminal_receipt_rows,
+                closure_capture_sequence: self.closure_capture_sequence,
+                generated_at_unix: self.generated_at_unix,
+                blocker: &self.blocker,
+                authority_ready: false,
+                phase_mutation_allowed: false,
+                raw_scanned_topology_rows: self.raw_scanned_topology_rows,
+                eligible_topology_rows: self.eligible_topology_rows,
+                censored_unattributed_rows: self.censored_unattributed_rows,
+                censored_topology_rows: self.censored_topology_rows,
+                censored_pre_route_receipt_rows: self.censored_pre_route_receipt_rows,
+                consumed_topology_cursor_rows: self.consumed_topology_cursor_rows,
+            })
+        } else if self.schema == MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2 {
             canonical_json_sha256(&Ms3GenerationLinkedAcquisitionClosureDigestV2 {
                 schema: MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V2,
                 generation_sequence: self.generation_sequence,

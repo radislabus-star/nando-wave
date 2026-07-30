@@ -18,7 +18,7 @@ fn contract_and_terminal_failure_restart_byte_identically() {
     );
     assert_eq!(
         contract.eligibility_policy.as_deref(),
-        Some(nando_operator_learning::multi_source::MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1)
+        Some(nando_operator_learning::multi_source::MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V2)
     );
     let collecting = runtime
         .evaluate(100, Vec::new(), Vec::new(), Vec::new())

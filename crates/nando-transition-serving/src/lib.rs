@@ -3022,15 +3022,22 @@ fn evaluate_ms3_linked_frame_acquisition(
         .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
         .generation_registry()
         .used_evidence_roots();
+    let route_bound_frame_roots = state
+        .remote_evidence_spool
+        .as_ref()
+        .and_then(|runtime| runtime.lock().ok())
+        .map(|runtime| runtime.route_bound_frame_roots())
+        .unwrap_or_default();
     runtime
         .lock()
         .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
-        .evaluate_excluding_used_evidence(
+        .evaluate_with_route_bound_evidence(
             unix_now(),
             new_topologies,
             frames,
             terminals,
             &used_evidence_roots,
+            &route_bound_frame_roots,
         )
 }
 
@@ -3066,6 +3073,7 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
             report.verdict,
             nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe
                 | nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredIneligibleProbe
+                | nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch
         )
     });
     let linked_capture_gap_repair = acquisition.terminal_report().filter(|report| {
@@ -8787,14 +8795,15 @@ mod tests {
     #[test]
     fn ms3_freeze_waits_for_terminal_linked_evidence() {
         use nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::{
-            AcquisitionFail, CensoredIneligibleProbe, CensoredUnattributedProbe, Collecting,
-            LinkedFrameObserved,
+            AcquisitionFail, CensoredIneligibleProbe, CensoredPreRouteReceiptEpoch,
+            CensoredUnattributedProbe, Collecting, LinkedFrameObserved,
         };
 
         assert!(!ms3_acquisition_allows_freeze(Collecting));
         assert!(!ms3_acquisition_allows_freeze(AcquisitionFail));
         assert!(!ms3_acquisition_allows_freeze(CensoredUnattributedProbe));
         assert!(!ms3_acquisition_allows_freeze(CensoredIneligibleProbe));
+        assert!(!ms3_acquisition_allows_freeze(CensoredPreRouteReceiptEpoch));
         assert!(ms3_acquisition_allows_freeze(LinkedFrameObserved));
     }
 

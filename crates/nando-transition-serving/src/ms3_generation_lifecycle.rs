@@ -1122,17 +1122,28 @@ mod tests {
         topology_archive
             .append(&unlinked)
             .expect("unlinked topology");
+        let settled_frame = completed_frame(
+            "unlinked",
+            "action-unlinked",
+            "unlinked-lineage",
+            opened_at_ms.saturating_add(20),
+            true,
+        );
+        let settled_frame_root =
+            nando_operator_kernel::canonical_json_sha256(&settled_frame).expect("frame root");
         let failed = generation_one
             .acquisition
-            .evaluate(
+            .evaluate_with_route_bound_evidence(
                 opened_at_unix,
                 vec![unlinked],
-                Vec::new(),
+                vec![settled_frame],
                 vec![terminal(
                     "request-unlinked",
                     opened_at_ms,
                     opened_at_ms.saturating_add(10),
                 )],
+                &BTreeSet::from([settled_frame_root.clone()]),
+                &BTreeSet::from([settled_frame_root]),
             )
             .expect("terminal acquisition failure");
         assert_eq!(
@@ -1580,6 +1591,157 @@ mod tests {
                 .frozen
                 .generation_registry()
                 .phase_mutation_allowed
+        );
+    }
+
+    #[test]
+    #[ignore = "requires NANDO_MS3_G25_FIXTURE pointing to a disposable live-state copy"]
+    fn frozen_g25_fixture_closes_pre_route_receipt_epoch_into_v3() {
+        let fixture =
+            PathBuf::from(std::env::var("NANDO_MS3_G25_FIXTURE").expect("fixture directory"));
+        let topology_root = fixture.join("pre-action-topology-archive-v1");
+        let topology_archive =
+            MultiSourceTopologyArchive::open(&topology_root).expect("topology archive");
+        let learning_root = fixture.join("linked-frame-acquisition-v1");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_secs();
+        let (mut lifecycle, mut generation) = Ms3GenerationLifecycleRuntime::open(
+            &learning_root,
+            &topology_archive,
+            now,
+            256,
+            86_400,
+        )
+        .expect("G25 lifecycle");
+        assert_eq!(lifecycle.manifest().active_generation_sequence, 25);
+        assert_eq!(
+            generation.acquisition.contract().schema,
+            nando_operator_learning::multi_source::MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2
+        );
+
+        let watermark = generation.acquisition.contract().topology_watermark_rows;
+        let new_topologies = topology_archive
+            .rows_after(usize::try_from(watermark).expect("watermark range"))
+            .expect("G25 topology tail");
+        let request_ids = new_topologies
+            .iter()
+            .map(|row| row.structure.request_event_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let intent_ids = new_topologies
+            .iter()
+            .map(|row| row.structure.turn_intent_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let frame_archive = crate::multi_source_frame_archive::MultiSourceFrameArchive::open(
+            &fixture.join("relation-frame-archive-v1"),
+        )
+        .expect("frame archive");
+        let terminal_archive = crate::terminal_receipt_archive::TerminalReceiptArchive::open(
+            &fixture.join("terminal-receipt-archive-v1"),
+        )
+        .expect("terminal archive");
+        let frames = frame_archive.frames_for_intents(&intent_ids);
+        let terminals = terminal_archive.receipts_for_requests(&request_ids);
+        let used_evidence_roots = generation
+            .frozen
+            .generation_registry()
+            .used_evidence_roots();
+        let report = generation
+            .acquisition
+            .evaluate_excluding_used_evidence(
+                now,
+                new_topologies,
+                frames,
+                terminals,
+                &used_evidence_roots,
+            )
+            .expect("G25 epoch closure report");
+
+        assert_eq!(report.raw_scanned_topology_rows, 264);
+        assert_eq!(report.eligible_topology_rows, 66);
+        assert_eq!(report.terminal_receipt_rows, 66);
+        assert_eq!(report.censored_topology_rows, 198);
+        assert_eq!(
+            report
+                .ineligible_reason_counts
+                .get(
+                    &nando_operator_learning::multi_source::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable
+                ),
+            Some(&180)
+        );
+        assert_eq!(
+            report.ineligible_reason_counts.get(
+                &nando_operator_learning::multi_source::MultiSourceJoinCensoredReasonV1::TopologyCensored
+            ),
+            Some(&18)
+        );
+        assert_eq!(
+            report
+                .ineligible_reason_counts
+                .values()
+                .copied()
+                .sum::<u64>(),
+            198
+        );
+        assert_eq!(report.linked_frame_rows, 0);
+        assert_eq!(
+            report.verdict,
+            nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch
+        );
+        assert_eq!(
+            report.blocker,
+            nando_operator_learning::multi_source::MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH
+        );
+        assert!(!report.authority_ready);
+        assert!(!report.phase_update_allowed);
+
+        let consumed_cursor = report.consumed_topology_cursor_rows;
+        let consumed_sequence = report.consumed_capture_sequence;
+        let closure_receipt = generation
+            .frozen
+            .seal_ineligible_probe_censor(&report, consumed_sequence)
+            .expect("durable G25 epoch censor");
+        assert_eq!(closure_receipt.censored_pre_route_receipt_rows, 180);
+        assert_eq!(closure_receipt.censored_topology_rows, 198);
+        let generation_26 = lifecycle
+            .prepare_successor(
+                &topology_archive,
+                now.saturating_add(1),
+                &generation.acquisition,
+                &generation.frozen,
+            )
+            .expect("G26 successor");
+        assert_eq!(generation_26.acquisition.generation_sequence(), 26);
+        assert_eq!(
+            generation_26.acquisition.contract().schema,
+            nando_operator_learning::multi_source::MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3
+        );
+        assert_eq!(
+            generation_26.acquisition.contract().topology_watermark_rows,
+            consumed_cursor
+        );
+        assert!(!generation_26.frozen.generation_registry().authority_ready);
+        assert!(
+            !generation_26
+                .frozen
+                .generation_registry()
+                .phase_mutation_allowed
+        );
+
+        let (restored, restored_generation) = Ms3GenerationLifecycleRuntime::open(
+            &learning_root,
+            &topology_archive,
+            now.saturating_add(2),
+            256,
+            86_400,
+        )
+        .expect("restart after G25 rollover");
+        assert_eq!(restored.manifest(), lifecycle.manifest());
+        assert_eq!(restored_generation.acquisition.generation_sequence(), 26);
+        assert_eq!(
+            restored_generation.acquisition.contract(),
+            generation_26.acquisition.contract()
         );
     }
 }
