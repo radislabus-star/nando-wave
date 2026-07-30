@@ -2260,17 +2260,12 @@ async fn ms3_generation_registry_report(State(state): State<AppState>) -> Respon
                     .independent_future()
                     .map(|future| future.envelope_root_sha256.clone()),
                 active_acquisition_report.as_ref().and_then(|report| {
-                    (report.verdict
-                        == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
-                        && !report.receipts.is_empty()
-                        && report.receipts.iter().all(|receipt| {
-                            runtime
-                                .generation_registry()
-                                .linked_evidence_was_used(receipt)
-                        }))
-                    .then_some(
-                        nando_operator_learning::multi_source::MS3_LINKED_EVIDENCE_REUSE,
+                    ms3_linked_evidence_reuse_is_blocker(
+                        report,
+                        runtime.contract(),
+                        runtime.generation_registry(),
                     )
+                    .then_some(nando_operator_learning::multi_source::MS3_LINKED_EVIDENCE_REUSE)
                 }),
             ))
         });
@@ -3105,14 +3100,11 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
             })
     });
     let linked_evidence_reuse = terminal_report.as_ref().filter(|report| {
-        !active_generation_frozen
-            && report.verdict
-            == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
-            && !report.receipts.is_empty()
-            && report
-                .receipts
-                .iter()
-                .all(|receipt| frozen.generation_registry().linked_evidence_was_used(receipt))
+        ms3_linked_evidence_reuse_is_blocker(
+            report,
+            active_frozen_contract.as_ref(),
+            frozen.generation_registry(),
+        )
     });
     let terminal_contradiction = frozen.independent_future().is_some_and(|future| {
         future.receipt.verdict
@@ -3197,6 +3189,24 @@ fn frozen_contract_owns_linked_report(
             && receipt.request_event_id_sha256 == contract.request_event_id_sha256
             && receipt.action_event_id_sha256 == contract.action_event_id_sha256
     })
+}
+
+fn ms3_linked_evidence_reuse_is_blocker(
+    report: &nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionReportV1,
+    active_frozen_contract: Option<
+        &nando_operator_learning::multi_source::FrozenVersionSpaceContractV1,
+    >,
+    registry: &nando_operator_learning::multi_source::Ms3GenerationRegistryV1,
+) -> bool {
+    report.verdict
+        == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+        && !report.receipts.is_empty()
+        && !active_frozen_contract
+            .is_some_and(|contract| frozen_contract_owns_linked_report(contract, report))
+        && report
+            .receipts
+            .iter()
+            .all(|receipt| registry.linked_evidence_was_used(receipt))
 }
 
 fn linked_acquisition_closure_capture_sequence(
@@ -9123,6 +9133,19 @@ mod tests {
             evaluate_ms3_frozen_version_space(&state).expect("idempotent G26 freeze"),
             frozen
         );
+        {
+            let runtime = state
+                .ms3_frozen_version_space
+                .as_ref()
+                .expect("frozen runtime")
+                .lock()
+                .expect("frozen runtime lock");
+            assert!(!ms3_linked_evidence_reuse_is_blocker(
+                &report,
+                runtime.contract(),
+                runtime.generation_registry(),
+            ));
+        }
         assert!(
             !rollover_ms3_generation_if_terminal(&state)
                 .expect("active generation must own its frozen linked evidence")
