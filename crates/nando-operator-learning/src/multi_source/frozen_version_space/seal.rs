@@ -7,11 +7,12 @@ use crate::{OperatorIdentificationMachineV1, OperatorIdentificationStateV1};
 
 use super::super::identification::MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2;
 use super::types::{
-    ContractDigestV1, FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1,
+    ContractDigestV1, ContractDigestV2, FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1,
     MAX_ENVELOPE_BYTES, MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1,
-    MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1, MS3_PRE_FREEZE_BUFFER_EXCLUDED,
-    MS3_T1_GRAMMAR_SCHEMA_V1, Ms3FrozenVersionSpaceErrorV1, Ms3FrozenVersionSpaceStateV1,
-    Ms3VersionSpaceVersionsV1, PreparedMs3VersionSpaceV1, PreparedStateV1,
+    MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2, MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1,
+    MS3_PRE_FREEZE_BUFFER_EXCLUDED, MS3_T1_GRAMMAR_SCHEMA_V1, Ms3FrozenVersionSpaceErrorV1,
+    Ms3FrozenVersionSpaceStateV1, Ms3VersionSpaceVersionsV1, PreparedMs3VersionSpaceV1,
+    PreparedStateV1,
 };
 
 impl PreparedMs3VersionSpaceV1 {
@@ -72,10 +73,17 @@ impl PreparedMs3VersionSpaceV1 {
             4_096_u64,
         ))
         .map_err(|_| Ms3FrozenVersionSpaceErrorV1::Serialization)?;
+        let contract_schema = if self.scientific_denominator_receipt_root_sha256.is_some() {
+            MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2
+        } else {
+            MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1
+        };
         let mut contract = FrozenVersionSpaceContractV1 {
-            schema: MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1.to_owned(),
+            schema: contract_schema.to_owned(),
             contract_root_sha256: String::new(),
             acquisition_report_root_sha256: self.acquisition_report_root_sha256,
+            scientific_denominator_receipt_root_sha256: self
+                .scientific_denominator_receipt_root_sha256,
             linked_receipt_root_sha256: self.linked_receipt.receipt_root_sha256,
             topology_root_sha256: self.linked_receipt.topology_commitment_root_sha256,
             frame_root_sha256: self.linked_receipt.completed_frame_root_sha256,
@@ -126,44 +134,89 @@ impl PreparedMs3VersionSpaceV1 {
 
 impl FrozenVersionSpaceContractV1 {
     pub fn expected_root(&self) -> Result<String, Ms3FrozenVersionSpaceErrorV1> {
-        canonical_json_sha256(&ContractDigestV1 {
-            schema: MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1,
-            acquisition_report_root_sha256: &self.acquisition_report_root_sha256,
-            linked_receipt_root_sha256: &self.linked_receipt_root_sha256,
-            topology_root_sha256: &self.topology_root_sha256,
-            frame_root_sha256: &self.frame_root_sha256,
-            terminal_root_sha256: &self.terminal_root_sha256,
-            transport_binding_root_sha256: &self.transport_binding_root_sha256,
-            session_lineage_sha256: &self.session_lineage_sha256,
-            session_id_sha256: &self.session_id_sha256,
-            turn_intent_id_sha256: &self.turn_intent_id_sha256,
-            request_event_id_sha256: &self.request_event_id_sha256,
-            action_event_id_sha256: &self.action_event_id_sha256,
-            extractor_schema: &self.extractor_schema,
-            extractor_version: &self.extractor_version,
-            generator_version: &self.generator_version,
-            grammar_root_sha256: &self.grammar_root_sha256,
-            compiler_version: &self.compiler_version,
-            vm_abi: &self.vm_abi,
-            verifier_schema: &self.verifier_schema,
-            support_rows_root_sha256: &self.support_rows_root_sha256,
-            support_watermark: self.support_watermark,
-            contract_watermark: self.contract_watermark,
-            future_min_sequence: self.future_min_sequence,
-            pre_freeze_buffer_sequence_span: self.pre_freeze_buffer_sequence_span,
-            pre_freeze_buffer_disposition: &self.pre_freeze_buffer_disposition,
-            candidate_program_roots_sha256: &self.candidate_program_roots_sha256,
-            semantic_class_roots_sha256: &self.semantic_class_roots_sha256,
-            quotient_root_sha256: &self.quotient_root_sha256,
-            class_predictions_root_sha256: &self.class_predictions_root_sha256,
-            machine_checkpoint_sha256: &self.machine_checkpoint_sha256,
-            machine_checkpoint_bytes: self.machine_checkpoint_bytes,
-            passive_probe: &self.passive_probe,
-            state: &self.state,
-            authority_ready: false,
-            phase_mutation_allowed: false,
-        })
-        .map_err(|_| Ms3FrozenVersionSpaceErrorV1::Serialization)
+        let root = if self.schema == MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2 {
+            let denominator_root = self
+                .scientific_denominator_receipt_root_sha256
+                .as_deref()
+                .ok_or(Ms3FrozenVersionSpaceErrorV1::InvalidEnvelope)?;
+            canonical_json_sha256(&ContractDigestV2 {
+                schema: MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2,
+                acquisition_report_root_sha256: &self.acquisition_report_root_sha256,
+                scientific_denominator_receipt_root_sha256: denominator_root,
+                linked_receipt_root_sha256: &self.linked_receipt_root_sha256,
+                topology_root_sha256: &self.topology_root_sha256,
+                frame_root_sha256: &self.frame_root_sha256,
+                terminal_root_sha256: &self.terminal_root_sha256,
+                transport_binding_root_sha256: &self.transport_binding_root_sha256,
+                session_lineage_sha256: &self.session_lineage_sha256,
+                session_id_sha256: &self.session_id_sha256,
+                turn_intent_id_sha256: &self.turn_intent_id_sha256,
+                request_event_id_sha256: &self.request_event_id_sha256,
+                action_event_id_sha256: &self.action_event_id_sha256,
+                extractor_schema: &self.extractor_schema,
+                extractor_version: &self.extractor_version,
+                generator_version: &self.generator_version,
+                grammar_root_sha256: &self.grammar_root_sha256,
+                compiler_version: &self.compiler_version,
+                vm_abi: &self.vm_abi,
+                verifier_schema: &self.verifier_schema,
+                support_rows_root_sha256: &self.support_rows_root_sha256,
+                support_watermark: self.support_watermark,
+                contract_watermark: self.contract_watermark,
+                future_min_sequence: self.future_min_sequence,
+                pre_freeze_buffer_sequence_span: self.pre_freeze_buffer_sequence_span,
+                pre_freeze_buffer_disposition: &self.pre_freeze_buffer_disposition,
+                candidate_program_roots_sha256: &self.candidate_program_roots_sha256,
+                semantic_class_roots_sha256: &self.semantic_class_roots_sha256,
+                quotient_root_sha256: &self.quotient_root_sha256,
+                class_predictions_root_sha256: &self.class_predictions_root_sha256,
+                machine_checkpoint_sha256: &self.machine_checkpoint_sha256,
+                machine_checkpoint_bytes: self.machine_checkpoint_bytes,
+                passive_probe: &self.passive_probe,
+                state: &self.state,
+                authority_ready: false,
+                phase_mutation_allowed: false,
+            })
+        } else {
+            canonical_json_sha256(&ContractDigestV1 {
+                schema: MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1,
+                acquisition_report_root_sha256: &self.acquisition_report_root_sha256,
+                linked_receipt_root_sha256: &self.linked_receipt_root_sha256,
+                topology_root_sha256: &self.topology_root_sha256,
+                frame_root_sha256: &self.frame_root_sha256,
+                terminal_root_sha256: &self.terminal_root_sha256,
+                transport_binding_root_sha256: &self.transport_binding_root_sha256,
+                session_lineage_sha256: &self.session_lineage_sha256,
+                session_id_sha256: &self.session_id_sha256,
+                turn_intent_id_sha256: &self.turn_intent_id_sha256,
+                request_event_id_sha256: &self.request_event_id_sha256,
+                action_event_id_sha256: &self.action_event_id_sha256,
+                extractor_schema: &self.extractor_schema,
+                extractor_version: &self.extractor_version,
+                generator_version: &self.generator_version,
+                grammar_root_sha256: &self.grammar_root_sha256,
+                compiler_version: &self.compiler_version,
+                vm_abi: &self.vm_abi,
+                verifier_schema: &self.verifier_schema,
+                support_rows_root_sha256: &self.support_rows_root_sha256,
+                support_watermark: self.support_watermark,
+                contract_watermark: self.contract_watermark,
+                future_min_sequence: self.future_min_sequence,
+                pre_freeze_buffer_sequence_span: self.pre_freeze_buffer_sequence_span,
+                pre_freeze_buffer_disposition: &self.pre_freeze_buffer_disposition,
+                candidate_program_roots_sha256: &self.candidate_program_roots_sha256,
+                semantic_class_roots_sha256: &self.semantic_class_roots_sha256,
+                quotient_root_sha256: &self.quotient_root_sha256,
+                class_predictions_root_sha256: &self.class_predictions_root_sha256,
+                machine_checkpoint_sha256: &self.machine_checkpoint_sha256,
+                machine_checkpoint_bytes: self.machine_checkpoint_bytes,
+                passive_probe: &self.passive_probe,
+                state: &self.state,
+                authority_ready: false,
+                phase_mutation_allowed: false,
+            })
+        };
+        root.map_err(|_| Ms3FrozenVersionSpaceErrorV1::Serialization)
     }
 
     #[must_use]
@@ -213,7 +266,14 @@ impl FrozenVersionSpaceContractV1 {
                     && self.passive_probe.is_some()
             }
         };
-        if self.schema != MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1
+        let schema_valid = self.schema == MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1
+            && self.scientific_denominator_receipt_root_sha256.is_none()
+            || self.schema == MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2
+                && self
+                    .scientific_denominator_receipt_root_sha256
+                    .as_deref()
+                    .is_some_and(valid_nonzero_sha256);
+        if !schema_valid
             || !roots.into_iter().all(valid_nonzero_sha256)
             || self.extractor_schema.is_empty()
             || self.extractor_version.is_empty()

@@ -25,16 +25,36 @@ fn contract_and_terminal_failure_restart_byte_identically() {
         .expect("collecting");
     assert!(!collecting.is_terminal());
     assert_eq!(runtime.frozen_evaluated_topology_rows(), None);
+    std::fs::create_dir(root.join(TERMINAL_REPORT_FILE)).expect("block report mirror");
+    assert!(
+        runtime
+            .evaluate(160, Vec::new(), Vec::new(), Vec::new())
+            .expect_err("report mirror failure")
+            .starts_with("ms3_acquisition_rename:")
+    );
+    assert!(runtime.scientific_denominator_receipt().is_some());
+    assert_eq!(runtime.frozen_evaluated_topology_rows(), None);
+    std::fs::remove_dir(root.join(TERMINAL_REPORT_FILE)).expect("unblock report mirror");
     let failed = runtime
         .evaluate(160, Vec::new(), Vec::new(), Vec::new())
-        .expect("failed");
+        .expect("recover report mirror from durable denominator");
     assert!(failed.is_terminal());
     assert_eq!(runtime.frozen_evaluated_topology_rows(), Some(0));
+    let denominator = runtime
+        .scientific_denominator_receipt()
+        .expect("scientific denominator");
+    assert!(denominator.settlements.is_empty());
+    assert_eq!(
+        denominator.reconstruction,
+        nando_operator_learning::multi_source::Ms3ScientificDenominatorReconstructionV1::AtomicAtReport
+    );
     drop(runtime);
+    std::fs::remove_file(root.join(TERMINAL_REPORT_FILE)).expect("remove report mirror");
 
     let mut restarted =
         Ms3LinkedFrameAcquisitionRuntime::open(&root, &topology_archive, 999, 1, 60)
             .expect("restart");
+    assert!(root.join(TERMINAL_REPORT_FILE).is_file());
     assert_eq!(restarted.contract(), &contract);
     assert_eq!(restarted.frozen_evaluated_topology_rows(), Some(0));
     assert_eq!(

@@ -26,6 +26,12 @@ pub const MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2: &str =
     "nando.ms3-linked-frame-acquisition-report.v2";
 pub const MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3: &str =
     "nando.ms3-linked-frame-acquisition-report.v3";
+pub const MS3_SCIENTIFIC_TOPOLOGY_SETTLEMENT_SCHEMA_V1: &str =
+    "nando.ms3-scientific-topology-settlement.v1";
+pub const MS3_SCIENTIFIC_DENOMINATOR_RECEIPT_SCHEMA_V1: &str =
+    "nando.ms3-scientific-denominator-receipt.v1";
+pub const MS3_SCIENTIFIC_DENOMINATOR_ENVELOPE_SCHEMA_V1: &str =
+    "nando.ms3-scientific-denominator-envelope.v1";
 pub const REPRESENTATION_GAP_CLASSIFIER_VERSION_V1: &str = "nando.representation-gap-classifier.v1";
 pub const MS3_LINKED_FRAME_ACQUISITION_FAIL: &str = "MS3_LINKED_FRAME_ACQUISITION_FAIL";
 pub const MS3_CENSORED_UNATTRIBUTED_PROBE: &str = "CENSORED_UNATTRIBUTED_PROBE";
@@ -34,6 +40,7 @@ pub const MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH: &str = "CENSORED_PRE_ROUTE_RECEI
 pub const MS3_RECEIPT_LAG_SLO_SECONDS_V1: u64 = 300;
 const MAX_ACQUISITION_TOPOLOGIES: u64 = 4_096;
 const MAX_ACQUISITION_SECONDS: u64 = 7 * 24 * 60 * 60;
+const MAX_SCIENTIFIC_DENOMINATOR_ENVELOPE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -123,6 +130,53 @@ pub struct Ms3LinkedFrameAcquisitionReportV1 {
     pub consumed_topology_cursor_rows: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub consumed_capture_sequence: u64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Ms3ScientificDenominatorReconstructionV1 {
+    AtomicAtReport,
+    AppendOnlyCountEquivalence,
+    ReportRootClosure,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ms3ScientificTopologySettlementV1 {
+    pub schema: String,
+    pub settlement_root_sha256: String,
+    pub acquisition_contract_root_sha256: String,
+    pub topology_commitment_root_sha256: String,
+    pub terminal_receipt_root_sha256: String,
+    pub route_bound_frame_root_sha256: String,
+    pub authority_ready: bool,
+    pub phase_mutation_allowed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ms3ScientificDenominatorReceiptV1 {
+    pub schema: String,
+    pub receipt_root_sha256: String,
+    pub acquisition_report_root_sha256: String,
+    pub acquisition_contract_root_sha256: String,
+    pub acquisition_report_schema: String,
+    pub topology_watermark_rows: u64,
+    pub consumed_topology_cursor_rows: u64,
+    pub eligible_topology_rows: u64,
+    pub settlements: Vec<Ms3ScientificTopologySettlementV1>,
+    pub reconstruction: Ms3ScientificDenominatorReconstructionV1,
+    pub authority_ready: bool,
+    pub phase_mutation_allowed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ms3ScientificDenominatorEnvelopeV1 {
+    pub schema: String,
+    pub envelope_root_sha256: String,
+    pub report: Ms3LinkedFrameAcquisitionReportV1,
+    pub receipt: Ms3ScientificDenominatorReceiptV1,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -421,7 +475,7 @@ impl Ms3LinkedFrameAcquisitionContractV1 {
     }
 
     #[must_use]
-    fn uses_route_settlement_policy(&self) -> bool {
+    pub fn uses_route_settlement_policy(&self) -> bool {
         self.schema == MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V3
             && self.eligibility_policy.as_deref() == Some(MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V2)
     }
@@ -875,6 +929,167 @@ fn route_bound_frame_matches_topology(
                 .contains(&frame.session_id_sha256))
 }
 
+pub fn build_ms3_scientific_denominator_receipt_v1(
+    report: &Ms3LinkedFrameAcquisitionReportV1,
+    topologies: &[PreActionTopologyAuditRowV1],
+    frames: &[RelationFrame],
+    terminals: &[TransportTerminalReceiptV1],
+    route_bound_frame_roots: &BTreeSet<String>,
+    reconstruction: Ms3ScientificDenominatorReconstructionV1,
+) -> Result<Ms3ScientificDenominatorReceiptV1, &'static str> {
+    if !report.validate()
+        || !report.is_terminal()
+        || !report.acquisition_contract.uses_route_settlement_policy()
+    {
+        return Err("ms3_scientific_denominator_report_invalid");
+    }
+    let selection = select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_v1(
+        &report.acquisition_contract,
+        report.generated_at_unix,
+        topologies.to_vec(),
+        terminals,
+        frames,
+        route_bound_frame_roots,
+    );
+    if u64::try_from(selection.raw_topologies.len()).unwrap_or(u64::MAX)
+        != report.raw_scanned_topology_rows
+        || u64::try_from(selection.candidate_topologies.len()).unwrap_or(u64::MAX)
+            != report.candidate_topology_rows
+        || u64::try_from(selection.eligible_topologies.len()).unwrap_or(u64::MAX)
+            != report.eligible_topology_rows
+        || selection.ineligible_reason_counts != report.ineligible_reason_counts
+    {
+        return Err("ms3_scientific_denominator_reconstruction_mismatch");
+    }
+
+    let deadline_nanos = report
+        .acquisition_contract
+        .deadline_unix
+        .saturating_mul(1_000_000_000);
+    let mut terminals_by_request = BTreeMap::<&str, &TransportTerminalReceiptV1>::new();
+    for terminal in terminals.iter().filter(|terminal| {
+        terminal.validate() && terminal.completed_at_unix_nanos <= deadline_nanos
+    }) {
+        match terminals_by_request.insert(&terminal.request_event_id_sha256, terminal) {
+            Some(existing) if existing != terminal => {
+                return Err("ms3_scientific_denominator_terminal_rebound");
+            }
+            _ => {}
+        }
+    }
+    let mut route_bound_frames = frames
+        .iter()
+        .filter_map(|frame| {
+            let root = canonical_json_sha256(frame).ok()?;
+            (frame.observed_at_unix_nanos <= deadline_nanos
+                && route_bound_frame_roots.contains(&root))
+            .then_some((root, frame))
+        })
+        .collect::<Vec<_>>();
+    route_bound_frames.sort_by(|left, right| left.0.cmp(&right.0));
+
+    let mut settlements = selection
+        .eligible_topologies
+        .iter()
+        .map(|topology| {
+            let terminal = terminals_by_request
+                .get(topology.structure.request_event_id_sha256.as_str())
+                .copied()
+                .ok_or("ms3_scientific_denominator_terminal_missing")?;
+            let (frame_root, _) = route_bound_frames
+                .iter()
+                .find(|(_, frame)| route_bound_frame_matches_topology(topology, frame))
+                .ok_or("ms3_scientific_denominator_route_frame_missing")?;
+            Ms3ScientificTopologySettlementV1::seal(
+                report.acquisition_contract.contract_root_sha256.clone(),
+                topology.commit.commitment_root_sha256.clone(),
+                terminal.receipt_root_sha256.clone(),
+                frame_root.clone(),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    settlements.sort_by(|left, right| {
+        left.topology_commitment_root_sha256
+            .cmp(&right.topology_commitment_root_sha256)
+    });
+
+    let mut receipt = Ms3ScientificDenominatorReceiptV1 {
+        schema: MS3_SCIENTIFIC_DENOMINATOR_RECEIPT_SCHEMA_V1.to_owned(),
+        receipt_root_sha256: String::new(),
+        acquisition_report_root_sha256: report.report_root_sha256.clone(),
+        acquisition_contract_root_sha256: report.acquisition_contract.contract_root_sha256.clone(),
+        acquisition_report_schema: report.schema.clone(),
+        topology_watermark_rows: report.acquisition_contract.topology_watermark_rows,
+        consumed_topology_cursor_rows: report.consumed_topology_cursor_rows,
+        eligible_topology_rows: report.eligible_topology_rows,
+        settlements,
+        reconstruction,
+        authority_ready: false,
+        phase_mutation_allowed: false,
+    };
+    receipt.receipt_root_sha256 = receipt.expected_root();
+    receipt
+        .validate_against_report(report)
+        .then_some(receipt)
+        .ok_or("ms3_scientific_denominator_receipt_invalid")
+}
+
+#[must_use]
+pub fn validate_ms3_scientific_denominator_evidence_v1(
+    receipt: &Ms3ScientificDenominatorReceiptV1,
+    report: &Ms3LinkedFrameAcquisitionReportV1,
+    topologies: &[PreActionTopologyAuditRowV1],
+    frames: &[RelationFrame],
+    terminals: &[TransportTerminalReceiptV1],
+    route_bound_frame_roots: &BTreeSet<String>,
+) -> bool {
+    if !receipt.validate_against_report(report) {
+        return false;
+    }
+    let topologies_by_root = topologies
+        .iter()
+        .map(|topology| (topology.commit.commitment_root_sha256.as_str(), topology))
+        .collect::<BTreeMap<_, _>>();
+    let terminals_by_root = terminals
+        .iter()
+        .filter(|terminal| terminal.validate())
+        .map(|terminal| (terminal.receipt_root_sha256.as_str(), terminal))
+        .collect::<BTreeMap<_, _>>();
+    let frames_by_root = frames
+        .iter()
+        .filter_map(|frame| canonical_json_sha256(frame).ok().map(|root| (root, frame)))
+        .collect::<BTreeMap<_, _>>();
+    receipt.settlements.iter().all(|settlement| {
+        let Some(topology) =
+            topologies_by_root.get(settlement.topology_commitment_root_sha256.as_str())
+        else {
+            return false;
+        };
+        let Some(terminal) =
+            terminals_by_root.get(settlement.terminal_receipt_root_sha256.as_str())
+        else {
+            return false;
+        };
+        let Some(frame) = frames_by_root.get(settlement.route_bound_frame_root_sha256.as_str())
+        else {
+            return false;
+        };
+        terminal.request_event_id_sha256 == topology.structure.request_event_id_sha256
+            && terminal.completed_at_unix_nanos
+                <= report
+                    .acquisition_contract
+                    .deadline_unix
+                    .saturating_mul(1_000_000_000)
+            && route_bound_frame_roots.contains(&settlement.route_bound_frame_root_sha256)
+            && frame.observed_at_unix_nanos
+                <= report
+                    .acquisition_contract
+                    .deadline_unix
+                    .saturating_mul(1_000_000_000)
+            && route_bound_frame_matches_topology(topology, frame)
+    })
+}
+
 fn acquisition_topology_eligibility(
     contract: &Ms3LinkedFrameAcquisitionContractV1,
     topology: &PreActionTopologyAuditRowV1,
@@ -978,6 +1193,186 @@ impl Ms3LinkedFrameReceiptV1 {
             && !self.phase_update_allowed
             && !self.authority_ready
             && self.receipt_root_sha256 == self.expected_root()
+    }
+}
+
+impl Ms3ScientificTopologySettlementV1 {
+    fn seal(
+        acquisition_contract_root_sha256: String,
+        topology_commitment_root_sha256: String,
+        terminal_receipt_root_sha256: String,
+        route_bound_frame_root_sha256: String,
+    ) -> Result<Self, &'static str> {
+        let mut settlement = Self {
+            schema: MS3_SCIENTIFIC_TOPOLOGY_SETTLEMENT_SCHEMA_V1.to_owned(),
+            settlement_root_sha256: String::new(),
+            acquisition_contract_root_sha256,
+            topology_commitment_root_sha256,
+            terminal_receipt_root_sha256,
+            route_bound_frame_root_sha256,
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        };
+        settlement.settlement_root_sha256 = settlement.expected_root();
+        settlement
+            .validate()
+            .then_some(settlement)
+            .ok_or("ms3_scientific_topology_settlement_invalid")
+    }
+
+    #[must_use]
+    pub fn expected_root(&self) -> String {
+        canonical_json_sha256(&(
+            MS3_SCIENTIFIC_TOPOLOGY_SETTLEMENT_SCHEMA_V1,
+            self.acquisition_contract_root_sha256.as_str(),
+            self.topology_commitment_root_sha256.as_str(),
+            self.terminal_receipt_root_sha256.as_str(),
+            self.route_bound_frame_root_sha256.as_str(),
+            false,
+            false,
+        ))
+        .expect("MS3 scientific topology settlement serializes")
+    }
+
+    #[must_use]
+    pub fn validate(&self) -> bool {
+        self.schema == MS3_SCIENTIFIC_TOPOLOGY_SETTLEMENT_SCHEMA_V1
+            && [
+                self.settlement_root_sha256.as_str(),
+                self.acquisition_contract_root_sha256.as_str(),
+                self.topology_commitment_root_sha256.as_str(),
+                self.terminal_receipt_root_sha256.as_str(),
+                self.route_bound_frame_root_sha256.as_str(),
+            ]
+            .into_iter()
+            .all(valid_nonzero_sha256)
+            && !self.authority_ready
+            && !self.phase_mutation_allowed
+            && self.settlement_root_sha256 == self.expected_root()
+    }
+}
+
+impl Ms3ScientificDenominatorReceiptV1 {
+    #[must_use]
+    pub fn expected_root(&self) -> String {
+        canonical_json_sha256(&(
+            MS3_SCIENTIFIC_DENOMINATOR_RECEIPT_SCHEMA_V1,
+            self.acquisition_report_root_sha256.as_str(),
+            self.acquisition_contract_root_sha256.as_str(),
+            self.acquisition_report_schema.as_str(),
+            self.topology_watermark_rows,
+            self.consumed_topology_cursor_rows,
+            self.eligible_topology_rows,
+            &self.settlements,
+            self.reconstruction,
+            false,
+            false,
+        ))
+        .expect("MS3 scientific denominator receipt serializes")
+    }
+
+    #[must_use]
+    pub fn validate_against_report(&self, report: &Ms3LinkedFrameAcquisitionReportV1) -> bool {
+        let settlement_topology_roots = self
+            .settlements
+            .iter()
+            .map(|settlement| settlement.topology_commitment_root_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        self.schema == MS3_SCIENTIFIC_DENOMINATOR_RECEIPT_SCHEMA_V1
+            && [
+                self.receipt_root_sha256.as_str(),
+                self.acquisition_report_root_sha256.as_str(),
+                self.acquisition_contract_root_sha256.as_str(),
+            ]
+            .into_iter()
+            .all(valid_nonzero_sha256)
+            && report.validate()
+            && report.is_terminal()
+            && report.acquisition_contract.uses_route_settlement_policy()
+            && self.acquisition_report_root_sha256 == report.report_root_sha256
+            && self.acquisition_contract_root_sha256
+                == report.acquisition_contract.contract_root_sha256
+            && self.acquisition_report_schema == report.schema
+            && self.topology_watermark_rows == report.acquisition_contract.topology_watermark_rows
+            && self.consumed_topology_cursor_rows == report.consumed_topology_cursor_rows
+            && self.eligible_topology_rows == report.eligible_topology_rows
+            && self.settlements.len()
+                == usize::try_from(self.eligible_topology_rows).unwrap_or(usize::MAX)
+            && self.settlements.iter().all(|settlement| {
+                settlement.validate()
+                    && settlement.acquisition_contract_root_sha256
+                        == self.acquisition_contract_root_sha256
+            })
+            && self.settlements.windows(2).all(|pair| {
+                pair[0].topology_commitment_root_sha256 < pair[1].topology_commitment_root_sha256
+            })
+            && report.receipts.iter().all(|receipt| {
+                settlement_topology_roots.contains(receipt.topology_commitment_root_sha256.as_str())
+            })
+            && !self.authority_ready
+            && !self.phase_mutation_allowed
+            && self.receipt_root_sha256 == self.expected_root()
+    }
+}
+
+impl Ms3ScientificDenominatorEnvelopeV1 {
+    pub fn seal(
+        report: Ms3LinkedFrameAcquisitionReportV1,
+        receipt: Ms3ScientificDenominatorReceiptV1,
+    ) -> Result<Self, &'static str> {
+        let mut envelope = Self {
+            schema: MS3_SCIENTIFIC_DENOMINATOR_ENVELOPE_SCHEMA_V1.to_owned(),
+            envelope_root_sha256: String::new(),
+            report,
+            receipt,
+        };
+        envelope.envelope_root_sha256 = envelope.expected_root();
+        envelope
+            .validate()
+            .then_some(envelope)
+            .ok_or("ms3_scientific_denominator_envelope_invalid")
+    }
+
+    #[must_use]
+    pub fn expected_root(&self) -> String {
+        canonical_json_sha256(&(
+            MS3_SCIENTIFIC_DENOMINATOR_ENVELOPE_SCHEMA_V1,
+            self.report.report_root_sha256.as_str(),
+            self.receipt.receipt_root_sha256.as_str(),
+        ))
+        .expect("MS3 scientific denominator envelope serializes")
+    }
+
+    #[must_use]
+    pub fn validate(&self) -> bool {
+        self.schema == MS3_SCIENTIFIC_DENOMINATOR_ENVELOPE_SCHEMA_V1
+            && valid_nonzero_sha256(&self.envelope_root_sha256)
+            && self.receipt.validate_against_report(&self.report)
+            && self.envelope_root_sha256 == self.expected_root()
+    }
+
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, &'static str> {
+        if !self.validate() {
+            return Err("ms3_scientific_denominator_envelope_invalid");
+        }
+        let bytes =
+            serde_cbor::to_vec(self).map_err(|_| "ms3_scientific_denominator_envelope_encode")?;
+        if bytes.is_empty() || bytes.len() > MAX_SCIENTIFIC_DENOMINATOR_ENVELOPE_BYTES {
+            return Err("ms3_scientific_denominator_envelope_budget");
+        }
+        Ok(bytes)
+    }
+
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
+        if bytes.is_empty() || bytes.len() > MAX_SCIENTIFIC_DENOMINATOR_ENVELOPE_BYTES {
+            return Err("ms3_scientific_denominator_envelope_budget");
+        }
+        let envelope = serde_cbor::from_slice::<Self>(bytes)
+            .map_err(|_| "ms3_scientific_denominator_envelope_decode")?;
+        if !envelope.validate() || envelope.canonical_bytes()? != bytes {
+            return Err("ms3_scientific_denominator_envelope_invalid");
+        }
+        Ok(envelope)
     }
 }
 

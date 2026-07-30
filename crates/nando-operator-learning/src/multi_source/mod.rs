@@ -40,9 +40,10 @@ pub use failure_corpus::{
 };
 pub use frozen_version_space::{
     FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1,
-    MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1, MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1,
-    MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL, MS3_FUTURE_APPLICABILITY_CONTRACT_SCHEMA_V1,
-    MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1, MS3_FUTURE_APPLICABILITY_LEDGER_SCHEMA_V1,
+    MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1, MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2,
+    MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1, MS3_FUTURE_APPLICABILITY_ACQUISITION_FAIL,
+    MS3_FUTURE_APPLICABILITY_CONTRACT_SCHEMA_V1, MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1,
+    MS3_FUTURE_APPLICABILITY_LEDGER_SCHEMA_V1,
     MS3_FUTURE_APPLICABILITY_MAX_INDEPENDENT_TOPOLOGIES_V1,
     MS3_FUTURE_APPLICABILITY_REPORT_SCHEMA_V1, MS3_FUTURE_APPLICABILITY_WINDOW_SECONDS_V1,
     MS3_FUTURE_PREDICTION_SCHEMA_V1, MS3_INDEPENDENT_FUTURE_ENVELOPE_SCHEMA_V1,
@@ -54,7 +55,7 @@ pub use frozen_version_space::{
     Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureReceiptV1, Ms3IndependentFutureVerdictV1,
     Ms3VersionSpaceVersionsV1, Ms3ZeroClassReasonV1, PreparedMs3VersionSpaceV1,
     classify_ms3_unique_law_v1, predict_ms3_unique_law_v1, prepare_ms3_frozen_version_space_v1,
-    seal_ms3_independent_future_v1,
+    prepare_ms3_frozen_version_space_with_denominator_v1, seal_ms3_independent_future_v1,
 };
 pub use identification::{
     MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
@@ -77,15 +78,20 @@ pub use linked_frame_acquisition::{
     MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1, MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2,
     MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3, MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V1,
     MS3_LINKED_FRAME_ELIGIBILITY_POLICY_V2, MS3_LINKED_FRAME_RECEIPT_SCHEMA_V1,
-    MS3_RECEIPT_LAG_SLO_SECONDS_V1, Ms3AcquisitionTopologySelectionV1,
-    Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
-    Ms3LinkedFrameAcquisitionVerdictV1, Ms3LinkedFrameReceiptV1,
+    MS3_RECEIPT_LAG_SLO_SECONDS_V1, MS3_SCIENTIFIC_DENOMINATOR_ENVELOPE_SCHEMA_V1,
+    MS3_SCIENTIFIC_DENOMINATOR_RECEIPT_SCHEMA_V1, MS3_SCIENTIFIC_TOPOLOGY_SETTLEMENT_SCHEMA_V1,
+    Ms3AcquisitionTopologySelectionV1, Ms3LinkedFrameAcquisitionContractV1,
+    Ms3LinkedFrameAcquisitionReportV1, Ms3LinkedFrameAcquisitionVerdictV1, Ms3LinkedFrameReceiptV1,
+    Ms3ScientificDenominatorEnvelopeV1, Ms3ScientificDenominatorReceiptV1,
+    Ms3ScientificDenominatorReconstructionV1, Ms3ScientificTopologySettlementV1,
     REPRESENTATION_GAP_CLASSIFIER_VERSION_V1,
     build_ms3_linked_frame_acquisition_report_excluding_used_evidence_v1,
     build_ms3_linked_frame_acquisition_report_v1,
     build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1,
-    close_ms3_pre_route_receipt_epoch_v1, select_ms3_linked_frame_acquisition_topologies_v1,
+    build_ms3_scientific_denominator_receipt_v1, close_ms3_pre_route_receipt_epoch_v1,
+    select_ms3_linked_frame_acquisition_topologies_v1,
     select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_v1,
+    validate_ms3_scientific_denominator_evidence_v1,
 };
 pub use live_snapshot::{
     LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3, LiveMultiSourceDiscoveryBlockerV1,

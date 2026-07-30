@@ -969,6 +969,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         ms3_frozen_version_space,
         remote_evidence_spool,
     };
+    validate_ms3_scientific_denominator_link(&state)?;
     if state.ms3_generation_lifecycle.is_some() {
         rollover_ms3_generation_if_terminal(&state)?;
     }
@@ -3195,12 +3196,15 @@ fn evaluate_ms3_frozen_version_space(
         .ms3_frozen_version_space
         .as_ref()
         .ok_or_else(|| "ms3_frozen_version_space_not_configured".to_owned())?;
-    if let Some(contract) = runtime
-        .lock()
-        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
-        .contract()
-        .cloned()
-    {
+    // Cross-ledger validation locks this runtime again, so release the guard here.
+    let existing_contract = {
+        let runtime = runtime
+            .lock()
+            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+        runtime.contract().cloned()
+    };
+    if let Some(contract) = existing_contract {
+        validate_ms3_scientific_denominator_link(state)?;
         return Ok(contract);
     }
 
@@ -3234,62 +3238,107 @@ fn evaluate_ms3_frozen_version_space(
                 .ok_or_else(|| "ms3_acquisition_consumed_cursor_not_frozen".to_owned())?,
         )
     };
-    let frozen_topologies = {
+    let denominator_window_topologies = {
         let archive = state
             .multi_source_topology_archive
             .as_ref()
             .ok_or_else(|| "multi_source_topology_archive_not_configured".to_owned())?
             .lock()
             .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
-        let rows = archive.rows_between(
+        archive.rows_between(
             usize::try_from(watermark_rows)
                 .map_err(|_| "ms3_version_space_watermark_range".to_owned())?,
             usize::try_from(consumed_cursor_rows)
                 .map_err(|_| "ms3_version_space_consumed_cursor_range".to_owned())?,
-        )?;
-        let eligible = rows
-            .into_iter()
-            .filter(|row| {
-                nando_operator_learning::multi_source::validate_pre_action_topology_join_eligibility_v1(
-                    row,
-                )
-                .is_ok()
-            })
-            .collect::<Vec<_>>();
-        if u64::try_from(eligible.len()).unwrap_or(u64::MAX) != evaluated_rows {
-            return Err("ms3_version_space_eligible_denominator_mismatch".to_owned());
-        }
-        eligible
+        )?
     };
-    if !frozen_topologies.iter().any(|topology| {
-        topology.commit.commitment_root_sha256 == linked_receipt.topology_commitment_root_sha256
-    }) {
-        return Err("ms3_linked_topology_missing".to_owned());
-    }
-    // Binding identity includes the next request boundary, so replay the exact
-    // frozen denominator before selecting the receipt-owned transition.
-    let request_ids = frozen_topologies
+    let denominator_request_ids = denominator_window_topologies
         .iter()
         .map(|row| row.structure.request_event_id_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let intent_ids = frozen_topologies
+    let denominator_intent_ids = denominator_window_topologies
         .iter()
         .map(|row| row.structure.turn_intent_id_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let terminals = state
+    let denominator_terminals = state
         .terminal_receipt_archive
         .as_ref()
         .ok_or_else(|| "terminal_receipt_archive_not_configured".to_owned())?
         .lock()
         .map_err(|_| "terminal_archive_lock_poisoned".to_owned())?
-        .receipts_for_requests(&request_ids);
-    let frames = state
+        .receipts_for_requests(&denominator_request_ids);
+    let denominator_frames = state
         .multi_source_frame_archive
         .as_ref()
         .ok_or_else(|| "multi_source_frame_archive_not_configured".to_owned())?
         .lock()
         .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
-        .frames_for_intents(&intent_ids);
+        .frames_for_intents(&denominator_intent_ids);
+    let route_bound_frame_roots = state
+        .remote_evidence_spool
+        .as_ref()
+        .and_then(|runtime| runtime.lock().ok())
+        .map(|runtime| runtime.route_bound_frame_roots())
+        .unwrap_or_default();
+    let denominator_receipt = state
+        .ms3_linked_frame_acquisition
+        .as_ref()
+        .ok_or_else(|| "ms3_linked_frame_acquisition_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())?
+        .ensure_scientific_denominator(
+            &denominator_window_topologies,
+            &denominator_frames,
+            &denominator_terminals,
+            &route_bound_frame_roots,
+        )?;
+    if !nando_operator_learning::multi_source::validate_ms3_scientific_denominator_evidence_v1(
+        &denominator_receipt,
+        &acquisition,
+        &denominator_window_topologies,
+        &denominator_frames,
+        &denominator_terminals,
+        &route_bound_frame_roots,
+    ) {
+        return Err("ms3_scientific_denominator_evidence_invalid".to_owned());
+    }
+    let scientific_topology_roots = denominator_receipt
+        .settlements
+        .iter()
+        .map(|settlement| settlement.topology_commitment_root_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let frozen_topologies = denominator_window_topologies
+        .into_iter()
+        .filter(|row| {
+            scientific_topology_roots.contains(row.commit.commitment_root_sha256.as_str())
+        })
+        .collect::<Vec<_>>();
+    if u64::try_from(frozen_topologies.len()).unwrap_or(u64::MAX) != evaluated_rows {
+        return Err("ms3_version_space_scientific_denominator_mismatch".to_owned());
+    }
+    if !frozen_topologies.iter().any(|topology| {
+        topology.commit.commitment_root_sha256 == linked_receipt.topology_commitment_root_sha256
+    }) {
+        return Err("ms3_linked_topology_missing".to_owned());
+    }
+    // Binding identity includes the next request boundary, so replay only the
+    // content-addressed scientific denominator before selecting its transition.
+    let request_ids = frozen_topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let intent_ids = frozen_topologies
+        .iter()
+        .map(|row| row.structure.turn_intent_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let terminals = denominator_terminals
+        .into_iter()
+        .filter(|receipt| request_ids.contains(receipt.request_event_id_sha256.as_str()))
+        .collect::<Vec<_>>();
+    let frames = denominator_frames
+        .into_iter()
+        .filter(|frame| intent_ids.contains(frame.client_intent_id_sha256.as_str()))
+        .collect::<Vec<_>>();
     let ledger = nando_operator_learning::multi_source::TransportBindingLedgerV1::build(
         &frozen_topologies,
         &frames,
@@ -3316,12 +3365,14 @@ fn evaluate_ms3_frozen_version_space(
         .cloned()
         .ok_or_else(|| "ms3_linked_frame_missing".to_owned())?;
 
-    let prepared = nando_operator_learning::multi_source::prepare_ms3_frozen_version_space_v1(
-        &acquisition,
-        &bound,
-        &frame,
-    )
-    .map_err(|error| format!("ms3_version_space_prepare:{error}"))?;
+    let prepared =
+        nando_operator_learning::multi_source::prepare_ms3_frozen_version_space_with_denominator_v1(
+            &acquisition,
+            &bound,
+            &frame,
+            &denominator_receipt.receipt_root_sha256,
+        )
+        .map_err(|error| format!("ms3_version_space_prepare:{error}"))?;
     // Candidate enumeration and exact replay are complete before this second
     // watermark is captured. Intervening rows cannot become support or future.
     let contract_watermark = state
@@ -3344,6 +3395,51 @@ fn evaluate_ms3_frozen_version_space(
             },
             unix_now(),
         )
+}
+
+fn validate_ms3_scientific_denominator_link(state: &AppState) -> Result<(), String> {
+    let Some(frozen) = state.ms3_frozen_version_space.as_ref() else {
+        return Ok(());
+    };
+    let contract = frozen
+        .lock()
+        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+        .contract()
+        .cloned();
+    let receipt = state
+        .ms3_linked_frame_acquisition
+        .as_ref()
+        .map(|runtime| {
+            runtime
+                .lock()
+                .map_err(|_| "ms3_linked_frame_acquisition_lock_poisoned".to_owned())
+                .map(|runtime| runtime.scientific_denominator_receipt())
+        })
+        .transpose()?
+        .flatten();
+    validate_ms3_scientific_denominator_roots(contract.as_ref(), receipt.as_ref())
+}
+
+fn validate_ms3_scientific_denominator_roots(
+    contract: Option<&nando_operator_learning::multi_source::FrozenVersionSpaceContractV1>,
+    receipt: Option<&nando_operator_learning::multi_source::Ms3ScientificDenominatorReceiptV1>,
+) -> Result<(), String> {
+    let Some(contract) = contract else {
+        return Ok(());
+    };
+    let Some(expected_denominator_root) = contract
+        .scientific_denominator_receipt_root_sha256
+        .as_deref()
+    else {
+        return Ok(());
+    };
+    let receipt = receipt.ok_or_else(|| "ms3_scientific_denominator_receipt_missing".to_owned())?;
+    if receipt.receipt_root_sha256 != expected_denominator_root
+        || receipt.acquisition_report_root_sha256 != contract.acquisition_report_root_sha256
+    {
+        return Err("ms3_scientific_denominator_frozen_link_invalid".to_owned());
+    }
+    Ok(())
 }
 
 fn owns_ms3_lifecycle(state: &AppState) -> bool {
@@ -8805,6 +8901,221 @@ mod tests {
         assert!(!ms3_acquisition_allows_freeze(CensoredIneligibleProbe));
         assert!(!ms3_acquisition_allows_freeze(CensoredPreRouteReceiptEpoch));
         assert!(ms3_acquisition_allows_freeze(LinkedFrameObserved));
+    }
+
+    #[test]
+    #[ignore = "requires NANDO_MS3_G26_FIXTURE pointing to a disposable live-state copy"]
+    fn frozen_g26_fixture_replays_the_exact_scientific_denominator() {
+        let root = PathBuf::from(env::var("NANDO_MS3_G26_FIXTURE").expect("G26 fixture directory"));
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let mut state = project_status_test_state(&root, &registry_path);
+        let topology_archive = Arc::new(Mutex::new(
+            multi_source_topology_archive::MultiSourceTopologyArchive::open(
+                &state.config.multi_source_topology_archive_path,
+            )
+            .expect("topology archive"),
+        ));
+        let frame_archive = Arc::new(Mutex::new(
+            multi_source_frame_archive::MultiSourceFrameArchive::open(
+                &state.config.multi_source_frame_archive_path,
+            )
+            .expect("frame archive"),
+        ));
+        let terminal_archive = Arc::new(Mutex::new(
+            terminal_receipt_archive::TerminalReceiptArchive::open(
+                &state.config.terminal_receipt_archive_path,
+            )
+            .expect("terminal archive"),
+        ));
+        let remote_spool = Arc::new(Mutex::new(
+            remote_evidence_spool::RemoteEvidenceSpoolRuntime::open(
+                root.join("multi-source-live-v2/remote-evidence-spool-v1"),
+                root.join("empty-evidence-client-keys"),
+            )
+            .expect("remote evidence spool"),
+        ));
+        let (lifecycle, runtimes) = {
+            let topology = topology_archive.lock().expect("topology lock");
+            ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime::open(
+                &state.config.ms3_linked_frame_acquisition_path,
+                &topology,
+                unix_now(),
+                256,
+                86_400,
+            )
+            .expect("G26 lifecycle")
+        };
+        assert_eq!(lifecycle.manifest().active_generation_sequence, 26);
+        state.ms3_generation_lifecycle = Some(Arc::new(Mutex::new(lifecycle)));
+        state.ms3_linked_frame_acquisition = Some(Arc::new(Mutex::new(runtimes.acquisition)));
+        state.ms3_frozen_version_space = Some(Arc::new(Mutex::new(runtimes.frozen)));
+        state.multi_source_topology_archive = Some(topology_archive);
+        state.multi_source_frame_archive = Some(frame_archive);
+        state.terminal_receipt_archive = Some(terminal_archive);
+        state.remote_evidence_spool = Some(remote_spool);
+
+        let report = state
+            .ms3_linked_frame_acquisition
+            .as_ref()
+            .expect("acquisition")
+            .lock()
+            .expect("acquisition lock")
+            .terminal_report()
+            .expect("G26 terminal report");
+        let denominator_rows = state
+            .multi_source_topology_archive
+            .as_ref()
+            .expect("topology archive")
+            .lock()
+            .expect("topology lock")
+            .rows_between(
+                usize::try_from(report.acquisition_contract.topology_watermark_rows)
+                    .expect("watermark"),
+                usize::try_from(report.consumed_topology_cursor_rows).expect("cursor"),
+            )
+            .expect("denominator rows");
+        let request_ids = denominator_rows
+            .iter()
+            .map(|row| row.structure.request_event_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let intent_ids = denominator_rows
+            .iter()
+            .map(|row| row.structure.turn_intent_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let terminals = state
+            .terminal_receipt_archive
+            .as_ref()
+            .expect("terminal archive")
+            .lock()
+            .expect("terminal lock")
+            .receipts_for_requests(&request_ids);
+        let frames = state
+            .multi_source_frame_archive
+            .as_ref()
+            .expect("frame archive")
+            .lock()
+            .expect("frame lock")
+            .frames_for_intents(&intent_ids);
+        let current_route_roots = state
+            .remote_evidence_spool
+            .as_ref()
+            .expect("remote spool")
+            .lock()
+            .expect("remote spool lock")
+            .route_bound_frame_roots();
+        let report_route_roots = report
+            .receipts
+            .iter()
+            .map(|receipt| receipt.completed_frame_root_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let current_selection = nando_operator_learning::multi_source::select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_v1(
+            &report.acquisition_contract,
+            report.generated_at_unix,
+            denominator_rows.clone(),
+            &terminals,
+            &frames,
+            &current_route_roots,
+        );
+        let report_root_selection = nando_operator_learning::multi_source::select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_v1(
+            &report.acquisition_contract,
+            report.generated_at_unix,
+            denominator_rows,
+            &terminals,
+            &frames,
+            &report_route_roots,
+        );
+        eprintln!(
+            "G26 denominator replay current={}/{}/{} report-roots={}/{}/{} terminal={} relevant={} linked={}",
+            current_selection.raw_topologies.len(),
+            current_selection.candidate_topologies.len(),
+            current_selection.eligible_topologies.len(),
+            report_root_selection.raw_topologies.len(),
+            report_root_selection.candidate_topologies.len(),
+            report_root_selection.eligible_topologies.len(),
+            report.terminal_receipt_rows,
+            report.relevant_verified_frame_rows,
+            report.linked_frame_rows,
+        );
+
+        let frozen =
+            evaluate_ms3_frozen_version_space(&state).expect("G26 exact denominator freeze");
+        assert_eq!(
+            frozen.schema,
+            nando_operator_learning::multi_source::MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2
+        );
+        assert!(matches!(
+            frozen.state,
+            nando_operator_learning::multi_source::Ms3FrozenVersionSpaceStateV1::UniqueLawFrozen { .. }
+        ));
+        let denominator = state
+            .ms3_linked_frame_acquisition
+            .as_ref()
+            .expect("acquisition")
+            .lock()
+            .expect("acquisition lock")
+            .scientific_denominator_receipt()
+            .expect("scientific denominator");
+        assert_eq!(denominator.eligible_topology_rows, 11);
+        assert_eq!(denominator.settlements.len(), 11);
+        assert_eq!(
+            denominator.reconstruction,
+            nando_operator_learning::multi_source::Ms3ScientificDenominatorReconstructionV1::ReportRootClosure
+        );
+        assert_eq!(
+            frozen.scientific_denominator_receipt_root_sha256.as_deref(),
+            Some(denominator.receipt_root_sha256.as_str())
+        );
+        assert_eq!(
+            validate_ms3_scientific_denominator_roots(Some(&frozen), Some(&denominator)),
+            Ok(())
+        );
+        assert_eq!(
+            validate_ms3_scientific_denominator_roots(Some(&frozen), None),
+            Err("ms3_scientific_denominator_receipt_missing".to_owned())
+        );
+        let mut foreign_denominator = denominator.clone();
+        foreign_denominator.receipt_root_sha256 = "f".repeat(64);
+        assert_eq!(
+            validate_ms3_scientific_denominator_roots(Some(&frozen), Some(&foreign_denominator)),
+            Err("ms3_scientific_denominator_frozen_link_invalid".to_owned())
+        );
+        assert!(!frozen.authority_ready);
+        assert!(!frozen.phase_mutation_allowed);
+        assert_eq!(
+            evaluate_ms3_frozen_version_space(&state).expect("idempotent G26 freeze"),
+            frozen
+        );
+        let frozen_root = frozen.contract_root_sha256.clone();
+        drop(state);
+
+        let topology = multi_source_topology_archive::MultiSourceTopologyArchive::open(
+            &root.join("multi-source-live-v2/pre-action-topology-archive-v1"),
+        )
+        .expect("restart topology archive");
+        let (restored_lifecycle, restored) =
+            ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime::open(
+                &root.join("multi-source-live-v2/linked-frame-acquisition-v1"),
+                &topology,
+                unix_now(),
+                256,
+                86_400,
+            )
+            .expect("restart G26 lifecycle");
+        assert_eq!(restored_lifecycle.manifest().active_generation_sequence, 26);
+        assert_eq!(
+            restored
+                .frozen
+                .contract()
+                .expect("restored frozen contract")
+                .contract_root_sha256,
+            frozen_root
+        );
+        assert!(!restored.frozen.generation_registry().authority_ready);
+        assert!(!restored.frozen.generation_registry().phase_mutation_allowed);
     }
 
     #[test]

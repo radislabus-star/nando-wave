@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
     ProgramSemanticClassIdV1, RelationFrame, ResponseProgram, canonical_json_sha256,
+    valid_nonzero_sha256,
 };
 
 use crate::{
@@ -28,16 +29,53 @@ pub fn prepare_ms3_frozen_version_space_v1(
     bound: &TransportBoundJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> Result<PreparedMs3VersionSpaceV1, Ms3FrozenVersionSpaceErrorV1> {
+    prepare_ms3_frozen_version_space(acquisition_report, bound, frame, None)
+}
+
+pub fn prepare_ms3_frozen_version_space_with_denominator_v1(
+    acquisition_report: &Ms3LinkedFrameAcquisitionReportV1,
+    bound: &TransportBoundJoinedTransitionV1,
+    frame: &RelationFrame,
+    scientific_denominator_receipt_root_sha256: &str,
+) -> Result<PreparedMs3VersionSpaceV1, Ms3FrozenVersionSpaceErrorV1> {
+    if !valid_nonzero_sha256(scientific_denominator_receipt_root_sha256) {
+        return Err(Ms3FrozenVersionSpaceErrorV1::InvalidScientificDenominator);
+    }
+    prepare_ms3_frozen_version_space(
+        acquisition_report,
+        bound,
+        frame,
+        Some(scientific_denominator_receipt_root_sha256.to_owned()),
+    )
+}
+
+fn prepare_ms3_frozen_version_space(
+    acquisition_report: &Ms3LinkedFrameAcquisitionReportV1,
+    bound: &TransportBoundJoinedTransitionV1,
+    frame: &RelationFrame,
+    scientific_denominator_receipt_root_sha256: Option<String>,
+) -> Result<PreparedMs3VersionSpaceV1, Ms3FrozenVersionSpaceErrorV1> {
     let linked_receipt = validate_linked_evidence(acquisition_report, bound, frame)?;
     let factorized = factor_multi_source_row_v1(&bound.joined);
     let support_watermark = bound.joined.capture_sequence;
-    let support_rows_root_sha256 = canonical_json_sha256(&(
-        "nando.ms3-version-space-support-rows.v1",
-        linked_receipt.receipt_root_sha256.as_str(),
-        bound.joined.join_root_sha256.as_str(),
-        support_watermark,
-    ))
-    .map_err(|_| Ms3FrozenVersionSpaceErrorV1::Serialization)?;
+    let support_rows_root_sha256 =
+        if let Some(denominator_root) = &scientific_denominator_receipt_root_sha256 {
+            canonical_json_sha256(&(
+                "nando.ms3-version-space-support-rows.v2",
+                denominator_root.as_str(),
+                linked_receipt.receipt_root_sha256.as_str(),
+                bound.joined.join_root_sha256.as_str(),
+                support_watermark,
+            ))
+        } else {
+            canonical_json_sha256(&(
+                "nando.ms3-version-space-support-rows.v1",
+                linked_receipt.receipt_root_sha256.as_str(),
+                bound.joined.join_root_sha256.as_str(),
+                support_watermark,
+            ))
+        }
+        .map_err(|_| Ms3FrozenVersionSpaceErrorV1::Serialization)?;
 
     let candidates = match enumerate_source_neutral_t1_candidates(&bound.joined, frame) {
         Ok(candidates) => candidates,
@@ -51,6 +89,7 @@ pub fn prepare_ms3_frozen_version_space_v1(
             )?;
             return Ok(PreparedMs3VersionSpaceV1 {
                 acquisition_report_root_sha256: acquisition_report.report_root_sha256.clone(),
+                scientific_denominator_receipt_root_sha256,
                 linked_receipt,
                 extractor_schema: frame.schema.clone(),
                 extractor_version: frame.extractor_version.clone(),
@@ -77,6 +116,7 @@ pub fn prepare_ms3_frozen_version_space_v1(
         factorized.applicability_shape_root_sha256,
         support_rows_root_sha256,
         support_watermark,
+        scientific_denominator_receipt_root_sha256,
         candidates,
     )
 }
@@ -90,6 +130,7 @@ fn build_prepared_space(
     shape_root: String,
     support_rows_root_sha256: String,
     support_watermark: u64,
+    scientific_denominator_receipt_root_sha256: Option<String>,
     candidates: BTreeMap<String, ResponseProgram>,
 ) -> Result<PreparedMs3VersionSpaceV1, Ms3FrozenVersionSpaceErrorV1> {
     let protocol_mode_root_sha256 = t1_protocol_mode_root(&candidates)
@@ -187,6 +228,7 @@ fn build_prepared_space(
     };
     Ok(PreparedMs3VersionSpaceV1 {
         acquisition_report_root_sha256: acquisition_report.report_root_sha256.clone(),
+        scientific_denominator_receipt_root_sha256,
         linked_receipt,
         extractor_schema: frame.schema.clone(),
         extractor_version: frame.extractor_version.clone(),

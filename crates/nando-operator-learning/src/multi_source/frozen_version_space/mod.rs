@@ -24,10 +24,13 @@ pub use prediction::{
     MS3_FUTURE_PREDICTION_SCHEMA_V1, Ms3FutureApplicabilityV1, Ms3FuturePredictionV1,
     classify_ms3_unique_law_v1, predict_ms3_unique_law_v1,
 };
-pub use prepare::prepare_ms3_frozen_version_space_v1;
+pub use prepare::{
+    prepare_ms3_frozen_version_space_v1, prepare_ms3_frozen_version_space_with_denominator_v1,
+};
 pub use types::{
     FrozenVersionSpaceContractV1, FrozenVersionSpaceEnvelopeV1,
-    MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1, MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1,
-    MS3_PRE_FREEZE_BUFFER_EXCLUDED, Ms3FrozenVersionSpaceErrorV1, Ms3FrozenVersionSpaceStateV1,
-    Ms3VersionSpaceVersionsV1, Ms3ZeroClassReasonV1, PreparedMs3VersionSpaceV1,
+    MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1, MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2,
+    MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1, MS3_PRE_FREEZE_BUFFER_EXCLUDED,
+    Ms3FrozenVersionSpaceErrorV1, Ms3FrozenVersionSpaceStateV1, Ms3VersionSpaceVersionsV1,
+    Ms3ZeroClassReasonV1, PreparedMs3VersionSpaceV1,
 };

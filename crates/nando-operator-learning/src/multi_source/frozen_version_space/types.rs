@@ -10,6 +10,8 @@ use super::super::{Ms3LinkedFrameReceiptV1, PassiveT1ProbeContractV1};
 
 pub const MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V1: &str =
     "nando.ms3-frozen-version-space-contract.v1";
+pub const MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2: &str =
+    "nando.ms3-frozen-version-space-contract.v2";
 pub const MS3_FROZEN_VERSION_SPACE_ENVELOPE_SCHEMA_V1: &str =
     "nando.ms3-frozen-version-space-envelope.v1";
 pub const MS3_PRE_FREEZE_BUFFER_EXCLUDED: &str = "PRE_FREEZE_BUFFER_EXCLUDED";
@@ -48,6 +50,8 @@ pub struct FrozenVersionSpaceContractV1 {
     pub schema: String,
     pub contract_root_sha256: String,
     pub acquisition_report_root_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scientific_denominator_receipt_root_sha256: Option<String>,
     pub linked_receipt_root_sha256: String,
     pub topology_root_sha256: String,
     pub frame_root_sha256: String,
@@ -102,6 +106,7 @@ pub struct Ms3VersionSpaceVersionsV1 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Ms3FrozenVersionSpaceErrorV1 {
     InvalidAcquisition,
+    InvalidScientificDenominator,
     LinkedReceiptMissing,
     LinkedEvidenceMismatch,
     RepresentationGapReopened,
@@ -119,6 +124,9 @@ impl fmt::Display for Ms3FrozenVersionSpaceErrorV1 {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidAcquisition => formatter.write_str("MS3 acquisition report is invalid"),
+            Self::InvalidScientificDenominator => {
+                formatter.write_str("scientific denominator receipt is invalid")
+            }
             Self::LinkedReceiptMissing => formatter.write_str("NO_GAP linked receipt is missing"),
             Self::LinkedEvidenceMismatch => {
                 formatter.write_str("linked topology, frame, and terminal roots do not match")
@@ -150,6 +158,7 @@ impl std::error::Error for Ms3FrozenVersionSpaceErrorV1 {}
 
 pub struct PreparedMs3VersionSpaceV1 {
     pub(super) acquisition_report_root_sha256: String,
+    pub(super) scientific_denominator_receipt_root_sha256: Option<String>,
     pub(super) linked_receipt: Ms3LinkedFrameReceiptV1,
     pub(super) extractor_schema: String,
     pub(super) extractor_version: String,
@@ -183,6 +192,46 @@ pub(super) enum PreparedStateV1 {
 pub(super) struct ContractDigestV1<'a> {
     pub(super) schema: &'static str,
     pub(super) acquisition_report_root_sha256: &'a str,
+    pub(super) linked_receipt_root_sha256: &'a str,
+    pub(super) topology_root_sha256: &'a str,
+    pub(super) frame_root_sha256: &'a str,
+    pub(super) terminal_root_sha256: &'a str,
+    pub(super) transport_binding_root_sha256: &'a str,
+    pub(super) session_lineage_sha256: &'a str,
+    pub(super) session_id_sha256: &'a str,
+    pub(super) turn_intent_id_sha256: &'a str,
+    pub(super) request_event_id_sha256: &'a str,
+    pub(super) action_event_id_sha256: &'a str,
+    pub(super) extractor_schema: &'a str,
+    pub(super) extractor_version: &'a str,
+    pub(super) generator_version: &'a str,
+    pub(super) grammar_root_sha256: &'a str,
+    pub(super) compiler_version: &'a str,
+    pub(super) vm_abi: &'a str,
+    pub(super) verifier_schema: &'a str,
+    pub(super) support_rows_root_sha256: &'a str,
+    pub(super) support_watermark: u64,
+    pub(super) contract_watermark: u64,
+    pub(super) future_min_sequence: u64,
+    pub(super) pre_freeze_buffer_sequence_span: u64,
+    pub(super) pre_freeze_buffer_disposition: &'a str,
+    pub(super) candidate_program_roots_sha256: &'a [String],
+    pub(super) semantic_class_roots_sha256: &'a [String],
+    pub(super) quotient_root_sha256: &'a str,
+    pub(super) class_predictions_root_sha256: &'a str,
+    pub(super) machine_checkpoint_sha256: &'a str,
+    pub(super) machine_checkpoint_bytes: usize,
+    pub(super) passive_probe: &'a Option<PassiveT1ProbeContractV1>,
+    pub(super) state: &'a Ms3FrozenVersionSpaceStateV1,
+    pub(super) authority_ready: bool,
+    pub(super) phase_mutation_allowed: bool,
+}
+
+#[derive(Serialize)]
+pub(super) struct ContractDigestV2<'a> {
+    pub(super) schema: &'static str,
+    pub(super) acquisition_report_root_sha256: &'a str,
+    pub(super) scientific_denominator_receipt_root_sha256: &'a str,
     pub(super) linked_receipt_root_sha256: &'a str,
     pub(super) topology_root_sha256: &'a str,
     pub(super) frame_root_sha256: &'a str,

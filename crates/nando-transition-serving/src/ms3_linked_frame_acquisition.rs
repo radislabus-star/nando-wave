@@ -10,9 +10,11 @@ use nando_operator_kernel::RelationFrame;
 use nando_operator_learning::multi_source::{
     MS3_LINKED_FRAME_ACQUISITION_CONTRACT_SCHEMA_V2, MS3_RECEIPT_LAG_SLO_SECONDS_V1,
     Ms3LinkedFrameAcquisitionContractV1, Ms3LinkedFrameAcquisitionReportV1,
-    PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
+    Ms3ScientificDenominatorEnvelopeV1, Ms3ScientificDenominatorReceiptV1,
+    Ms3ScientificDenominatorReconstructionV1, PreActionTopologyAuditRowV1,
+    TransportTerminalReceiptV1,
     build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1,
-    close_ms3_pre_route_receipt_epoch_v1,
+    build_ms3_scientific_denominator_receipt_v1, close_ms3_pre_route_receipt_epoch_v1,
 };
 use std::collections::BTreeSet;
 
@@ -20,6 +22,7 @@ use crate::multi_source_topology_archive::MultiSourceTopologyArchive;
 
 const CONTRACT_FILE: &str = "contract-v1.cbor";
 const TERMINAL_REPORT_FILE: &str = "terminal-report-v1.cbor";
+const SCIENTIFIC_DENOMINATOR_FILE: &str = "scientific-denominator-v1.cbor";
 const MAX_STATE_BYTES: usize = 4 * 1024 * 1024;
 const RAW_SCAN_MULTIPLIER_V2: u64 = 16;
 const MAX_RAW_SCAN_ROWS_V2: u64 = 4_096;
@@ -29,6 +32,8 @@ pub(super) struct Ms3LinkedFrameAcquisitionRuntime {
     contract: Ms3LinkedFrameAcquisitionContractV1,
     terminal_report: Option<Ms3LinkedFrameAcquisitionReportV1>,
     terminal_report_path: PathBuf,
+    scientific_denominator: Option<Ms3ScientificDenominatorEnvelopeV1>,
+    scientific_denominator_path: PathBuf,
 }
 
 impl Ms3LinkedFrameAcquisitionRuntime {
@@ -123,7 +128,7 @@ impl Ms3LinkedFrameAcquisitionRuntime {
             return Err("ms3_acquisition_contract_invalid".to_owned());
         }
         let terminal_report_path = directory.join(TERMINAL_REPORT_FILE);
-        let terminal_report = read_bounded(&terminal_report_path)?
+        let mut terminal_report = read_bounded(&terminal_report_path)?
             .map(|bytes| {
                 serde_cbor::from_slice::<Ms3LinkedFrameAcquisitionReportV1>(&bytes)
                     .map_err(|error| format!("ms3_acquisition_report_decode:{error}"))
@@ -136,11 +141,34 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         }) {
             return Err("ms3_acquisition_terminal_report_invalid".to_owned());
         }
+        let scientific_denominator_path = directory.join(SCIENTIFIC_DENOMINATOR_FILE);
+        let scientific_denominator = read_bounded(&scientific_denominator_path)?
+            .map(|bytes| {
+                Ms3ScientificDenominatorEnvelopeV1::from_canonical_bytes(&bytes)
+                    .map_err(str::to_owned)
+            })
+            .transpose()?;
+        if let Some(envelope) = &scientific_denominator {
+            if envelope.report.acquisition_contract.contract_root_sha256
+                != contract.contract_root_sha256
+                || terminal_report
+                    .as_ref()
+                    .is_some_and(|report| report != &envelope.report)
+            {
+                return Err("ms3_scientific_denominator_binding_invalid".to_owned());
+            }
+            if terminal_report.is_none() {
+                write_cbor_atomic(&terminal_report_path, &envelope.report)?;
+                terminal_report = Some(envelope.report.clone());
+            }
+        }
         Ok(Self {
             generation_sequence,
             contract,
             terminal_report,
             terminal_report_path,
+            scientific_denominator,
+            scientific_denominator_path,
         })
     }
 
@@ -177,6 +205,14 @@ impl Ms3LinkedFrameAcquisitionRuntime {
                     .saturating_add(report.evaluated_topology_rows)
             }
         })
+    }
+
+    pub(super) fn scientific_denominator_receipt(
+        &self,
+    ) -> Option<Ms3ScientificDenominatorReceiptV1> {
+        self.scientific_denominator
+            .as_ref()
+            .map(|envelope| envelope.receipt.clone())
     }
 
     #[cfg(test)]
@@ -232,12 +268,18 @@ impl Ms3LinkedFrameAcquisitionRuntime {
         if let Some(report) = &self.terminal_report {
             return Ok(report.clone());
         }
+        if let Some(envelope) = &self.scientific_denominator {
+            let report = envelope.report.clone();
+            write_cbor_atomic(&self.terminal_report_path, &report)?;
+            self.terminal_report = Some(report.clone());
+            return Ok(report);
+        }
         let report = build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
             self.contract.clone(),
             generated_at_unix,
-            new_topologies,
-            frames,
-            terminals,
+            new_topologies.clone(),
+            frames.clone(),
+            terminals.clone(),
             used_evidence_roots,
             route_bound_frame_roots,
         );
@@ -253,10 +295,86 @@ impl Ms3LinkedFrameAcquisitionRuntime {
             return Err("ms3_acquisition_report_invalid".to_owned());
         }
         if report.is_terminal() {
+            let scientific_denominator = if self.contract.uses_route_settlement_policy() {
+                let receipt = build_ms3_scientific_denominator_receipt_v1(
+                    &report,
+                    &new_topologies,
+                    &frames,
+                    &terminals,
+                    route_bound_frame_roots,
+                    Ms3ScientificDenominatorReconstructionV1::AtomicAtReport,
+                )
+                .map_err(str::to_owned)?;
+                let envelope = Ms3ScientificDenominatorEnvelopeV1::seal(report.clone(), receipt)
+                    .map_err(str::to_owned)?;
+                let bytes = envelope.canonical_bytes().map_err(str::to_owned)?;
+                write_bytes_atomic(&self.scientific_denominator_path, &bytes)?;
+                Some(envelope)
+            } else {
+                None
+            };
+            if let Some(envelope) = scientific_denominator {
+                self.scientific_denominator = Some(envelope);
+            }
             write_cbor_atomic(&self.terminal_report_path, &report)?;
             self.terminal_report = Some(report.clone());
         }
         Ok(report)
+    }
+
+    pub(super) fn ensure_scientific_denominator(
+        &mut self,
+        topologies: &[PreActionTopologyAuditRowV1],
+        frames: &[RelationFrame],
+        terminals: &[TransportTerminalReceiptV1],
+        route_bound_frame_roots: &BTreeSet<String>,
+    ) -> Result<Ms3ScientificDenominatorReceiptV1, String> {
+        if let Some(envelope) = &self.scientific_denominator {
+            return Ok(envelope.receipt.clone());
+        }
+        let report = self
+            .terminal_report
+            .as_ref()
+            .ok_or_else(|| "ms3_scientific_denominator_report_missing".to_owned())?;
+        let receipt = build_ms3_scientific_denominator_receipt_v1(
+            report,
+            topologies,
+            frames,
+            terminals,
+            route_bound_frame_roots,
+            Ms3ScientificDenominatorReconstructionV1::AppendOnlyCountEquivalence,
+        )
+        .or_else(|error| {
+            if error != "ms3_scientific_denominator_reconstruction_mismatch" {
+                return Err(error);
+            }
+            let report_route_roots = report
+                .receipts
+                .iter()
+                .map(|receipt| receipt.completed_frame_root_sha256.clone())
+                .collect::<BTreeSet<_>>();
+            if report_route_roots.is_empty()
+                || u64::try_from(report_route_roots.len()).unwrap_or(u64::MAX)
+                    != report.relevant_verified_frame_rows
+            {
+                return Err(error);
+            }
+            build_ms3_scientific_denominator_receipt_v1(
+                report,
+                topologies,
+                frames,
+                terminals,
+                &report_route_roots,
+                Ms3ScientificDenominatorReconstructionV1::ReportRootClosure,
+            )
+        })
+        .map_err(str::to_owned)?;
+        let envelope = Ms3ScientificDenominatorEnvelopeV1::seal(report.clone(), receipt.clone())
+            .map_err(str::to_owned)?;
+        let bytes = envelope.canonical_bytes().map_err(str::to_owned)?;
+        write_bytes_atomic(&self.scientific_denominator_path, &bytes)?;
+        self.scientific_denominator = Some(envelope);
+        Ok(receipt)
     }
 }
 
@@ -280,6 +398,10 @@ fn read_bounded(path: &Path) -> Result<Option<Vec<u8>>, String> {
 fn write_cbor_atomic<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let bytes =
         serde_cbor::to_vec(value).map_err(|error| format!("ms3_acquisition_encode:{error}"))?;
+    write_bytes_atomic(path, &bytes)
+}
+
+fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if bytes.is_empty() || bytes.len() > MAX_STATE_BYTES {
         return Err("ms3_acquisition_state_budget".to_owned());
     }
@@ -291,7 +413,7 @@ fn write_cbor_atomic<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), 
     let mut file = options
         .open(&temporary)
         .map_err(|error| format!("ms3_acquisition_write_open:{error}"))?;
-    file.write_all(&bytes)
+    file.write_all(bytes)
         .and_then(|()| file.sync_all())
         .map_err(|error| format!("ms3_acquisition_write:{error}"))?;
     fs::rename(&temporary, path).map_err(|error| format!("ms3_acquisition_rename:{error}"))?;

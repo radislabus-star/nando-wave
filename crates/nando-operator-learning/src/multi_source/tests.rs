@@ -1633,6 +1633,146 @@ fn v3_scientific_denominator_requires_route_bound_frame_and_terminal() {
 }
 
 #[test]
+fn scientific_denominator_is_content_addressed_and_bound_into_freeze() {
+    let topology = t1_topology_row("settled", "request-settled", "session-a", 1, 1_000);
+    let frame = t1_completed_frame("settled", "action-settled", "session-a", 1_500);
+    let terminal = terminal("request-settled", 990, 1_100);
+    let frame_root = nando_operator_kernel::canonical_json_sha256(&frame).expect("frame root");
+    let route_bound_roots = BTreeSet::from([frame_root]);
+    let report = build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
+        acquisition_contract_v3(3, 4),
+        10,
+        vec![topology.clone()],
+        vec![frame.clone()],
+        vec![terminal.clone()],
+        &BTreeSet::new(),
+        &route_bound_roots,
+    );
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+    );
+
+    let denominator = build_ms3_scientific_denominator_receipt_v1(
+        &report,
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+        &route_bound_roots,
+        Ms3ScientificDenominatorReconstructionV1::AtomicAtReport,
+    )
+    .expect("scientific denominator");
+    assert_eq!(denominator.settlements.len(), 1);
+    assert!(validate_ms3_scientific_denominator_evidence_v1(
+        &denominator,
+        &report,
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+        &route_bound_roots,
+    ));
+    let denominator_envelope =
+        Ms3ScientificDenominatorEnvelopeV1::seal(report.clone(), denominator.clone())
+            .expect("denominator envelope");
+    let denominator_bytes = denominator_envelope
+        .canonical_bytes()
+        .expect("denominator bytes");
+    assert_eq!(
+        Ms3ScientificDenominatorEnvelopeV1::from_canonical_bytes(&denominator_bytes)
+            .expect("denominator restart")
+            .canonical_bytes()
+            .expect("restored denominator bytes"),
+        denominator_bytes
+    );
+
+    let ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+    let bound = &ledger.bound_for_topology(&topology.commit.commitment_root_sha256)[0];
+    let frozen = prepare_ms3_frozen_version_space_with_denominator_v1(
+        &report,
+        bound,
+        &frame,
+        &denominator.receipt_root_sha256,
+    )
+    .expect("prepared denominator-bound version space")
+    .seal(
+        7,
+        Ms3VersionSpaceVersionsV1 {
+            compiler_version: "test-compiler.v1".to_owned(),
+            vm_abi: "test-vm.v1".to_owned(),
+        },
+    )
+    .expect("denominator-bound freeze");
+    assert_eq!(
+        frozen.contract.schema,
+        MS3_FROZEN_VERSION_SPACE_CONTRACT_SCHEMA_V2
+    );
+    assert_eq!(
+        frozen
+            .contract
+            .scientific_denominator_receipt_root_sha256
+            .as_deref(),
+        Some(denominator.receipt_root_sha256.as_str())
+    );
+    assert!(!frozen.contract.authority_ready);
+    assert!(!frozen.contract.phase_mutation_allowed);
+}
+
+#[test]
+fn legacy_denominator_migration_rejects_late_scientific_set_growth() {
+    let topology_a = t1_topology_row("settled-a", "request-a", "session-a", 1, 1_000);
+    let topology_b = t1_topology_row("settled-b", "request-b", "session-b", 2, 2_000);
+    let frame_a = t1_completed_frame("settled-a", "action-a", "session-a", 1_500);
+    let frame_b = t1_completed_frame("settled-b", "action-b", "session-b", 2_500);
+    let terminal_a = terminal("request-a", 990, 1_100);
+    let terminal_b = terminal("request-b", 1_990, 2_100);
+    let frame_a_root =
+        nando_operator_kernel::canonical_json_sha256(&frame_a).expect("frame a root");
+    let frame_b_root =
+        nando_operator_kernel::canonical_json_sha256(&frame_b).expect("frame b root");
+    let report = build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
+        acquisition_contract_v3(3, 4),
+        10,
+        vec![topology_a.clone(), topology_b.clone()],
+        vec![frame_a.clone()],
+        vec![terminal_a.clone()],
+        &BTreeSet::new(),
+        &BTreeSet::from([frame_a_root.clone()]),
+    );
+    assert_eq!(report.eligible_topology_rows, 1);
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
+    );
+
+    let error = build_ms3_scientific_denominator_receipt_v1(
+        &report,
+        &[topology_a.clone(), topology_b.clone()],
+        &[frame_a.clone(), frame_b.clone()],
+        &[terminal_a.clone(), terminal_b.clone()],
+        &BTreeSet::from([frame_a_root.clone(), frame_b_root]),
+        Ms3ScientificDenominatorReconstructionV1::AppendOnlyCountEquivalence,
+    )
+    .expect_err("late evidence must not rewrite the frozen denominator");
+    assert_eq!(error, "ms3_scientific_denominator_reconstruction_mismatch");
+
+    let recovered = build_ms3_scientific_denominator_receipt_v1(
+        &report,
+        &[topology_a, topology_b],
+        &[frame_a, frame_b],
+        &[terminal_a, terminal_b],
+        &BTreeSet::from([frame_a_root]),
+        Ms3ScientificDenominatorReconstructionV1::ReportRootClosure,
+    )
+    .expect("report-root closure reconstructs the original scientific set");
+    assert_eq!(recovered.eligible_topology_rows, 1);
+    assert_eq!(recovered.settlements.len(), 1);
+}
+
+#[test]
 fn unattributed_raw_budget_closes_as_censor_and_restarts_byte_identically() {
     let report = build_ms3_linked_frame_acquisition_report_v1(
         acquisition_contract(4, 60),
