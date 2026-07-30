@@ -1,3 +1,4 @@
+mod checkpoint;
 mod spool;
 
 use std::collections::{BTreeSet, VecDeque};
@@ -12,13 +13,15 @@ use nando_operator_learning::OpportunityBridgeEventV1;
 use serde::Serialize;
 
 use crate::miner_worker::MinerWorkerHandle;
+use checkpoint::{OpportunityBridgeCounterCheckpointV1, load_counter_checkpoint};
 use spool::{
     PendingBridgeEvent, acknowledge_pending_batch, create_private_directory,
-    first_pending_sequence, next_pending_sequence, pending_batch, pending_stats, persist_event,
-    recover_temporary_events, refresh_pending_counters, spool_stats, sync_pending_spool,
+    discard_acknowledged_prefix, first_pending_sequence, next_pending_sequence, pending_batch,
+    pending_stats, persist_event, recover_temporary_events, refresh_pending_counters, spool_stats,
+    sync_pending_spool,
 };
 
-const BRIDGE_STATUS_SCHEMA_V1: &str = "nando.opportunity-process-bridge-status.v1";
+const BRIDGE_STATUS_SCHEMA_V2: &str = "nando.opportunity-process-bridge-status.v2";
 const PRODUCER_DURABILITY_INTERVAL: Duration = Duration::from_millis(10);
 const SPOOL_RECONCILE_INTERVAL: Duration = Duration::from_secs(15);
 const MAX_CONSUMER_INFLIGHT_EVENTS: usize = 256;
@@ -68,6 +71,8 @@ pub struct OpportunityBridgeEndpointStatusV1 {
 pub struct OpportunityBridgeStatusV1 {
     pub schema: String,
     pub root: String,
+    pub counter_checkpoint_restored: bool,
+    pub counter_checkpoint_last_sequence: u64,
     pub pending_events: u64,
     pub pending_bytes: u64,
     pub consumer_inflight_events: u64,
@@ -83,6 +88,9 @@ pub struct OpportunityBridgeRuntime {
 
 struct BridgeInner {
     root: PathBuf,
+    counter_checkpoint_path: PathBuf,
+    counter_checkpoint: Mutex<OpportunityBridgeCounterCheckpointV1>,
+    counter_checkpoint_restored: bool,
     staging_dir: PathBuf,
     pending_dir: PathBuf,
     rejected_dir: PathBuf,
@@ -130,28 +138,31 @@ impl OpportunityBridgeRuntime {
             create_private_directory(&staging_dir)?;
             recover_temporary_events(&staging_dir, &pending_dir, &rejected_dir)?;
         }
+        let counter_checkpoint_path = root.join("counter-checkpoint-v1.json");
+        let restored_counter_checkpoint = load_counter_checkpoint(&counter_checkpoint_path)?;
+        let counter_checkpoint_restored = restored_counter_checkpoint.is_some();
+        let first_pending_sequence = first_pending_sequence(&pending_dir)?;
+        let scanned_next_sequence =
+            next_pending_sequence(&[&pending_dir, &staging_dir, &rejected_dir])?;
+        let counter_checkpoint = restored_counter_checkpoint.unwrap_or_else(|| {
+            OpportunityBridgeCounterCheckpointV1::empty(first_pending_sequence.map_or_else(
+                || scanned_next_sequence.saturating_sub(1),
+                |sequence| sequence.saturating_sub(1),
+            ))
+        });
+        let next_sequence = scanned_next_sequence
+            .max(counter_checkpoint.last_sequence.saturating_add(1))
+            .max(1);
         let (spool_files, spool_bytes) = spool_stats(&[&staging_dir, &pending_dir, &rejected_dir])?;
         let (pending_events, pending_bytes) = pending_stats(&pending_dir);
-        let next_sequence = next_pending_sequence(&[&pending_dir, &staging_dir])?;
-        let producer_counter_started_after_sequence = next_sequence.saturating_sub(1);
-        let consumer_counter_started_after_sequence = first_pending_sequence(&pending_dir)?
-            .map_or(producer_counter_started_after_sequence, |sequence| {
-                sequence.saturating_sub(1)
-            });
         let producer = BridgeEndpointCounters::default();
-        producer
-            .last_sequence
-            .store(producer_counter_started_after_sequence, Ordering::Release);
-        producer
-            .counter_started_after_sequence
-            .store(producer_counter_started_after_sequence, Ordering::Release);
         let consumer = BridgeEndpointCounters::default();
-        consumer
-            .counter_started_after_sequence
-            .store(consumer_counter_started_after_sequence, Ordering::Release);
         let runtime = Self {
             inner: Arc::new(BridgeInner {
                 root,
+                counter_checkpoint_path,
+                counter_checkpoint: Mutex::new(counter_checkpoint.clone()),
+                counter_checkpoint_restored,
                 staging_dir,
                 pending_dir,
                 rejected_dir,
@@ -168,9 +179,67 @@ impl OpportunityBridgeRuntime {
                 consumer,
                 consumer_started: AtomicBool::new(false),
                 consumer_inflight: AtomicU64::new(0),
-                producer_sync_requested: AtomicBool::new(next_sequence > 1),
+                producer_sync_requested: AtomicBool::new(
+                    next_sequence.saturating_sub(1) > counter_checkpoint.last_sequence,
+                ),
             }),
         };
+        let mut recovered_counter_checkpoint = counter_checkpoint;
+        let producer_checkpoint = if producer_enabled {
+            let mut checkpoint_seen = counter_checkpoint_restored;
+            let mut recovered_producer = None;
+            for _ in 0..8 {
+                discard_acknowledged_prefix(
+                    &runtime.inner,
+                    recovered_counter_checkpoint.last_sequence,
+                )?;
+                let pending = pending_batch(&runtime.inner, usize::MAX, &BTreeSet::new())?;
+                let latest = match load_counter_checkpoint(&runtime.inner.counter_checkpoint_path)?
+                {
+                    Some(latest) => {
+                        checkpoint_seen = true;
+                        latest
+                    }
+                    None if !checkpoint_seen => recovered_counter_checkpoint.clone(),
+                    None => {
+                        return Err("opportunity_bridge_counter_checkpoint_disappeared".to_owned());
+                    }
+                };
+                if latest == recovered_counter_checkpoint {
+                    recovered_producer = Some(recovered_counter_checkpoint.with_pending(&pending)?);
+                    break;
+                }
+                recovered_counter_checkpoint = latest;
+            }
+            recovered_producer
+                .ok_or_else(|| "opportunity_bridge_counter_recovery_unstable".to_owned())?
+        } else {
+            discard_acknowledged_prefix(
+                &runtime.inner,
+                recovered_counter_checkpoint.last_sequence,
+            )?;
+            recovered_counter_checkpoint.clone()
+        };
+        *runtime
+            .inner
+            .counter_checkpoint
+            .lock()
+            .map_err(|_| "opportunity_bridge_counter_checkpoint_lock_poisoned".to_owned())? =
+            recovered_counter_checkpoint.clone();
+        runtime.inner.next_sequence.fetch_max(
+            producer_checkpoint.last_sequence.saturating_add(1),
+            Ordering::AcqRel,
+        );
+        restore_endpoint_counters(
+            &runtime.inner.producer,
+            &producer_checkpoint,
+            recovered_counter_checkpoint.last_sequence,
+        );
+        restore_endpoint_counters(
+            &runtime.inner.consumer,
+            &recovered_counter_checkpoint,
+            recovered_counter_checkpoint.last_sequence,
+        );
         if producer_enabled {
             runtime.start_producer_durability_worker()?;
         }
@@ -281,9 +350,16 @@ impl OpportunityBridgeRuntime {
 
     #[must_use]
     pub fn status(&self) -> OpportunityBridgeStatusV1 {
+        let counter_checkpoint_last_sequence = self
+            .inner
+            .counter_checkpoint
+            .lock()
+            .map_or(0, |checkpoint| checkpoint.last_sequence);
         OpportunityBridgeStatusV1 {
-            schema: BRIDGE_STATUS_SCHEMA_V1.to_owned(),
+            schema: BRIDGE_STATUS_SCHEMA_V2.to_owned(),
             root: self.inner.root.display().to_string(),
+            counter_checkpoint_restored: self.inner.counter_checkpoint_restored,
+            counter_checkpoint_last_sequence,
             pending_events: self.inner.pending_events.load(Ordering::Acquire),
             pending_bytes: self.inner.pending_bytes.load(Ordering::Acquire),
             consumer_inflight_events: self.inner.consumer_inflight.load(Ordering::Acquire),
@@ -360,6 +436,29 @@ fn record_event(
             .request_input_tokens
             .fetch_add(input_tokens, Ordering::Relaxed);
     }
+}
+
+fn restore_endpoint_counters(
+    counters: &BridgeEndpointCounters,
+    checkpoint: &OpportunityBridgeCounterCheckpointV1,
+    durable_sequence: u64,
+) {
+    counters.events.store(checkpoint.events, Ordering::Release);
+    counters
+        .request_events
+        .store(checkpoint.request_events, Ordering::Release);
+    counters
+        .request_input_tokens
+        .store(checkpoint.request_input_tokens, Ordering::Release);
+    counters
+        .last_sequence
+        .store(checkpoint.last_sequence, Ordering::Release);
+    counters
+        .durable_sequence
+        .store(durable_sequence, Ordering::Release);
+    counters
+        .counter_started_after_sequence
+        .store(checkpoint.counter_started_after_sequence, Ordering::Release);
 }
 
 fn record_failure(counters: &BridgeEndpointCounters, error: &str) {

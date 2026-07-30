@@ -11,10 +11,11 @@ use nando_operator_learning::{OPPORTUNITY_BRIDGE_MAX_EVENT_BYTES_V1, Opportunity
 
 #[cfg(test)]
 use super::MAX_CONSUMER_INFLIGHT_EVENTS;
+use super::checkpoint::persist_counter_checkpoint;
 use super::{BridgeInner, record_event, record_timing, set_last_error};
 
 const EVENT_SUFFIX: &str = ".cbor";
-const MAX_SPOOL_FILES: u64 = 131_072;
+pub(super) const MAX_SPOOL_FILES: u64 = 131_072;
 pub(super) const MAX_SPOOL_BYTES: u64 = 1024 * 1024 * 1024;
 
 pub(super) struct PendingBridgeEvent {
@@ -150,6 +151,7 @@ pub(super) fn pending_batch(
         };
         let event = match read_pending_event(&path, &expected_digest) {
             Ok(event) => event,
+            Err(_) if !path.exists() => continue,
             Err(error) => {
                 quarantine_event(inner, &path, &error)?;
                 continue;
@@ -176,6 +178,15 @@ pub(super) fn acknowledge_pending_batch(
         .persist_lock
         .lock()
         .map_err(|_| "opportunity_bridge_persist_lock_poisoned".to_owned())?;
+    let mut checkpoint = inner
+        .counter_checkpoint
+        .lock()
+        .map_err(|_| "opportunity_bridge_counter_checkpoint_lock_poisoned".to_owned())?;
+    let previous_last_sequence = checkpoint.last_sequence;
+    let next_checkpoint = checkpoint.with_pending(&pending)?;
+    persist_counter_checkpoint(&inner.counter_checkpoint_path, &next_checkpoint)?;
+    *checkpoint = next_checkpoint.clone();
+    drop(checkpoint);
     for row in pending {
         let bytes = row.path.metadata().map_or(0, |metadata| metadata.len());
         if let Err(error) = fs::remove_file(&row.path) {
@@ -186,17 +197,69 @@ pub(super) fn acknowledge_pending_batch(
         saturating_atomic_sub(&inner.spool_bytes, bytes);
         saturating_atomic_sub(&inner.pending_events, 1);
         saturating_atomic_sub(&inner.pending_bytes, bytes);
-        // Count only an event whose spool file was actually removed. If a
-        // later unlink fails, the durable worker ledger remains authoritative
-        // and the remaining suffix is retried without losing this prefix.
-        record_event(&inner.consumer, &row.event, row.sequence);
+        // The durable checkpoint already covers the ACKed batch. In-memory
+        // counters follow successful unlinks; restart removes any residual
+        // checkpointed files without delivering them again.
+        if row.sequence > previous_last_sequence {
+            record_event(&inner.consumer, &row.event, row.sequence);
+        }
     }
     if let Err(error) = sync_directory(&inner.pending_dir) {
         refresh_pending_counters(inner);
         return Err(error);
     }
+    inner
+        .consumer
+        .durable_sequence
+        .store(next_checkpoint.last_sequence, Ordering::Release);
     record_timing(&inner.consumer, started);
     Ok(())
+}
+
+pub(super) fn discard_acknowledged_prefix(
+    inner: &BridgeInner,
+    through_sequence: u64,
+) -> Result<(), String> {
+    if through_sequence == 0 {
+        return Ok(());
+    }
+    let entries = match fs::read_dir(&inner.pending_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("opportunity_bridge_pending_read_dir:{error}")),
+    };
+    let mut acknowledged = Vec::new();
+    for entry in entries {
+        let path = entry
+            .map_err(|error| format!("opportunity_bridge_pending_entry:{error}"))?
+            .path();
+        if pending_identity(&path).is_ok_and(|(sequence, _)| sequence <= through_sequence) {
+            acknowledged.push(path);
+        }
+    }
+    if acknowledged.is_empty() {
+        return Ok(());
+    }
+    let _guard = inner
+        .persist_lock
+        .lock()
+        .map_err(|_| "opportunity_bridge_persist_lock_poisoned".to_owned())?;
+    for path in acknowledged {
+        let bytes = path.metadata().map_or(0, |metadata| metadata.len());
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(format!("opportunity_bridge_checkpointed_remove:{error}"));
+            }
+        }
+        saturating_atomic_sub(&inner.spool_files, 1);
+        saturating_atomic_sub(&inner.spool_bytes, bytes);
+        saturating_atomic_sub(&inner.pending_events, 1);
+        saturating_atomic_sub(&inner.pending_bytes, bytes);
+    }
+    sync_directory(&inner.pending_dir)?;
+    refresh_spool_counters(inner)
 }
 
 fn read_pending_event(
@@ -233,8 +296,14 @@ fn quarantine_event(inner: &BridgeInner, path: &Path, reason: &str) -> Result<()
         .ok_or_else(|| "opportunity_bridge_invalid_pending_name".to_owned())?;
     let destination = inner.rejected_dir.join(format!("{file_name}.invalid"));
     let bytes = path.metadata().map_or(0, |metadata| metadata.len());
-    fs::rename(path, destination)
-        .map_err(|error| format!("opportunity_bridge_quarantine:{error}"))?;
+    match fs::rename(path, destination) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            refresh_pending_counters(inner);
+            return Ok(());
+        }
+        Err(error) => return Err(format!("opportunity_bridge_quarantine:{error}")),
+    }
     saturating_atomic_sub(&inner.pending_events, 1);
     saturating_atomic_sub(&inner.pending_bytes, bytes);
     sync_directory(&inner.pending_dir)?;
@@ -357,6 +426,7 @@ pub(super) fn next_pending_sequence(directories: &[&Path]) -> Result<u64, String
             let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
                 continue;
             };
+            let name = name.strip_suffix(".invalid").unwrap_or(name);
             let name = name.strip_suffix(".tmp").unwrap_or(name);
             let Some(stem) = name.strip_suffix(EVENT_SUFFIX) else {
                 continue;
@@ -477,7 +547,7 @@ pub(super) fn create_private_directory(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn sync_directory(path: &Path) -> Result<(), String> {
+pub(super) fn sync_directory(path: &Path) -> Result<(), String> {
     File::open(path)
         .and_then(|directory| directory.sync_all())
         .map_err(|error| {
