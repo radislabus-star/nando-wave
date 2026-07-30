@@ -3065,20 +3065,32 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     let mut frozen = frozen
         .lock()
         .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
-    let linked_acquisition_failure = acquisition.terminal_report().filter(|report| {
+    let terminal_report = acquisition.terminal_report();
+    let active_frozen_contract = frozen.contract().cloned();
+    if let Some(contract) = &active_frozen_contract {
+        let report = terminal_report
+            .as_ref()
+            .ok_or_else(|| "ms3_active_frozen_acquisition_report_missing".to_owned())?;
+        if !frozen_contract_owns_linked_report(contract, report) {
+            return Err("ms3_active_frozen_acquisition_binding_invalid".to_owned());
+        }
+    }
+    let active_generation_frozen = active_frozen_contract.is_some();
+    let linked_acquisition_failure = terminal_report.as_ref().filter(|report| {
         report.verdict
             == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
     });
-    let linked_ineligible_probe_censor = acquisition.terminal_report().filter(|report| {
+    let linked_ineligible_probe_censor = terminal_report.as_ref().filter(|report| {
         matches!(
             report.verdict,
             nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe
                 | nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredIneligibleProbe
-                | nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch
+            | nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch
         )
     });
-    let linked_capture_gap_repair = acquisition.terminal_report().filter(|report| {
-        report.verdict
+    let linked_capture_gap_repair = terminal_report.as_ref().filter(|report| {
+        !active_generation_frozen
+            && report.verdict
             == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
             && !report.receipts.is_empty()
             && !report
@@ -3092,8 +3104,9 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
                     )
             })
     });
-    let linked_evidence_reuse = acquisition.terminal_report().filter(|report| {
-        report.verdict
+    let linked_evidence_reuse = terminal_report.as_ref().filter(|report| {
+        !active_generation_frozen
+            && report.verdict
             == nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved
             && !report.receipts.is_empty()
             && report
@@ -3126,25 +3139,25 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     let topology_archive = topology_archive
         .lock()
         .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
-    if let Some(report) = linked_acquisition_failure.as_ref() {
+    if let Some(report) = linked_acquisition_failure {
         frozen.seal_linked_acquisition_failure(
             report,
             linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
         )?;
     }
-    if let Some(report) = linked_ineligible_probe_censor.as_ref() {
+    if let Some(report) = linked_ineligible_probe_censor {
         frozen.seal_ineligible_probe_censor(
             report,
             linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
         )?;
     }
-    if let Some(report) = linked_capture_gap_repair.as_ref() {
+    if let Some(report) = linked_capture_gap_repair {
         frozen.seal_linked_capture_gap_repair(
             report,
             linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
         )?;
     }
-    if let Some(report) = linked_evidence_reuse.as_ref() {
+    if let Some(report) = linked_evidence_reuse {
         frozen.seal_linked_evidence_reuse(
             report,
             linked_acquisition_closure_capture_sequence(report, &topology_archive)?,
@@ -3163,6 +3176,27 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     *acquisition = runtimes.acquisition;
     *frozen = runtimes.frozen;
     Ok(true)
+}
+
+fn frozen_contract_owns_linked_report(
+    contract: &nando_operator_learning::multi_source::FrozenVersionSpaceContractV1,
+    report: &nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionReportV1,
+) -> bool {
+    if contract.acquisition_report_root_sha256 != report.report_root_sha256 {
+        return false;
+    }
+    report.receipts.iter().any(|receipt| {
+        receipt.receipt_root_sha256 == contract.linked_receipt_root_sha256
+            && receipt.topology_commitment_root_sha256 == contract.topology_root_sha256
+            && receipt.completed_frame_root_sha256 == contract.frame_root_sha256
+            && receipt.terminal_receipt_root_sha256 == contract.terminal_root_sha256
+            && receipt.transport_binding_root_sha256 == contract.transport_binding_root_sha256
+            && receipt.session_lineage_sha256 == contract.session_lineage_sha256
+            && receipt.session_id_sha256 == contract.session_id_sha256
+            && receipt.turn_intent_id_sha256 == contract.turn_intent_id_sha256
+            && receipt.request_event_id_sha256 == contract.request_event_id_sha256
+            && receipt.action_event_id_sha256 == contract.action_event_id_sha256
+    })
 }
 
 fn linked_acquisition_closure_capture_sequence(
@@ -9088,6 +9122,10 @@ mod tests {
         assert_eq!(
             evaluate_ms3_frozen_version_space(&state).expect("idempotent G26 freeze"),
             frozen
+        );
+        assert!(
+            !rollover_ms3_generation_if_terminal(&state)
+                .expect("active generation must own its frozen linked evidence")
         );
         let frozen_root = frozen.contract_root_sha256.clone();
         drop(state);
