@@ -49,3 +49,20 @@ The cube stores a crystallized law; it does not grok by itself. Circuit
 formation must pass through `CandidateCubeField` and
 `OperatorGrokkingConsolidator`, resolve a whole connected operator, and survive
 exact-memory cleanup plus causal phase ablations.
+
+## Development Provenance
+
+Entire is the repository's development-provenance and handoff layer. It records
+Codex sessions and checkpoints around Git work; it is not part of the Nando
+runtime, learning authority, or product architecture.
+
+Before substantial work, run `entire status`. Keep changes in focused commits so
+each commit forms a useful checkpoint boundary. Use `entire checkpoint list`
+and `entire checkpoint explain <id|sha>` when recovering context, and
+`entire dispatch --local` when a durable handoff is needed.
+
+Keep telemetry and automatic session pushing disabled until a locally captured
+checkpoint has been reviewed for secrets and private operational data. Entire
+history is supporting development evidence only: it never replaces tests,
+frozen receipts, the live transition gate, independent verification, or
+external admission.
