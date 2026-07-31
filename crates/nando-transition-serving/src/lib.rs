@@ -2469,6 +2469,10 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                 .is_some_and(|sequence| sequence >= prediction_min_sequence)
         })
         .collect::<Vec<_>>();
+    let topology_by_root = rows
+        .iter()
+        .map(|row| (row.commit.commitment_root_sha256.as_str(), row))
+        .collect::<BTreeMap<_, _>>();
     let support_reuse = rows
         .iter()
         .filter(|row| {
@@ -2517,6 +2521,13 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
         .lock()
         .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
         .frames_for_intents(&intent_ids);
+    let route_receipts_by_frame_root = state
+        .remote_evidence_spool
+        .as_ref()
+        .ok_or_else(|| "remote_evidence_spool_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "remote_evidence_spool_lock_poisoned".to_owned())?
+        .route_receipts_by_frame_root();
     let terminals_by_request = terminals
         .iter()
         .map(|terminal| (terminal.request_event_id_sha256.as_str(), terminal))
@@ -2543,6 +2554,33 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
             .get(prediction.request_event_id_sha256.as_str())
             .copied();
         let frame_exists = frame_intents.contains(prediction.turn_intent_id_sha256.as_str());
+        let route_matches = topology_by_root
+            .get(prediction.topology_root_sha256.as_str())
+            .map(|topology| {
+                frames
+                    .iter()
+                    .filter_map(|frame| {
+                        let frame_root = nando_operator_kernel::canonical_json_sha256(frame).ok()?;
+                        let receipt = route_receipts_by_frame_root.get(&frame_root)?;
+                        (receipt.request_body_sha256
+                            == topology.structure.provider_capture_request_root_sha256
+                            && receipt.turn_intent_id_sha256 == prediction.turn_intent_id_sha256
+                            && receipt.session_id_sha256 == frame.session_id_sha256)
+                            .then(|| {
+                                json!({
+                                    "completed_frame_root_sha256": frame_root,
+                                    "route_receipt_root_sha256": receipt.receipt_root_sha256,
+                                    "request_body_sha256": receipt.request_body_sha256,
+                                    "remote_status": receipt.remote_status,
+                                    "request_observed_at_unix_nanos": receipt.request_observed_at_unix_nanos,
+                                    "route_confirmed_at_unix_nanos": receipt.route_confirmed_at_unix_nanos,
+                                    "action_observed_at_unix_nanos": frame.observed_at_unix_nanos
+                                })
+                            })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let exact = transport
             .bound_for_topology(&prediction.topology_root_sha256)
             .iter()
@@ -2552,6 +2590,8 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                     && bound.binding.session_lineage_sha256 == prediction.session_lineage_sha256
             });
         let transport_failure = transport.failure_for_topology(&prediction.topology_root_sha256);
+        let join_rejection =
+            transport.join_rejection_for_topology(&prediction.topology_root_sha256);
         if let Some(failure) = transport_failure {
             let count = transport_failures
                 .entry(format!("{failure:?}"))
@@ -2660,7 +2700,19 @@ fn ms3_future_prediction_diagnostics(state: &AppState) -> Result<Value, String> 
                 "turn_intent_id_sha256": prediction.turn_intent_id_sha256,
                 "terminal_receipt_found": terminal.is_some(),
                 "completed_frame_found": frame_exists,
-                "transport_failure": transport_failure.map(|failure| format!("{failure:?}"))
+                "exact_route_frame_count": route_matches.len(),
+                "first_exact_route_frame": route_matches.first(),
+                "transport_failure": transport_failure.map(|failure| format!("{failure:?}")),
+                "join_rejection": join_rejection.map(|rejection| json!({
+                    "reason": format!("{:?}", rejection.reason),
+                    "completed_frame_root_sha256": rejection.completed_frame_root_sha256,
+                    "topology_captured_at_unix_nanos": rejection.topology_captured_at_unix_nanos,
+                    "action_observed_at_unix_nanos": rejection.action_observed_at_unix_nanos,
+                    "turn_intent_matches": rejection.turn_intent_matches,
+                    "session_identity_matches": rejection.session_identity_matches,
+                    "pre_action_order_proven": rejection.topology_captured_at_unix_nanos
+                        <= rejection.action_observed_at_unix_nanos
+                }))
             }));
         }
     }
@@ -3677,12 +3729,58 @@ fn evaluate_ms3_independent_future(
         .lock()
         .map_err(|_| "multi_source_frame_archive_lock_poisoned".to_owned())?
         .frames_for_intents(&intent_ids);
+    let route_receipts_by_frame_root = state
+        .remote_evidence_spool
+        .as_ref()
+        .ok_or_else(|| "remote_evidence_spool_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "remote_evidence_spool_lock_poisoned".to_owned())?
+        .route_receipts_by_frame_root();
+    let terminals_by_request = terminals
+        .iter()
+        .map(|terminal| (terminal.request_event_id_sha256.as_str(), terminal))
+        .collect::<BTreeMap<_, _>>();
+    let topologies_by_root = future_topologies
+        .iter()
+        .map(|topology| (topology.commit.commitment_root_sha256.as_str(), topology))
+        .collect::<BTreeMap<_, _>>();
     let ledger = nando_operator_learning::multi_source::TransportBindingLedgerV1::build(
         &future_topologies,
         &frames,
         &terminals,
     );
     for (prediction, (applicability_event_root, durable_at)) in predictions {
+        let exact_route_outcome = topologies_by_root
+            .get(prediction.topology_root_sha256.as_str())
+            .and_then(|topology| {
+                frames.iter().find_map(|frame| {
+                    let frame_root = nando_operator_kernel::canonical_json_sha256(frame).ok()?;
+                    let route_receipt = route_receipts_by_frame_root.get(&frame_root)?;
+                    (route_receipt.request_body_sha256
+                        == topology.structure.provider_capture_request_root_sha256
+                        && route_receipt.turn_intent_id_sha256 == prediction.turn_intent_id_sha256
+                        && route_receipt.session_id_sha256 == frame.session_id_sha256)
+                        .then_some((frame, route_receipt))
+                })
+            });
+        if let Some((frame, route_receipt)) = exact_route_outcome
+            && route_receipt.remote_status == 200
+            && let Some(terminal) =
+                terminals_by_request.get(prediction.request_event_id_sha256.as_str())
+        {
+            runtime
+                .lock()
+                .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
+                .record_self_generated_cpu_outcome(
+                    &prediction,
+                    &terminal.receipt_root_sha256,
+                    terminal.completed_at_unix_nanos,
+                    frame.observed_at_unix_nanos,
+                    &route_receipt.receipt_root_sha256,
+                    route_receipt.remote_status,
+                )?;
+            continue;
+        }
         let bound = ledger
             .bound_for_topology(&prediction.topology_root_sha256)
             .iter()
@@ -3696,6 +3794,20 @@ fn evaluate_ms3_independent_future(
             // Topology progress does not prove that the independent frame consumer has
             // crossed this request. Keep the prediction unresolved and inspect the remaining
             // precommitted roots; missing evidence is neither contradiction nor anti-evidence.
+            continue;
+        };
+        let independent_route_receipt = route_receipts_by_frame_root
+            .get(&bound.binding.completed_frame_root_sha256)
+            .filter(|receipt| {
+                receipt.remote_status == 418
+                    && topologies_by_root
+                        .get(prediction.topology_root_sha256.as_str())
+                        .is_some_and(|topology| {
+                            receipt.request_body_sha256
+                                == topology.structure.provider_capture_request_root_sha256
+                        })
+            });
+        let Some(independent_route_receipt) = independent_route_receipt else {
             continue;
         };
         if bound.binding.action_observed_at_unix_nanos <= durable_at
@@ -3720,13 +3832,19 @@ fn evaluate_ms3_independent_future(
             })
             .cloned()
             .ok_or_else(|| "ms3_future_frame_missing".to_owned())?;
-        let future = nando_operator_learning::multi_source::seal_ms3_independent_future_v1(
+        let future_topology = topologies_by_root
+            .get(prediction.topology_root_sha256.as_str())
+            .copied()
+            .ok_or_else(|| "ms3_future_topology_missing".to_owned())?;
+        let future = nando_operator_learning::multi_source::seal_ms3_independent_future_with_route_receipt_v1(
             &frozen,
             &prediction,
             &applicability_event_root,
             durable_at,
             &bound,
             &frame,
+            future_topology,
+            independent_route_receipt,
         )
         .map_err(|error| format!("ms3_independent_future_seal:{error}"))?;
         let mut runtime = runtime
@@ -9150,6 +9268,38 @@ mod tests {
         ));
         assert!(!frozen.authority_ready);
         assert!(!frozen.phase_mutation_allowed);
+        assert!(
+            evaluate_ms3_independent_future(&state)
+                .expect("independent future evaluation")
+                .is_none()
+        );
+        let applicability = state
+            .ms3_frozen_version_space
+            .as_ref()
+            .expect("frozen runtime")
+            .lock()
+            .expect("frozen runtime lock")
+            .applicability_report(unix_now())
+            .expect("applicability report")
+            .expect("applicability gate");
+        assert_eq!(applicability.censored_self_generated_cpu_outcome, 1);
+        assert_eq!(applicability.active_predictions, 0);
+        let future_diagnostics =
+            ms3_future_prediction_diagnostics(&state).expect("future prediction diagnostics");
+        if let Some(unresolved) = future_diagnostics
+            .pointer("/outcome_join/first_unresolved")
+            .filter(|value| !value.is_null())
+        {
+            eprintln!("first unresolved future prediction: {unresolved}");
+            if unresolved.get("transport_failure").and_then(Value::as_str) == Some("JoinRejected") {
+                assert!(
+                    unresolved
+                        .get("join_rejection")
+                        .is_some_and(|value| !value.is_null()),
+                    "join rejection reason must remain observable: {unresolved}"
+                );
+            }
+        }
         let frozen_root = frozen.contract_root_sha256.clone();
         drop(state);
 

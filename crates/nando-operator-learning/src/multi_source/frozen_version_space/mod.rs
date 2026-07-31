@@ -18,7 +18,7 @@ pub use applicability::{
 pub use future::{
     MS3_INDEPENDENT_FUTURE_ENVELOPE_SCHEMA_V1, MS3_INDEPENDENT_FUTURE_RECEIPT_SCHEMA_V1,
     Ms3IndependentFutureEnvelopeV1, Ms3IndependentFutureReceiptV1, Ms3IndependentFutureVerdictV1,
-    seal_ms3_independent_future_v1,
+    seal_ms3_independent_future_v1, seal_ms3_independent_future_with_route_receipt_v1,
 };
 pub use prediction::{
     MS3_FUTURE_PREDICTION_SCHEMA_V1, Ms3FutureApplicabilityV1, Ms3FuturePredictionV1,

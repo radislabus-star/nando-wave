@@ -25,13 +25,16 @@ pub enum Ms3FutureApplicabilityDispositionV1 {
     PredictionCommitted,
     PrecommittedPredictionMissing,
     CensoredMissingCompletedFrame,
+    CensoredSelfGeneratedCpuOutcome,
 }
 
 impl Ms3FutureApplicabilityDispositionV1 {
     fn is_prediction_disqualification(self) -> bool {
         matches!(
             self,
-            Self::PrecommittedPredictionMissing | Self::CensoredMissingCompletedFrame
+            Self::PrecommittedPredictionMissing
+                | Self::CensoredMissingCompletedFrame
+                | Self::CensoredSelfGeneratedCpuOutcome
         )
     }
 }
@@ -78,6 +81,10 @@ pub struct Ms3FutureApplicabilityEventV1 {
     pub action_observed_at_unix_nanos: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_frame_capture_fence: Option<Ms3CompletedFrameCaptureFenceV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_route_receipt_root_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_route_status: Option<u16>,
     pub recorded_at_unix_nanos: u64,
     pub authority_ready: bool,
     pub phase_mutation_allowed: bool,
@@ -116,6 +123,7 @@ pub struct Ms3FutureApplicabilityReportV1 {
     pub predictions_committed: u64,
     pub precommitted_prediction_missing: u64,
     pub censored_missing_completed_frame: u64,
+    pub censored_self_generated_cpu_outcome: u64,
     pub active_predictions: u64,
     pub independent_lineages: u64,
     pub verdict: Ms3FutureApplicabilityVerdictV1,
@@ -219,6 +227,8 @@ impl Ms3FutureApplicabilityEventV1 {
             terminal_completed_at_unix_nanos: terminal.map(|(_, completed, _)| completed),
             action_observed_at_unix_nanos: terminal.map(|(_, _, observed)| observed),
             completed_frame_capture_fence: None,
+            client_route_receipt_root_sha256: None,
+            client_route_status: None,
             recorded_at_unix_nanos,
             authority_ready: false,
             phase_mutation_allowed: false,
@@ -255,6 +265,48 @@ impl Ms3FutureApplicabilityEventV1 {
             terminal_completed_at_unix_nanos: Some(terminal_completed_at_unix_nanos),
             action_observed_at_unix_nanos: None,
             completed_frame_capture_fence: Some(completed_frame_capture_fence),
+            client_route_receipt_root_sha256: None,
+            client_route_status: None,
+            recorded_at_unix_nanos,
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        };
+        event.event_root_sha256 = event.expected_root()?;
+        event
+            .validate(contract)
+            .then_some(event)
+            .ok_or("future_applicability_event_invalid")
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal_censored_self_generated_cpu_outcome(
+        contract: &Ms3FutureApplicabilityContractV1,
+        prediction: &Ms3FuturePredictionV1,
+        prediction_durable_at_unix_nanos: u64,
+        terminal_receipt_root_sha256: &str,
+        terminal_completed_at_unix_nanos: u64,
+        action_observed_at_unix_nanos: u64,
+        client_route_receipt_root_sha256: &str,
+        client_route_status: u16,
+        recorded_at_unix_nanos: u64,
+    ) -> Result<Self, &'static str> {
+        let mut event = Self {
+            schema: MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1.to_owned(),
+            event_root_sha256: String::new(),
+            contract_root_sha256: contract.contract_root_sha256.clone(),
+            capture_sequence: prediction.capture_sequence,
+            topology_root_sha256: prediction.topology_root_sha256.clone(),
+            session_lineage_sha256: prediction.session_lineage_sha256.clone(),
+            disposition: Ms3FutureApplicabilityDispositionV1::CensoredSelfGeneratedCpuOutcome,
+            blocker: "CENSORED_SELF_GENERATED_CPU_OUTCOME".to_owned(),
+            prediction_root_sha256: Some(prediction.prediction_root_sha256.clone()),
+            prediction_durable_at_unix_nanos: Some(prediction_durable_at_unix_nanos),
+            terminal_receipt_root_sha256: Some(terminal_receipt_root_sha256.to_owned()),
+            terminal_completed_at_unix_nanos: Some(terminal_completed_at_unix_nanos),
+            action_observed_at_unix_nanos: Some(action_observed_at_unix_nanos),
+            completed_frame_capture_fence: None,
+            client_route_receipt_root_sha256: Some(client_route_receipt_root_sha256.to_owned()),
+            client_route_status: Some(client_route_status),
             recorded_at_unix_nanos,
             authority_ready: false,
             phase_mutation_allowed: false,
@@ -267,6 +319,31 @@ impl Ms3FutureApplicabilityEventV1 {
     }
 
     fn expected_root(&self) -> Result<String, &'static str> {
+        if self.disposition == Ms3FutureApplicabilityDispositionV1::CensoredSelfGeneratedCpuOutcome
+        {
+            return canonical_json_sha256(&(
+                MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1,
+                self.contract_root_sha256.as_str(),
+                self.capture_sequence,
+                self.topology_root_sha256.as_str(),
+                self.session_lineage_sha256.as_str(),
+                self.disposition,
+                self.blocker.as_str(),
+                self.prediction_root_sha256.as_deref(),
+                self.prediction_durable_at_unix_nanos,
+                self.terminal_receipt_root_sha256.as_deref(),
+                self.terminal_completed_at_unix_nanos,
+                self.action_observed_at_unix_nanos,
+                (
+                    self.client_route_receipt_root_sha256.as_deref(),
+                    self.client_route_status,
+                ),
+                self.recorded_at_unix_nanos,
+                false,
+                false,
+            ))
+            .map_err(|_| "future_applicability_event_root_failed");
+        }
         if let Some(fence) = &self.completed_frame_capture_fence {
             return canonical_json_sha256(&(
                 MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1,
@@ -337,6 +414,8 @@ impl Ms3FutureApplicabilityEventV1 {
                         && self.terminal_receipt_root_sha256.is_none()
                         && self.action_observed_at_unix_nanos.is_none()
                         && self.completed_frame_capture_fence.is_none()
+                        && self.client_route_receipt_root_sha256.is_none()
+                        && self.client_route_status.is_none()
                 }
                 Ms3FutureApplicabilityDispositionV1::PredictionCommitted => {
                     self.blocker.is_empty()
@@ -345,6 +424,8 @@ impl Ms3FutureApplicabilityEventV1 {
                         && self.terminal_receipt_root_sha256.is_none()
                         && self.action_observed_at_unix_nanos.is_none()
                         && self.completed_frame_capture_fence.is_none()
+                        && self.client_route_receipt_root_sha256.is_none()
+                        && self.client_route_status.is_none()
                 }
                 Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing => {
                     self.blocker == "PRECOMMITTED_PREDICTION_MISSING"
@@ -354,6 +435,8 @@ impl Ms3FutureApplicabilityEventV1 {
                         && self.terminal_completed_at_unix_nanos.is_some()
                         && self.action_observed_at_unix_nanos.is_some()
                         && self.completed_frame_capture_fence.is_none()
+                        && self.client_route_receipt_root_sha256.is_none()
+                        && self.client_route_status.is_none()
                         && (self.terminal_completed_at_unix_nanos
                             <= self.prediction_durable_at_unix_nanos
                             || self.action_observed_at_unix_nanos
@@ -378,6 +461,22 @@ impl Ms3FutureApplicabilityEventV1 {
                                         |completed| fence.captured_at_unix_nanos > completed,
                                     )
                             })
+                        && self.client_route_receipt_root_sha256.is_none()
+                        && self.client_route_status.is_none()
+                }
+                Ms3FutureApplicabilityDispositionV1::CensoredSelfGeneratedCpuOutcome => {
+                    self.blocker == "CENSORED_SELF_GENERATED_CPU_OUTCOME"
+                        && self.prediction_root_sha256.is_some()
+                        && self.prediction_durable_at_unix_nanos.is_some()
+                        && self.terminal_receipt_root_sha256.is_some()
+                        && self.terminal_completed_at_unix_nanos.is_some()
+                        && self.action_observed_at_unix_nanos.is_some()
+                        && self.completed_frame_capture_fence.is_none()
+                        && self
+                            .client_route_receipt_root_sha256
+                            .as_deref()
+                            .is_some_and(valid_nonzero_sha256)
+                        && self.client_route_status == Some(200)
                 }
             };
         self.schema == MS3_FUTURE_APPLICABILITY_EVENT_SCHEMA_V1
@@ -519,6 +618,10 @@ impl Ms3FutureApplicabilityLedgerV1 {
                 &self.events,
                 Ms3FutureApplicabilityDispositionV1::CensoredMissingCompletedFrame,
             ),
+            censored_self_generated_cpu_outcome: count_disposition(
+                &self.events,
+                Ms3FutureApplicabilityDispositionV1::CensoredSelfGeneratedCpuOutcome,
+            ),
             active_predictions: u64::try_from(active_predictions).unwrap_or(u64::MAX),
             independent_lineages: u64::try_from(
                 classifications
@@ -646,6 +749,7 @@ impl Ms3FutureApplicabilityReportV1 {
             self.predictions_committed,
             self.precommitted_prediction_missing,
             self.censored_missing_completed_frame,
+            self.censored_self_generated_cpu_outcome,
             self.active_predictions,
             self.independent_lineages,
             self.verdict,
@@ -686,6 +790,7 @@ impl Ms3FutureApplicabilityReportV1 {
             && self.structurally_not_applicable <= self.independent_topologies
             && self.predictions_committed <= self.independent_topologies
             && self.censored_missing_completed_frame <= self.predictions_committed
+            && self.censored_self_generated_cpu_outcome <= self.predictions_committed
             && self.active_predictions <= self.predictions_committed
             && verdict_valid
             && !self.authority_ready

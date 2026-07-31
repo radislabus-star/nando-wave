@@ -1,3 +1,4 @@
+use nando_client_evidence::NandoRouteReceiptV1;
 use nando_operator_kernel::{
     RelationFrame, canonical_json_sha256, sha256_bytes, valid_nonzero_sha256,
 };
@@ -7,7 +8,7 @@ use crate::{OperatorIdentificationMachineV1, OperatorIdentificationStateV1};
 
 use super::{FrozenVersionSpaceEnvelopeV1, Ms3FuturePredictionV1};
 use crate::multi_source::{
-    TransportBoundJoinedTransitionV1,
+    PreActionTopologyAuditRowV1, TransportBoundJoinedTransitionV1,
     identification::observation_for_transition,
     source_neutral_t1::{pre_action_t1_binding_root, t1_program_consistency_blocker},
 };
@@ -42,6 +43,10 @@ pub struct Ms3IndependentFutureReceiptV1 {
     pub transport_binding_root_sha256: String,
     pub session_lineage_sha256: String,
     pub verifier_receipt_root_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_route_receipt_root_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_route_status: Option<u16>,
     pub verdict: Ms3IndependentFutureVerdictV1,
     pub blocker: String,
     pub exact_transfer_parity: bool,
@@ -76,6 +81,10 @@ struct FutureReceiptDigestV1<'a> {
     transport_binding_root_sha256: &'a str,
     session_lineage_sha256: &'a str,
     verifier_receipt_root_sha256: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_route_receipt_root_sha256: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_route_status: Option<u16>,
     verdict: Ms3IndependentFutureVerdictV1,
     blocker: &'a str,
     exact_transfer_parity: bool,
@@ -91,6 +100,60 @@ pub fn seal_ms3_independent_future_v1(
     prediction_durable_at_unix_nanos: u64,
     bound: &TransportBoundJoinedTransitionV1,
     frame: &RelationFrame,
+) -> Result<Ms3IndependentFutureEnvelopeV1, &'static str> {
+    seal_ms3_independent_future_inner_v1(
+        frozen,
+        prediction,
+        applicability_event_root_sha256,
+        prediction_durable_at_unix_nanos,
+        bound,
+        frame,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn seal_ms3_independent_future_with_route_receipt_v1(
+    frozen: &FrozenVersionSpaceEnvelopeV1,
+    prediction: &Ms3FuturePredictionV1,
+    applicability_event_root_sha256: &str,
+    prediction_durable_at_unix_nanos: u64,
+    bound: &TransportBoundJoinedTransitionV1,
+    frame: &RelationFrame,
+    topology: &PreActionTopologyAuditRowV1,
+    route_receipt: &NandoRouteReceiptV1,
+) -> Result<Ms3IndependentFutureEnvelopeV1, &'static str> {
+    if !route_receipt.validate()
+        || route_receipt.remote_status != 418
+        || topology.commit.commitment_root_sha256 != prediction.topology_root_sha256
+        || topology.structure.provider_capture_request_root_sha256
+            != route_receipt.request_body_sha256
+        || route_receipt.turn_intent_id_sha256 != prediction.turn_intent_id_sha256
+        || route_receipt.session_id_sha256 != frame.session_id_sha256
+        || route_receipt.route_confirmed_at_unix_nanos > frame.observed_at_unix_nanos
+    {
+        return Err("future_client_route_receipt_binding_mismatch");
+    }
+    seal_ms3_independent_future_inner_v1(
+        frozen,
+        prediction,
+        applicability_event_root_sha256,
+        prediction_durable_at_unix_nanos,
+        bound,
+        frame,
+        Some(route_receipt),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn seal_ms3_independent_future_inner_v1(
+    frozen: &FrozenVersionSpaceEnvelopeV1,
+    prediction: &Ms3FuturePredictionV1,
+    applicability_event_root_sha256: &str,
+    prediction_durable_at_unix_nanos: u64,
+    bound: &TransportBoundJoinedTransitionV1,
+    frame: &RelationFrame,
+    route_receipt: Option<&NandoRouteReceiptV1>,
 ) -> Result<Ms3IndependentFutureEnvelopeV1, &'static str> {
     prediction.validate(frozen)?;
     let mut machine =
@@ -152,6 +215,9 @@ pub fn seal_ms3_independent_future_v1(
         transport_binding_root_sha256: bound.binding.binding_root_sha256.clone(),
         session_lineage_sha256: prediction.session_lineage_sha256.clone(),
         verifier_receipt_root_sha256: bound.joined.verifier_receipt_root_sha256.clone(),
+        client_route_receipt_root_sha256: route_receipt
+            .map(|receipt| receipt.receipt_root_sha256.clone()),
+        client_route_status: route_receipt.map(|receipt| receipt.remote_status),
         verdict,
         blocker: detail,
         exact_transfer_parity: verdict == Ms3IndependentFutureVerdictV1::Pass,
@@ -189,6 +255,8 @@ impl Ms3IndependentFutureReceiptV1 {
             transport_binding_root_sha256: &self.transport_binding_root_sha256,
             session_lineage_sha256: &self.session_lineage_sha256,
             verifier_receipt_root_sha256: &self.verifier_receipt_root_sha256,
+            client_route_receipt_root_sha256: self.client_route_receipt_root_sha256.as_deref(),
+            client_route_status: self.client_route_status,
             verdict: self.verdict,
             blocker: &self.blocker,
             exact_transfer_parity: self.exact_transfer_parity,
@@ -234,6 +302,14 @@ impl Ms3IndependentFutureEnvelopeV1 {
             .map(|ledger| ledger.accounting())
             .ok_or("future_ledger_missing")?;
         let pass = self.receipt.verdict == Ms3IndependentFutureVerdictV1::Pass;
+        let client_route_valid = match (
+            self.receipt.client_route_receipt_root_sha256.as_deref(),
+            self.receipt.client_route_status,
+        ) {
+            (None, None) => true,
+            (Some(root), Some(418)) => valid_nonzero_sha256(root),
+            _ => false,
+        };
         if self.schema != MS3_INDEPENDENT_FUTURE_ENVELOPE_SCHEMA_V1
             || self.receipt.schema != MS3_INDEPENDENT_FUTURE_RECEIPT_SCHEMA_V1
             || self.receipt.contract_root_sha256 != frozen.contract.contract_root_sha256
@@ -242,6 +318,7 @@ impl Ms3IndependentFutureEnvelopeV1 {
             || self.receipt.runtime_actor_verifier_parity
             || self.receipt.authority_ready
             || self.receipt.phase_mutation_allowed
+            || !client_route_valid
             || (pass && !self.receipt.blocker.is_empty())
             || (!pass && self.receipt.blocker.is_empty())
             || self.receipt.receipt_root_sha256 != self.receipt.expected_root()?

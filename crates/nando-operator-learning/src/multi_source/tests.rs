@@ -6,6 +6,9 @@ use crate::{
     VerifiedDeltaRelationState,
     opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass},
 };
+use nando_client_evidence::{
+    ClientRouteIdentityV1, NandoRouteReceiptV1, route_receipt_genesis_root,
+};
 use nando_core::wave::{CircuitSynthesisConfig, OperatorGrokkingConfig};
 use nando_operator_kernel::{
     AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, MultiSourceCardinalityClassV1,
@@ -2237,6 +2240,7 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
     )
     .expect("durable prediction event");
     let committed_root = committed.event_root_sha256.clone();
+    let committed_for_cpu_censor = committed.clone();
     assert!(applicability.append(committed).expect("append"));
     assert_eq!(
         applicability.report(101).verdict,
@@ -2251,13 +2255,32 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
     );
     let future_bound =
         &future_ledger.bound_for_topology(&future_topology.commit.commitment_root_sha256)[0];
-    let future = seal_ms3_independent_future_v1(
+    let route_identity = ClientRouteIdentityV1 {
+        turn_intent_id_sha256: root("future"),
+        session_id_sha256: root("future-lineage"),
+    };
+    let route_receipt = NandoRouteReceiptV1::seal(
+        1,
+        route_receipt_genesis_root(),
+        &route_identity,
+        future_topology
+            .structure
+            .provider_capture_request_root_sha256
+            .clone(),
+        418,
+        2_030_000_000,
+        2_040_000_000,
+    )
+    .expect("independent route receipt");
+    let future = seal_ms3_independent_future_with_route_receipt_v1(
         &frozen,
         &prediction,
         &committed_root,
         2_060_000_000,
         future_bound,
         &future_frame,
+        &future_topology,
+        &route_receipt,
     )
     .expect("independent future");
 
@@ -2265,6 +2288,11 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
     assert!(future.receipt.exact_transfer_parity);
     assert!(!future.receipt.runtime_actor_verifier_parity);
     assert!(!future.receipt.authority_ready);
+    assert_eq!(future.receipt.client_route_status, Some(418));
+    assert_eq!(
+        future.receipt.client_route_receipt_root_sha256.as_deref(),
+        Some(route_receipt.receipt_root_sha256.as_str())
+    );
     let bytes = future
         .canonical_bytes(&frozen)
         .expect("future canonical bytes");
@@ -2275,6 +2303,56 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
             .canonical_bytes(&frozen)
             .expect("restored future bytes"),
         bytes
+    );
+
+    let cpu_route_receipt = NandoRouteReceiptV1::seal(
+        2,
+        route_receipt.receipt_root_sha256.clone(),
+        &route_identity,
+        future_topology
+            .structure
+            .provider_capture_request_root_sha256
+            .clone(),
+        200,
+        2_030_000_000,
+        2_040_000_000,
+    )
+    .expect("CPU route receipt");
+    assert_eq!(
+        seal_ms3_independent_future_with_route_receipt_v1(
+            &frozen,
+            &prediction,
+            &committed_root,
+            2_060_000_000,
+            future_bound,
+            &future_frame,
+            &future_topology,
+            &cpu_route_receipt,
+        ),
+        Err("future_client_route_receipt_binding_mismatch")
+    );
+    let mismatched_route_receipt = NandoRouteReceiptV1::seal(
+        2,
+        route_receipt.receipt_root_sha256.clone(),
+        &route_identity,
+        root("different-request-body"),
+        418,
+        2_030_000_000,
+        2_040_000_000,
+    )
+    .expect("mismatched route receipt");
+    assert_eq!(
+        seal_ms3_independent_future_with_route_receipt_v1(
+            &frozen,
+            &prediction,
+            &committed_root,
+            2_060_000_000,
+            future_bound,
+            &future_frame,
+            &future_topology,
+            &mismatched_route_receipt,
+        ),
+        Err("future_client_route_receipt_binding_mismatch")
     );
 
     let missing = Ms3FutureApplicabilityEventV1::seal(
@@ -2310,6 +2388,46 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
             .canonical_bytes()
             .expect("restored gate bytes"),
         gate_bytes
+    );
+
+    let mut cpu_ledger =
+        Ms3FutureApplicabilityLedgerV1::new(applicability_contract.clone()).expect("CPU ledger");
+    assert!(
+        cpu_ledger
+            .append(committed_for_cpu_censor)
+            .expect("append CPU prediction")
+    );
+    let self_generated = Ms3FutureApplicabilityEventV1::seal_censored_self_generated_cpu_outcome(
+        &applicability_contract,
+        &prediction,
+        2_060_000_000,
+        &future_terminal.receipt_root_sha256,
+        future_terminal.completed_at_unix_nanos,
+        future_frame.observed_at_unix_nanos,
+        &root("client-route-receipt"),
+        200,
+        2_080_000_000,
+    )
+    .expect("self-generated CPU censor");
+    assert!(
+        cpu_ledger
+            .append(self_generated)
+            .expect("append CPU censor")
+    );
+    let cpu_report = cpu_ledger.report(101);
+    assert_eq!(cpu_report.censored_self_generated_cpu_outcome, 1);
+    assert_eq!(cpu_report.active_predictions, 0);
+    assert_eq!(
+        cpu_report.verdict,
+        Ms3FutureApplicabilityVerdictV1::Collecting
+    );
+    let cpu_bytes = cpu_ledger.canonical_bytes().expect("CPU ledger bytes");
+    assert_eq!(
+        Ms3FutureApplicabilityLedgerV1::from_canonical_bytes(&cpu_bytes)
+            .expect("CPU ledger restart")
+            .canonical_bytes()
+            .expect("CPU ledger restored bytes"),
+        cpu_bytes
     );
 }
 
@@ -2994,6 +3112,31 @@ fn transport_binding_rejects_overlapping_response_intervals() {
             .get(&Ms3FailureDispositionV1::TransportBindingUnresolved),
         Some(&2)
     );
+}
+
+#[test]
+fn transport_binding_preserves_exact_join_rejection_reason() {
+    let topology = t1_topology_row("turn", "request", "session", 1, 2_000);
+    let frame = t1_completed_frame("turn", "action", "session", 1_500);
+    let terminal = terminal("request", 1_000, 2_100);
+    let ledger = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+
+    assert_eq!(
+        ledger.failure_for_topology(&topology.commit.commitment_root_sha256),
+        Some(TransportBindingFailureV1::JoinRejected)
+    );
+    let rejection = ledger
+        .join_rejection_for_topology(&topology.commit.commitment_root_sha256)
+        .expect("join rejection detail");
+    assert_eq!(
+        rejection.reason,
+        MultiSourceJoinCensoredReasonV1::IdentityMismatch
+    );
+    assert!(rejection.topology_captured_at_unix_nanos > rejection.action_observed_at_unix_nanos);
 }
 
 #[test]

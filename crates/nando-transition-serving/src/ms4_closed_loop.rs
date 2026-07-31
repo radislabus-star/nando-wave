@@ -163,6 +163,18 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
         report.reseal();
         return Ok(report);
     }
+    if future.receipt.client_route_status != Some(418)
+        || future
+            .receipt
+            .client_route_receipt_root_sha256
+            .as_deref()
+            .is_none_or(str::is_empty)
+    {
+        report.stage = Ms4ClosedLoopStageV1::Blocked;
+        report.blocker = "ms3_future_independent_route_proof_missing".to_owned();
+        report.reseal();
+        return Ok(report);
+    }
 
     let candidate_path = state
         .config

@@ -56,6 +56,7 @@ pub use frozen_version_space::{
     Ms3VersionSpaceVersionsV1, Ms3ZeroClassReasonV1, PreparedMs3VersionSpaceV1,
     classify_ms3_unique_law_v1, predict_ms3_unique_law_v1, prepare_ms3_frozen_version_space_v1,
     prepare_ms3_frozen_version_space_with_denominator_v1, seal_ms3_independent_future_v1,
+    seal_ms3_independent_future_with_route_receipt_v1,
 };
 pub use identification::{
     MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
@@ -136,7 +137,7 @@ pub use source_neutral_t1::pre_action_t1_binding_root;
 pub use transport_binding::{
     REQUEST_ACTION_BINDING_SCHEMA_V1, RequestActionBindingV1, TRANSPORT_BOUND_JOIN_MAX_ROWS_V1,
     TRANSPORT_TERMINAL_RECEIPT_SCHEMA_V1, TransportBindingFailureV1, TransportBindingLedgerV1,
-    TransportBoundJoinedTransitionV1, TransportTerminalReceiptV1,
+    TransportBoundJoinedTransitionV1, TransportJoinRejectionV1, TransportTerminalReceiptV1,
 };
 
 #[cfg(test)]

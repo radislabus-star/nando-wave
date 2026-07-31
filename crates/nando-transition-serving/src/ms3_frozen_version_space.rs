@@ -459,6 +459,7 @@ impl Ms3FrozenVersionSpaceRuntime {
                     event.disposition,
                     Ms3FutureApplicabilityDispositionV1::PrecommittedPredictionMissing
                         | Ms3FutureApplicabilityDispositionV1::CensoredMissingCompletedFrame
+                        | Ms3FutureApplicabilityDispositionV1::CensoredSelfGeneratedCpuOutcome
                 ) && event.prediction_root_sha256.as_deref() == Some(prediction_root)
             })
         })
@@ -497,6 +498,41 @@ impl Ms3FrozenVersionSpaceRuntime {
                 action_observed_at_unix_nanos,
             )),
             now,
+        )
+        .map_err(str::to_owned)?;
+        self.append_applicability_event(event)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn record_self_generated_cpu_outcome(
+        &mut self,
+        prediction: &Ms3FuturePredictionV1,
+        terminal_receipt_root_sha256: &str,
+        terminal_completed_at_unix_nanos: u64,
+        action_observed_at_unix_nanos: u64,
+        client_route_receipt_root_sha256: &str,
+        client_route_status: u16,
+    ) -> Result<bool, String> {
+        if self.prediction_is_disqualified(&prediction.prediction_root_sha256) {
+            return Ok(false);
+        }
+        let (_, durable_at) = self
+            .prediction_commitment(&prediction.prediction_root_sha256)
+            .ok_or_else(|| "ms3_prediction_durable_receipt_missing".to_owned())?;
+        let gate = self
+            .applicability_ledger
+            .as_ref()
+            .ok_or_else(|| "ms3_future_applicability_missing".to_owned())?;
+        let event = Ms3FutureApplicabilityEventV1::seal_censored_self_generated_cpu_outcome(
+            &gate.contract,
+            prediction,
+            durable_at,
+            terminal_receipt_root_sha256,
+            terminal_completed_at_unix_nanos,
+            action_observed_at_unix_nanos,
+            client_route_receipt_root_sha256,
+            client_route_status,
+            unix_now_nanos(),
         )
         .map_err(str::to_owned)?;
         self.append_applicability_event(event)

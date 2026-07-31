@@ -134,11 +134,18 @@ pub(crate) struct RemoteEvidenceSpoolRuntime {
     heads: BTreeMap<String, RemoteEvidenceClientHeadV1>,
     configured_clients: u64,
     route_bound_frame_roots: BTreeSet<String>,
+    route_receipt_by_frame_root: BTreeMap<String, NandoRouteReceiptV1>,
     runtime_parity_by_frame_root: BTreeMap<String, RuntimeParityCase>,
     duplicate_batches: u64,
     auth_failures: u64,
     rejected_batches: u64,
 }
+
+type AcceptedFrameEvidenceV1 = (
+    BTreeSet<String>,
+    BTreeMap<String, NandoRouteReceiptV1>,
+    BTreeMap<String, RuntimeParityCase>,
+);
 
 impl RemoteEvidenceFrameV1 {
     pub fn seal(frame: RelationFrame) -> Result<Self, String> {
@@ -600,6 +607,7 @@ impl RemoteEvidenceSpoolRuntime {
             .map_err(|error| format!("remote_evidence_spool_directory:{error}"))?;
         let mut heads = BTreeMap::new();
         let mut route_bound_frame_roots = BTreeSet::new();
+        let mut route_receipt_by_frame_root = BTreeMap::new();
         let mut runtime_parity_by_frame_root = BTreeMap::new();
         for entry in fs::read_dir(root.join("clients"))
             .map_err(|error| format!("remote_evidence_spool_scan:{error}"))?
@@ -635,9 +643,18 @@ impl RemoteEvidenceSpoolRuntime {
             if canonical != bytes {
                 return Err("remote_evidence_head_invalid".to_owned());
             }
-            let (client_route_bound_roots, client_runtime_parity) =
+            let (client_route_bound_roots, client_route_receipts, client_runtime_parity) =
                 load_accepted_frame_evidence(&entry.path(), &head)?;
             route_bound_frame_roots.extend(client_route_bound_roots);
+            for (frame_root, receipt) in client_route_receipts {
+                match route_receipt_by_frame_root.get(&frame_root) {
+                    Some(existing) if existing == &receipt => {}
+                    Some(_) => return Err("remote_evidence_route_receipt_rebound".to_owned()),
+                    None => {
+                        route_receipt_by_frame_root.insert(frame_root, receipt);
+                    }
+                }
+            }
             for (frame_root, parity) in client_runtime_parity {
                 match runtime_parity_by_frame_root.get(&frame_root) {
                     Some(existing) if existing == &parity => {}
@@ -659,6 +676,7 @@ impl RemoteEvidenceSpoolRuntime {
             heads,
             configured_clients,
             route_bound_frame_roots,
+            route_receipt_by_frame_root,
             runtime_parity_by_frame_root,
             duplicate_batches: 0,
             auth_failures: 0,
@@ -740,6 +758,14 @@ impl RemoteEvidenceSpoolRuntime {
             return Err("remote_evidence_sequence_conflict".to_owned());
         }
         for frame in &batch.frames {
+            if let Some(receipt) = &frame.route_receipt
+                && self
+                    .route_receipt_by_frame_root
+                    .get(&frame.frame_root_sha256)
+                    .is_some_and(|existing| existing != receipt)
+            {
+                return Err("remote_evidence_route_receipt_rebound".to_owned());
+            }
             if let Some(parity) = &frame.runtime_parity_case
                 && self
                     .runtime_parity_by_frame_root
@@ -793,6 +819,11 @@ impl RemoteEvidenceSpoolRuntime {
                 .map(|frame| frame.frame_root_sha256.clone()),
         );
         for frame in &batch.frames {
+            if let Some(receipt) = &frame.route_receipt {
+                self.route_receipt_by_frame_root
+                    .entry(frame.frame_root_sha256.clone())
+                    .or_insert_with(|| receipt.clone());
+            }
             if let Some(parity) = &frame.runtime_parity_case {
                 self.runtime_parity_by_frame_root
                     .entry(frame.frame_root_sha256.clone())
@@ -842,6 +873,10 @@ impl RemoteEvidenceSpoolRuntime {
         self.route_bound_frame_roots.clone()
     }
 
+    pub(crate) fn route_receipts_by_frame_root(&self) -> BTreeMap<String, NandoRouteReceiptV1> {
+        self.route_receipt_by_frame_root.clone()
+    }
+
     pub(crate) fn runtime_parity_for_frame(
         &self,
         frame_root_sha256: &str,
@@ -855,7 +890,7 @@ impl RemoteEvidenceSpoolRuntime {
 fn load_accepted_frame_evidence(
     client_directory: &Path,
     head: &RemoteEvidenceClientHeadV1,
-) -> Result<(BTreeSet<String>, BTreeMap<String, RuntimeParityCase>), String> {
+) -> Result<AcceptedFrameEvidenceV1, String> {
     let mut batches = BTreeMap::new();
     for entry in fs::read_dir(client_directory)
         .map_err(|error| format!("remote_evidence_spool_scan:{error}"))?
@@ -885,6 +920,7 @@ fn load_accepted_frame_evidence(
     let mut previous_root = remote_evidence_genesis_root(&head.client_id_sha256);
     let mut accepted_frames = 0_u64;
     let mut route_bound_frame_roots = BTreeSet::new();
+    let mut route_receipt_by_frame_root = BTreeMap::new();
     let mut runtime_parity_by_frame_root = BTreeMap::new();
     for sequence in 1..=head.sequence {
         let batch = batches
@@ -904,6 +940,16 @@ fn load_accepted_frame_evidence(
                 .map(|frame| frame.frame_root_sha256.clone()),
         );
         for frame in &batch.frames {
+            if let Some(receipt) = &frame.route_receipt {
+                match route_receipt_by_frame_root.get(&frame.frame_root_sha256) {
+                    Some(existing) if existing == receipt => {}
+                    Some(_) => return Err("remote_evidence_route_receipt_rebound".to_owned()),
+                    None => {
+                        route_receipt_by_frame_root
+                            .insert(frame.frame_root_sha256.clone(), receipt.clone());
+                    }
+                }
+            }
             if let Some(parity) = &frame.runtime_parity_case {
                 match runtime_parity_by_frame_root.get(&frame.frame_root_sha256) {
                     Some(existing) if existing == parity => {}
@@ -919,7 +965,11 @@ fn load_accepted_frame_evidence(
     if previous_root != head.batch_root_sha256 || accepted_frames != head.accepted_frames {
         return Err("remote_evidence_receipt_head_invalid".to_owned());
     }
-    Ok((route_bound_frame_roots, runtime_parity_by_frame_root))
+    Ok((
+        route_bound_frame_roots,
+        route_receipt_by_frame_root,
+        runtime_parity_by_frame_root,
+    ))
 }
 
 fn count_configured_clients(directory: &Path) -> Result<u64, String> {

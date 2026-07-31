@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     BlindThenRevealJoinedTransitionV1, PreActionTopologyAuditRowV1,
-    join::join_explicit_topology_to_frame,
+    join::{MultiSourceJoinCensoredReasonV1, join_explicit_topology_to_frame},
 };
 
 pub const TRANSPORT_TERMINAL_RECEIPT_SCHEMA_V1: &str = "nando.transport-terminal-receipt.v1";
@@ -64,10 +64,21 @@ pub enum TransportBindingFailureV1 {
     CapacityExhausted,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransportJoinRejectionV1 {
+    pub reason: MultiSourceJoinCensoredReasonV1,
+    pub completed_frame_root_sha256: String,
+    pub topology_captured_at_unix_nanos: u64,
+    pub action_observed_at_unix_nanos: u64,
+    pub turn_intent_matches: bool,
+    pub session_identity_matches: bool,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TransportBindingLedgerV1 {
     bound_by_topology: BTreeMap<String, Vec<TransportBoundJoinedTransitionV1>>,
     failures_by_topology: BTreeMap<String, TransportBindingFailureV1>,
+    join_rejections_by_topology: BTreeMap<String, TransportJoinRejectionV1>,
 }
 
 impl TransportTerminalReceiptV1 {
@@ -276,12 +287,33 @@ impl TransportBindingLedgerV1 {
                 );
                 continue;
             };
-            let Ok(joined) = join_explicit_topology_to_frame(topology, frame) else {
-                ledger.failures_by_topology.insert(
-                    topology.commit.commitment_root_sha256.clone(),
-                    TransportBindingFailureV1::JoinRejected,
-                );
-                continue;
+            let joined = match join_explicit_topology_to_frame(topology, frame) {
+                Ok(joined) => joined,
+                Err(reason) => {
+                    ledger.failures_by_topology.insert(
+                        topology.commit.commitment_root_sha256.clone(),
+                        TransportBindingFailureV1::JoinRejected,
+                    );
+                    ledger.join_rejections_by_topology.insert(
+                        topology.commit.commitment_root_sha256.clone(),
+                        TransportJoinRejectionV1 {
+                            reason,
+                            completed_frame_root_sha256: frame_root.clone(),
+                            topology_captured_at_unix_nanos: topology
+                                .captured_at_unix_ms
+                                .unwrap_or_default()
+                                .saturating_mul(1_000_000),
+                            action_observed_at_unix_nanos: frame.observed_at_unix_nanos,
+                            turn_intent_matches: topology.structure.turn_intent_id_sha256
+                                == frame.client_intent_id_sha256,
+                            session_identity_matches: topology
+                                .structure
+                                .session_lineage_roots_sha256
+                                .contains(&frame.session_id_sha256),
+                        },
+                    );
+                    continue;
+                }
             };
             let mut binding = RequestActionBindingV1 {
                 schema: REQUEST_ACTION_BINDING_SCHEMA_V1.to_owned(),
@@ -309,6 +341,9 @@ impl TransportBindingLedgerV1 {
             }
             ledger
                 .failures_by_topology
+                .remove(topology.commit.commitment_root_sha256.as_str());
+            ledger
+                .join_rejections_by_topology
                 .remove(topology.commit.commitment_root_sha256.as_str());
             ledger
                 .bound_by_topology
@@ -349,6 +384,14 @@ impl TransportBindingLedgerV1 {
         topology_root_sha256: &str,
     ) -> Option<TransportBindingFailureV1> {
         self.failures_by_topology.get(topology_root_sha256).copied()
+    }
+
+    #[must_use]
+    pub fn join_rejection_for_topology(
+        &self,
+        topology_root_sha256: &str,
+    ) -> Option<&TransportJoinRejectionV1> {
+        self.join_rejections_by_topology.get(topology_root_sha256)
     }
 
     #[must_use]
