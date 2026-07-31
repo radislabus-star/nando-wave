@@ -315,6 +315,93 @@ fn admission_snapshot_for_function(
     .expect("complete candidate")
 }
 
+fn v4_continuation_replacement(mut legacy: ResponsePackage) -> (ResponsePackage, ResponsePackage) {
+    let legacy_selector = ResponseValueSelector::ContentLinePrefix {
+        prefix: "Script running with cell ID ".to_owned(),
+        value_type: AtomValueType::Identifier,
+    };
+    let crate::ResponseOperation::FunctionCallFromRoles {
+        selector,
+        arguments,
+        ..
+    } = &mut legacy.program.operation
+    else {
+        panic!("function-call package");
+    };
+    *selector = legacy_selector;
+    let [
+        crate::ResponseArgument::Role {
+            role, value_type, ..
+        },
+    ] = arguments.as_mut_slice()
+    else {
+        panic!("single role argument");
+    };
+    *role = crate::SemanticRole::ContinuationHandle;
+    *value_type = Some(AtomValueType::String);
+    legacy.verifier =
+        Some(crate::source_neutral_verifier_for_program(&legacy.program).expect("legacy verifier"));
+    legacy.required_routing_atom_ids.clear();
+    legacy.anti_centers.clear();
+    legacy.crystallized_operator = None;
+
+    let mut candidate = legacy.clone();
+    candidate.package_id = "natural-v4-continuation".to_owned();
+    let crate::ResponseOperation::FunctionCallFromRoles { selector, .. } =
+        &mut candidate.program.operation
+    else {
+        panic!("function-call package");
+    };
+    *selector = ResponseValueSelector::ContinuationHandle {
+        value_type: AtomValueType::Identifier,
+    };
+    candidate.verifier =
+        Some(crate::source_neutral_verifier_for_program(&candidate.program).expect("V4 verifier"));
+    candidate.required_routing_atom_ids =
+        crate::response_program_required_routing_atom_ids(&candidate.program);
+    candidate
+        .phase_centers
+        .clone_from(&candidate.required_routing_atom_ids);
+    candidate.anti_centers = vec![crate::stable_atom_id("test:negative-continuation")];
+    candidate.wave_margin_micro = 1;
+    candidate.proof.adaptive_identification = Some(
+        nando_operator_admission::seal_adaptive_identification_proof_v1(
+            nando_operator_admission::AdaptiveIdentificationProofInputV1 {
+                candidate_freeze_root_sha256: "11".repeat(32),
+                semantic_class_id_sha256: "22".repeat(32),
+                canonical_program_root_sha256: "33".repeat(32),
+                applicability_scope_root_sha256: "44".repeat(32),
+                transfer_proof_root_sha256: "55".repeat(32),
+            },
+        )
+        .expect("adaptive proof"),
+    );
+    let proof = crate::crystallized_operator::DurableProgramCrystallizationProof {
+        generation: 1,
+        blueprint_sha256: [1; 32],
+        candidate_set_sha256: [2; 32],
+        support_root_sha256: [3; 32],
+        future_evidence_root_sha256: [4; 32],
+        future_lineage_root_sha256: [5; 32],
+        winner_seal_sha256: [6; 32],
+        support_lineages: vec![[7; 32]],
+        future_lineages: vec![[8; 32]],
+        binding_receipts: vec![[9; 32]],
+        execution_receipts: vec![[10; 32]],
+    };
+    candidate.crystallized_operator = Some(
+        crate::VerifiedCrystallizedOperator::crystallize_durable_program(
+            candidate.program.clone(),
+            candidate.verifier.clone().expect("candidate verifier"),
+            proof,
+        )
+        .expect("V4 operator")
+        .restart_bundle()
+        .expect("V4 bundle"),
+    );
+    (legacy, candidate)
+}
+
 #[test]
 fn active_admission_merge_preserves_distinct_operator_packages() {
     let active = admission_snapshot_for_function(0, "wait", "cell_id", 100);
@@ -343,6 +430,37 @@ fn active_admission_merge_preserves_distinct_operator_packages() {
     )
     .expect("merged authority");
     assert_eq!(executor.active_package_count(), 2);
+}
+
+#[test]
+fn guarded_v4_continuation_supersedes_only_the_same_legacy_action() {
+    let base = admission_snapshot_for_function(0, "wait", "cell_id", 100)
+        .registry
+        .packages
+        .into_iter()
+        .next()
+        .expect("base package");
+    let (legacy, candidate) = v4_continuation_replacement(base);
+
+    assert!(candidate_strictly_supersedes_legacy_continuation_adapter(
+        &legacy, &candidate
+    ));
+    assert_eq!(
+        superseded_legacy_continuation_adapter_ids(&[legacy.clone(), candidate.clone()]),
+        BTreeSet::from([legacy.package_id.clone()])
+    );
+
+    let mut different_action = candidate;
+    let crate::ResponseOperation::FunctionCallFromRoles { function_name, .. } =
+        &mut different_action.program.operation
+    else {
+        panic!("function-call package");
+    };
+    *function_name = "different_action".to_owned();
+    assert!(!same_continuation_action_contract(
+        &legacy,
+        &different_action
+    ));
 }
 
 #[test]

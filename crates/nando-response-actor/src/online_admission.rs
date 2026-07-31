@@ -367,6 +367,14 @@ pub fn merge_online_admission_snapshots(
             .packages
             .extend(snapshot.admission.response_authority.packages);
     }
+    let superseded_ids = superseded_legacy_continuation_adapter_ids(&registry.packages);
+    registry
+        .packages
+        .retain(|package| !superseded_ids.contains(&package.package_id));
+    admission
+        .response_authority
+        .packages
+        .retain(|binding| !superseded_ids.contains(&binding.package_id));
     registry
         .packages
         .sort_by(|left, right| left.package_id.cmp(&right.package_id));
@@ -655,11 +663,22 @@ pub fn merge_with_proven_active_online_admission(
         .iter()
         .map(|package| package.package_id.clone())
         .collect::<BTreeSet<_>>();
+    let superseded_existing_ids = existing_registry
+        .packages
+        .iter()
+        .filter(|existing| {
+            candidate.registry.packages.iter().any(|replacement| {
+                candidate_strictly_supersedes_legacy_continuation_adapter(existing, replacement)
+            })
+        })
+        .map(|package| package.package_id.clone())
+        .collect::<BTreeSet<_>>();
     let retained_packages = existing_registry
         .packages
         .iter()
         .filter(|package| {
             !replaced_ids.contains(&package.package_id)
+                && !superseded_existing_ids.contains(&package.package_id)
                 && package.eligible_for_admission_candidate()
         })
         .cloned()
@@ -710,6 +729,117 @@ fn candidate_upgrades_legacy_crystal_to_v4(
         (Some(active), Some(candidate))
             if !active.has_canonical_bundle_v4() && candidate.has_canonical_bundle_v4()
     )
+}
+
+fn superseded_legacy_continuation_adapter_ids(packages: &[ResponsePackage]) -> BTreeSet<String> {
+    packages
+        .iter()
+        .filter(|active| {
+            packages.iter().any(|candidate| {
+                candidate_strictly_supersedes_legacy_continuation_adapter(active, candidate)
+            })
+        })
+        .map(|package| package.package_id.clone())
+        .collect()
+}
+
+fn candidate_strictly_supersedes_legacy_continuation_adapter(
+    active: &ResponsePackage,
+    candidate: &ResponsePackage,
+) -> bool {
+    if active.package_id == candidate.package_id
+        || !active.required_routing_atom_ids.is_empty()
+        || !active.anti_centers.is_empty()
+        || candidate.required_routing_atom_ids.is_empty()
+        || candidate.anti_centers.is_empty()
+        || active
+            .crystallized_operator
+            .as_ref()
+            .is_some_and(|bundle| bundle.has_canonical_bundle_v4())
+        || candidate
+            .crystallized_operator
+            .as_ref()
+            .is_none_or(|bundle| !bundle.has_canonical_bundle_v4())
+        || candidate
+            .crystallized_operator
+            .as_ref()
+            .is_none_or(|bundle| bundle.restore_verified().is_err())
+        || candidate
+            .proof
+            .adaptive_identification
+            .as_ref()
+            .is_none_or(|proof| proof.validate().is_err())
+    {
+        return false;
+    }
+    same_continuation_action_contract(active, candidate)
+}
+
+fn same_continuation_action_contract(
+    active: &ResponsePackage,
+    candidate: &ResponsePackage,
+) -> bool {
+    let (
+        crate::ResponseOperation::FunctionCallFromRoles {
+            function_name: active_function,
+            selector: active_selector,
+            arguments: active_arguments,
+        },
+        crate::ResponseOperation::FunctionCallFromRoles {
+            function_name: candidate_function,
+            selector: candidate_selector,
+            arguments: candidate_arguments,
+        },
+        Some(crate::VerifierProgram::FunctionCallFromRoles {
+            function_name: active_verifier_function,
+            selector: active_verifier_selector,
+            role_arguments: active_role_arguments,
+            role_argument_types: active_role_argument_types,
+            integer_arguments: active_integer_arguments,
+            string_arguments: active_string_arguments,
+            boolean_arguments: active_boolean_arguments,
+            require_pending_state: active_require_pending,
+            require_unique_handle: active_require_unique,
+        }),
+        Some(crate::VerifierProgram::FunctionCallFromRoles {
+            function_name: candidate_verifier_function,
+            selector: candidate_verifier_selector,
+            role_arguments: candidate_role_arguments,
+            role_argument_types: candidate_role_argument_types,
+            integer_arguments: candidate_integer_arguments,
+            string_arguments: candidate_string_arguments,
+            boolean_arguments: candidate_boolean_arguments,
+            require_pending_state: candidate_require_pending,
+            require_unique_handle: candidate_require_unique,
+        }),
+    ) = (
+        &active.program.operation,
+        &candidate.program.operation,
+        active.verifier.as_ref(),
+        candidate.verifier.as_ref(),
+    )
+    else {
+        return false;
+    };
+    matches!(
+        candidate_selector,
+        crate::ResponseValueSelector::ContinuationHandle { .. }
+    ) && active_selector != candidate_selector
+        && active_verifier_selector == active_selector
+        && candidate_verifier_selector == candidate_selector
+        && active_function == candidate_function
+        && active_arguments == candidate_arguments
+        && active.program.max_output_bytes == candidate.program.max_output_bytes
+        && active_verifier_function == candidate_verifier_function
+        && active_role_arguments == candidate_role_arguments
+        && active_role_argument_types == candidate_role_argument_types
+        && active_integer_arguments == candidate_integer_arguments
+        && active_string_arguments == candidate_string_arguments
+        && active_boolean_arguments == candidate_boolean_arguments
+        && active_require_pending == candidate_require_pending
+        && active_require_unique == candidate_require_unique
+        && *candidate_require_pending
+        && *candidate_require_unique
 }
 
 fn candidate_crystallizes_same_law(active: &ResponsePackage, candidate: &ResponsePackage) -> bool {
