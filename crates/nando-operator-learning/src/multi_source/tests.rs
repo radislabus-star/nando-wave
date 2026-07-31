@@ -1633,6 +1633,134 @@ fn v3_scientific_denominator_requires_route_bound_frame_and_terminal() {
 }
 
 #[test]
+fn route_settlement_limit_closes_with_unsettled_candidates() {
+    let unresolved = t1_topology_row("unresolved", "request-u", "session-u", 1, 1_000);
+    let frame_pending = t1_topology_row("frame-pending", "request-f", "session-f", 2, 2_000);
+    let eligible_a = t1_topology_row("eligible-a", "request-a", "session-a", 3, 3_000);
+    let eligible_b = t1_topology_row("eligible-b", "request-b", "session-b", 4, 4_000);
+    let frame_a = t1_completed_frame("eligible-a", "action-a", "session-a", 3_500);
+    let frame_b = t1_completed_frame("eligible-b", "action-b", "session-b", 4_500);
+    let route_bound_roots = BTreeSet::from([
+        nando_operator_kernel::canonical_json_sha256(&frame_a).expect("frame A root"),
+        nando_operator_kernel::canonical_json_sha256(&frame_b).expect("frame B root"),
+    ]);
+
+    let report = build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
+        acquisition_contract_v3(2, 4),
+        10,
+        vec![unresolved, frame_pending, eligible_a, eligible_b],
+        vec![frame_a, frame_b],
+        vec![
+            terminal("request-f", 1_990, 2_100),
+            terminal("request-a", 2_990, 3_100),
+            terminal("request-b", 3_990, 4_100),
+        ],
+        &BTreeSet::from([root("session-a"), root("session-b")]),
+        &route_bound_roots,
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.schema, MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4);
+    assert_eq!(report.raw_scanned_topology_rows, 4);
+    assert_eq!(report.candidate_topology_rows, 4);
+    assert_eq!(report.eligible_topology_rows, 2);
+    assert_eq!(report.route_settlement_pending_rows, 2);
+    assert_eq!(report.evidence_reuse_excluded_rows, 2);
+    assert_eq!(
+        report
+            .candidate_settlement_counts
+            .get(&Ms3CandidateSettlementClassV1::SettledEligible),
+        Some(&2)
+    );
+    assert_eq!(
+        report
+            .candidate_settlement_counts
+            .get(&Ms3CandidateSettlementClassV1::ReceiptStalled),
+        Some(&2)
+    );
+    assert_eq!(
+        report
+            .transport_binding_failure_counts
+            .get(&TransportBindingFailureV1::TerminalReceiptMissing),
+        Some(&1)
+    );
+    assert_eq!(
+        report
+            .transport_binding_failure_counts
+            .get(&TransportBindingFailureV1::CompletedFrameMissing),
+        Some(&1)
+    );
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+    );
+    assert_eq!(report.blocker, MS3_LINKED_FRAME_ACQUISITION_FAIL);
+    assert!(!report.phase_update_allowed);
+    assert!(!report.authority_ready);
+    let mut registry = Ms3GenerationRegistryV1::new();
+    let closure = registry
+        .seal_linked_acquisition_failure(1, &report, report.consumed_capture_sequence)
+        .expect("bounded settlement closure");
+    assert_eq!(
+        closure.schema,
+        MS3_GENERATION_LINKED_ACQUISITION_FAILURE_SCHEMA_V4
+    );
+    assert_eq!(closure.candidate_topology_rows, 4);
+    assert_eq!(closure.route_settlement_pending_rows, 2);
+    assert_eq!(closure.structurally_ineligible_rows, 0);
+    assert!(closure.validate());
+}
+
+#[test]
+fn route_settlement_deadline_closes_without_terminal_receipt() {
+    let report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract_v3(3, 4),
+        61,
+        vec![t1_topology_row(
+            "deadline",
+            "request-deadline",
+            "session-deadline",
+            1,
+            1_000,
+        )],
+        Vec::new(),
+        Vec::new(),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(report.route_settlement_pending_rows, 1);
+    assert_eq!(
+        report.verdict,
+        Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail
+    );
+    assert_eq!(report.blocker, MS3_LINKED_FRAME_ACQUISITION_FAIL);
+}
+
+#[test]
+fn legacy_v3_acquisition_report_remains_canonical() {
+    let mut report = build_ms3_linked_frame_acquisition_report_v1(
+        acquisition_contract_v3(3, 4),
+        10,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    report.schema = MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3.to_owned();
+    report.candidate_settlement_counts.clear();
+    report.route_settlement_pending_rows = 0;
+    report.transport_binding_failure_counts.clear();
+    report.evidence_reuse_excluded_rows = 0;
+    report.report_root_sha256 = report.expected_root();
+
+    assert!(report.validate(), "{report:#?}");
+    let bytes = serde_cbor::to_vec(&report).expect("legacy V3 bytes");
+    let restored = serde_cbor::from_slice::<Ms3LinkedFrameAcquisitionReportV1>(&bytes)
+        .expect("legacy V3 restore");
+    assert_eq!(restored, report);
+    assert!(restored.validate());
+}
+
+#[test]
 fn scientific_denominator_is_content_addressed_and_bound_into_freeze() {
     let topology = t1_topology_row("settled", "request-settled", "session-a", 1, 1_000);
     let frame = t1_completed_frame("settled", "action-settled", "session-a", 1_500);

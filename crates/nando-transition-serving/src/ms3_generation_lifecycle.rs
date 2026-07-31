@@ -1319,12 +1319,22 @@ mod tests {
             86_400,
         )
         .expect("generation one");
+        let unsettled = topology(
+            "unsettled",
+            "request-unsettled",
+            "unsettled-lineage",
+            1,
+            opened_at_ms,
+        );
+        topology_archive
+            .append(&unsettled)
+            .expect("unsettled topology");
         let unlinked = topology(
             "unlinked",
             "request-unlinked",
             "unlinked-lineage",
-            1,
-            opened_at_ms,
+            2,
+            opened_at_ms.saturating_add(100),
         );
         topology_archive
             .append(&unlinked)
@@ -1333,7 +1343,7 @@ mod tests {
             "unlinked",
             "action-unlinked",
             "unlinked-lineage",
-            opened_at_ms.saturating_add(20),
+            opened_at_ms.saturating_add(120),
             true,
         );
         let settled_frame_root =
@@ -1342,12 +1352,12 @@ mod tests {
             .acquisition
             .evaluate_with_route_bound_evidence(
                 opened_at_unix,
-                vec![unlinked],
+                vec![unsettled, unlinked],
                 vec![settled_frame],
                 vec![terminal(
                     "request-unlinked",
-                    opened_at_ms,
-                    opened_at_ms.saturating_add(10),
+                    opened_at_ms.saturating_add(90),
+                    opened_at_ms.saturating_add(110),
                 )],
                 &BTreeSet::from([settled_frame_root.clone()]),
                 &BTreeSet::from([settled_frame_root]),
@@ -1362,6 +1372,9 @@ mod tests {
             .seal_linked_acquisition_failure(&failed, topology_archive.max_bridge_sequence())
             .expect("durable linked acquisition failure");
         assert_eq!(failure.generation_sequence, 1);
+        assert_eq!(failed.candidate_topology_rows, 2);
+        assert_eq!(failed.eligible_topology_rows, 1);
+        assert_eq!(failed.route_settlement_pending_rows, 1);
         assert!(!failure.authority_ready);
         assert!(!failure.phase_mutation_allowed);
         assert!(
@@ -1379,7 +1392,7 @@ mod tests {
             "support-two",
             "request-support-two",
             "support-two-lineage",
-            2,
+            3,
             opened_at_ms.saturating_add(1_000),
         );
         topology_archive
@@ -1404,7 +1417,7 @@ mod tests {
                 .acquisition
                 .contract()
                 .topology_watermark_rows,
-            1,
+            2,
             "successor starts at the consumed cursor, not the archive tail"
         );
         assert!(generation_two.frozen.envelope().is_none());

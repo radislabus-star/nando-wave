@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     PreActionTopologyAuditRowV1, RepresentationGapClassV1, RequestStructureAuditSnapshotV1,
-    TransportBindingLedgerV1, TransportTerminalReceiptV1,
+    TransportBindingFailureV1, TransportBindingLedgerV1, TransportTerminalReceiptV1,
     build_representation_gap_adjudication_report_v1,
 };
 
@@ -26,6 +26,8 @@ pub const MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2: &str =
     "nando.ms3-linked-frame-acquisition-report.v2";
 pub const MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3: &str =
     "nando.ms3-linked-frame-acquisition-report.v3";
+pub const MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4: &str =
+    "nando.ms3-linked-frame-acquisition-report.v4";
 pub const MS3_SCIENTIFIC_TOPOLOGY_SETTLEMENT_SCHEMA_V1: &str =
     "nando.ms3-scientific-topology-settlement.v1";
 pub const MS3_SCIENTIFIC_DENOMINATOR_RECEIPT_SCHEMA_V1: &str =
@@ -51,6 +53,16 @@ pub enum Ms3LinkedFrameAcquisitionVerdictV1 {
     CensoredUnattributedProbe,
     CensoredIneligibleProbe,
     CensoredPreRouteReceiptEpoch,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Ms3CandidateSettlementClassV1 {
+    SettledEligible,
+    TerminalPending,
+    RouteFramePending,
+    ReceiptStalled,
+    StructurallyIneligible,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -130,6 +142,14 @@ pub struct Ms3LinkedFrameAcquisitionReportV1 {
     pub consumed_topology_cursor_rows: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub consumed_capture_sequence: u64,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub candidate_settlement_counts: BTreeMap<Ms3CandidateSettlementClassV1, u64>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub route_settlement_pending_rows: u64,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub transport_binding_failure_counts: BTreeMap<TransportBindingFailureV1, u64>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub evidence_reuse_excluded_rows: u64,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -185,6 +205,7 @@ pub struct Ms3AcquisitionTopologySelectionV1 {
     pub candidate_topologies: Vec<PreActionTopologyAuditRowV1>,
     pub eligible_topologies: Vec<PreActionTopologyAuditRowV1>,
     pub ineligible_reason_counts: BTreeMap<super::MultiSourceJoinCensoredReasonV1, u64>,
+    pub candidate_settlement_counts: BTreeMap<Ms3CandidateSettlementClassV1, u64>,
 }
 
 #[derive(Serialize)]
@@ -238,6 +259,37 @@ struct Ms3LinkedFrameAcquisitionReportDigestV3<'a> {
     ineligible_reason_counts: &'a BTreeMap<super::MultiSourceJoinCensoredReasonV1, u64>,
     consumed_topology_cursor_rows: u64,
     consumed_capture_sequence: u64,
+}
+
+#[derive(Serialize)]
+struct Ms3LinkedFrameAcquisitionReportDigestV4<'a> {
+    schema: &'static str,
+    acquisition_contract: &'a Ms3LinkedFrameAcquisitionContractV1,
+    generated_at_unix: u64,
+    new_topology_rows_seen: u64,
+    evaluated_topology_rows: u64,
+    terminal_receipt_rows: u64,
+    relevant_verified_frame_rows: u64,
+    linked_frame_rows: u64,
+    gap_class_counts: &'a BTreeMap<RepresentationGapClassV1, u64>,
+    no_representation_gap_rows: u64,
+    receipts: &'a [Ms3LinkedFrameReceiptV1],
+    verdict: Ms3LinkedFrameAcquisitionVerdictV1,
+    blocker: &'a str,
+    phase_update_allowed: bool,
+    authority_ready: bool,
+    raw_scanned_topology_rows: u64,
+    candidate_topology_rows: u64,
+    eligible_topology_rows: u64,
+    censored_unattributed_rows: u64,
+    censored_topology_rows: u64,
+    ineligible_reason_counts: &'a BTreeMap<super::MultiSourceJoinCensoredReasonV1, u64>,
+    consumed_topology_cursor_rows: u64,
+    consumed_capture_sequence: u64,
+    candidate_settlement_counts: &'a BTreeMap<Ms3CandidateSettlementClassV1, u64>,
+    route_settlement_pending_rows: u64,
+    transport_binding_failure_counts: &'a BTreeMap<TransportBindingFailureV1, u64>,
+    evidence_reuse_excluded_rows: u64,
 }
 
 impl Ms3LinkedFrameAcquisitionContractV1 {
@@ -538,6 +590,7 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
         candidate_topologies,
         eligible_topologies,
         ineligible_reason_counts,
+        candidate_settlement_counts,
     } = select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_v1(
         &contract,
         generated_at_unix,
@@ -569,7 +622,8 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
         request_ids.contains(receipt.request_event_id_sha256.as_str())
             && receipt.completed_at_unix_nanos <= deadline_nanos
     });
-    let ledger = TransportBindingLedgerV1::build(&eligible_topologies, &frames, &terminals);
+    let ledger = TransportBindingLedgerV1::build(&candidate_topologies, &frames, &terminals);
+    let transport_binding_failure_counts = ledger.failure_counts();
     let gap_report = build_representation_gap_adjudication_report_v1(
         request_snapshot(eligible_topologies.clone()),
         frames.clone(),
@@ -581,6 +635,7 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
         .map(|row| (row.transport_binding_root_sha256.as_str(), row))
         .collect::<BTreeMap<_, _>>();
     let mut receipts = Vec::new();
+    let mut evidence_reuse_excluded_rows = 0_u64;
     for topology in &eligible_topologies {
         for bound in ledger.bound_for_topology(&topology.commit.commitment_root_sha256) {
             if [
@@ -591,6 +646,7 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
             .iter()
             .any(|root| used_evidence_roots.contains(*root))
             {
+                evidence_reuse_excluded_rows = evidence_reuse_excluded_rows.saturating_add(1);
                 continue;
             }
             let gap = gaps_by_binding.get(bound.binding.binding_root_sha256.as_str());
@@ -677,8 +733,6 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
     )
     .unwrap_or(u64::MAX);
     let all_eligible_terminal = terminal_receipt_rows >= eligible_topology_rows;
-    let all_candidates_scientifically_settled = !contract.uses_route_settlement_policy()
-        || candidate_topology_rows == eligible_topology_rows;
     let eligible_budget_exhausted = eligible_topology_rows == contract.max_new_topology_rows;
     let raw_budget_exhausted = raw_scanned_topology_rows == contract.max_raw_topology_rows();
     let operational_ineligible_censor = !eligible_budget_exhausted
@@ -687,9 +741,14 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
         && operationally_censored_rows == ineligible_rows
         && stale_operationally_censored_rows == operationally_censored_rows
         && all_eligible_terminal;
-    let exhausted = (generated_at_unix >= contract.deadline_unix || eligible_budget_exhausted)
-        && all_eligible_terminal
-        && all_candidates_scientifically_settled;
+    let exhausted = if contract.uses_route_settlement_policy() {
+        generated_at_unix >= contract.deadline_unix
+            || eligible_budget_exhausted
+            || raw_budget_exhausted
+    } else {
+        (generated_at_unix >= contract.deadline_unix || eligible_budget_exhausted)
+            && all_eligible_terminal
+    };
     let (verdict, blocker) = if linked_frame_rows > 0 {
         (
             Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved,
@@ -715,11 +774,18 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
     } else {
         (
             Ms3LinkedFrameAcquisitionVerdictV1::Collecting,
-            if generated_at_unix >= contract.deadline_unix
-                && contract.uses_route_settlement_policy()
-                && candidate_topology_rows > eligible_topology_rows
+            if contract.uses_route_settlement_policy()
+                && candidate_settlement_counts
+                    .get(&Ms3CandidateSettlementClassV1::ReceiptStalled)
+                    .copied()
+                    .unwrap_or(0)
+                    > 0
             {
                 "route_settlement_stalled".to_owned()
+            } else if contract.uses_route_settlement_policy()
+                && candidate_topology_rows > eligible_topology_rows
+            {
+                "route_settlement_pending".to_owned()
             } else if generated_at_unix >= contract.deadline_unix
                 && terminal_receipt_rows < eligible_topology_rows
             {
@@ -742,9 +808,24 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
     } else {
         0
     };
+    let route_settlement_pending_rows = if contract.uses_route_settlement_policy() {
+        candidate_topology_rows.saturating_sub(eligible_topology_rows)
+    } else {
+        0
+    };
+    let serialized_transport_binding_failure_counts = if contract.uses_route_settlement_policy() {
+        transport_binding_failure_counts
+    } else {
+        BTreeMap::new()
+    };
+    let serialized_evidence_reuse_excluded_rows = if contract.uses_route_settlement_policy() {
+        evidence_reuse_excluded_rows
+    } else {
+        0
+    };
     let mut report = Ms3LinkedFrameAcquisitionReportV1 {
         schema: if contract.uses_route_settlement_policy() {
-            MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3
+            MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4
         } else {
             MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2
         }
@@ -772,6 +853,10 @@ pub fn build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
         ineligible_reason_counts,
         consumed_topology_cursor_rows,
         consumed_capture_sequence,
+        candidate_settlement_counts,
+        route_settlement_pending_rows,
+        transport_binding_failure_counts: serialized_transport_binding_failure_counts,
+        evidence_reuse_excluded_rows: serialized_evidence_reuse_excluded_rows,
     };
     report.report_root_sha256 = report.expected_root();
     report
@@ -863,6 +948,7 @@ pub fn select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_
     let mut eligible_topologies = Vec::new();
     let mut ineligible_reason_counts =
         BTreeMap::<super::MultiSourceJoinCensoredReasonV1, u64>::new();
+    let mut candidate_settlement_counts = BTreeMap::<Ms3CandidateSettlementClassV1, u64>::new();
     for topology in new_topologies {
         if raw_topologies.len()
             >= usize::try_from(contract.max_raw_topology_rows()).unwrap_or(usize::MAX)
@@ -875,16 +961,35 @@ pub fn select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_
             match super::validate_pre_action_topology_join_eligibility_v1(&topology) {
                 Ok(()) => {
                     candidate_topologies.push(topology.clone());
-                    if terminal_request_ids.contains(&topology.structure.request_event_id_sha256)
-                        && route_bound_frames
-                            .iter()
-                            .any(|frame| route_bound_frame_matches_topology(&topology, frame))
-                    {
+                    let terminal_present =
+                        terminal_request_ids.contains(&topology.structure.request_event_id_sha256);
+                    let route_frame_present = route_bound_frames
+                        .iter()
+                        .any(|frame| route_bound_frame_matches_topology(&topology, frame));
+                    let settlement_class = if terminal_present && route_frame_present {
                         eligible_topologies.push(topology.clone());
-                    }
+                        Ms3CandidateSettlementClassV1::SettledEligible
+                    } else if topology.captured_at_unix_ms.is_some_and(|captured_at| {
+                        generated_at_unix
+                            .saturating_mul(1_000)
+                            .saturating_sub(captured_at)
+                            >= contract.receipt_lag_slo_seconds().saturating_mul(1_000)
+                    }) {
+                        Ms3CandidateSettlementClassV1::ReceiptStalled
+                    } else if !terminal_present {
+                        Ms3CandidateSettlementClassV1::TerminalPending
+                    } else {
+                        Ms3CandidateSettlementClassV1::RouteFramePending
+                    };
+                    *candidate_settlement_counts
+                        .entry(settlement_class)
+                        .or_default() += 1;
                 }
                 Err(reason) => {
                     *ineligible_reason_counts.entry(reason).or_default() += 1;
+                    *candidate_settlement_counts
+                        .entry(Ms3CandidateSettlementClassV1::StructurallyIneligible)
+                        .or_default() += 1;
                 }
             }
         } else {
@@ -911,6 +1016,7 @@ pub fn select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_
         candidate_topologies,
         eligible_topologies,
         ineligible_reason_counts,
+        candidate_settlement_counts,
     }
 }
 
@@ -958,6 +1064,8 @@ pub fn build_ms3_scientific_denominator_receipt_v1(
         || u64::try_from(selection.eligible_topologies.len()).unwrap_or(u64::MAX)
             != report.eligible_topology_rows
         || selection.ineligible_reason_counts != report.ineligible_reason_counts
+        || (report.schema == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4
+            && selection.candidate_settlement_counts != report.candidate_settlement_counts)
     {
         return Err("ms3_scientific_denominator_reconstruction_mismatch");
     }
@@ -1384,7 +1492,38 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
 
     #[must_use]
     pub fn expected_root(&self) -> String {
-        if self.schema == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3 {
+        if self.schema == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4 {
+            canonical_json_sha256(&Ms3LinkedFrameAcquisitionReportDigestV4 {
+                schema: MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4,
+                acquisition_contract: &self.acquisition_contract,
+                generated_at_unix: self.generated_at_unix,
+                new_topology_rows_seen: self.new_topology_rows_seen,
+                evaluated_topology_rows: self.evaluated_topology_rows,
+                terminal_receipt_rows: self.terminal_receipt_rows,
+                relevant_verified_frame_rows: self.relevant_verified_frame_rows,
+                linked_frame_rows: self.linked_frame_rows,
+                gap_class_counts: &self.gap_class_counts,
+                no_representation_gap_rows: self.no_representation_gap_rows,
+                receipts: &self.receipts,
+                verdict: self.verdict,
+                blocker: &self.blocker,
+                phase_update_allowed: false,
+                authority_ready: false,
+                raw_scanned_topology_rows: self.raw_scanned_topology_rows,
+                candidate_topology_rows: self.candidate_topology_rows,
+                eligible_topology_rows: self.eligible_topology_rows,
+                censored_unattributed_rows: self.censored_unattributed_rows,
+                censored_topology_rows: self.censored_topology_rows,
+                ineligible_reason_counts: &self.ineligible_reason_counts,
+                consumed_topology_cursor_rows: self.consumed_topology_cursor_rows,
+                consumed_capture_sequence: self.consumed_capture_sequence,
+                candidate_settlement_counts: &self.candidate_settlement_counts,
+                route_settlement_pending_rows: self.route_settlement_pending_rows,
+                transport_binding_failure_counts: &self.transport_binding_failure_counts,
+                evidence_reuse_excluded_rows: self.evidence_reuse_excluded_rows,
+            })
+            .expect("MS3 acquisition report serializes")
+        } else if self.schema == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3 {
             canonical_json_sha256(&Ms3LinkedFrameAcquisitionReportDigestV3 {
                 schema: MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3,
                 acquisition_contract: &self.acquisition_contract,
@@ -1467,6 +1606,7 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
             MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1
                 | MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V2
                 | MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3
+                | MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4
         ) && self.acquisition_contract.validate()
             && self.generated_at_unix >= self.acquisition_contract.opened_at_unix
             && self.evaluated_topology_rows <= self.acquisition_contract.max_new_topology_rows
@@ -1480,7 +1620,15 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
             });
         let verdict_valid = match self.verdict {
             Ms3LinkedFrameAcquisitionVerdictV1::Collecting => {
+                let bounded_route_window_closed = self.schema
+                    == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4
+                    && (self.generated_at_unix >= self.acquisition_contract.deadline_unix
+                        || self.evaluated_topology_rows
+                            == self.acquisition_contract.max_new_topology_rows
+                        || self.raw_scanned_topology_rows
+                            == self.acquisition_contract.max_raw_topology_rows());
                 self.linked_frame_rows == 0
+                    && !bounded_route_window_closed
                     && !((self.generated_at_unix >= self.acquisition_contract.deadline_unix
                         || self.evaluated_topology_rows
                             == self.acquisition_contract.max_new_topology_rows)
@@ -1492,19 +1640,28 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
                         "linked_frame_pending"
                             | "terminal_receipt_stalled"
                             | "route_settlement_stalled"
+                            | "route_settlement_pending"
                     )
             }
             Ms3LinkedFrameAcquisitionVerdictV1::LinkedFrameObserved => {
                 self.linked_frame_rows > 0 && self.blocker.is_empty()
             }
             Ms3LinkedFrameAcquisitionVerdictV1::AcquisitionFail => {
-                self.linked_frame_rows == 0
+                let bounded_route_window_closed = self.schema
+                    == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V4
                     && (self.generated_at_unix >= self.acquisition_contract.deadline_unix
                         || self.evaluated_topology_rows
-                            == self.acquisition_contract.max_new_topology_rows)
-                    && self.terminal_receipt_rows >= self.evaluated_topology_rows
-                    && (!self.acquisition_contract.uses_route_settlement_policy()
-                        || self.candidate_topology_rows == self.eligible_topology_rows)
+                            == self.acquisition_contract.max_new_topology_rows
+                        || self.raw_scanned_topology_rows
+                            == self.acquisition_contract.max_raw_topology_rows());
+                self.linked_frame_rows == 0
+                    && (bounded_route_window_closed
+                        || ((self.generated_at_unix >= self.acquisition_contract.deadline_unix
+                            || self.evaluated_topology_rows
+                                == self.acquisition_contract.max_new_topology_rows)
+                            && self.terminal_receipt_rows >= self.evaluated_topology_rows
+                            && (!self.acquisition_contract.uses_route_settlement_policy()
+                                || self.candidate_topology_rows == self.eligible_topology_rows)))
                     && self.blocker == MS3_LINKED_FRAME_ACQUISITION_FAIL
             }
             Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe => {
@@ -1549,6 +1706,10 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
                     && self.blocker == MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH
             }
         };
+        let v4_observability_fields_empty = self.candidate_settlement_counts.is_empty()
+            && self.route_settlement_pending_rows == 0
+            && self.transport_binding_failure_counts.is_empty()
+            && self.evidence_reuse_excluded_rows == 0;
         let schema_valid = if self.schema == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V1 {
             self.raw_scanned_topology_rows == 0
                 && self.candidate_topology_rows == 0
@@ -1558,6 +1719,7 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
                 && self.ineligible_reason_counts.is_empty()
                 && self.consumed_topology_cursor_rows == 0
                 && self.consumed_capture_sequence == 0
+                && v4_observability_fields_empty
                 && !matches!(
                     self.verdict,
                     Ms3LinkedFrameAcquisitionVerdictV1::CensoredUnattributedProbe
@@ -1605,7 +1767,8 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
                     || self.raw_scanned_topology_rows > 0 && self.consumed_capture_sequence > 0)
                 && self.verdict
                     != Ms3LinkedFrameAcquisitionVerdictV1::CensoredPreRouteReceiptEpoch
-        } else {
+                && v4_observability_fields_empty
+        } else if self.schema == MS3_LINKED_FRAME_ACQUISITION_REPORT_SCHEMA_V3 {
             let route_ineligible_rows = self
                 .raw_scanned_topology_rows
                 .saturating_sub(self.candidate_topology_rows);
@@ -1680,7 +1843,99 @@ impl Ms3LinkedFrameAcquisitionReportV1 {
                     &super::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable,
                 )
                 && common_cursor_valid;
-            pre_route_migration_valid || route_settlement_valid
+            (pre_route_migration_valid || route_settlement_valid) && v4_observability_fields_empty
+        } else {
+            let route_ineligible_rows = self
+                .raw_scanned_topology_rows
+                .saturating_sub(self.candidate_topology_rows);
+            let pending_rows = self
+                .candidate_topology_rows
+                .saturating_sub(self.eligible_topology_rows);
+            let pending_class_rows = self
+                .candidate_settlement_counts
+                .get(&Ms3CandidateSettlementClassV1::TerminalPending)
+                .copied()
+                .unwrap_or(0)
+                .saturating_add(
+                    self.candidate_settlement_counts
+                        .get(&Ms3CandidateSettlementClassV1::RouteFramePending)
+                        .copied()
+                        .unwrap_or(0),
+                )
+                .saturating_add(
+                    self.candidate_settlement_counts
+                        .get(&Ms3CandidateSettlementClassV1::ReceiptStalled)
+                        .copied()
+                        .unwrap_or(0),
+                );
+            let settled_rows = self
+                .candidate_settlement_counts
+                .get(&Ms3CandidateSettlementClassV1::SettledEligible)
+                .copied()
+                .unwrap_or(0);
+            let structurally_ineligible_rows = self
+                .candidate_settlement_counts
+                .get(&Ms3CandidateSettlementClassV1::StructurallyIneligible)
+                .copied()
+                .unwrap_or(0);
+            self.acquisition_contract.uses_route_settlement_policy()
+                && self.raw_scanned_topology_rows
+                    <= self.acquisition_contract.max_raw_topology_rows()
+                && self.raw_scanned_topology_rows <= self.new_topology_rows_seen
+                && self.candidate_topology_rows <= self.raw_scanned_topology_rows
+                && self.eligible_topology_rows == self.evaluated_topology_rows
+                && self.eligible_topology_rows <= self.candidate_topology_rows
+                && self.eligible_topology_rows <= self.terminal_receipt_rows
+                && self.terminal_receipt_rows <= self.candidate_topology_rows
+                && self.ineligible_reason_counts.values().copied().sum::<u64>()
+                    == route_ineligible_rows
+                && self
+                    .candidate_settlement_counts
+                    .values()
+                    .copied()
+                    .sum::<u64>()
+                    == self.raw_scanned_topology_rows
+                && self
+                    .candidate_settlement_counts
+                    .values()
+                    .all(|rows| *rows > 0)
+                && settled_rows == self.eligible_topology_rows
+                && structurally_ineligible_rows == route_ineligible_rows
+                && pending_class_rows == pending_rows
+                && self.route_settlement_pending_rows == pending_rows
+                && self
+                    .transport_binding_failure_counts
+                    .values()
+                    .copied()
+                    .sum::<u64>()
+                    <= self.candidate_topology_rows
+                && self
+                    .transport_binding_failure_counts
+                    .values()
+                    .all(|rows| *rows > 0)
+                && self.evidence_reuse_excluded_rows <= self.eligible_topology_rows
+                && self.censored_unattributed_rows
+                    == self
+                        .ineligible_reason_counts
+                        .get(&super::MultiSourceJoinCensoredReasonV1::ProviderIdentityUnproven)
+                        .copied()
+                        .unwrap_or(0)
+                && self.censored_topology_rows
+                    == self
+                        .ineligible_reason_counts
+                        .get(&super::MultiSourceJoinCensoredReasonV1::TopologyCensored)
+                        .copied()
+                        .unwrap_or(0)
+                && !self.ineligible_reason_counts.contains_key(
+                    &super::MultiSourceJoinCensoredReasonV1::TerminalReceiptUnavailable,
+                )
+                && self.consumed_topology_cursor_rows
+                    == self
+                        .acquisition_contract
+                        .topology_watermark_rows
+                        .saturating_add(self.raw_scanned_topology_rows)
+                && (self.raw_scanned_topology_rows == 0 && self.consumed_capture_sequence == 0
+                    || self.raw_scanned_topology_rows > 0 && self.consumed_capture_sequence > 0)
         };
         common_valid
             && verdict_valid

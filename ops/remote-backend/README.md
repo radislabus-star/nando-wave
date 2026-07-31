@@ -127,6 +127,14 @@ cargo build --release -p nando-transition-serving \
   --bin nando-evidence-agent
 ```
 
+All remote Rust test commands, including ignored release fixtures, must use the
+bounded runner. It terminates the complete Cargo/test process group after the
+registered timeout, including a child test that stops making progress:
+
+```bash
+ops/remote-backend/run-remote-rust-test.sh --timeout 1800 test --workspace
+```
+
 The raw 32-byte client key is created out of band with mode `0600` and is never
 printed. Enable the remote cold spool transactionally:
 
@@ -265,3 +273,27 @@ health does not pass. Disable remains explicit:
 ```bash
 ops/remote-backend/reconcile-authority.sh disable
 ```
+
+## Deployment Receipt
+
+Every live binary update has a durable two-phase receipt. `prepare` runs before
+the transactional installers and preserves the previous binaries, configs,
+and unit files. `finalize` runs only after readiness passes and atomically
+records the source commit/tree, installed artifact hashes, service PIDs, unit
+roots, state manifests, runtime snapshots, and rollback pointer:
+
+```bash
+deployment_dir="$(ops/remote-backend/deployment-receipt.sh prepare \
+  --source-dir /home/e/build/nando-wave-release \
+  --rollback-commit <previous-commit>)"
+
+# Run the cold learner and control transactional installers here.
+
+ops/remote-backend/deployment-receipt.sh finalize \
+  --source-dir /home/e/build/nando-wave-release \
+  --deployment-dir "${deployment_dir}"
+```
+
+Finalization fails if the hot-serving or Nginx PID changed. The completed
+receipt directory is made read-only and remains under
+`/var/lib/nando-wave/deployments`.

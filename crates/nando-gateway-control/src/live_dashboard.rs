@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.28-b044";
+const DASHBOARD_BUILD: &str = "2026.07.31-b045";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -618,6 +618,8 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">SCIENTIFIC / LINKED LIMIT</div><div id="ms3-acquisition" class="ms3-value watch">— / 256</div><div id="ms3-acquisition-raw" class="scope-note">CANDIDATE — · RAW — / 4096</div></div>
       <div class="ms3-cell"><div class="ms3-label">TERMINAL / RELEVANT / LINKED</div><div id="ms3-evidence" class="ms3-value watch">0 / 0 / 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">ROUTE SETTLEMENT</div><div id="ms3-settlement" class="ms3-value watch">0 / 0</div><div id="ms3-settlement-note" class="scope-note">SETTLED / PENDING / STALLED / STRUCTURAL</div></div>
+      <div class="ms3-cell"><div class="ms3-label">TRANSPORT BINDING FAILURES</div><div id="ms3-binding-failures" class="ms3-value watch">0</div><div id="ms3-binding-failure-note" class="scope-note">NONE · REUSE 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">LAW</div><div id="ms3-law" class="ms3-value locked">НЕ ЗАМОРОЖЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">FUTURE APPLICABILITY</div><div id="ms3-future-applicability" class="ms3-value watch">0 / 256</div></div>
       <div class="ms3-cell"><div class="ms3-label">DURABLE / ACTIVE PREDICTIONS</div><div id="ms3-predictions" class="ms3-value watch">0 / 0</div></div>
@@ -812,6 +814,23 @@ const TEMPLATE: &str = r#"
     const terminalRows = acquisition.terminal_receipt_rows || 0;
     const relevantRows = acquisition.relevant_verified_frame_rows || 0;
     const linkedRows = acquisition.linked_frame_rows || 0;
+    const settlementCounts = acquisition.candidate_settlement_counts || {};
+    const settledRows = settlementCounts.settled_eligible || 0;
+    const terminalPendingRows = settlementCounts.terminal_pending || 0;
+    const routeFramePendingRows = settlementCounts.route_frame_pending || 0;
+    const receiptStalledRows = settlementCounts.receipt_stalled || 0;
+    const structurallyIneligibleRows = settlementCounts.structurally_ineligible || 0;
+    const routeSettlementPendingRows = acquisition.route_settlement_pending_rows
+      ?? terminalPendingRows + routeFramePendingRows + receiptStalledRows;
+    const bindingFailureCounts = acquisition.transport_binding_failure_counts || {};
+    const bindingFailureRows = Object.values(bindingFailureCounts)
+      .reduce((total, rows) => total + Number(rows || 0), 0);
+    const bindingFailureSummary = Object.entries(bindingFailureCounts)
+      .filter(([, rows]) => Number(rows || 0) > 0)
+      .sort((left, right) => Number(right[1]) - Number(left[1]))
+      .map(([name, rows]) => `${name.replaceAll("_", " ").toUpperCase()} ${number.format(rows)}`)
+      .join(" · ");
+    const evidenceReuseExcludedRows = acquisition.evidence_reuse_excluded_rows || 0;
     const futureVerdict = ms3.effective_verdict || ms3.verdict || "not_evaluated";
     const activeFreezeBlocker = lifecycleStatus.active_freeze_blocker || "";
     const futureBlocker = ms3.effective_blocker || ms3.blocker || activeFreezeBlocker || "";
@@ -843,6 +862,10 @@ const TEMPLATE: &str = r#"
     text("ms3-acquisition", `${number.format(eligibleTopologyRows)} / ${number.format(topologyLimit)}`);
     text("ms3-acquisition-raw", `CANDIDATE ${number.format(candidateTopologyRows)} · RAW ${number.format(rawTopologyRows)} / ${number.format(rawTopologyLimit)} · CENSORED ${number.format(censoredTopologyRows)}`);
     text("ms3-evidence", `${number.format(terminalRows)} / ${number.format(relevantRows)} / ${number.format(linkedRows)}`);
+    text("ms3-settlement", `${number.format(settledRows)} / ${number.format(routeSettlementPendingRows)}`);
+    text("ms3-settlement-note", `SETTLED ${number.format(settledRows)} · TERMINAL PENDING ${number.format(terminalPendingRows)} · FRAME PENDING ${number.format(routeFramePendingRows)} · STALLED ${number.format(receiptStalledRows)} · STRUCTURAL ${number.format(structurallyIneligibleRows)}`);
+    text("ms3-binding-failures", number.format(bindingFailureRows));
+    text("ms3-binding-failure-note", `${bindingFailureSummary || "NONE"} · REUSE ${number.format(evidenceReuseExcludedRows)}`);
     text("ms3-law", lawFrozen ? "UNIQUE LAW FROZEN" : "LAW NOT FROZEN");
     text("ms3-future-applicability", lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN");
     text("ms3-predictions", lawFrozen ? `${number.format(predictionsCommitted)} / ${number.format(activePredictions)}` : "NOT OPEN");
@@ -871,6 +894,8 @@ const TEMPLATE: &str = r#"
     stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
     stateClass("ms3-operational-health", `ms3-value ${captureStatus === "CAPTURE_STALLED" || receiptStatus === "RECEIPT_STALLED" || captureStatus === "NOT_EVALUATED" ? "locked" : receiptStatus === "IN_FLIGHT" ? "watch" : "good"}`);
+    stateClass("ms3-settlement", `ms3-value ${receiptStalledRows > 0 ? "locked" : routeSettlementPendingRows > 0 ? "watch" : "good"}`);
+    stateClass("ms3-binding-failures", `ms3-value ${bindingFailureRows > 0 ? "watch" : "good"}`);
     stateClass("ms4-stage", `ms3-value ${ms4Complete ? "good" : ms4.stage === "blocked" ? "locked" : "watch"}`);
     stateClass("ms4-package", `ms3-value ${ms4Package ? "good" : "muted"}`);
     stateClass("ms4-admission", `ms3-value ${ms4.external_admission_pass === true ? "good" : "locked"}`);
@@ -1143,6 +1168,12 @@ mod tests {
         assert!(html.contains("acquisition.eligible_topology_rows"));
         assert!(html.contains("acquisition.candidate_topology_rows"));
         assert!(html.contains("acquisitionContract.max_raw_topology_rows"));
+        assert!(html.contains("ROUTE SETTLEMENT"));
+        assert!(html.contains("TRANSPORT BINDING FAILURES"));
+        assert!(html.contains("acquisition.candidate_settlement_counts"));
+        assert!(html.contains("acquisition.route_settlement_pending_rows"));
+        assert!(html.contains("acquisition.transport_binding_failure_counts"));
+        assert!(html.contains("acquisition.evidence_reuse_excluded_rows"));
         assert!(html.contains("CAPTURE / RECEIPT HEALTH"));
         assert!(html.contains("AUTONOMOUS STAGE"));
         assert!(html.contains("ORDINARY CPU PROOF"));

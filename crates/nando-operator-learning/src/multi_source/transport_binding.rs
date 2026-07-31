@@ -50,7 +50,8 @@ pub struct TransportBoundJoinedTransitionV1 {
     pub joined: BlindThenRevealJoinedTransitionV1,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TransportBindingFailureV1 {
     TerminalReceiptMissing,
     TerminalReceiptInvalid,
@@ -353,6 +354,17 @@ impl TransportBindingLedgerV1 {
     #[must_use]
     pub fn bound_count(&self) -> usize {
         self.bound_by_topology.values().map(Vec::len).sum()
+    }
+
+    #[must_use]
+    pub fn failure_counts(&self) -> BTreeMap<TransportBindingFailureV1, u64> {
+        self.failures_by_topology
+            .values()
+            .copied()
+            .fold(BTreeMap::new(), |mut counts, failure| {
+                *counts.entry(failure).or_default() += 1;
+                counts
+            })
     }
 }
 
