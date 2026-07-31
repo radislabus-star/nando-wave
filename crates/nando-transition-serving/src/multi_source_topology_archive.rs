@@ -128,23 +128,33 @@ impl MultiSourceTopologyArchive {
             return Err("multi_source_topology_archive_sequence_missing".to_owned());
         }
         let mut cursor = 0;
-        let mut previous = 0;
+        let mut closure_matches = 0_u64;
+        let mut future_seen = false;
         for root in &self.append_order {
             let sequence = self
                 .by_commitment
                 .get(root)
                 .and_then(|row| row.bridge_sequence)
                 .ok_or_else(|| "multi_source_topology_archive_sequence_missing".to_owned())?;
-            if sequence <= previous {
-                return Err("multi_source_topology_archive_sequence_order_invalid".to_owned());
+            if sequence == closure_capture_sequence {
+                closure_matches = closure_matches.saturating_add(1);
             }
-            previous = sequence;
-            if sequence > closure_capture_sequence {
-                break;
+            if sequence <= closure_capture_sequence {
+                if future_seen {
+                    return Err(
+                        "multi_source_topology_archive_sequence_boundary_invalid".to_owned()
+                    );
+                }
+                cursor += 1;
+            } else {
+                future_seen = true;
             }
-            cursor += 1;
         }
-        Ok(cursor)
+        match closure_matches {
+            0 => Err("multi_source_topology_archive_sequence_missing".to_owned()),
+            1 => Ok(cursor),
+            _ => Err("multi_source_topology_archive_sequence_order_invalid".to_owned()),
+        }
     }
 
     pub(super) fn prefix_root(&self, rows: usize) -> Result<String, String> {

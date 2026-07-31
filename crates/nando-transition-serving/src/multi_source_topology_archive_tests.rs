@@ -112,3 +112,86 @@ fn archive_maps_closure_sequence_to_the_exact_consumed_cursor() {
     assert_eq!(archive.rows_between(2, 5).expect("bounded rows").len(), 3);
     std::fs::remove_dir_all(root).expect("cleanup");
 }
+
+#[test]
+fn archive_accepts_backfilled_order_with_a_clean_closure_boundary() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-topology-backfill-{}",
+        std::process::id()
+    ));
+    let mut archive = MultiSourceTopologyArchive::open(&root).expect("archive");
+    for index in [3, 1, 2, 0, 4, 5] {
+        archive.append(&row(index)).expect("append");
+    }
+
+    assert_eq!(
+        archive
+            .cursor_after_bridge_sequence(4)
+            .expect("closure cursor"),
+        4
+    );
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn archive_rejects_a_closure_that_would_consume_future_rows() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-topology-crossed-boundary-{}",
+        std::process::id()
+    ));
+    let mut archive = MultiSourceTopologyArchive::open(&root).expect("archive");
+    for index in [0, 4, 3, 5] {
+        archive.append(&row(index)).expect("append");
+    }
+
+    assert_eq!(
+        archive
+            .cursor_after_bridge_sequence(4)
+            .expect_err("crossed boundary"),
+        "multi_source_topology_archive_sequence_boundary_invalid"
+    );
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn archive_requires_the_exact_closure_sequence() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-topology-missing-closure-{}",
+        std::process::id()
+    ));
+    let mut archive = MultiSourceTopologyArchive::open(&root).expect("archive");
+    for index in [0, 1, 3] {
+        archive.append(&row(index)).expect("append");
+    }
+
+    assert_eq!(
+        archive
+            .cursor_after_bridge_sequence(3)
+            .expect_err("missing closure"),
+        "multi_source_topology_archive_sequence_missing"
+    );
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn archive_rejects_an_ambiguous_closure_sequence() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-topology-ambiguous-closure-{}",
+        std::process::id()
+    ));
+    let mut archive = MultiSourceTopologyArchive::open(&root).expect("archive");
+    archive.append(&row(0)).expect("first append");
+    let mut duplicate_sequence = row(9);
+    duplicate_sequence.bridge_sequence = Some(1);
+    archive
+        .append(&duplicate_sequence)
+        .expect("second append");
+
+    assert_eq!(
+        archive
+            .cursor_after_bridge_sequence(1)
+            .expect_err("ambiguous closure"),
+        "multi_source_topology_archive_sequence_order_invalid"
+    );
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
