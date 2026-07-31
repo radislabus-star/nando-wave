@@ -3290,6 +3290,83 @@ fn linked_acquisition_closure_capture_sequence(
     Ok(archive_sequence)
 }
 
+fn reconstruct_ms3_linked_transport_evidence(
+    acquisition: &nando_operator_learning::multi_source::Ms3LinkedFrameAcquisitionReportV1,
+    linked_receipt: &nando_operator_learning::multi_source::Ms3LinkedFrameReceiptV1,
+    denominator_window_topologies: &[nando_operator_learning::multi_source::PreActionTopologyAuditRowV1],
+    denominator_frames: &[nando_operator_kernel::RelationFrame],
+    denominator_terminals: &[nando_operator_learning::multi_source::TransportTerminalReceiptV1],
+    route_bound_frame_roots: &BTreeSet<String>,
+) -> Result<
+    (
+        nando_operator_learning::multi_source::TransportBoundJoinedTransitionV1,
+        nando_operator_kernel::RelationFrame,
+    ),
+    String,
+> {
+    let selection = nando_operator_learning::multi_source::select_ms3_linked_frame_acquisition_topologies_with_route_bound_evidence_v1(
+        &acquisition.acquisition_contract,
+        acquisition.generated_at_unix,
+        denominator_window_topologies.to_vec(),
+        denominator_terminals,
+        denominator_frames,
+        route_bound_frame_roots,
+    );
+    if u64::try_from(selection.raw_topologies.len()).unwrap_or(u64::MAX)
+        != acquisition.raw_scanned_topology_rows
+        || u64::try_from(selection.candidate_topologies.len()).unwrap_or(u64::MAX)
+            != acquisition.candidate_topology_rows
+    {
+        return Err("ms3_linked_transport_candidate_snapshot_mismatch".to_owned());
+    }
+    let frame = denominator_frames
+        .iter()
+        .find(|frame| {
+            nando_operator_kernel::canonical_json_sha256(*frame)
+                .is_ok_and(|root| root == linked_receipt.completed_frame_root_sha256)
+        })
+        .cloned()
+        .ok_or_else(|| "ms3_linked_frame_missing".to_owned())?;
+    if !route_bound_frame_roots.contains(&linked_receipt.completed_frame_root_sha256) {
+        return Err("ms3_linked_frame_route_binding_missing".to_owned());
+    }
+    let candidate_request_ids = selection
+        .candidate_topologies
+        .iter()
+        .map(|row| row.structure.request_event_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let deadline_nanos = acquisition
+        .acquisition_contract
+        .deadline_unix
+        .saturating_mul(1_000_000_000);
+    let terminals = denominator_terminals
+        .iter()
+        .filter(|terminal| {
+            candidate_request_ids.contains(terminal.request_event_id_sha256.as_str())
+                && terminal.completed_at_unix_nanos <= deadline_nanos
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let ledger = nando_operator_learning::multi_source::TransportBindingLedgerV1::build(
+        &selection.candidate_topologies,
+        std::slice::from_ref(&frame),
+        &terminals,
+    );
+    let bound = ledger
+        .bound_for_topology(&linked_receipt.topology_commitment_root_sha256)
+        .iter()
+        .find(|bound| {
+            bound.binding.binding_root_sha256 == linked_receipt.transport_binding_root_sha256
+                && bound.binding.terminal_receipt_root_sha256
+                    == linked_receipt.terminal_receipt_root_sha256
+                && bound.joined.completed_frame_root_sha256
+                    == linked_receipt.completed_frame_root_sha256
+        })
+        .cloned()
+        .ok_or_else(|| "ms3_linked_transport_binding_missing".to_owned())?;
+    Ok((bound, frame))
+}
+
 fn evaluate_ms3_frozen_version_space(
     state: &AppState,
 ) -> Result<nando_operator_learning::multi_source::FrozenVersionSpaceContractV1, String> {
@@ -3409,10 +3486,11 @@ fn evaluate_ms3_frozen_version_space(
         .map(|settlement| settlement.topology_commitment_root_sha256.as_str())
         .collect::<BTreeSet<_>>();
     let frozen_topologies = denominator_window_topologies
-        .into_iter()
+        .iter()
         .filter(|row| {
             scientific_topology_roots.contains(row.commit.commitment_root_sha256.as_str())
         })
+        .cloned()
         .collect::<Vec<_>>();
     if u64::try_from(frozen_topologies.len()).unwrap_or(u64::MAX) != evaluated_rows {
         return Err("ms3_version_space_scientific_denominator_mismatch".to_owned());
@@ -3422,49 +3500,17 @@ fn evaluate_ms3_frozen_version_space(
     }) {
         return Err("ms3_linked_topology_missing".to_owned());
     }
-    // Binding identity includes the next request boundary, so replay only the
-    // content-addressed scientific denominator before selecting its transition.
-    let request_ids = frozen_topologies
-        .iter()
-        .map(|row| row.structure.request_event_id_sha256.as_str())
-        .collect::<BTreeSet<_>>();
-    let intent_ids = frozen_topologies
-        .iter()
-        .map(|row| row.structure.turn_intent_id_sha256.as_str())
-        .collect::<BTreeSet<_>>();
-    let terminals = denominator_terminals
-        .into_iter()
-        .filter(|receipt| request_ids.contains(receipt.request_event_id_sha256.as_str()))
-        .collect::<Vec<_>>();
-    let frames = denominator_frames
-        .into_iter()
-        .filter(|frame| intent_ids.contains(frame.client_intent_id_sha256.as_str()))
-        .collect::<Vec<_>>();
-    let ledger = nando_operator_learning::multi_source::TransportBindingLedgerV1::build(
-        &frozen_topologies,
-        &frames,
-        &terminals,
-    );
-    let bound = ledger
-        .bound_for_topology(&linked_receipt.topology_commitment_root_sha256)
-        .iter()
-        .find(|bound| {
-            bound.binding.binding_root_sha256 == linked_receipt.transport_binding_root_sha256
-                && bound.binding.terminal_receipt_root_sha256
-                    == linked_receipt.terminal_receipt_root_sha256
-                && bound.joined.completed_frame_root_sha256
-                    == linked_receipt.completed_frame_root_sha256
-        })
-        .cloned()
-        .ok_or_else(|| "ms3_linked_transport_binding_missing".to_owned())?;
-    let frame = frames
-        .iter()
-        .find(|frame| {
-            nando_operator_kernel::canonical_json_sha256(*frame)
-                .is_ok_and(|root| root == linked_receipt.completed_frame_root_sha256)
-        })
-        .cloned()
-        .ok_or_else(|| "ms3_linked_frame_missing".to_owned())?;
+    // Binding identity includes the next request boundary. Reconstruct it from
+    // the full frozen candidate snapshot, while support remains the smaller
+    // content-addressed scientific denominator.
+    let (bound, frame) = reconstruct_ms3_linked_transport_evidence(
+        &acquisition,
+        linked_receipt,
+        &denominator_window_topologies,
+        &denominator_frames,
+        &denominator_terminals,
+        &route_bound_frame_roots,
+    )?;
 
     let prepared =
         nando_operator_learning::multi_source::prepare_ms3_frozen_version_space_with_denominator_v1(
@@ -9029,6 +9075,109 @@ mod tests {
         assert!(!ms3_acquisition_allows_freeze(CensoredIneligibleProbe));
         assert!(!ms3_acquisition_allows_freeze(CensoredPreRouteReceiptEpoch));
         assert!(ms3_acquisition_allows_freeze(LinkedFrameObserved));
+    }
+
+    #[test]
+    #[ignore = "requires NANDO_MS3_LIVE_FIXTURE pointing to a disposable live-state copy"]
+    fn frozen_live_fixture_replays_active_candidate_snapshot() {
+        let root =
+            PathBuf::from(env::var("NANDO_MS3_LIVE_FIXTURE").expect("live fixture directory"));
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let mut state = project_status_test_state(&root, &registry_path);
+        let topology_archive = Arc::new(Mutex::new(
+            multi_source_topology_archive::MultiSourceTopologyArchive::open(
+                &state.config.multi_source_topology_archive_path,
+            )
+            .expect("topology archive"),
+        ));
+        let frame_archive = Arc::new(Mutex::new(
+            multi_source_frame_archive::MultiSourceFrameArchive::open(
+                &state.config.multi_source_frame_archive_path,
+            )
+            .expect("frame archive"),
+        ));
+        let terminal_archive = Arc::new(Mutex::new(
+            terminal_receipt_archive::TerminalReceiptArchive::open(
+                &state.config.terminal_receipt_archive_path,
+            )
+            .expect("terminal archive"),
+        ));
+        let remote_spool = Arc::new(Mutex::new(
+            remote_evidence_spool::RemoteEvidenceSpoolRuntime::open(
+                root.join("multi-source-live-v2/remote-evidence-spool-v1"),
+                root.join("empty-evidence-client-keys"),
+            )
+            .expect("remote evidence spool"),
+        ));
+        let (lifecycle, runtimes) = {
+            let topology = topology_archive.lock().expect("topology lock");
+            ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime::open(
+                &state.config.ms3_linked_frame_acquisition_path,
+                &topology,
+                unix_now(),
+                256,
+                86_400,
+            )
+            .expect("active lifecycle")
+        };
+        let active_generation = lifecycle.manifest().active_generation_sequence;
+        state.ms3_generation_lifecycle = Some(Arc::new(Mutex::new(lifecycle)));
+        state.ms3_linked_frame_acquisition = Some(Arc::new(Mutex::new(runtimes.acquisition)));
+        state.ms3_frozen_version_space = Some(Arc::new(Mutex::new(runtimes.frozen)));
+        state.multi_source_topology_archive = Some(topology_archive);
+        state.multi_source_frame_archive = Some(frame_archive);
+        state.terminal_receipt_archive = Some(terminal_archive);
+        state.remote_evidence_spool = Some(remote_spool);
+
+        let report = state
+            .ms3_linked_frame_acquisition
+            .as_ref()
+            .expect("acquisition")
+            .lock()
+            .expect("acquisition lock")
+            .terminal_report()
+            .expect("terminal report");
+        assert_eq!(report.linked_frame_rows, 1);
+        assert_eq!(report.no_representation_gap_rows, 1);
+        let frozen = evaluate_ms3_frozen_version_space(&state).expect("active freeze");
+        assert!(matches!(
+            frozen.state,
+            nando_operator_learning::multi_source::Ms3FrozenVersionSpaceStateV1::UniqueLawFrozen { .. }
+        ));
+        assert!(!frozen.authority_ready);
+        assert!(!frozen.phase_mutation_allowed);
+        let frozen_root = frozen.contract_root_sha256.clone();
+        drop(state);
+
+        let topology = multi_source_topology_archive::MultiSourceTopologyArchive::open(
+            &root.join("multi-source-live-v2/pre-action-topology-archive-v1"),
+        )
+        .expect("restart topology archive");
+        let (restored_lifecycle, restored) =
+            ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime::open(
+                &root.join("multi-source-live-v2/linked-frame-acquisition-v1"),
+                &topology,
+                unix_now(),
+                256,
+                86_400,
+            )
+            .expect("restart lifecycle");
+        assert_eq!(
+            restored_lifecycle.manifest().active_generation_sequence,
+            active_generation
+        );
+        assert_eq!(
+            restored
+                .frozen
+                .contract()
+                .expect("restored frozen contract")
+                .contract_root_sha256,
+            frozen_root
+        );
     }
 
     #[test]

@@ -456,9 +456,10 @@ mod tests {
     use nando_operator_learning::{
         RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION,
         multi_source::{
-            Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1, TransportBindingLedgerV1,
-            TransportTerminalReceiptV1, prepare_ms3_frozen_version_space_v1,
-            seal_ms3_independent_future_v1,
+            Ms3LinkedFrameAcquisitionContractV1, Ms3VersionSpaceVersionsV1,
+            PreActionTopologyAuditRowV1, TransportBindingLedgerV1, TransportTerminalReceiptV1,
+            build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1,
+            prepare_ms3_frozen_version_space_v1, seal_ms3_independent_future_v1,
         },
     };
     use nando_operator_runtime::response_pre_action_context_atom_ids;
@@ -644,6 +645,105 @@ mod tests {
             200,
         )
         .expect("terminal receipt")
+    }
+
+    #[test]
+    fn linked_binding_reconstruction_keeps_non_support_request_boundary() {
+        let opened_at_unix = 1_000_000_u64;
+        let opened_at_ms = opened_at_unix.saturating_mul(1_000);
+        let first = topology(
+            "shared-intent",
+            "request-first",
+            "shared-lineage",
+            1,
+            opened_at_ms,
+        );
+        let second = topology(
+            "shared-intent",
+            "request-second",
+            "shared-lineage",
+            2,
+            opened_at_ms.saturating_add(1_000),
+        );
+        let first_terminal = terminal(
+            "request-first",
+            opened_at_ms.saturating_sub(10),
+            opened_at_ms.saturating_add(100),
+        );
+        let second_terminal = terminal(
+            "request-second",
+            opened_at_ms.saturating_add(900),
+            opened_at_ms.saturating_add(1_100),
+        );
+        let frame = completed_frame(
+            "shared-intent",
+            "action-first",
+            "shared-lineage",
+            opened_at_ms.saturating_add(500),
+            true,
+        );
+        let frame_root = canonical_json_sha256(&frame).expect("frame root");
+        let route_bound_frame_roots = BTreeSet::from([frame_root]);
+        let contract = Ms3LinkedFrameAcquisitionContractV1::seal_v3(
+            hash("prefix"),
+            0,
+            opened_at_unix,
+            256,
+            4_096,
+            86_400,
+            60,
+        )
+        .expect("contract");
+        let topologies = vec![first.clone(), second];
+        let terminals = vec![first_terminal, second_terminal.clone()];
+        let frames = vec![frame];
+        let report = build_ms3_linked_frame_acquisition_report_with_route_bound_evidence_v1(
+            contract,
+            opened_at_unix.saturating_add(2),
+            topologies.clone(),
+            frames.clone(),
+            terminals.clone(),
+            &BTreeSet::new(),
+            &route_bound_frame_roots,
+        );
+        assert_eq!(report.candidate_topology_rows, 2);
+        assert_eq!(report.eligible_topology_rows, 1);
+        assert_eq!(report.linked_frame_rows, 1);
+        let linked = report.receipts.first().expect("linked receipt");
+
+        let eligible_only = TransportBindingLedgerV1::build(
+            std::slice::from_ref(&first),
+            &frames,
+            std::slice::from_ref(&terminals[0]),
+        );
+        assert_ne!(
+            eligible_only.bound_for_topology(&first.commit.commitment_root_sha256)[0]
+                .binding
+                .binding_root_sha256,
+            linked.transport_binding_root_sha256
+        );
+
+        let (bound, recovered_frame) = crate::reconstruct_ms3_linked_transport_evidence(
+            &report,
+            linked,
+            &topologies,
+            &frames,
+            &terminals,
+            &route_bound_frame_roots,
+        )
+        .expect("candidate-snapshot reconstruction");
+        assert_eq!(
+            bound.binding.binding_root_sha256,
+            linked.transport_binding_root_sha256
+        );
+        assert_eq!(
+            bound.binding.next_request_started_at_unix_nanos,
+            Some(second_terminal.started_at_unix_nanos)
+        );
+        assert_eq!(
+            canonical_json_sha256(&recovered_frame).expect("recovered frame root"),
+            linked.completed_frame_root_sha256
+        );
     }
 
     fn terminal_generation(
