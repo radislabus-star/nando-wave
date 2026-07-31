@@ -226,9 +226,9 @@ for endpoint in ${RUNTIME_ENDPOINTS}; do
   curl -fsS --max-time 10 "${url}" | jq -S '.' > "${snapshot}"
   snapshot_sha="$(sha256sum "${snapshot}" | awk '{print $1}')"
   as_root install -m 0600 "${snapshot}" "${deployment_dir}/evidence/${label}.json"
-  jq -nS --arg label "${label}" --arg url "${url}" --arg sha "${snapshot_sha}" \
+  jq -nS --arg snapshot_label "${label}" --arg url "${url}" --arg sha "${snapshot_sha}" \
     --arg path "evidence/${label}.json" \
-    '{label:$label,url:$url,sha256:$sha,path:$path}' >> "${work}/runtime.jsonl"
+    '{label:$snapshot_label,url:$url,sha256:$sha,path:$path}' >> "${work}/runtime.jsonl"
 done
 jq -sS '.' "${work}/runtime.jsonl" > "${work}/runtime.json"
 
