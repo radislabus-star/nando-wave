@@ -61,6 +61,11 @@ each commit forms a useful checkpoint boundary. Use `entire checkpoint list`
 and `entire checkpoint explain <id|sha>` when recovering context, and
 `entire dispatch --local` when a durable handoff is needed.
 
+Start Codex from a clean Nando worktree. Heavy builds and tests may run on the
+mini-PC, but make the resulting Git commit from an Entire-tracked worktree. If
+Codex edits or commits directly on another machine, enable and trust Entire on
+that machine first.
+
 Keep telemetry and automatic session pushing disabled until a locally captured
 checkpoint has been reviewed for secrets and private operational data. Entire
 history is supporting development evidence only: it never replaces tests,
