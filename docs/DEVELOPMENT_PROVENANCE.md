@@ -27,7 +27,7 @@ boundary that can be inspected and handed off independently.
 entire status
 entire checkpoint list
 entire checkpoint explain <id-or-sha>
-entire dispatch --local
+entire dispatch --local --agent codex
 ```
 
 Use `checkpoint explain` to recover the reasoning and context around a known

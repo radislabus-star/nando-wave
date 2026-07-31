@@ -59,7 +59,7 @@ runtime, learning authority, or product architecture.
 Before substantial work, run `entire status`. Keep changes in focused commits so
 each commit forms a useful checkpoint boundary. Use `entire checkpoint list`
 and `entire checkpoint explain <id|sha>` when recovering context, and
-`entire dispatch --local` when a durable handoff is needed.
+`entire dispatch --local --agent codex` when a durable handoff is needed.
 
 Start Codex from a clean Nando worktree. Heavy builds and tests may run on the
 mini-PC, but make the resulting Git commit from an Entire-tracked worktree. If
