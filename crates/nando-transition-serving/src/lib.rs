@@ -9372,6 +9372,19 @@ mod tests {
                 future.receipt.verdict, future.receipt.receipt_root_sha256
             );
         }
+        if evaluated_future.is_some() {
+            let ms4 = ms4_closed_loop::advance(&state).expect("MS4 closed loop");
+            assert_eq!(
+                ms4.stage,
+                ms4_closed_loop::Ms4ClosedLoopStageV1::ExternalAdmissionPending
+            );
+            assert_eq!(ms4.blocker, "external_admission_pending");
+            assert!(ms4.candidate_root_sha256.is_some());
+            assert!(ms4.package_id.is_some());
+            assert!(!ms4.external_admission_pass);
+            assert!(!ms4.authority_ready);
+            assert!(!ms4.phase_mutation_allowed);
+        }
         let future_diagnostics =
             ms3_future_prediction_diagnostics(&state).expect("future prediction diagnostics");
         if let Some(unresolved) = future_diagnostics

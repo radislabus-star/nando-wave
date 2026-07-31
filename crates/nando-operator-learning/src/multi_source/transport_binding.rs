@@ -479,6 +479,43 @@ pub fn bind_independent_fallback_transition_v1(
         .ok_or("fallback_transport_binding_invalid")
 }
 
+/// Revalidate a frozen request/action binding without reconstructing the full
+/// response-interval cohort that supplied its next-request fence.
+pub fn validate_request_action_binding_v1(
+    topology: &PreActionTopologyAuditRowV1,
+    frame: &RelationFrame,
+    terminal: &TransportTerminalReceiptV1,
+    binding: &RequestActionBindingV1,
+) -> Result<(), &'static str> {
+    let frame_root = canonical_json_sha256(frame).map_err(|_| "transport_frame_root_invalid")?;
+    if !terminal.validate()
+        || !terminal.successful
+        || !binding.validate()
+        || binding.topology_commitment_root_sha256 != topology.commit.commitment_root_sha256
+        || binding.request_event_id_sha256 != topology.structure.request_event_id_sha256
+        || binding.request_event_id_sha256 != terminal.request_event_id_sha256
+        || binding.terminal_receipt_root_sha256 != terminal.receipt_root_sha256
+        || binding.completed_frame_root_sha256 != frame_root
+        || binding.action_event_id_sha256 != frame.event_id_sha256
+        || binding.turn_intent_id_sha256 != topology.structure.turn_intent_id_sha256
+        || binding.turn_intent_id_sha256 != frame.client_intent_id_sha256
+        || topology.session_lineage_sha256.as_deref()
+            != Some(binding.session_lineage_sha256.as_str())
+        || !topology
+            .structure
+            .session_lineage_roots_sha256
+            .contains(&frame.session_id_sha256)
+        || binding.request_started_at_unix_nanos != terminal.started_at_unix_nanos
+        || binding.request_completed_at_unix_nanos != terminal.completed_at_unix_nanos
+        || binding.action_observed_at_unix_nanos != frame.observed_at_unix_nanos
+        || !capture_belongs_to_request(topology, terminal)
+        || join_explicit_topology_to_frame(topology, frame).is_err()
+    {
+        return Err("transport_frozen_binding_mismatch");
+    }
+    Ok(())
+}
+
 fn validated_terminals(
     terminals: &[TransportTerminalReceiptV1],
 ) -> BTreeMap<&str, &TransportTerminalReceiptV1> {

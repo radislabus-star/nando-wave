@@ -1,5 +1,7 @@
 //! Source-neutral multi-source discovery contracts.
 
+pub use nando_client_evidence::NandoRouteReceiptV1;
+
 mod audit;
 mod coverage_portfolio_shadow_v1;
 mod factorizer;
@@ -138,7 +140,7 @@ pub use transport_binding::{
     REQUEST_ACTION_BINDING_SCHEMA_V1, RequestActionBindingV1, TRANSPORT_BOUND_JOIN_MAX_ROWS_V1,
     TRANSPORT_TERMINAL_RECEIPT_SCHEMA_V1, TransportBindingFailureV1, TransportBindingLedgerV1,
     TransportBoundJoinedTransitionV1, TransportJoinRejectionV1, TransportTerminalReceiptV1,
-    bind_independent_fallback_transition_v1,
+    bind_independent_fallback_transition_v1, validate_request_action_binding_v1,
 };
 
 #[cfg(test)]

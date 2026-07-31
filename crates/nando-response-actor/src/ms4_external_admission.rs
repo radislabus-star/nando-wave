@@ -6,8 +6,10 @@ use nando_core::wave::{phase_coherence, phase_margin_to_micro, phase_vector_from
 use nando_operator_kernel::{RelationFrame, canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::multi_source::{
     FrozenVersionSpaceEnvelopeV1, Ms3FutureApplicabilityV1, Ms3IndependentFutureEnvelopeV1,
-    Ms3IndependentFutureVerdictV1, PreActionTopologyAuditRowV1, TransportBindingLedgerV1,
-    TransportTerminalReceiptV1, classify_ms3_unique_law_v1, pre_action_t1_binding_root,
+    Ms3IndependentFutureVerdictV1, NandoRouteReceiptV1, PreActionTopologyAuditRowV1,
+    RequestActionBindingV1, TransportBindingLedgerV1, TransportTerminalReceiptV1,
+    bind_independent_fallback_transition_v1, classify_ms3_unique_law_v1,
+    pre_action_t1_binding_root, validate_request_action_binding_v1,
 };
 use nando_operator_learning::{OperatorIdentificationMachineV1, RuntimeParityCase};
 use serde::{Deserialize, Serialize};
@@ -56,10 +58,14 @@ pub struct Ms4ExternalAdmissionCandidateV1 {
     support_topology: PreActionTopologyAuditRowV1,
     support_frame: RelationFrame,
     support_terminal: TransportTerminalReceiptV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    support_transport_binding: Option<RequestActionBindingV1>,
     support_runtime_parity: RuntimeParityCase,
     future_topology: PreActionTopologyAuditRowV1,
     future_frame: RelationFrame,
     future_terminal: TransportTerminalReceiptV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    future_route_receipt: Option<NandoRouteReceiptV1>,
     future_runtime_parity: RuntimeParityCase,
     negative_topologies: Vec<PreActionTopologyAuditRowV1>,
     guard_proof: Ms4AdaptiveGuardProofV1,
@@ -76,10 +82,12 @@ impl Ms4ExternalAdmissionCandidateV1 {
         support_topology: PreActionTopologyAuditRowV1,
         support_frame: RelationFrame,
         support_terminal: TransportTerminalReceiptV1,
+        support_transport_binding: Option<RequestActionBindingV1>,
         support_runtime_parity: RuntimeParityCase,
         future_topology: PreActionTopologyAuditRowV1,
         future_frame: RelationFrame,
         future_terminal: TransportTerminalReceiptV1,
+        future_route_receipt: Option<NandoRouteReceiptV1>,
         future_runtime_parity: RuntimeParityCase,
         mut negative_topologies: Vec<PreActionTopologyAuditRowV1>,
     ) -> Result<Self, &'static str> {
@@ -111,9 +119,11 @@ impl Ms4ExternalAdmissionCandidateV1 {
             &support_topology,
             &support_frame,
             &support_terminal,
+            support_transport_binding.as_ref(),
             &future_topology,
             &future_frame,
             &future_terminal,
+            future_route_receipt.as_ref(),
             &negative_topologies,
         )?;
         let mut candidate = Self {
@@ -124,10 +134,12 @@ impl Ms4ExternalAdmissionCandidateV1 {
             support_topology,
             support_frame,
             support_terminal,
+            support_transport_binding,
             support_runtime_parity,
             future_topology,
             future_frame,
             future_terminal,
+            future_route_receipt,
             future_runtime_parity,
             negative_topologies,
             guard_proof,
@@ -182,9 +194,11 @@ impl Ms4ExternalAdmissionCandidateV1 {
             &self.support_topology,
             &self.support_frame,
             &self.support_terminal,
+            self.support_transport_binding.as_ref(),
             &self.future_topology,
             &self.future_frame,
             &self.future_terminal,
+            self.future_route_receipt.as_ref(),
             &self.negative_topologies,
         )?;
         if rebuilt_guard != self.guard_proof
@@ -233,6 +247,39 @@ impl Ms4ExternalAdmissionCandidateV1 {
     }
 
     fn expected_root(&self) -> Result<String, &'static str> {
+        if self.support_transport_binding.is_some() || self.future_route_receipt.is_some() {
+            return canonical_json_sha256(&(
+                MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1,
+                self.frozen.envelope_root_sha256.as_str(),
+                self.future.envelope_root_sha256.as_str(),
+                canonical_json_sha256(&self.support_topology)?,
+                canonical_json_sha256(&self.support_frame)?,
+                (
+                    self.support_terminal.receipt_root_sha256.as_str(),
+                    self.support_transport_binding
+                        .as_ref()
+                        .map(|binding| binding.binding_root_sha256.as_str()),
+                ),
+                canonical_json_sha256(&self.support_runtime_parity)?,
+                canonical_json_sha256(&self.future_topology)?,
+                canonical_json_sha256(&self.future_frame)?,
+                (
+                    self.future_terminal.receipt_root_sha256.as_str(),
+                    self.future_route_receipt
+                        .as_ref()
+                        .map(|receipt| receipt.receipt_root_sha256.as_str()),
+                ),
+                canonical_json_sha256(&self.future_runtime_parity)?,
+                self.negative_topologies
+                    .iter()
+                    .map(|topology| topology.commit.commitment_root_sha256.as_str())
+                    .collect::<Vec<_>>(),
+                self.guard_proof.proof_root_sha256.as_str(),
+                self.shadow_candidate.candidate_root_sha256(),
+                false,
+                false,
+            ));
+        }
         canonical_json_sha256(&(
             MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1,
             self.frozen.envelope_root_sha256.as_str(),
@@ -336,33 +383,70 @@ fn build_guard_proof(
     support_topology: &PreActionTopologyAuditRowV1,
     support_frame: &RelationFrame,
     support_terminal: &TransportTerminalReceiptV1,
+    support_transport_binding: Option<&RequestActionBindingV1>,
     future_topology: &PreActionTopologyAuditRowV1,
     future_frame: &RelationFrame,
     future_terminal: &TransportTerminalReceiptV1,
+    future_route_receipt: Option<&NandoRouteReceiptV1>,
     negative_topologies: &[PreActionTopologyAuditRowV1],
 ) -> Result<Ms4AdaptiveGuardProofV1, &'static str> {
     if negative_topologies.is_empty() || negative_topologies.len() > MS4_MAX_NEGATIVE_TOPOLOGIES_V1
     {
         return Err("ms4_external_negative_control_missing");
     }
-    let support_binding = validate_transport_partition(
-        support_topology,
-        support_frame,
-        support_terminal,
-        &frozen.contract.topology_root_sha256,
-        &frozen.contract.frame_root_sha256,
-        &frozen.contract.terminal_root_sha256,
-        &frozen.contract.transport_binding_root_sha256,
-    )?;
-    let future_binding = validate_transport_partition(
-        future_topology,
-        future_frame,
-        future_terminal,
-        &future.receipt.topology_root_sha256,
-        &future.receipt.completed_frame_root_sha256,
-        &future.receipt.terminal_receipt_root_sha256,
-        &future.receipt.transport_binding_root_sha256,
-    )?;
+    let support_binding = if let Some(binding) = support_transport_binding {
+        validate_frozen_transport_partition(
+            support_topology,
+            support_frame,
+            support_terminal,
+            binding,
+            &frozen.contract.topology_root_sha256,
+            &frozen.contract.frame_root_sha256,
+            &frozen.contract.terminal_root_sha256,
+            &frozen.contract.transport_binding_root_sha256,
+        )?
+    } else {
+        validate_transport_partition(
+            support_topology,
+            support_frame,
+            support_terminal,
+            &frozen.contract.topology_root_sha256,
+            &frozen.contract.frame_root_sha256,
+            &frozen.contract.terminal_root_sha256,
+            &frozen.contract.transport_binding_root_sha256,
+        )?
+    };
+    let future_binding = match (
+        future.receipt.client_route_receipt_root_sha256.as_deref(),
+        future.receipt.client_route_status,
+        future_route_receipt,
+    ) {
+        (Some(expected_route_root), Some(418), Some(route_receipt)) => {
+            if route_receipt.receipt_root_sha256 != expected_route_root {
+                return Err("ms4_external_future_route_receipt_mismatch");
+            }
+            validate_fallback_transport_partition(
+                future_topology,
+                future_frame,
+                future_terminal,
+                route_receipt,
+                &future.receipt.topology_root_sha256,
+                &future.receipt.completed_frame_root_sha256,
+                &future.receipt.terminal_receipt_root_sha256,
+                &future.receipt.transport_binding_root_sha256,
+            )?
+        }
+        (None, None, None) => validate_transport_partition(
+            future_topology,
+            future_frame,
+            future_terminal,
+            &future.receipt.topology_root_sha256,
+            &future.receipt.completed_frame_root_sha256,
+            &future.receipt.terminal_receipt_root_sha256,
+            &future.receipt.transport_binding_root_sha256,
+        )?,
+        _ => return Err("ms4_external_future_route_receipt_missing"),
+    };
     let machine =
         OperatorIdentificationMachineV1::from_checkpoint_bytes(frozen.machine_checkpoint())
             .map_err(|_| "ms4_external_identification_restore_failed")?;
@@ -539,6 +623,55 @@ fn validate_transport_partition(
         return Err("ms4_external_transport_binding_mismatch");
     }
     Ok(bound.binding.binding_root_sha256.clone())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_frozen_transport_partition(
+    topology: &PreActionTopologyAuditRowV1,
+    frame: &RelationFrame,
+    terminal: &TransportTerminalReceiptV1,
+    binding: &RequestActionBindingV1,
+    expected_topology_root: &str,
+    expected_frame_root: &str,
+    expected_terminal_root: &str,
+    expected_binding_root: &str,
+) -> Result<String, &'static str> {
+    if topology.commit.commitment_root_sha256 != expected_topology_root
+        || canonical_json_sha256(frame)? != expected_frame_root
+        || terminal.receipt_root_sha256 != expected_terminal_root
+        || binding.binding_root_sha256 != expected_binding_root
+    {
+        return Err("ms4_external_frozen_partition_root_mismatch");
+    }
+    validate_request_action_binding_v1(topology, frame, terminal, binding)
+        .map_err(|_| "ms4_external_frozen_transport_binding_mismatch")?;
+    Ok(binding.binding_root_sha256.clone())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_fallback_transport_partition(
+    topology: &PreActionTopologyAuditRowV1,
+    frame: &RelationFrame,
+    terminal: &TransportTerminalReceiptV1,
+    route_receipt: &NandoRouteReceiptV1,
+    expected_topology_root: &str,
+    expected_frame_root: &str,
+    expected_terminal_root: &str,
+    expected_binding_root: &str,
+) -> Result<String, &'static str> {
+    if topology.commit.commitment_root_sha256 != expected_topology_root
+        || canonical_json_sha256(frame)? != expected_frame_root
+        || terminal.receipt_root_sha256 != expected_terminal_root
+        || !terminal.validate()
+        || !route_receipt.validate()
+    {
+        return Err("ms4_external_fallback_partition_root_mismatch");
+    }
+    let bound = bind_independent_fallback_transition_v1(topology, frame, terminal, route_receipt)?;
+    if bound.binding.binding_root_sha256 != expected_binding_root {
+        return Err("ms4_external_fallback_transport_binding_mismatch");
+    }
+    Ok(bound.binding.binding_root_sha256)
 }
 
 fn validate_runtime_parity_binding(

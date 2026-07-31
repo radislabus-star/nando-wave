@@ -1,12 +1,13 @@
 //! Idempotent cold-path actuator from MS3 future PASS to ordinary CPU proof.
 
+use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::Path;
 
 use nando_operator_kernel::canonical_json_sha256;
 use nando_operator_learning::multi_source::{
-    Ms3FutureApplicabilityDispositionV1, Ms3IndependentFutureVerdictV1,
+    Ms3FutureApplicabilityDispositionV1, Ms3IndependentFutureVerdictV1, TransportBindingLedgerV1,
 };
 use nando_response_actor::{
     Ms4ExternalAdmissionCandidateV1, ResponsePackageState, ResponseRegistry,
@@ -195,12 +196,20 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
             .multi_source_topology_archive
             .as_ref()
             .ok_or_else(|| "ms4_topology_archive_missing".to_owned())?;
-        let (support_topology, future_topology, negative_topologies) = {
+        let (support_topology, future_topology, negative_topologies, support_partition_topologies) = {
             let archive = topology_archive
                 .lock()
                 .map_err(|_| "ms4_topology_archive_lock_poisoned".to_owned())?;
             let support = archive.row_by_root(&frozen.contract.topology_root_sha256);
             let future_row = archive.row_by_root(&future.receipt.topology_root_sha256);
+            let support_intent = support
+                .as_ref()
+                .map(|row| row.structure.turn_intent_id_sha256.as_str());
+            let support_partition = archive
+                .rows()
+                .into_iter()
+                .filter(|row| support_intent == Some(row.structure.turn_intent_id_sha256.as_str()))
+                .collect::<Vec<_>>();
             let negatives = applicability
                 .as_ref()
                 .into_iter()
@@ -210,9 +219,23 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
                         == Ms3FutureApplicabilityDispositionV1::StructurallyNotApplicable
                 })
                 .filter_map(|event| archive.row_by_root(&event.topology_root_sha256))
+                .filter(|topology| {
+                    topology
+                        .bridge_sequence
+                        .is_some_and(|sequence| sequence >= frozen.contract.future_min_sequence)
+                        && topology
+                            .session_lineage_sha256
+                            .as_ref()
+                            .is_some_and(|lineage| {
+                                lineage != &frozen.contract.session_lineage_sha256
+                                    && lineage != &future.receipt.session_lineage_sha256
+                            })
+                        && topology.structure.provider_bound_turn_identity
+                        && topology.physical_order_proven
+                })
                 .take(64)
                 .collect::<Vec<_>>();
-            (support, future_row, negatives)
+            (support, future_row, negatives, support_partition)
         };
         let (Some(support_topology), Some(future_topology)) = (support_topology, future_topology)
         else {
@@ -232,39 +255,53 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
             .multi_source_frame_archive
             .as_ref()
             .ok_or_else(|| "ms4_frame_archive_missing".to_owned())?;
-        let (support_frame, future_frame) = {
+        let support_intents = support_partition_topologies
+            .iter()
+            .map(|row| row.structure.turn_intent_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let (support_frame, future_frame, support_partition_frames) = {
             let archive = frame_archive
                 .lock()
                 .map_err(|_| "ms4_frame_archive_lock_poisoned".to_owned())?;
             (
                 archive.frame_by_root(&frozen.contract.frame_root_sha256),
                 archive.frame_by_root(&future.receipt.completed_frame_root_sha256),
+                archive.frames_for_intents(&support_intents),
             )
         };
         let terminals = state
             .terminal_receipt_archive
             .as_ref()
             .ok_or_else(|| "ms4_terminal_archive_missing".to_owned())?;
-        let (support_terminal, future_terminal) = {
+        let support_request_ids = support_partition_topologies
+            .iter()
+            .map(|row| row.structure.request_event_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let (support_terminal, future_terminal, support_partition_terminals) = {
             let archive = terminals
                 .lock()
                 .map_err(|_| "ms4_terminal_archive_lock_poisoned".to_owned())?;
             (
                 archive.receipt_for_request(&frozen.contract.request_event_id_sha256),
                 archive.receipt_for_request(&future_topology.structure.request_event_id_sha256),
+                archive.receipts_for_requests(&support_request_ids),
             )
         };
         let parities = state
             .remote_evidence_spool
             .as_ref()
             .ok_or_else(|| "ms4_runtime_parity_spool_missing".to_owned())?;
-        let (support_parity, future_parity) = {
+        let (support_parity, future_parity, future_route_receipt) = {
             let spool = parities
                 .lock()
                 .map_err(|_| "ms4_runtime_parity_spool_lock_poisoned".to_owned())?;
+            let route_receipts = spool.route_receipts_by_frame_root();
             (
                 spool.runtime_parity_for_frame(&frozen.contract.frame_root_sha256),
                 spool.runtime_parity_for_frame(&future.receipt.completed_frame_root_sha256),
+                route_receipts
+                    .get(&future.receipt.completed_frame_root_sha256)
+                    .cloned(),
             )
         };
         let (
@@ -288,16 +325,42 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
             report.reseal();
             return Ok(report);
         };
+        let support_transport = TransportBindingLedgerV1::build(
+            &support_partition_topologies,
+            &support_partition_frames,
+            &support_partition_terminals,
+        );
+        let Some(support_transport_binding) = support_transport
+            .bound_for_topology(&frozen.contract.topology_root_sha256)
+            .iter()
+            .find(|bound| {
+                bound.binding.binding_root_sha256 == frozen.contract.transport_binding_root_sha256
+            })
+            .map(|bound| bound.binding.clone())
+        else {
+            report.stage = Ms4ClosedLoopStageV1::WaitingForRuntimeEvidence;
+            report.blocker = "ms4_support_transport_binding_pending".to_owned();
+            report.reseal();
+            return Ok(report);
+        };
+        let Some(future_route_receipt) = future_route_receipt else {
+            report.stage = Ms4ClosedLoopStageV1::WaitingForRuntimeEvidence;
+            report.blocker = "ms4_bound_future_route_receipt_pending".to_owned();
+            report.reseal();
+            return Ok(report);
+        };
         let candidate = Ms4ExternalAdmissionCandidateV1::seal(
             frozen.clone(),
             future.clone(),
             support_topology,
             support_frame,
             support_terminal,
+            Some(support_transport_binding),
             support_parity,
             future_topology,
             future_frame,
             future_terminal,
+            Some(future_route_receipt),
             future_parity,
             negative_topologies,
         )

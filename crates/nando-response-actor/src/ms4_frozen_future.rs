@@ -24,9 +24,10 @@ use crate::crystallized_operator::{
     DurableProgramCrystallizationProof, VerifiedCrystallizedOperator, decode_sha256,
 };
 use crate::{
-    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt, ResponseExecutionStatus,
-    ResponsePackage, ResponseProgram, VerifiedOperatorRestartBundle, VerifierProgram,
-    execute_response, response_actor_program_digest, response_independent_verifier_program_digest,
+    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2,
+    DurableRuntimeParityReceipt, ResponseExecutionStatus, ResponsePackage, ResponseProgram,
+    VerifiedOperatorRestartBundle, VerifierProgram, execute_response,
+    response_actor_program_digest, response_independent_verifier_program_digest,
     response_program_external_verifier_schema, response_program_required_routing_atom_ids,
     sha256_bytes, source_neutral_verifier_for_program, verify_response_independently_with_request,
 };
@@ -493,7 +494,13 @@ fn seal_runtime_parity_receipt(
         .response
         .as_deref()
         .ok_or("ms4_runtime_actor_response_missing")?;
-    if actor_response != evidence.parity.expected_response {
+    let exact_teacher_match = actor_response == evidence.parity.expected_response;
+    let execution_budget_normalized_match =
+        crate::online_admission::responses_match_after_execution_budget_normalization(
+            actor_response,
+            &evidence.parity.expected_response,
+        );
+    if !exact_teacher_match && !execution_budget_normalized_match {
         return Err("ms4_runtime_teacher_parity_mismatch");
     }
     verify_response_independently_with_request(
@@ -504,7 +511,12 @@ fn seal_runtime_parity_receipt(
     )
     .map_err(|error| error.0)?;
     let mut receipt = DurableRuntimeParityReceipt {
-        schema: DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1.to_owned(),
+        schema: if exact_teacher_match {
+            DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1
+        } else {
+            DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2
+        }
+        .to_owned(),
         receipt_sha256: String::new(),
         evidence_ref_sha256: evidence.parity.evidence_ref_sha256.clone(),
         program_sha256: response_actor_program_digest(program)?,
@@ -518,7 +530,7 @@ fn seal_runtime_parity_receipt(
         actor_executed: true,
         teacher_authority_match: true,
         independent_verifier_pass: true,
-        exact_teacher_match: true,
+        exact_teacher_match,
     };
     receipt.seal_digest()?;
     receipt.validate_sealed()?;
@@ -776,6 +788,58 @@ mod tests {
             seal_runtime_parity_receipt(&program, &verifier, &evidence).expect("runtime receipt");
         assert!(receipt.validate_sealed().is_ok());
         assert!(receipt.independent_verifier_pass);
+    }
+
+    #[test]
+    fn runtime_receipt_records_poll_budget_normalization_as_semantic_parity() {
+        let program = ResponseProgram::function_call_from_roles(
+            "wait",
+            ResponseValueSelector::ContinuationHandle {
+                value_type: AtomValueType::Identifier,
+            },
+            vec![ResponseArgument::Role {
+                name: "cell_id".to_owned(),
+                role: SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::String),
+            }],
+        );
+        let verifier = source_neutral_verifier_for_program(&program).expect("verifier");
+        let mut evidence = Ms4RuntimeEvidenceV1 {
+            source_frame_root_sha256: "1".repeat(64),
+            session_lineage_sha256: "2".repeat(64),
+            surface_sha256: "3".repeat(64),
+            parity: RuntimeParityCase {
+                evidence_ref_sha256: "4".repeat(64),
+                capture_receipt: None,
+                request_text: "continue".to_owned(),
+                provider_payload: json!({
+                    "input": [{
+                        "type": "function_call_output",
+                        "output": "Script running with cell ID cell-17"
+                    }]
+                }),
+                expected_response: String::new(),
+            },
+        };
+        evidence.parity.expected_response = serde_json::to_string(&json!({
+            "name": "wait",
+            "arguments": {
+                "cell_id": "cell-17",
+                "yield_time_ms": 1_000,
+                "max_tokens": 3_000
+            }
+        }))
+        .expect("expected response");
+
+        let receipt =
+            seal_runtime_parity_receipt(&program, &verifier, &evidence).expect("runtime receipt");
+        assert_eq!(receipt.schema, DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V2);
+        assert!(!receipt.exact_teacher_match);
+        assert_ne!(
+            receipt.teacher_response_sha256,
+            receipt.actor_response_sha256
+        );
+        assert!(receipt.validate_sealed().is_ok());
     }
 
     #[test]
