@@ -1276,6 +1276,60 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             },
         },
     });
+    let ms4_package_id = ms4_closed_loop
+        .get("package_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let ms4_package_economics = economics
+        .get("verified_by_package")
+        .and_then(Value::as_object)
+        .and_then(|packages| packages.get(ms4_package_id));
+    let ms4_package_input_tokens = ms4_package_economics
+        .map(|package| metric_u64(package, "exact_input_tokens"))
+        .unwrap_or(0);
+    let ms4_package_accepts = ms4_package_economics
+        .map(|package| metric_u64(package, "ordinary_accepts"))
+        .unwrap_or(0);
+    let cpu_compression = json!({
+        "schema": "nando.cpu-traffic-compression-view.v1",
+        "lifetime": {
+            "scope": "all_recorded_accounting_partitions",
+            "eligible_input_tokens": server_total_input_tokens,
+            "avoided_input_tokens": server_cpu_input_tokens,
+        },
+        "current_epoch": {
+            "scope": "current_v4_request_event_epoch",
+            "ordinary_requests_seen": metric_u64(economics, "terminal_request_events"),
+            "cpu_accepts": metric_u64(economics, "actual_local_accepts"),
+            "avoided_upstream_calls": metric_u64(economics, "avoided_calls"),
+            "eligible_input_tokens": current_epoch_total_input_tokens,
+            "avoided_input_tokens": current_epoch_cpu_input_tokens,
+            "started_at_unix": metric_u64(economics, "accounting_epoch_started_at_unix"),
+        },
+        "natural_ms4_package": {
+            "scope": "verified_applicable_package_matches",
+            "stage": ms4_closed_loop.get("stage").and_then(Value::as_str).unwrap_or(""),
+            "package_id": ms4_package_id,
+            "ordinary_requests_seen": ms4_package_accepts,
+            "cpu_accepts": ms4_package_accepts,
+            "avoided_upstream_calls": ms4_package_accepts,
+            "eligible_input_tokens": ms4_package_input_tokens,
+            "avoided_input_tokens": ms4_package_input_tokens,
+            "last_accept_timestamp_unix": ms4_package_economics
+                .map(|package| metric_u64(package, "last_accept_timestamp_unix"))
+                .unwrap_or(0),
+            "receipt_root_sha256": ms4_package_economics
+                .and_then(|package| package.get("last_receipt_root_sha256"))
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            "lifecycle_receipt_root_sha256": ms4_closed_loop
+                .get("ordinary_cpu_receipt_root_sha256")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            "false_accepts": metric_u64(economics, "false_accepts"),
+            "runtime_parity_mismatches": metric_u64(economics, "runtime_parity_mismatches"),
+        },
+    });
     (
         [(header::CACHE_CONTROL, "no-store")],
         Json(json!({
@@ -1291,6 +1345,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "verified_window_cpu_input_tokens": miner_verified_tokens,
             "optimistic_upper_bound_tokens": miner_optimistic_tokens,
             "overview": traffic_overview,
+            "cpu_compression": cpu_compression,
             "accounting": {
                 "schema": economics.get("schema").and_then(Value::as_str).unwrap_or(""),
                 "identity_domain": economics.get("identity_domain").and_then(Value::as_str).unwrap_or(""),

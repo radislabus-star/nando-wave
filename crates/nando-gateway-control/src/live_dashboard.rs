@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.31-b045";
+const DASHBOARD_BUILD: &str = "2026.07.31-b046";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -393,6 +393,23 @@ const TEMPLATE: &str = r#"
 .stage-fill { width:0; height:100%; min-width:2px; background:var(--green); transition:width .25s ease; }
 .scope-alert { margin-top:14px; padding:11px 14px; color:#ced5d9; background:#171b1e; border-left:3px solid var(--amber); font-size:12px; font-weight:700; line-height:1.45; }
 .scope-alert strong { color:var(--amber); }
+.compression-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.compression-cell { min-width:0; min-height:188px; padding:17px 20px; border-right:1px solid var(--line); background:#111518; }
+.compression-cell:last-child { border-right:0; }
+.compression-cell.natural { border-top:3px solid var(--green); padding-top:14px; }
+.compression-label { color:var(--muted); font-size:11px; font-weight:800; }
+.compression-main { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:7px 12px; margin-top:11px; }
+.compression-value { color:#e7ecef; font-size:22px; font-weight:800; overflow-wrap:anywhere; }
+.compression-ratio { color:var(--green); font-size:20px; font-weight:800; }
+.compression-unit { margin-top:5px; color:var(--muted); font-size:10px; font-weight:800; }
+.compression-rail { height:10px; margin-top:14px; background:#282e32; overflow:hidden; }
+.compression-fill { width:0; height:100%; min-width:2px; background:var(--green); transition:width .25s ease; }
+.compression-meta { margin-top:11px; color:#c9d0d4; font-size:12px; font-weight:700; line-height:1.45; }
+.compression-scope { margin-top:7px; color:var(--muted); font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
+.compression-proof { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px 14px; margin-top:13px; color:var(--muted); font-size:11px; line-height:1.45; }
+.compression-proof strong { color:var(--green); }
+.compression-proof strong.warning { color:var(--amber); }
+.compression-root { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:#cbd2d6; overflow-wrap:anywhere; }
 .scope-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid var(--line); }
 .scope-metric { min-width:0; padding:16px 22px; border-right:1px solid var(--line); }
 .scope-metric:first-child { padding-left:0; }
@@ -488,6 +505,9 @@ const TEMPLATE: &str = r#"
   .traffic-stage:nth-child(2n) { border-right:0; }
   .traffic-stage:nth-last-child(-n+2) { border-bottom:0; }
   .scope-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .compression-grid { grid-template-columns:1fr; }
+  .compression-cell { min-height:0; border-right:0; border-bottom:1px solid var(--line); }
+  .compression-cell:last-child { border-bottom:0; }
   .ingestion-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .ingestion-cell:nth-child(2n) { border-right:0; }
   .ingestion-cell:nth-child(-n+2) { border-bottom:1px solid var(--line); }
@@ -511,6 +531,8 @@ const TEMPLATE: &str = r#"
   .stage-value { font-size:24px; }
   .stage-share { font-size:14px; }
   .scope-grid { grid-template-columns:1fr; }
+  .compression-cell { padding:14px 12px; }
+  .compression-proof { grid-template-columns:1fr; gap:4px; }
   .ingestion-grid { grid-template-columns:1fr; }
   .ingestion-cell:nth-child(n) { border-right:0; border-bottom:1px solid var(--line); }
   .ingestion-cell:last-child { border-bottom:0; }
@@ -589,6 +611,39 @@ const TEMPLATE: &str = r#"
       </article>
     </div>
     <div class="scope-alert"><strong>ЭТО НЕ ОДНА ПОСЛЕДОВАТЕЛЬНАЯ ВОРОНКА.</strong> Recorded server accounting, miner classification window и live process epoch имеют разные watermark и периоды: между ними нельзя считать остаток или процент. CPU share в четвёртом блоке относится только к записанным request_event.v1 partitions; recognition share — только к опубликованному корпусу майнера.</div>
+  </div></section>
+  <section class="live-band"><div class="live-inner">
+    <div class="overview-head">
+      <h2 class="band-title">СЖАТИЕ ВХОДНОГО ТРАФИКА НА CPU</h2>
+      <div class="overview-rule good">AVOIDED INPUT / ELIGIBLE INPUT · EXACT O200K TOKENS</div>
+    </div>
+    <div class="compression-grid">
+      <article class="compression-cell">
+        <div class="compression-label">ВСЯ ЗАПИСАННАЯ ИСТОРИЯ</div>
+        <div class="compression-main"><output id="compression-lifetime-tokens" class="compression-value">— / —</output><output id="compression-lifetime-ratio" class="compression-ratio">—</output></div>
+        <div class="compression-unit">CPU-ПРЕДОТВРАЩЕНО / УЧТЕНО ВХОДНЫХ ТОКЕНОВ</div>
+        <div class="compression-rail"><div id="compression-lifetime-bar" class="compression-fill"></div></div>
+        <div class="compression-meta">ВСЕ ACCOUNTING PARTITIONS</div>
+        <div class="compression-scope">TOKEN TOTALS COMPOSABLE · CALL COUNTS МЕЖДУ LEGACY PARTITIONS НЕ СКЛЕИВАЮТСЯ</div>
+      </article>
+      <article class="compression-cell">
+        <div class="compression-label">ТЕКУЩАЯ V4 ACCOUNTING EPOCH</div>
+        <div class="compression-main"><output id="compression-epoch-tokens" class="compression-value">— / —</output><output id="compression-epoch-ratio" class="compression-ratio">—</output></div>
+        <div class="compression-unit">CPU-ПРЕДОТВРАЩЕНО / ORDINARY INPUT</div>
+        <div class="compression-rail"><div id="compression-epoch-bar" class="compression-fill"></div></div>
+        <div id="compression-epoch-calls" class="compression-meta">— REQUESTS · — CPU ACCEPTS · — UPSTREAM CALLS AVOIDED</div>
+        <div id="compression-epoch-since" class="compression-scope">EPOCH —</div>
+      </article>
+      <article class="compression-cell natural">
+        <div class="compression-label">НОВЫЙ NATURAL MS4 PACKAGE</div>
+        <div class="compression-main"><output id="compression-ms4-tokens" class="compression-value">— / —</output><output id="compression-ms4-ratio" class="compression-ratio">—</output></div>
+        <div class="compression-unit">CPU-ПРЕДОТВРАЩЕНО / PACKAGE-MATCHED INPUT</div>
+        <div class="compression-rail"><div id="compression-ms4-bar" class="compression-fill"></div></div>
+        <div id="compression-ms4-calls" class="compression-meta">ORDINARY PROOF PENDING</div>
+        <div id="compression-ms4-package" class="compression-scope">PACKAGE —</div>
+      </article>
+    </div>
+    <div class="compression-proof"><strong id="compression-ms4-status">MS4 PENDING</strong><span id="compression-ms4-time">LAST ACCEPT —</span><span>RECEIPT ROOT</span><span id="compression-ms4-root" class="compression-root">—</span></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
     <div class="overview-head">
@@ -740,6 +795,40 @@ const TEMPLATE: &str = r#"
     const productM3 = accounting.product_m3_pass === true ? "PASS" : "WATCH";
     const currentM3 = accounting.m3_current_window_pass === true ? "PASS" : "WATCH";
     text("current-v4-execution", `ТЕКУЩАЯ V4: ${number.format(epochCpu)} / ${number.format(epochTotal)} · ${ratio(epochCpu, epochTotal, 1)} · ${number.format(epochAccepts)} ACCEPTS · PRODUCT M3 ${productM3} · COMPLETED ${m3Streak}/${accounting.m3_required_consecutive_windows || 3} · CURRENT WINDOW ${currentM3}`);
+
+    const compression = snapshot.cpu_compression || {};
+    const lifetimeCompression = compression.lifetime || {};
+    const epochCompression = compression.current_epoch || {};
+    const ms4Compression = compression.natural_ms4_package || {};
+    const lifetimeEligible = lifetimeCompression.eligible_input_tokens ?? serverTotal;
+    const lifetimeAvoided = lifetimeCompression.avoided_input_tokens ?? serverCpu;
+    const epochEligible = epochCompression.eligible_input_tokens ?? epochTotal;
+    const epochAvoided = epochCompression.avoided_input_tokens ?? epochCpu;
+    const ms4Eligible = ms4Compression.eligible_input_tokens || 0;
+    const ms4Avoided = ms4Compression.avoided_input_tokens || 0;
+    const ms4Accepts = ms4Compression.cpu_accepts || 0;
+    const ms4Receipt = ms4Compression.receipt_root_sha256 || "";
+    const ms4LifecycleReceipt = ms4Compression.lifecycle_receipt_root_sha256 || "";
+    const ms4ReceiptMatched = Boolean(ms4Receipt) && ms4Receipt === ms4LifecycleReceipt;
+    const ms4CompressionComplete = ms4Compression.stage === "complete" && ms4Accepts > 0 && ms4ReceiptMatched;
+    text("compression-lifetime-tokens", `${number.format(lifetimeAvoided)} / ${number.format(lifetimeEligible)}`);
+    text("compression-lifetime-ratio", ratio(lifetimeAvoided, lifetimeEligible, 2));
+    width("compression-lifetime-bar", lifetimeAvoided, lifetimeEligible);
+    text("compression-epoch-tokens", `${number.format(epochAvoided)} / ${number.format(epochEligible)}`);
+    text("compression-epoch-ratio", ratio(epochAvoided, epochEligible, 2));
+    width("compression-epoch-bar", epochAvoided, epochEligible);
+    text("compression-epoch-calls", `${number.format(epochCompression.ordinary_requests_seen ?? epochEvents)} REQUESTS · ${number.format(epochCompression.cpu_accepts ?? epochAccepts)} CPU ACCEPTS · ${number.format(epochCompression.avoided_upstream_calls ?? epochAccepts)} UPSTREAM CALLS AVOIDED`);
+    text("compression-epoch-since", `EPOCH С ${localTime(epochCompression.started_at_unix ?? accounting.epoch_started_at_unix ?? 0)}`);
+    text("compression-ms4-tokens", `${number.format(ms4Avoided)} / ${number.format(ms4Eligible)}`);
+    text("compression-ms4-ratio", ratio(ms4Avoided, ms4Eligible, 2));
+    width("compression-ms4-bar", ms4Avoided, ms4Eligible);
+    text("compression-ms4-calls", `${number.format(ms4Compression.ordinary_requests_seen || 0)} ORDINARY REQUEST · ${number.format(ms4Accepts)} CPU ACCEPT · ${number.format(ms4Compression.avoided_upstream_calls || 0)} UPSTREAM CALL AVOIDED`);
+    const compactPackage = ms4Compression.package_id ? `${ms4Compression.package_id.slice(0, 28)}…${ms4Compression.package_id.slice(-12)}` : "—";
+    text("compression-ms4-package", `PACKAGE ${compactPackage}`);
+    text("compression-ms4-status", ms4CompressionComplete ? "MS4 COMPLETE · ROOT MATCH" : "MS4 PROOF PENDING");
+    text("compression-ms4-time", `LAST ACCEPT ${localTime(ms4Compression.last_accept_timestamp_unix || 0)} · FALSE ACCEPTS ${number.format(ms4Compression.false_accepts || 0)} · PARITY ${number.format(ms4Compression.runtime_parity_mismatches || 0)}`);
+    text("compression-ms4-root", ms4Receipt || "—");
+    stateClass("compression-ms4-status", ms4CompressionComplete ? "good" : "warning");
 
     const miner = snapshot.miner_window || {};
     const minerOverview = overview.miner || {};
@@ -1160,6 +1249,13 @@ mod tests {
             html.contains("РАЗДЕЛЬНЫЕ SCOPE · SERVER HISTORY / MINER WINDOW / EXECUTION RECEIPTS")
         );
         assert!(html.contains("ЭТО НЕ ОДНА ПОСЛЕДОВАТЕЛЬНАЯ ВОРОНКА"));
+        assert!(html.contains("СЖАТИЕ ВХОДНОГО ТРАФИКА НА CPU"));
+        assert!(html.contains("AVOIDED INPUT / ELIGIBLE INPUT · EXACT O200K TOKENS"));
+        assert!(html.contains("id=\"compression-lifetime-bar\""));
+        assert!(html.contains("id=\"compression-epoch-calls\""));
+        assert!(html.contains("id=\"compression-ms4-root\""));
+        assert!(html.contains("snapshot.cpu_compression"));
+        assert!(html.contains("MS4 COMPLETE · ROOT MATCH"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3 → MS4"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
