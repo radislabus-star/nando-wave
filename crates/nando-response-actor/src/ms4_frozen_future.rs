@@ -502,7 +502,7 @@ fn seal_runtime_parity_receipt(
         &evidence.parity.provider_payload,
         actor_response,
     )
-    .map_err(|_| "ms4_runtime_independent_verifier_rejected")?;
+    .map_err(|error| error.0)?;
     let mut receipt = DurableRuntimeParityReceipt {
         schema: DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1.to_owned(),
         receipt_sha256: String::new(),
@@ -683,7 +683,9 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::{AtomValueType, ResponseValueSelector, ValueProjectionFormat};
+    use crate::{
+        AtomValueType, ResponseArgument, ResponseValueSelector, SemanticRole, ValueProjectionFormat,
+    };
 
     fn projection_program() -> ResponseProgram {
         ResponseProgram::project_selected_value(
@@ -732,6 +734,48 @@ mod tests {
             seal_runtime_parity_receipt(&program, &verifier, &evidence("8")),
             Err("ms4_runtime_teacher_parity_mismatch")
         );
+    }
+
+    #[test]
+    fn runtime_receipt_accepts_protocol_continuation_selector() {
+        let program = ResponseProgram::function_call_from_roles(
+            "wait",
+            ResponseValueSelector::ContinuationHandle {
+                value_type: AtomValueType::Identifier,
+            },
+            vec![ResponseArgument::Role {
+                name: "cell_id".to_owned(),
+                role: SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::String),
+            }],
+        );
+        let verifier = source_neutral_verifier_for_program(&program).expect("verifier");
+        let evidence = Ms4RuntimeEvidenceV1 {
+            source_frame_root_sha256: "1".repeat(64),
+            session_lineage_sha256: "2".repeat(64),
+            surface_sha256: "3".repeat(64),
+            parity: RuntimeParityCase {
+                evidence_ref_sha256: "4".repeat(64),
+                capture_receipt: None,
+                request_text: "continue".to_owned(),
+                provider_payload: json!({
+                    "input": [{
+                        "type": "function_call_output",
+                        "output": "Script running with cell ID cell-17"
+                    }]
+                }),
+                expected_response: serde_json::to_string(&json!({
+                    "name": "wait",
+                    "arguments": {"cell_id": "cell-17"}
+                }))
+                .expect("expected response"),
+            },
+        };
+
+        let receipt =
+            seal_runtime_parity_receipt(&program, &verifier, &evidence).expect("runtime receipt");
+        assert!(receipt.validate_sealed().is_ok());
+        assert!(receipt.independent_verifier_pass);
     }
 
     #[test]

@@ -11,7 +11,7 @@ use nando_operator_kernel::{
     ProjectStatusMapping, RequestTemplateMarker, ResponseAdapterWaveRoute, ResponseArgument,
     ResponseOperation, ResponseProgram, ResponseRenderSegment, ResponseValueSelector, SemanticRole,
     ValueProjectionFormat, VerifierProgram, canonical_json_sha256,
-    canonical_response_value_selector, sha256_bytes,
+    canonical_response_value_selector, selector_denotes_continuation_handle, sha256_bytes,
 };
 use serde_json::Value;
 
@@ -1146,11 +1146,8 @@ fn independently_expected_call_value(
         } => {
             let scalar = independently_select_scalar(provider_payload, selector)?;
             if *require_pending_state
-                && !matches!(
-                    selector,
-                    ResponseValueSelector::ContentLinePrefix { .. }
-                        | ResponseValueSelector::JsonField { .. }
-                )
+                && !selector_denotes_continuation_handle(selector)
+                && !matches!(selector, ResponseValueSelector::JsonField { .. })
             {
                 return Err(ResponseVerificationError("pending_selector_missing"));
             }
@@ -1433,11 +1430,8 @@ pub fn verify_response_independently_with_request(
     };
     let scalar = independently_select_scalar(provider_payload, selector)?;
     if *require_pending_state
-        && !matches!(
-            selector,
-            ResponseValueSelector::ContentLinePrefix { .. }
-                | ResponseValueSelector::JsonField { .. }
-        )
+        && !selector_denotes_continuation_handle(selector)
+        && !matches!(selector, ResponseValueSelector::JsonField { .. })
     {
         return Err(ResponseVerificationError("pending_selector_missing"));
     }
