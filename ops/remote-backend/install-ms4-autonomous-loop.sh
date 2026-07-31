@@ -71,6 +71,7 @@ if [[ ! -x "${ADMISSION_BINARY_SOURCE}" ]]; then
   printf 'response admission binary is not executable: %s\n' "${ADMISSION_BINARY_SOURCE}" >&2
   exit 2
 fi
+ADMISSION_BINARY_SOURCE="$(realpath --canonicalize-existing -- "${ADMISSION_BINARY_SOURCE}")"
 if [[ ! -x "${GATE_BINARY}" ]]; then
   printf 'live transition gate is not executable: %s\n' "${GATE_BINARY}" >&2
   exit 2

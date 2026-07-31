@@ -69,6 +69,20 @@ cat >"${BIN}/systemd-analyze" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "${1:-}" == "verify" ]]
+shift
+if grep -H 'TriggerLimitIntervalSec' "$@"; then
+  printf 'unsupported path trigger limit reached systemd verification\n' >&2
+  exit 1
+fi
+for unit in "$@"; do
+  while IFS= read -r exec_start; do
+    executable="${exec_start#ExecStart=}"
+    [[ "${executable}" == /* ]] || {
+      printf 'relative ExecStart reached systemd verification: %s\n' "${executable}" >&2
+      exit 1
+    }
+  done < <(grep '^ExecStart=' "${unit}" || true)
+done
 EOF
 
 cat >"${BIN}/systemctl" <<'EOF'
@@ -129,13 +143,17 @@ export NANDO_MS4_STATE_DIR="${STATE_DIR}"
 export NANDO_MS4_READINESS_ATTEMPTS=1
 export NANDO_MS4_READINESS_SLEEP_SECONDS=0
 
-"${INSTALLER}" --admission-binary "${WORK}/candidate-admission" >/dev/null
+(
+  cd "${WORK}"
+  "${INSTALLER}" --admission-binary candidate-admission >/dev/null
+)
 cmp -s "${WORK}/candidate-admission" "${INSTALL_BINARY}"
 for unit in nando-response-admission.path nando-response-admission.timer nando-live-transition-gate.path nando-live-transition-gate.timer; do
   [[ -e "${NANDO_TEST_SYSTEMCTL_STATE}/enabled-${unit}" ]]
   [[ -e "${NANDO_TEST_SYSTEMCTL_STATE}/active-${unit}" ]]
 done
 grep -Fq "User=$(id -un)" "${SYSTEMD_DIR}/nando-response-admission.service"
+grep -Fq "ExecStart=${INSTALL_BINARY}" "${SYSTEMD_DIR}/nando-response-admission.service"
 grep -Fq 'OnUnitInactiveSec=10s' "${SYSTEMD_DIR}/nando-live-transition-gate.timer"
 
 printf 'rollback admission binary\n' >"${INSTALL_BINARY}"
