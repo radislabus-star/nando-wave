@@ -756,6 +756,20 @@ fn terminal(
     .expect("terminal")
 }
 
+fn fallback_terminal(
+    request_event: &str,
+    started_at_unix_ms: u64,
+    completed_at_unix_ms: u64,
+) -> TransportTerminalReceiptV1 {
+    TransportTerminalReceiptV1::seal(
+        root(request_event),
+        started_at_unix_ms.saturating_mul(1_000_000),
+        completed_at_unix_ms.saturating_mul(1_000_000),
+        418,
+    )
+    .expect("fallback terminal")
+}
+
 fn acquisition_contract(
     max_new_topology_rows: u64,
     max_elapsed_seconds: u64,
@@ -2247,14 +2261,7 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
         Ms3FutureApplicabilityVerdictV1::ApplicablePredictionPending
     );
     let future_frame = t1_completed_frame("future", "action-future", "future-lineage", 2_500);
-    let future_terminal = terminal("request-future", 1_990, 2_100);
-    let future_ledger = TransportBindingLedgerV1::build(
-        std::slice::from_ref(&future_topology),
-        std::slice::from_ref(&future_frame),
-        std::slice::from_ref(&future_terminal),
-    );
-    let future_bound =
-        &future_ledger.bound_for_topology(&future_topology.commit.commitment_root_sha256)[0];
+    let future_terminal = fallback_terminal("request-future", 1_990, 2_040);
     let route_identity = ClientRouteIdentityV1 {
         turn_intent_id_sha256: root("future"),
         session_id_sha256: root("future-lineage"),
@@ -2268,16 +2275,23 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
             .provider_capture_request_root_sha256
             .clone(),
         418,
-        2_030_000_000,
-        2_040_000_000,
+        2_010_000_000,
+        2_045_000_000,
     )
     .expect("independent route receipt");
+    let future_bound = bind_independent_fallback_transition_v1(
+        &future_topology,
+        &future_frame,
+        &future_terminal,
+        &route_receipt,
+    )
+    .expect("independent fallback binding");
     let future = seal_ms3_independent_future_with_route_receipt_v1(
         &frozen,
         &prediction,
         &committed_root,
         2_060_000_000,
-        future_bound,
+        &future_bound,
         &future_frame,
         &future_topology,
         &route_receipt,
@@ -2324,7 +2338,7 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
             &prediction,
             &committed_root,
             2_060_000_000,
-            future_bound,
+            &future_bound,
             &future_frame,
             &future_topology,
             &cpu_route_receipt,
@@ -2347,7 +2361,7 @@ fn unique_law_future_is_predicted_before_terminal_and_restarts_byte_identically(
             &prediction,
             &committed_root,
             2_060_000_000,
-            future_bound,
+            &future_bound,
             &future_frame,
             &future_topology,
             &mismatched_route_receipt,
@@ -3137,6 +3151,62 @@ fn transport_binding_preserves_exact_join_rejection_reason() {
         MultiSourceJoinCensoredReasonV1::IdentityMismatch
     );
     assert!(rejection.topology_captured_at_unix_nanos > rejection.action_observed_at_unix_nanos);
+}
+
+#[test]
+fn independent_fallback_binding_requires_exact_418_route_proof() {
+    let topology = t1_topology_row("future", "request-future", "future-lineage", 8, 2_000);
+    let frame = t1_completed_frame("future", "action-future", "future-lineage", 2_500);
+    let terminal = fallback_terminal("request-future", 1_990, 2_040);
+    let identity = ClientRouteIdentityV1 {
+        turn_intent_id_sha256: root("future"),
+        session_id_sha256: root("future-lineage"),
+    };
+    let route_receipt = NandoRouteReceiptV1::seal(
+        1,
+        route_receipt_genesis_root(),
+        &identity,
+        topology
+            .structure
+            .provider_capture_request_root_sha256
+            .clone(),
+        418,
+        2_010_000_000,
+        2_045_000_000,
+    )
+    .expect("fallback route receipt");
+
+    let generic = TransportBindingLedgerV1::build(
+        std::slice::from_ref(&topology),
+        std::slice::from_ref(&frame),
+        std::slice::from_ref(&terminal),
+    );
+    assert_eq!(
+        generic.failure_for_topology(&topology.commit.commitment_root_sha256),
+        Some(TransportBindingFailureV1::TerminalRequestFailed)
+    );
+    let bound =
+        bind_independent_fallback_transition_v1(&topology, &frame, &terminal, &route_receipt)
+            .expect("independent fallback binding");
+    assert_eq!(
+        bound.binding.terminal_receipt_root_sha256,
+        terminal.receipt_root_sha256
+    );
+
+    let mismatched = NandoRouteReceiptV1::seal(
+        2,
+        route_receipt.receipt_root_sha256,
+        &identity,
+        root("other-request-body"),
+        418,
+        2_010_000_000,
+        2_045_000_000,
+    )
+    .expect("mismatched fallback route receipt");
+    assert_eq!(
+        bind_independent_fallback_transition_v1(&topology, &frame, &terminal, &mismatched),
+        Err("fallback_transport_identity_mismatch")
+    );
 }
 
 #[test]

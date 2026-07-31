@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use nando_client_evidence::NandoRouteReceiptV1;
 use nando_operator_kernel::{RelationFrame, canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
@@ -409,6 +410,73 @@ impl TransportBindingLedgerV1 {
                 counts
             })
     }
+}
+
+/// Bind an independently observed upstream action after Nando explicitly handed the
+/// request off with HTTP 418. The ordinary transport ledger keeps treating 418 as
+/// unsuccessful; only this route-receipt-bound proof path may cross that boundary.
+pub fn bind_independent_fallback_transition_v1(
+    topology: &PreActionTopologyAuditRowV1,
+    frame: &RelationFrame,
+    terminal: &TransportTerminalReceiptV1,
+    route_receipt: &NandoRouteReceiptV1,
+) -> Result<TransportBoundJoinedTransitionV1, &'static str> {
+    let frame_root = canonical_json_sha256(frame).map_err(|_| "fallback_frame_root_invalid")?;
+    let session_lineage_sha256 = topology
+        .session_lineage_sha256
+        .clone()
+        .ok_or("fallback_session_lineage_missing")?;
+    if !terminal.validate()
+        || terminal.status != 418
+        || terminal.successful
+        || !route_receipt.validate()
+        || route_receipt.remote_status != 418
+        || topology.structure.request_event_id_sha256 != terminal.request_event_id_sha256
+        || topology.structure.provider_capture_request_root_sha256
+            != route_receipt.request_body_sha256
+        || topology.structure.turn_intent_id_sha256 != route_receipt.turn_intent_id_sha256
+        || topology.structure.turn_intent_id_sha256 != frame.client_intent_id_sha256
+        || route_receipt.session_id_sha256 != frame.session_id_sha256
+        || !topology
+            .structure
+            .session_lineage_roots_sha256
+            .contains(&frame.session_id_sha256)
+        || !capture_belongs_to_request(topology, terminal)
+        || route_receipt
+            .request_observed_at_unix_nanos
+            .saturating_add(CAPTURE_CLOCK_SKEW_NANOS)
+            < terminal.started_at_unix_nanos
+        || route_receipt
+            .route_confirmed_at_unix_nanos
+            .saturating_add(CAPTURE_CLOCK_SKEW_NANOS)
+            < terminal.completed_at_unix_nanos
+        || route_receipt.route_confirmed_at_unix_nanos > frame.observed_at_unix_nanos
+    {
+        return Err("fallback_transport_identity_mismatch");
+    }
+    let joined = join_explicit_topology_to_frame(topology, frame)
+        .map_err(|_| "fallback_transport_join_rejected")?;
+    let mut binding = RequestActionBindingV1 {
+        schema: REQUEST_ACTION_BINDING_SCHEMA_V1.to_owned(),
+        binding_root_sha256: String::new(),
+        topology_commitment_root_sha256: topology.commit.commitment_root_sha256.clone(),
+        request_event_id_sha256: topology.structure.request_event_id_sha256.clone(),
+        terminal_receipt_root_sha256: terminal.receipt_root_sha256.clone(),
+        completed_frame_root_sha256: frame_root,
+        action_event_id_sha256: frame.event_id_sha256.clone(),
+        turn_intent_id_sha256: frame.client_intent_id_sha256.clone(),
+        session_lineage_sha256,
+        request_started_at_unix_nanos: terminal.started_at_unix_nanos,
+        request_completed_at_unix_nanos: terminal.completed_at_unix_nanos,
+        action_observed_at_unix_nanos: frame.observed_at_unix_nanos,
+        next_request_started_at_unix_nanos: None,
+        unique_response_interval: true,
+    };
+    binding.binding_root_sha256 = binding.expected_root();
+    binding
+        .validate()
+        .then_some(TransportBoundJoinedTransitionV1 { binding, joined })
+        .ok_or("fallback_transport_binding_invalid")
 }
 
 fn validated_terminals(

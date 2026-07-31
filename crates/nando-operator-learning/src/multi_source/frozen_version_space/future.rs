@@ -173,7 +173,8 @@ fn seal_ms3_independent_future_inner_v1(
         || !valid_nonzero_sha256(applicability_event_root_sha256)
         || prediction.predicted_at_unix_nanos >= bound.binding.action_observed_at_unix_nanos
         || prediction_durable_at_unix_nanos >= bound.binding.action_observed_at_unix_nanos
-        || prediction.predicted_at_unix_nanos >= bound.binding.request_completed_at_unix_nanos
+        || (route_receipt.is_none()
+            && prediction.predicted_at_unix_nanos >= bound.binding.request_completed_at_unix_nanos)
     {
         return Err("future_prediction_binding_mismatch");
     }
