@@ -457,6 +457,9 @@ fn package_is_admitted(state: &AppState, package_id: &str) -> Result<bool, Strin
 }
 
 fn ordinary_cpu_receipt_root(path: &Path, package_id: &str) -> Result<Option<String>, String> {
+    if let Some(receipt_root) = ordinary_cpu_receipt_root_from_snapshot(path, package_id)? {
+        return Ok(Some(receipt_root));
+    }
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -524,6 +527,61 @@ fn ordinary_cpu_receipt_root(path: &Path, package_id: &str) -> Result<Option<Str
         line.clear();
     }
     Ok(None)
+}
+
+fn ordinary_cpu_receipt_root_from_snapshot(
+    path: &Path,
+    package_id: &str,
+) -> Result<Option<String>, String> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("ms4_economics_snapshot_read:{error}")),
+    };
+    let Ok(snapshot) = serde_json::from_slice::<Value>(&bytes) else {
+        return Ok(None);
+    };
+    if snapshot.get("schema").and_then(Value::as_str) != Some("nando.economics-snapshot.v4") {
+        return Ok(None);
+    }
+    let clean = snapshot.get("false_accepts").and_then(Value::as_u64) == Some(0)
+        && snapshot
+            .get("runtime_parity_mismatches")
+            .and_then(Value::as_u64)
+            == Some(0)
+        && snapshot.get("pipeline_dropped").and_then(Value::as_u64) == Some(0);
+    if !clean {
+        return Ok(None);
+    }
+    let Some(package) = snapshot
+        .get("verified_by_package")
+        .and_then(Value::as_object)
+        .and_then(|packages| packages.get(package_id))
+    else {
+        return Ok(None);
+    };
+    let receipt_root = package
+        .get("last_receipt_root_sha256")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let valid_root = receipt_root.len() == 64
+        && receipt_root
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
+    let proven = package
+        .get("ordinary_accepts")
+        .and_then(Value::as_u64)
+        .is_some_and(|accepts| accepts > 0)
+        && package
+            .get("exact_input_tokens")
+            .and_then(Value::as_u64)
+            .is_some_and(|tokens| tokens > 0)
+        && package
+            .get("last_accept_timestamp_unix")
+            .and_then(Value::as_u64)
+            .is_some_and(|timestamp| timestamp > 0)
+        && valid_root;
+    Ok(proven.then(|| receipt_root.to_owned()))
 }
 
 fn persist_report(
@@ -643,5 +701,48 @@ mod tests {
         );
         std::fs::remove_file(path).expect("cleanup");
         std::fs::remove_file(legacy_path).expect("legacy cleanup");
+    }
+
+    #[test]
+    fn completion_accepts_clean_v4_package_receipt_snapshot() {
+        let path = test_path("v4-snapshot");
+        let package_id = "ms4-natural-test";
+        let receipt_root = "b".repeat(64);
+        let snapshot = json!({
+            "schema": "nando.economics-snapshot.v4",
+            "false_accepts": 0,
+            "runtime_parity_mismatches": 0,
+            "pipeline_dropped": 0,
+            "verified_by_package": {
+                (package_id): {
+                    "ordinary_accepts": 1,
+                    "exact_input_tokens": 321,
+                    "last_accept_timestamp_unix": 123,
+                    "last_receipt_root_sha256": receipt_root,
+                }
+            }
+        });
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&snapshot).expect("snapshot encode"),
+        )
+        .expect("snapshot");
+        assert_eq!(
+            ordinary_cpu_receipt_root(&path, package_id).expect("scan"),
+            Some("b".repeat(64))
+        );
+
+        let mut unsafe_snapshot = snapshot;
+        unsafe_snapshot["false_accepts"] = Value::from(1);
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&unsafe_snapshot).expect("unsafe snapshot encode"),
+        )
+        .expect("unsafe snapshot");
+        assert_eq!(
+            ordinary_cpu_receipt_root(&path, package_id).expect("unsafe scan"),
+            None
+        );
+        std::fs::remove_file(path).expect("cleanup");
     }
 }

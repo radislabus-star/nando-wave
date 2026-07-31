@@ -28,12 +28,32 @@ struct EconomicsEvent {
     stage: String,
     #[serde(default)]
     reason: String,
+    #[serde(default)]
+    package_id: String,
+    #[serde(default)]
+    verification_receipt_root_sha256: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct FallbackCounter {
     intents: u64,
     input_tokens: u64,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct PackageVerifiedEconomics {
+    ordinary_accepts: u64,
+    exact_input_tokens: u64,
+    last_accept_timestamp_unix: u64,
+    last_receipt_root_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct VerifiedReceiptMetadata {
+    package_id: String,
+    exact_input_tokens: u64,
+    accepted_at_unix: u64,
+    receipt_root_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -84,6 +104,10 @@ struct EconomicsCheckpoint {
     false_accept_intents: BTreeSet<String>,
     #[serde(default)]
     parity_failure_intents: BTreeSet<String>,
+    #[serde(default)]
+    verified_receipt_by_intent: BTreeMap<String, VerifiedReceiptMetadata>,
+    #[serde(default)]
+    verified_by_package: BTreeMap<String, PackageVerifiedEconomics>,
 }
 
 pub struct LiveEconomicsLedger {
@@ -108,6 +132,8 @@ pub struct LiveEconomicsLedger {
     pipeline_dropped: u64,
     false_accept_intents: BTreeSet<String>,
     parity_failure_intents: BTreeSet<String>,
+    verified_receipt_by_intent: BTreeMap<String, VerifiedReceiptMetadata>,
+    verified_by_package: BTreeMap<String, PackageVerifiedEconomics>,
     events_since_checkpoint: u64,
     last_checkpoint: Instant,
     last_snapshot: Instant,
@@ -161,6 +187,8 @@ impl LiveEconomicsLedger {
                 pipeline_dropped: checkpoint.pipeline_dropped,
                 false_accept_intents: checkpoint.false_accept_intents,
                 parity_failure_intents: checkpoint.parity_failure_intents,
+                verified_receipt_by_intent: checkpoint.verified_receipt_by_intent,
+                verified_by_package: checkpoint.verified_by_package,
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 last_snapshot: Instant::now(),
@@ -188,6 +216,8 @@ impl LiveEconomicsLedger {
                 pipeline_dropped: 0,
                 false_accept_intents: BTreeSet::new(),
                 parity_failure_intents: BTreeSet::new(),
+                verified_receipt_by_intent: BTreeMap::new(),
+                verified_by_package: BTreeMap::new(),
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 last_snapshot: Instant::now(),
@@ -248,16 +278,37 @@ impl LiveEconomicsLedger {
             timestamp_unix: unix_now(),
             stage: String::new(),
             reason: String::new(),
+            package_id: String::new(),
+            verification_receipt_root_sha256: String::new(),
         })
     }
 
-    pub fn observe_verified_accept(
+    #[cfg(test)]
+    fn observe_verified_accept(
         &mut self,
         intent_sha256: &str,
         input_tokens: u64,
     ) -> Result<(), String> {
+        self.observe_verified_accept_with_receipt(intent_sha256, input_tokens, None, None)
+    }
+
+    pub fn observe_verified_accept_with_receipt(
+        &mut self,
+        intent_sha256: &str,
+        input_tokens: u64,
+        package_id: Option<&str>,
+        verification_receipt_root_sha256: Option<&str>,
+    ) -> Result<(), String> {
         if self.ineligible.contains(intent_sha256) || self.verified.contains_key(intent_sha256) {
             return self.maybe_persist(false);
+        }
+        let package_id = package_id.unwrap_or_default();
+        let verification_receipt_root_sha256 = verification_receipt_root_sha256.unwrap_or_default();
+        if !package_id.is_empty()
+            && (!valid_package_id(package_id)
+                || !valid_sha256_hex(verification_receipt_root_sha256))
+        {
+            return Err("live_economics_invalid_verified_receipt_metadata".to_owned());
         }
         self.record(EconomicsEvent {
             schema: EVENT_SCHEMA.to_owned(),
@@ -268,6 +319,8 @@ impl LiveEconomicsLedger {
             timestamp_unix: unix_now(),
             stage: String::new(),
             reason: String::new(),
+            package_id: package_id.to_owned(),
+            verification_receipt_root_sha256: verification_receipt_root_sha256.to_owned(),
         })
     }
 
@@ -287,6 +340,8 @@ impl LiveEconomicsLedger {
             timestamp_unix: unix_now(),
             stage: bounded_label(stage),
             reason: bounded_label(reason),
+            package_id: String::new(),
+            verification_receipt_root_sha256: String::new(),
         })
     }
 
@@ -300,6 +355,8 @@ impl LiveEconomicsLedger {
             timestamp_unix: unix_now(),
             stage: String::new(),
             reason: String::new(),
+            package_id: String::new(),
+            verification_receipt_root_sha256: String::new(),
         })
     }
 
@@ -313,6 +370,8 @@ impl LiveEconomicsLedger {
             timestamp_unix: unix_now(),
             stage: String::new(),
             reason: String::new(),
+            package_id: String::new(),
+            verification_receipt_root_sha256: String::new(),
         })
     }
 
@@ -348,6 +407,10 @@ impl LiveEconomicsLedger {
             "verified_accept"
                 if event.eligible && !self.ineligible.contains(&event.intent_sha256) =>
             {
+                if self.verified.contains_key(&event.intent_sha256) {
+                    self.pending_opened_at.remove(&event.intent_sha256);
+                    return;
+                }
                 let exact_input_tokens = self
                     .eligible
                     .get(&event.intent_sha256)
@@ -370,6 +433,31 @@ impl LiveEconomicsLedger {
                 self.verified
                     .entry(event.intent_sha256.clone())
                     .or_insert(exact_input_tokens);
+                if valid_package_id(&event.package_id)
+                    && valid_sha256_hex(&event.verification_receipt_root_sha256)
+                {
+                    self.verified_receipt_by_intent.insert(
+                        event.intent_sha256.clone(),
+                        VerifiedReceiptMetadata {
+                            package_id: event.package_id.clone(),
+                            exact_input_tokens,
+                            accepted_at_unix: event.timestamp_unix,
+                            receipt_root_sha256: event.verification_receipt_root_sha256.clone(),
+                        },
+                    );
+                    let package = self
+                        .verified_by_package
+                        .entry(event.package_id)
+                        .or_default();
+                    package.ordinary_accepts = package.ordinary_accepts.saturating_add(1);
+                    package.exact_input_tokens = package
+                        .exact_input_tokens
+                        .saturating_add(exact_input_tokens);
+                    if event.timestamp_unix >= package.last_accept_timestamp_unix {
+                        package.last_accept_timestamp_unix = event.timestamp_unix;
+                        package.last_receipt_root_sha256 = event.verification_receipt_root_sha256;
+                    }
+                }
                 self.pending_opened_at.remove(&event.intent_sha256);
             }
             "fallback"
@@ -422,8 +510,33 @@ impl LiveEconomicsLedger {
             counter.intents = counter.intents.saturating_add(1);
             counter.input_tokens = counter.input_tokens.saturating_add(input_tokens);
         }
+        if self
+            .verified_receipt_by_intent
+            .remove(intent_sha256)
+            .is_some()
+        {
+            self.rebuild_verified_by_package();
+        }
         self.pending_opened_at.remove(intent_sha256);
         true
+    }
+
+    fn rebuild_verified_by_package(&mut self) {
+        self.verified_by_package.clear();
+        for metadata in self.verified_receipt_by_intent.values() {
+            let package = self
+                .verified_by_package
+                .entry(metadata.package_id.clone())
+                .or_default();
+            package.ordinary_accepts = package.ordinary_accepts.saturating_add(1);
+            package.exact_input_tokens = package
+                .exact_input_tokens
+                .saturating_add(metadata.exact_input_tokens);
+            if metadata.accepted_at_unix >= package.last_accept_timestamp_unix {
+                package.last_accept_timestamp_unix = metadata.accepted_at_unix;
+                package.last_receipt_root_sha256 = metadata.receipt_root_sha256.clone();
+            }
+        }
     }
 
     fn reconcile_false_accept_outcomes(&mut self) {
@@ -474,6 +587,8 @@ impl LiveEconomicsLedger {
                 pipeline_dropped: self.pipeline_dropped,
                 false_accept_intents: self.false_accept_intents.clone(),
                 parity_failure_intents: self.parity_failure_intents.clone(),
+                verified_receipt_by_intent: self.verified_receipt_by_intent.clone(),
+                verified_by_package: self.verified_by_package.clone(),
             },
         )
     }
@@ -561,6 +676,11 @@ impl LiveEconomicsLedger {
             "boundary": "terminal ordinary provider request events; a user turn may contain multiple independently accounted model calls; in-flight requests remain outside completed economics windows; exact o200k tokenization of recursively key-sorted JSON request payloads; finalized Rust verifier receipts only; counterfactual provider-billed usage for avoided calls is unavailable and is not claimed",
         });
         if let Some(object) = snapshot.as_object_mut() {
+            object.insert(
+                "verified_by_package".to_owned(),
+                serde_json::to_value(&self.verified_by_package)
+                    .map_err(|error| format!("live_economics_package_snapshot:{error}"))?,
+            );
             object.insert(
                 "display_global_input_tokens".to_owned(),
                 json!(display_global_input_tokens),
@@ -757,6 +877,21 @@ fn bounded_label(value: &str) -> String {
         .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
         .take(96)
         .collect()
+}
+
+fn valid_package_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
+}
+
+fn valid_sha256_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 fn ratio_milli(numerator: u64, denominator: u64) -> u64 {
@@ -958,6 +1093,8 @@ mod tests {
             pipeline_dropped: 0,
             false_accept_intents: BTreeSet::new(),
             parity_failure_intents: BTreeSet::new(),
+            verified_receipt_by_intent: BTreeMap::new(),
+            verified_by_package: BTreeMap::new(),
         };
         write_atomic_cbor(&root.join("economics-live-v3.checkpoint"), &legacy)
             .expect("legacy checkpoint");
@@ -983,6 +1120,68 @@ mod tests {
             snapshot["display_prior_epoch_schema"],
             "nando.live-economics-checkpoint.v3"
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn package_receipt_and_exact_tokens_survive_restart_and_false_accept() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-live-economics-package-{}-{}",
+            std::process::id(),
+            unix_now()
+        ));
+        let package_id = "ms4-natural-test";
+        let receipt_root = "a".repeat(64);
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
+        ledger
+            .observe_request("natural-intent", 321, true)
+            .expect("request");
+        ledger
+            .observe_verified_accept_with_receipt(
+                "natural-intent",
+                999,
+                Some(package_id),
+                Some(&receipt_root),
+            )
+            .expect("verified");
+        ledger.persist_checkpoint().expect("checkpoint");
+        ledger.persist_snapshot().expect("snapshot");
+
+        let snapshot: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("economics-live.json")).expect("read snapshot"),
+        )
+        .expect("snapshot");
+        assert_eq!(
+            snapshot["verified_by_package"][package_id]["ordinary_accepts"],
+            1
+        );
+        assert_eq!(
+            snapshot["verified_by_package"][package_id]["exact_input_tokens"],
+            321
+        );
+        assert_eq!(
+            snapshot["verified_by_package"][package_id]["last_receipt_root_sha256"],
+            receipt_root
+        );
+
+        drop(ledger);
+        let mut replayed = LiveEconomicsLedger::open(&root).expect("restart");
+        assert_eq!(
+            replayed
+                .verified_by_package
+                .get(package_id)
+                .map(|package| package.exact_input_tokens),
+            Some(321)
+        );
+        replayed
+            .observe_false_accept("natural-intent")
+            .expect("false accept");
+        replayed.persist_snapshot().expect("false snapshot");
+        let snapshot: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("economics-live.json")).expect("read false snapshot"),
+        )
+        .expect("false snapshot");
+        assert!(snapshot["verified_by_package"][package_id].is_null());
         let _ = fs::remove_dir_all(root);
     }
 }

@@ -28,6 +28,8 @@ enum EconomicsCommand {
     Verified {
         intent_sha256: String,
         input_tokens: u64,
+        package_id: Option<String>,
+        verification_receipt_root_sha256: Option<String>,
     },
     ParityFailure {
         intent_sha256: String,
@@ -91,10 +93,18 @@ impl EconomicsWorkerHandle {
         })
     }
 
-    pub fn observe_verified(&self, intent_sha256: String, input_tokens: u64) -> Result<(), String> {
+    pub fn observe_verified(
+        &self,
+        intent_sha256: String,
+        input_tokens: u64,
+        package_id: Option<String>,
+        verification_receipt_root_sha256: Option<String>,
+    ) -> Result<(), String> {
         self.submit(EconomicsCommand::Verified {
             intent_sha256,
             input_tokens,
+            package_id,
+            verification_receipt_root_sha256,
         })
     }
 
@@ -199,7 +209,14 @@ pub fn spawn_economics_worker(state_dir: PathBuf) -> Result<EconomicsWorkerHandl
                     EconomicsCommand::Verified {
                         intent_sha256,
                         input_tokens,
-                    } => ledger.observe_verified_accept(&intent_sha256, input_tokens),
+                        package_id,
+                        verification_receipt_root_sha256,
+                    } => ledger.observe_verified_accept_with_receipt(
+                        &intent_sha256,
+                        input_tokens,
+                        package_id.as_deref(),
+                        verification_receipt_root_sha256.as_deref(),
+                    ),
                     EconomicsCommand::ParityFailure { intent_sha256 } => {
                         ledger.observe_parity_failure(&intent_sha256)
                     }

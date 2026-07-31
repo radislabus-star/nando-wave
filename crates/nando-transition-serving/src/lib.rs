@@ -439,7 +439,7 @@ impl ServingConfig {
             ms4_ordinary_economics_path: env_path_join(
                 "NANDO_MS4_ORDINARY_ECONOMICS_JSONL",
                 &state_dir,
-                "economics-terminal.jsonl",
+                "economics-live.json",
             ),
         })
     }
@@ -5337,6 +5337,8 @@ fn try_response_actor(
         request_event_id,
         input_tokens,
         natural_evidence_eligible,
+        Some(package_id),
+        Some(receipt),
     );
     Some(match projection {
         Projection::Responses if stream => sse_response(responses_sse(&projected)),
@@ -6222,6 +6224,8 @@ fn execute_and_project(
             request_event_id,
             input_tokens,
             natural_evidence_eligible,
+            None,
+            None,
         );
     } else {
         write_event(
@@ -7580,14 +7584,19 @@ fn observe_live_economics_verified_accept(
     request_event_id: &str,
     input_tokens: u64,
     natural_evidence_eligible: bool,
+    package_id: Option<&str>,
+    verification_receipt_root_sha256: Option<&str>,
 ) {
     if !natural_evidence_eligible {
         return;
     }
     let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
-    let result = state
-        .live_economics
-        .observe_verified(intent_sha256.clone(), input_tokens);
+    let result = state.live_economics.observe_verified(
+        intent_sha256.clone(),
+        input_tokens,
+        package_id.map(str::to_owned),
+        verification_receipt_root_sha256.map(str::to_owned),
+    );
     if let Err(error) = result {
         state.counters.errors.fetch_add(1, Ordering::Relaxed);
         eprintln!("nando-live-economics accept: {error}");
