@@ -451,16 +451,22 @@ mod tests {
         MultiSourceExtractionStatusV1, MultiSourceRelationEdgeV1, MultiSourceRelationKindV1,
         MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1,
         MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1,
-        RELATION_FRAME_SCHEMA, RelationAtom, RelationFrame, sha256_bytes,
+        RELATION_FRAME_SCHEMA, RelationAtom, RelationFrame, canonical_json_sha256, sha256_bytes,
     };
     use nando_operator_learning::{
-        SOURCE_NEUTRAL_EXTRACTOR_VERSION,
+        RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION,
         multi_source::{
             Ms3VersionSpaceVersionsV1, PreActionTopologyAuditRowV1, TransportBindingLedgerV1,
             TransportTerminalReceiptV1, prepare_ms3_frozen_version_space_v1,
             seal_ms3_independent_future_v1,
         },
     };
+    use nando_operator_runtime::response_pre_action_context_atom_ids;
+    use nando_response_actor::{
+        Ms4ExternalAdmissionCandidateV1, ResponseExecutionStatus, ResponseExecutor,
+        build_ms4_external_admission_snapshot, request_phase_atom_ids,
+    };
+    use serde_json::json;
 
     use super::*;
 
@@ -476,6 +482,22 @@ mod tests {
 
     fn hash(label: &str) -> String {
         sha256_bytes(label.as_bytes())
+    }
+
+    fn runtime_payload() -> serde_json::Value {
+        json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": "Return opaque"
+                },
+                {
+                    "type": "function_call_output",
+                    "output": "{\"opaque\":7}"
+                }
+            ]
+        })
     }
 
     fn topology(
@@ -519,8 +541,8 @@ mod tests {
             request_event_id_sha256: hash(request_event),
             provider_bound_turn_identity: true,
             session_lineage_roots_sha256: vec![hash(session)],
-            request_phase_atom_ids: vec![1],
-            pre_action_context_atom_ids: vec![2],
+            request_phase_atom_ids: request_phase_atom_ids("Return opaque"),
+            pre_action_context_atom_ids: response_pre_action_context_atom_ids(&runtime_payload()),
             capability_atom_ids: vec![3],
             estimated_input_tokens: 100,
             provider_payload_bytes: 400,
@@ -772,6 +794,191 @@ mod tests {
             .seal_independent_future(future)
             .expect("terminal future");
         (topology_archive, lifecycle, runtimes)
+    }
+
+    fn runtime_parity(frame: &RelationFrame) -> RuntimeParityCase {
+        RuntimeParityCase {
+            evidence_ref_sha256: frame.frame_id_sha256.clone(),
+            capture_receipt: None,
+            request_text: "Return opaque".to_owned(),
+            provider_payload: runtime_payload(),
+            expected_response: serde_json::to_string(&json!({
+                "name": "transport_a",
+                "arguments": {"value": 7}
+            }))
+            .expect("expected response"),
+        }
+    }
+
+    fn negative_topology(sequence: u64, captured_at_unix_ms: u64) -> PreActionTopologyAuditRowV1 {
+        let mut row = topology(
+            "negative",
+            "request-negative",
+            "negative-lineage",
+            sequence,
+            captured_at_unix_ms,
+        );
+        row.structure.request_phase_atom_ids = vec![7];
+        row.structure.pre_action_context_atom_ids = vec![8];
+        row.structure.topology.role_witnesses.clear();
+        row.commit = PreActionTopologyCommitV1::seal(
+            &row.structure,
+            MultiSourceEvidenceOriginV1::FreshLive,
+            hash("extractor"),
+            hash("config"),
+            sequence,
+        )
+        .expect("negative topology commit");
+        row
+    }
+
+    #[test]
+    fn ms4_external_candidate_rebuilds_authority_without_trusting_candidate_flags() {
+        let root = test_root("ms4-external-admission");
+        let (topology_archive, _lifecycle, runtimes) = terminal_generation(&root, Some(true));
+        let frozen = runtimes.frozen.envelope().cloned().expect("frozen law");
+        let future = runtimes
+            .frozen
+            .independent_future()
+            .cloned()
+            .expect("future pass");
+        let support_topology = topology_archive
+            .row_by_root(&frozen.contract.topology_root_sha256)
+            .expect("support topology");
+        let future_topology = topology_archive
+            .row_by_root(&future.receipt.topology_root_sha256)
+            .expect("future topology");
+        let support_ms = support_topology.captured_at_unix_ms.expect("support time");
+        let future_ms = future_topology.captured_at_unix_ms.expect("future time");
+        let support_frame = completed_frame(
+            "support",
+            "action-support",
+            "support-lineage",
+            support_ms.saturating_add(500),
+            true,
+        );
+        let future_frame = completed_frame(
+            "future",
+            "action-future",
+            "future-lineage",
+            future_ms.saturating_add(10_000),
+            true,
+        );
+        assert_eq!(
+            canonical_json_sha256(&support_frame).expect("support root"),
+            frozen.contract.frame_root_sha256
+        );
+        assert_eq!(
+            canonical_json_sha256(&future_frame).expect("future root"),
+            future.receipt.completed_frame_root_sha256
+        );
+        let support_terminal = terminal(
+            "request-support",
+            support_ms.saturating_sub(10),
+            support_ms.saturating_add(100),
+        );
+        let future_terminal = terminal(
+            "request-future",
+            future_ms.saturating_sub(1),
+            future_ms.saturating_add(11_000),
+        );
+        let negative = negative_topology(
+            frozen.contract.future_min_sequence.saturating_add(10),
+            future_ms.saturating_add(20_000),
+        );
+        let candidate = Ms4ExternalAdmissionCandidateV1::seal(
+            frozen.clone(),
+            future.clone(),
+            support_topology.clone(),
+            support_frame.clone(),
+            support_terminal.clone(),
+            runtime_parity(&support_frame),
+            future_topology.clone(),
+            future_frame.clone(),
+            future_terminal.clone(),
+            runtime_parity(&future_frame),
+            vec![negative.clone()],
+        )
+        .expect("external candidate");
+        let bytes = candidate.canonical_bytes().expect("candidate bytes");
+        assert_eq!(
+            Ms4ExternalAdmissionCandidateV1::from_canonical_bytes(&bytes)
+                .expect("candidate restart"),
+            candidate
+        );
+        let package = candidate.admitted_package().expect("admitted package");
+        assert!(package.proof.wave_causal_pass);
+        assert!(!package.phase_centers.is_empty());
+        assert!(!package.anti_centers.is_empty());
+        assert_eq!(package.admission_candidate_blocker(), None);
+
+        let gate_root = hash("gate");
+        let runtime_root = hash("runtime");
+        let snapshot = build_ms4_external_admission_snapshot(
+            std::slice::from_ref(&candidate),
+            "nando-wave",
+            1,
+            100,
+            30,
+            &gate_root,
+            &runtime_root,
+        )
+        .expect("external rebuild")
+        .expect("admission snapshot");
+        let executor = ResponseExecutor::from_registry_with_admission(
+            snapshot.registry,
+            snapshot.admission,
+            "nando-wave",
+            &gate_root,
+            &runtime_root,
+            100,
+            30,
+        )
+        .expect("independent executor");
+        let execution = executor.execute("Return opaque", &runtime_payload());
+        assert_eq!(execution.status, ResponseExecutionStatus::Executed);
+        assert_eq!(
+            execution.response.as_deref(),
+            Some(runtime_parity(&support_frame).expected_response.as_str())
+        );
+
+        assert_eq!(
+            Ms4ExternalAdmissionCandidateV1::seal(
+                frozen.clone(),
+                future.clone(),
+                support_topology.clone(),
+                support_frame.clone(),
+                support_terminal.clone(),
+                runtime_parity(&support_frame),
+                future_topology.clone(),
+                future_frame.clone(),
+                future_terminal.clone(),
+                runtime_parity(&future_frame),
+                Vec::new(),
+            )
+            .expect_err("negative proof is mandatory"),
+            "ms4_external_negative_control_missing"
+        );
+        let mut rebound_parity = runtime_parity(&support_frame);
+        rebound_parity.evidence_ref_sha256 = hash("wrong frame");
+        assert_eq!(
+            Ms4ExternalAdmissionCandidateV1::seal(
+                frozen,
+                future,
+                support_topology,
+                support_frame,
+                support_terminal,
+                rebound_parity,
+                future_topology,
+                future_frame.clone(),
+                future_terminal,
+                runtime_parity(&future_frame),
+                vec![negative],
+            )
+            .expect_err("runtime parity cannot rebound"),
+            "ms4_external_runtime_parity_binding_invalid"
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]

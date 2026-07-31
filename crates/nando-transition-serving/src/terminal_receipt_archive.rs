@@ -151,6 +151,13 @@ impl TerminalReceiptArchive {
             .collect()
     }
 
+    pub(super) fn receipt_for_request(
+        &self,
+        request_event_id_sha256: &str,
+    ) -> Option<TransportTerminalReceiptV1> {
+        self.by_request.get(request_event_id_sha256).cloned()
+    }
+
     pub(super) fn len(&self) -> usize {
         self.by_request.len()
     }

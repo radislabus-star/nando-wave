@@ -612,7 +612,7 @@ const TEMPLATE: &str = r#"
     <div class="legacy-strip"><span>АРХИВ V3: <b id="legacy-values">__LEGACY_VALUES__</b></span><span class="legacy-scope">АРХИВНАЯ PARTITION · УЖЕ ВКЛЮЧЕНА В SERVER TOTAL · ТЕКУЩАЯ ДОЛЯ ПОКАЗАНА ОТДЕЛЬНО ДЛЯ V4</span></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
-    <h2 class="band-title">АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3</h2>
+    <h2 class="band-title">АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3 → MS4</h2>
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">ACTIVE GENERATION</div><div id="ms3-generation" class="ms3-value watch">—</div></div>
       <div class="ms3-cell"><div class="ms3-label">PREDECESSOR</div><div id="ms3-predecessor" class="ms3-value locked">—</div></div>
@@ -624,6 +624,10 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">INDEPENDENT FUTURE</div><div id="ms3-future" class="ms3-value watch">НЕ ОЦЕНЕН</div></div>
       <div class="ms3-cell"><div class="ms3-label">AUTHORITY</div><div id="ms3-authority" class="ms3-value locked">FALSE</div></div>
       <div class="ms3-cell"><div class="ms3-label">CAPTURE / RECEIPT HEALTH</div><div id="ms3-operational-health" class="ms3-value watch">ЗАГРУЗКА</div><div id="ms3-operational-note" class="scope-note">operational guard</div></div>
+      <div class="ms3-cell"><div class="ms3-label">AUTONOMOUS STAGE</div><div id="ms4-stage" class="ms3-value watch">WAITING FOR MS3</div></div>
+      <div class="ms3-cell"><div class="ms3-label">BUNDLE / PACKAGE</div><div id="ms4-package" class="ms3-value muted">НЕ ЗАПЕЧАТАН</div></div>
+      <div class="ms3-cell"><div class="ms3-label">EXTERNAL ADMISSION</div><div id="ms4-admission" class="ms3-value locked">FALSE</div></div>
+      <div class="ms3-cell"><div class="ms3-label">ORDINARY CPU PROOF</div><div id="ms4-ordinary-proof" class="ms3-value locked">PENDING</div></div>
     </div>
     <div id="ms3-note" class="ms3-note">Загрузка generation lifecycle и frozen acquisition…</div>
   </div></section>
@@ -769,6 +773,7 @@ const TEMPLATE: &str = r#"
     text("legacy-values", `${number.format(legacy.input_tokens || 0)} вход / ${number.format(legacy.cpu_tokens || 0)} CPU`);
 
     const ms3 = snapshot.ms3 || {};
+    const ms4 = snapshot.ms4_closed_loop || {};
     const lifecycleStatus = snapshot.ms3_lifecycle || {};
     const lifecycle = lifecycleStatus.lifecycle || {};
     const acquisition = snapshot.ms3_acquisition || {};
@@ -813,7 +818,7 @@ const TEMPLATE: &str = r#"
     const acquisitionBlocker = acquisition.blocker || "";
     const lawFrozen = Boolean(lifecycleStatus.active_frozen_envelope_root_sha256);
     const futureFrozen = Boolean(lifecycleStatus.active_future_envelope_root_sha256);
-    const authorityReady = lifecycleStatus.authority_ready === true || ms3.authority_ready === true;
+    const authorityReady = lifecycleStatus.authority_ready === true || ms3.authority_ready === true || ms4.authority_ready === true;
     const phaseMutation = lifecycleStatus.phase_mutation_allowed === true || acquisition.phase_update_allowed === true || ms3.phase_mutation_allowed === true;
     const predictionsCommitted = ms3.predictions_committed || 0;
     const activePredictions = ms3.effective_active_predictions ?? ms3.active_predictions ?? 0;
@@ -851,6 +856,13 @@ const TEMPLATE: &str = r#"
     const receiptSlo = receiptHealth.receipt_lag_slo_seconds || 0;
     text("ms3-operational-health", `${captureStatus} · ${receiptStatus}${receiptInflight > 0 ? ` ${number.format(receiptInflight)}` : ""}`);
     text("ms3-operational-note", `oldest ${duration(receiptLag)} · SLO ${duration(receiptSlo)} · stalled ${number.format(receiptStalled)}`);
+    const ms4Stage = (ms4.stage || "waiting_for_ms3").toUpperCase();
+    const ms4Package = ms4.package_id || "";
+    const ms4Complete = ms4.stage === "complete" && Boolean(ms4.ordinary_cpu_receipt_root_sha256);
+    text("ms4-stage", ms4Stage);
+    text("ms4-package", ms4Package ? ms4Package.slice(0, 20) : "НЕ ЗАПЕЧАТАН");
+    text("ms4-admission", ms4.external_admission_pass === true ? "PASS" : "FALSE");
+    text("ms4-ordinary-proof", ms4Complete ? "PASS" : "PENDING");
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
     stateClass("ms3-future-applicability", `ms3-value ${!lawFrozen ? "muted" : futureAcquisitionFailed ? "locked" : "watch"}`);
@@ -859,12 +871,18 @@ const TEMPLATE: &str = r#"
     stateClass("ms3-future", `ms3-value ${futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-authority", `ms3-value ${authorityReady ? "good" : "locked"}`);
     stateClass("ms3-operational-health", `ms3-value ${captureStatus === "CAPTURE_STALLED" || receiptStatus === "RECEIPT_STALLED" || captureStatus === "NOT_EVALUATED" ? "locked" : receiptStatus === "IN_FLIGHT" ? "watch" : "good"}`);
+    stateClass("ms4-stage", `ms3-value ${ms4Complete ? "good" : ms4.stage === "blocked" ? "locked" : "watch"}`);
+    stateClass("ms4-package", `ms3-value ${ms4Package ? "good" : "muted"}`);
+    stateClass("ms4-admission", `ms3-value ${ms4.external_admission_pass === true ? "good" : "locked"}`);
+    stateClass("ms4-ordinary-proof", `ms3-value ${ms4Complete ? "good" : "locked"}`);
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
     const currentBlocker = lawFrozen ? futureBlocker : acquisitionBlocker || futureBlocker;
-    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN"} · blocker ${currentBlocker || "none"} · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
-    text("next-route", authorityReady
+    text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN"} · MS4 ${ms4Stage} (${ms4.blocker || "none"}) · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
+    text("next-route", ms4Complete
+      ? "autonomous closed loop complete"
+      : authorityReady
       ? "ordinary CPU receipt → avoided upstream call"
       : futureVerdict === "future_pass"
         ? "BundleV4 → external admission → bounded lease"
@@ -1117,7 +1135,7 @@ mod tests {
             html.contains("РАЗДЕЛЬНЫЕ SCOPE · SERVER HISTORY / MINER WINDOW / EXECUTION RECEIPTS")
         );
         assert!(html.contains("ЭТО НЕ ОДНА ПОСЛЕДОВАТЕЛЬНАЯ ВОРОНКА"));
-        assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3"));
+        assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3 → MS4"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
         assert!(html.contains("SCIENTIFIC / LINKED LIMIT"));
@@ -1126,6 +1144,9 @@ mod tests {
         assert!(html.contains("acquisition.candidate_topology_rows"));
         assert!(html.contains("acquisitionContract.max_raw_topology_rows"));
         assert!(html.contains("CAPTURE / RECEIPT HEALTH"));
+        assert!(html.contains("AUTONOMOUS STAGE"));
+        assert!(html.contains("ORDINARY CPU PROOF"));
+        assert!(html.contains("snapshot.ms4_closed_loop"));
         assert!(html.contains("RECEIPT_STALLED"));
         assert!(html.contains("· OPEN ${joinOpen}"));
         assert!(html.contains("linked_acquisition_failures"));

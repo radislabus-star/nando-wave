@@ -240,6 +240,16 @@ impl Ms4FrozenFutureShadowCandidateV1 {
         false
     }
 
+    #[must_use]
+    pub fn support_runtime_receipt(&self) -> &DurableRuntimeParityReceipt {
+        &self.support_runtime_receipt
+    }
+
+    #[must_use]
+    pub fn future_runtime_receipt(&self) -> &DurableRuntimeParityReceipt {
+        &self.future_runtime_receipt
+    }
+
     fn expected_root(&self) -> Result<String, &'static str> {
         canonical_json_sha256(&(
             MS4_FROZEN_FUTURE_SHADOW_CANDIDATE_SCHEMA_V1,

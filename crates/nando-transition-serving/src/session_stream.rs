@@ -150,7 +150,15 @@ impl SessionMinerSink for MinerWorkerHandle {
 }
 
 pub trait VerifiedRelationFrameSink: Send + Sync {
-    fn append_verified_frame(&self, frame: RelationFrame) -> Result<(), String>;
+    fn append_verified_frame_with_parity(
+        &self,
+        frame: RelationFrame,
+        runtime_parity_case: Option<RuntimeParityCase>,
+    ) -> Result<(), String>;
+
+    fn append_verified_frame(&self, frame: RelationFrame) -> Result<(), String> {
+        self.append_verified_frame_with_parity(frame, None)
+    }
 }
 
 struct VerifiedRelationFrameSinkAdapter {
@@ -161,9 +169,10 @@ impl SessionMinerSink for VerifiedRelationFrameSinkAdapter {
     fn submit_frame_with_parity(
         &self,
         frame: RelationFrame,
-        _runtime_parity_case: Option<RuntimeParityCase>,
+        runtime_parity_case: Option<RuntimeParityCase>,
     ) -> Result<(), String> {
-        self.sink.append_verified_frame(frame)
+        self.sink
+            .append_verified_frame_with_parity(frame, runtime_parity_case)
     }
 
     fn submit_collection(&self, _observation: OnlineCollectionObservation) -> Result<(), String> {

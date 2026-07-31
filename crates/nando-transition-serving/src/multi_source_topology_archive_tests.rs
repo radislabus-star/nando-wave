@@ -183,9 +183,7 @@ fn archive_rejects_an_ambiguous_closure_sequence() {
     archive.append(&row(0)).expect("first append");
     let mut duplicate_sequence = row(9);
     duplicate_sequence.bridge_sequence = Some(1);
-    archive
-        .append(&duplicate_sequence)
-        .expect("second append");
+    archive.append(&duplicate_sequence).expect("second append");
 
     assert_eq!(
         archive

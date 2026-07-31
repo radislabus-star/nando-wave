@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Nando response admission when a cold learner publishes candidates
+After=nando-response-learning.service
+
+[Path]
+PathChanged=/var/lib/nando-wave/transition/response-admission-candidates.cbor
+Unit=nando-response-admission.service
+TriggerLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

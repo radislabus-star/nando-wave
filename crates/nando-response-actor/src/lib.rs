@@ -24,6 +24,7 @@ mod executable_protocol_mode;
 mod family_discovery;
 mod grounding;
 mod lifecycle;
+mod ms4_external_admission;
 mod ms4_frozen_future;
 mod online;
 mod online_admission;
@@ -282,6 +283,10 @@ pub use lifecycle::{
     frame_representation_matches_support, freeze_source_neutral_support,
     freeze_source_neutral_support_with_policy, grounded_response_package_id,
     response_package_lineage_id, response_support_manifest_digest,
+};
+pub use ms4_external_admission::{
+    MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1, Ms4AdaptiveGuardProofV1,
+    Ms4ExternalAdmissionCandidateV1, build_ms4_external_admission_snapshot,
 };
 pub use ms4_frozen_future::{
     MS4_FROZEN_FUTURE_SHADOW_CANDIDATE_SCHEMA_V1, Ms4FrozenFutureShadowCandidateV1,

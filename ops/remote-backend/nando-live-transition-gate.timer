@@ -1,0 +1,12 @@
+[Unit]
+Description=Renew the bounded Nando authority lease
+
+[Timer]
+OnBootSec=4s
+OnUnitInactiveSec=10s
+AccuracySec=1s
+Persistent=true
+Unit=nando-live-transition-gate.service
+
+[Install]
+WantedBy=timers.target

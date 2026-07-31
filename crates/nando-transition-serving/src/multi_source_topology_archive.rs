@@ -95,6 +95,13 @@ impl MultiSourceTopologyArchive {
         self.by_commitment.values().cloned().collect()
     }
 
+    pub(super) fn row_by_root(
+        &self,
+        topology_root_sha256: &str,
+    ) -> Option<PreActionTopologyAuditRowV1> {
+        self.by_commitment.get(topology_root_sha256).cloned()
+    }
+
     pub(super) fn len(&self) -> usize {
         self.by_commitment.len()
     }

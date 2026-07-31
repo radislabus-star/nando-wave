@@ -228,6 +228,20 @@ control remain bound to loopback. Do not change the listener to a public
 interface until TLS, tenant authentication, rate limits, and restore gates
 exist.
 
+Complete the cold MS3 -> MS4 lifecycle with independent admission and lease
+workers. The transaction validates the runtime ABI against the already-running
+hot process and never restarts Nginx or hot serving:
+
+```bash
+ops/remote-backend/install-ms4-autonomous-loop.sh \
+  --admission-binary /path/to/nando-response-admission
+```
+
+Candidate publication and authority reconciliation both have filesystem
+triggers plus 10-second recovery timers. The composite gate still issues only
+a bounded 30-second lease and remains fail-closed until real future evidence
+passes.
+
 After restore and shadow streaming pass, authority can be reconciled through
 the composite gate:
 

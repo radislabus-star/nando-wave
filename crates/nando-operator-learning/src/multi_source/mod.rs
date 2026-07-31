@@ -130,6 +130,7 @@ pub use representation_gap::{
     RepresentationGapAdjudicationReportV1, RepresentationGapAdjudicationV1,
     RepresentationGapClassV1, build_representation_gap_adjudication_report_v1,
 };
+pub use source_neutral_t1::pre_action_t1_binding_root;
 pub use transport_binding::{
     REQUEST_ACTION_BINDING_SCHEMA_V1, RequestActionBindingV1, TRANSPORT_BOUND_JOIN_MAX_ROWS_V1,
     TRANSPORT_TERMINAL_RECEIPT_SCHEMA_V1, TransportBindingFailureV1, TransportBindingLedgerV1,

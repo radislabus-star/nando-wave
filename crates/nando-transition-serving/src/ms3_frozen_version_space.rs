@@ -706,6 +706,10 @@ impl Ms3FrozenVersionSpaceRuntime {
         self.independent_future.as_ref()
     }
 
+    pub(super) const fn applicability_ledger(&self) -> Option<&Ms3FutureApplicabilityLedgerV1> {
+        self.applicability_ledger.as_ref()
+    }
+
     pub(super) const fn envelope(&self) -> Option<&FrozenVersionSpaceEnvelopeV1> {
         self.envelope.as_ref()
     }

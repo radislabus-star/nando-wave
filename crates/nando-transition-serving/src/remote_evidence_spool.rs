@@ -12,7 +12,9 @@ use nando_client_evidence::NandoRouteReceiptV1;
 use nando_operator_kernel::{
     RelationFrame, canonical_json_sha256, sha256_bytes, valid_nonzero_sha256,
 };
-use nando_operator_learning::{is_source_neutral_relation_frame, teacher_outcome_from_completed};
+use nando_operator_learning::{
+    RuntimeParityCase, is_source_neutral_relation_frame, teacher_outcome_from_completed,
+};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
@@ -22,7 +24,8 @@ pub const REMOTE_EVIDENCE_ENDPOINT_V1: &str = "/_nando/evidence/v1/batches";
 pub const REMOTE_EVIDENCE_BATCH_SCHEMA_V1: &str = "nando.remote-evidence-batch.v1";
 pub const REMOTE_EVIDENCE_FRAME_SCHEMA_V1: &str = "nando.remote-evidence-frame.v1";
 const REMOTE_EVIDENCE_HEAD_SCHEMA_V1: &str = "nando.remote-evidence-client-head.v1";
-pub const REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1: usize = 256 * 1024;
+pub const REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1: usize = 8 * 1024 * 1024;
+pub const REMOTE_EVIDENCE_MAX_FRAME_BYTES_V1: usize = 4 * 1024 * 1024;
 pub const REMOTE_EVIDENCE_MAX_FRAMES_V1: usize = 32;
 pub const REMOTE_EVIDENCE_AUTH_SKEW_SECONDS_V1: u64 = 300;
 const REMOTE_EVIDENCE_MAX_CLIENTS_V1: usize = 1_024;
@@ -46,12 +49,15 @@ pub struct RemoteEvidenceFrameV1 {
     pub action_event_id_sha256: String,
     pub observed_at_unix_nanos: u64,
     pub frame: RelationFrame,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_parity_case: Option<RuntimeParityCase>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RouteBoundEvidenceFrameV1 {
     pub frame: RelationFrame,
     pub route_receipt: NandoRouteReceiptV1,
+    pub runtime_parity_case: Option<RuntimeParityCase>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -102,6 +108,7 @@ pub struct RemoteEvidenceSpoolStatusV1 {
     pub accepted_batches: u64,
     pub accepted_frames: u64,
     pub route_bound_frames: u64,
+    pub runtime_parity_frames: u64,
     pub duplicate_batches: u64,
     pub auth_failures: u64,
     pub rejected_batches: u64,
@@ -127,6 +134,7 @@ pub(crate) struct RemoteEvidenceSpoolRuntime {
     heads: BTreeMap<String, RemoteEvidenceClientHeadV1>,
     configured_clients: u64,
     route_bound_frame_roots: BTreeSet<String>,
+    runtime_parity_by_frame_root: BTreeMap<String, RuntimeParityCase>,
     duplicate_batches: u64,
     auth_failures: u64,
     rejected_batches: u64,
@@ -134,19 +142,28 @@ pub(crate) struct RemoteEvidenceSpoolRuntime {
 
 impl RemoteEvidenceFrameV1 {
     pub fn seal(frame: RelationFrame) -> Result<Self, String> {
-        Self::seal_with_route_receipt(frame, None)
+        Self::seal_with_route_receipt(frame, None, None)
     }
 
     pub fn seal_route_bound(
         frame: RelationFrame,
         route_receipt: NandoRouteReceiptV1,
     ) -> Result<Self, String> {
-        Self::seal_with_route_receipt(frame, Some(route_receipt))
+        Self::seal_route_bound_with_parity(frame, route_receipt, None)
+    }
+
+    pub fn seal_route_bound_with_parity(
+        frame: RelationFrame,
+        route_receipt: NandoRouteReceiptV1,
+        runtime_parity_case: Option<RuntimeParityCase>,
+    ) -> Result<Self, String> {
+        Self::seal_with_route_receipt(frame, Some(route_receipt), runtime_parity_case)
     }
 
     fn seal_with_route_receipt(
         frame: RelationFrame,
         route_receipt: Option<NandoRouteReceiptV1>,
+        runtime_parity_case: Option<RuntimeParityCase>,
     ) -> Result<Self, String> {
         let outcome = teacher_outcome_from_completed(&frame)
             .map_err(|error| format!("remote_evidence_verifier:{error:?}"))?;
@@ -174,6 +191,7 @@ impl RemoteEvidenceFrameV1 {
             action_event_id_sha256: frame.event_id_sha256.clone(),
             observed_at_unix_nanos: frame.observed_at_unix_nanos,
             frame,
+            runtime_parity_case,
         };
         receipt
             .validate()
@@ -205,6 +223,14 @@ impl RemoteEvidenceFrameV1 {
             || self.turn_intent_id_sha256 != self.frame.client_intent_id_sha256
             || self.action_event_id_sha256 != self.frame.event_id_sha256
             || self.observed_at_unix_nanos != self.frame.observed_at_unix_nanos
+            || self.runtime_parity_case.as_ref().is_some_and(|parity| {
+                parity.evidence_ref_sha256 != self.frame.frame_id_sha256
+                    || parity.request_text.is_empty()
+                    || parity.expected_response.is_empty()
+                    || serde_cbor::to_vec(parity).map_or(true, |bytes| {
+                        bytes.len() > REMOTE_EVIDENCE_MAX_FRAME_BYTES_V1
+                    })
+            })
             || !matches!(
                 canonical_json_sha256(&self.frame),
                 Ok(root) if root == self.frame_root_sha256
@@ -280,7 +306,11 @@ impl RemoteEvidenceBatchV1 {
             frames
                 .into_iter()
                 .map(|bound| {
-                    RemoteEvidenceFrameV1::seal_route_bound(bound.frame, bound.route_receipt)
+                    RemoteEvidenceFrameV1::seal_route_bound_with_parity(
+                        bound.frame,
+                        bound.route_receipt,
+                        bound.runtime_parity_case,
+                    )
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         )
@@ -570,6 +600,7 @@ impl RemoteEvidenceSpoolRuntime {
             .map_err(|error| format!("remote_evidence_spool_directory:{error}"))?;
         let mut heads = BTreeMap::new();
         let mut route_bound_frame_roots = BTreeSet::new();
+        let mut runtime_parity_by_frame_root = BTreeMap::new();
         for entry in fs::read_dir(root.join("clients"))
             .map_err(|error| format!("remote_evidence_spool_scan:{error}"))?
         {
@@ -604,7 +635,18 @@ impl RemoteEvidenceSpoolRuntime {
             if canonical != bytes {
                 return Err("remote_evidence_head_invalid".to_owned());
             }
-            route_bound_frame_roots.extend(load_route_bound_frame_roots(&entry.path(), &head)?);
+            let (client_route_bound_roots, client_runtime_parity) =
+                load_accepted_frame_evidence(&entry.path(), &head)?;
+            route_bound_frame_roots.extend(client_route_bound_roots);
+            for (frame_root, parity) in client_runtime_parity {
+                match runtime_parity_by_frame_root.get(&frame_root) {
+                    Some(existing) if existing == &parity => {}
+                    Some(_) => return Err("remote_evidence_runtime_parity_rebound".to_owned()),
+                    None => {
+                        runtime_parity_by_frame_root.insert(frame_root, parity);
+                    }
+                }
+            }
             heads.insert(client_id, head);
         }
         if heads.len() > REMOTE_EVIDENCE_MAX_CLIENTS_V1 {
@@ -617,6 +659,7 @@ impl RemoteEvidenceSpoolRuntime {
             heads,
             configured_clients,
             route_bound_frame_roots,
+            runtime_parity_by_frame_root,
             duplicate_batches: 0,
             auth_failures: 0,
             rejected_batches: 0,
@@ -696,6 +739,16 @@ impl RemoteEvidenceSpoolRuntime {
         {
             return Err("remote_evidence_sequence_conflict".to_owned());
         }
+        for frame in &batch.frames {
+            if let Some(parity) = &frame.runtime_parity_case
+                && self
+                    .runtime_parity_by_frame_root
+                    .get(&frame.frame_root_sha256)
+                    .is_some_and(|existing| existing != parity)
+            {
+                return Err("remote_evidence_runtime_parity_rebound".to_owned());
+            }
+        }
         let client_directory = self.root.join("clients").join(client_id_sha256);
         fs::create_dir_all(&client_directory)
             .map_err(|error| format!("remote_evidence_client_directory:{error}"))?;
@@ -739,6 +792,13 @@ impl RemoteEvidenceSpoolRuntime {
                 .filter(|frame| frame.is_route_bound())
                 .map(|frame| frame.frame_root_sha256.clone()),
         );
+        for frame in &batch.frames {
+            if let Some(parity) = &frame.runtime_parity_case {
+                self.runtime_parity_by_frame_root
+                    .entry(frame.frame_root_sha256.clone())
+                    .or_insert_with(|| parity.clone());
+            }
+        }
         self.heads.insert(client_id_sha256.to_owned(), next_head);
         RemoteEvidenceAckV1::seal(
             &key,
@@ -762,6 +822,8 @@ impl RemoteEvidenceSpoolRuntime {
             accepted_frames,
             route_bound_frames: u64::try_from(self.route_bound_frame_roots.len())
                 .unwrap_or(u64::MAX),
+            runtime_parity_frames: u64::try_from(self.runtime_parity_by_frame_root.len())
+                .unwrap_or(u64::MAX),
             duplicate_batches: self.duplicate_batches,
             auth_failures: self.auth_failures,
             rejected_batches: self.rejected_batches,
@@ -779,12 +841,21 @@ impl RemoteEvidenceSpoolRuntime {
     pub(crate) fn route_bound_frame_roots(&self) -> BTreeSet<String> {
         self.route_bound_frame_roots.clone()
     }
+
+    pub(crate) fn runtime_parity_for_frame(
+        &self,
+        frame_root_sha256: &str,
+    ) -> Option<RuntimeParityCase> {
+        self.runtime_parity_by_frame_root
+            .get(frame_root_sha256)
+            .cloned()
+    }
 }
 
-fn load_route_bound_frame_roots(
+fn load_accepted_frame_evidence(
     client_directory: &Path,
     head: &RemoteEvidenceClientHeadV1,
-) -> Result<BTreeSet<String>, String> {
+) -> Result<(BTreeSet<String>, BTreeMap<String, RuntimeParityCase>), String> {
     let mut batches = BTreeMap::new();
     for entry in fs::read_dir(client_directory)
         .map_err(|error| format!("remote_evidence_spool_scan:{error}"))?
@@ -814,6 +885,7 @@ fn load_route_bound_frame_roots(
     let mut previous_root = remote_evidence_genesis_root(&head.client_id_sha256);
     let mut accepted_frames = 0_u64;
     let mut route_bound_frame_roots = BTreeSet::new();
+    let mut runtime_parity_by_frame_root = BTreeMap::new();
     for sequence in 1..=head.sequence {
         let batch = batches
             .get(&sequence)
@@ -831,11 +903,23 @@ fn load_route_bound_frame_roots(
                 .filter(|frame| frame.is_route_bound())
                 .map(|frame| frame.frame_root_sha256.clone()),
         );
+        for frame in &batch.frames {
+            if let Some(parity) = &frame.runtime_parity_case {
+                match runtime_parity_by_frame_root.get(&frame.frame_root_sha256) {
+                    Some(existing) if existing == parity => {}
+                    Some(_) => return Err("remote_evidence_runtime_parity_rebound".to_owned()),
+                    None => {
+                        runtime_parity_by_frame_root
+                            .insert(frame.frame_root_sha256.clone(), parity.clone());
+                    }
+                }
+            }
+        }
     }
     if previous_root != head.batch_root_sha256 || accepted_frames != head.accepted_frames {
         return Err("remote_evidence_receipt_head_invalid".to_owned());
     }
-    Ok(route_bound_frame_roots)
+    Ok((route_bound_frame_roots, runtime_parity_by_frame_root))
 }
 
 fn count_configured_clients(directory: &Path) -> Result<u64, String> {
@@ -1000,7 +1084,8 @@ mod tests {
         AtomSource, AtomValueType, RELATION_FRAME_SCHEMA, RelationAtom, RelationFrame,
         ResponseValueSelector, sha256_bytes,
     };
-    use nando_operator_learning::SOURCE_NEUTRAL_EXTRACTOR_VERSION;
+    use nando_operator_learning::{RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION};
+    use serde_json::json;
 
     use super::{
         REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1, RemoteEvidenceBatchV1, RemoteEvidenceSpoolRuntime,
@@ -1095,6 +1180,21 @@ mod tests {
             route_confirmed_at_unix_nanos,
         )
         .expect("route receipt")
+    }
+
+    fn runtime_parity(frame: &RelationFrame, expected_response: &str) -> RuntimeParityCase {
+        RuntimeParityCase {
+            evidence_ref_sha256: frame.frame_id_sha256.clone(),
+            capture_receipt: None,
+            request_text: "Return opaque".to_owned(),
+            provider_payload: json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"opaque\":7}"
+                }]
+            }),
+            expected_response: expected_response.to_owned(),
+        }
     }
 
     fn write_key(directory: &std::path::Path, client_id: &str, key: &[u8]) {
@@ -1215,6 +1315,7 @@ mod tests {
             vec![RouteBoundEvidenceFrameV1 {
                 frame,
                 route_receipt,
+                runtime_parity_case: None,
             }],
         )
         .expect("route-bound batch");
@@ -1243,6 +1344,102 @@ mod tests {
             RemoteEvidenceSpoolRuntime::open(spool_root, key_root).expect("spool restore");
         assert_eq!(restored.status(true).route_bound_frames, 1);
         assert!(!restored.status(true).learning_closed_loop_ready);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn runtime_parity_survives_restart_and_rebound_is_rejected() {
+        let root = temporary_root("runtime-parity");
+        let spool_root = root.join("spool");
+        let key_root = root.join("keys");
+        let archive_root = root.join("frames");
+        let client_id = hash("client:runtime-parity");
+        let key = [23_u8; 32];
+        write_key(&key_root, &client_id, &key);
+        let frame = completed_frame("runtime-parity");
+        let route_receipt = route_receipt_for_frame(
+            &frame,
+            frame.observed_at_unix_nanos.saturating_sub(2),
+            frame.observed_at_unix_nanos.saturating_sub(1),
+        );
+        let batch = RemoteEvidenceBatchV1::seal_route_bound(
+            client_id.clone(),
+            1,
+            remote_evidence_genesis_root(&client_id),
+            1_700_000_000,
+            vec![RouteBoundEvidenceFrameV1 {
+                frame: frame.clone(),
+                route_receipt: route_receipt.clone(),
+                runtime_parity_case: Some(runtime_parity(&frame, "7")),
+            }],
+        )
+        .expect("parity batch");
+        let body = batch.canonical_bytes().expect("body");
+        let signature =
+            sign_remote_evidence_request_v1(&key, batch.generated_at_unix, &batch, &body)
+                .expect("signature");
+        let mut archive = MultiSourceFrameArchive::open(&archive_root).expect("archive");
+        let mut runtime =
+            RemoteEvidenceSpoolRuntime::open(spool_root.clone(), key_root.clone()).expect("spool");
+        runtime
+            .ingest(
+                &client_id,
+                batch.generated_at_unix,
+                &signature,
+                &body,
+                batch.generated_at_unix,
+                &mut archive,
+            )
+            .expect("ingest");
+        assert_eq!(runtime.status(true).runtime_parity_frames, 1);
+        assert_eq!(
+            runtime.runtime_parity_for_frame(&batch.frames[0].frame_root_sha256),
+            batch.frames[0].runtime_parity_case
+        );
+        drop(runtime);
+
+        let mut restored =
+            RemoteEvidenceSpoolRuntime::open(spool_root, key_root).expect("spool restore");
+        assert_eq!(restored.status(true).runtime_parity_frames, 1);
+        assert_eq!(
+            restored.runtime_parity_for_frame(&batch.frames[0].frame_root_sha256),
+            batch.frames[0].runtime_parity_case
+        );
+
+        let rebound = RemoteEvidenceBatchV1::seal_route_bound(
+            client_id.clone(),
+            2,
+            batch.batch_root_sha256.clone(),
+            batch.generated_at_unix.saturating_add(1),
+            vec![RouteBoundEvidenceFrameV1 {
+                frame: frame.clone(),
+                route_receipt,
+                runtime_parity_case: Some(runtime_parity(&frame, "8")),
+            }],
+        )
+        .expect("rebound batch");
+        let rebound_body = rebound.canonical_bytes().expect("rebound body");
+        let rebound_signature = sign_remote_evidence_request_v1(
+            &key,
+            rebound.generated_at_unix,
+            &rebound,
+            &rebound_body,
+        )
+        .expect("rebound signature");
+        assert_eq!(
+            restored
+                .ingest(
+                    &client_id,
+                    rebound.generated_at_unix,
+                    &rebound_signature,
+                    &rebound_body,
+                    rebound.generated_at_unix,
+                    &mut archive,
+                )
+                .expect_err("parity rebound must fail"),
+            "remote_evidence_runtime_parity_rebound"
+        );
+        assert_eq!(restored.status(true).accepted_frames, 1);
         fs::remove_dir_all(root).expect("cleanup");
     }
 

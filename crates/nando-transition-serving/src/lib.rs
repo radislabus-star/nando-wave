@@ -18,6 +18,7 @@ mod ms3_frozen_version_space;
 mod ms3_generation_lifecycle;
 mod ms3_linked_frame_acquisition;
 mod ms3_receipt_health;
+mod ms4_closed_loop;
 pub mod multi_source_audit;
 mod multi_source_capture;
 mod multi_source_frame_archive;
@@ -191,6 +192,8 @@ pub struct ServingConfig {
     pub remote_evidence_spool_enabled: bool,
     pub remote_evidence_spool_path: PathBuf,
     pub remote_evidence_client_keys_path: PathBuf,
+    pub ms4_closed_loop_path: PathBuf,
+    pub ms4_ordinary_economics_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -427,6 +430,16 @@ impl ServingConfig {
             remote_evidence_client_keys_path: env_path(
                 "NANDO_REMOTE_EVIDENCE_CLIENT_KEYS",
                 "/etc/nando-wave/evidence-clients",
+            ),
+            ms4_closed_loop_path: env_path_join(
+                "NANDO_MS4_CLOSED_LOOP",
+                &state_dir,
+                "multi-source-live-v2/ms4-closed-loop-v1",
+            ),
+            ms4_ordinary_economics_path: env_path_join(
+                "NANDO_MS4_ORDINARY_ECONOMICS_JSONL",
+                &state_dir,
+                "economics-terminal.jsonl",
             ),
         })
     }
@@ -706,6 +719,9 @@ struct AppState {
     ms3_frozen_version_space:
         Option<Arc<Mutex<ms3_frozen_version_space::Ms3FrozenVersionSpaceRuntime>>>,
     remote_evidence_spool: Option<Arc<Mutex<remote_evidence_spool::RemoteEvidenceSpoolRuntime>>>,
+    ms4_external_candidate:
+        Arc<RwLock<Option<nando_response_actor::Ms4ExternalAdmissionCandidateV1>>>,
+    ms4_closed_loop_report: Arc<RwLock<ms4_closed_loop::Ms4ClosedLoopReportV1>>,
 }
 
 #[derive(Default)]
@@ -968,6 +984,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         ms3_linked_frame_acquisition,
         ms3_frozen_version_space,
         remote_evidence_spool,
+        ms4_external_candidate: Arc::new(RwLock::new(None)),
+        ms4_closed_loop_report: Arc::new(RwLock::new(
+            ms4_closed_loop::Ms4ClosedLoopReportV1::default(),
+        )),
     };
     validate_ms3_scientific_denominator_link(&state)?;
     if state.ms3_generation_lifecycle.is_some() {
@@ -1018,6 +1038,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/ms3-capture-health",
             get(ms3_capture_health_report),
+        )
+        .route(
+            "/v2/multi-source/ms4-closed-loop",
+            get(ms4_closed_loop_report),
         )
         .route(
             remote_evidence_spool::REMOTE_EVIDENCE_ENDPOINT_V1,
@@ -1408,6 +1432,11 @@ async fn health(State(state): State<AppState>) -> Response {
         .or_else(|| collection_health_snapshot_without_worker(collection_miner.as_ref()));
     let collection_busy = collection_miner.is_some() && collection_snapshot.is_none();
     let mut remote_evidence = remote_evidence_status(&state);
+    let ms4_closed_loop = state
+        .ms4_closed_loop_report
+        .read()
+        .map(|report| report.clone())
+        .unwrap_or_default();
     let local_session_evidence_ready =
         session_watcher_alive && session_source_files > 0 && turn_graphs_finalized > 0;
     let (frozen_generations, route_bound_frozen_generations) =
@@ -1509,6 +1538,10 @@ async fn health(State(state): State<AppState>) -> Response {
         object.insert(
             "remote_evidence".to_owned(),
             serde_json::to_value(&remote_evidence).unwrap_or_else(|_| json!({})),
+        );
+        object.insert(
+            "ms4_closed_loop".to_owned(),
+            serde_json::to_value(&ms4_closed_loop).unwrap_or_else(|_| json!({})),
         );
         object.insert(
             "learning_closed_loop_ready".to_owned(),
@@ -2678,6 +2711,27 @@ async fn ms3_capture_health_report(State(state): State<AppState>) -> Response {
     }
 }
 
+async fn ms4_closed_loop_report(State(state): State<AppState>) -> Response {
+    match state.ms4_closed_loop_report.read() {
+        Ok(report) => json_response(
+            StatusCode::OK,
+            serde_json::to_value(&*report).unwrap_or_else(|_| {
+                json!({
+                    "schema": "nando.ms4-autonomous-closed-loop-error.v1",
+                    "error": "report_encode"
+                })
+            }),
+        ),
+        Err(_) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.ms4-autonomous-closed-loop-error.v1",
+                "error": "report_lock_poisoned"
+            }),
+        ),
+    }
+}
+
 fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
     std::thread::Builder::new()
         .name("nando-multi-source-snapshot".to_owned())
@@ -2738,6 +2792,9 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                                 eprintln!("nando-ms3-independent-future-generation: {error}");
                             }
                         }
+                    }
+                    if let Err(error) = ms4_closed_loop::advance(&state) {
+                        eprintln!("nando-ms4-closed-loop: {error}");
                     }
                 }
                 let snapshot_generation = state
@@ -5012,6 +5069,8 @@ fn try_response_actor(
             "client_intent_id": turn_intent_id,
             "request_event_id": request_event_id,
             "intent_dedupe_eligible": intent_dedupe_eligible,
+            "ordinary": intent_dedupe_eligible,
+            "controlled": !intent_dedupe_eligible,
             "provider_attempt_id": Value::Null,
             "request_sha256": request_hash,
             "route": "local_response_actor",
@@ -5062,7 +5121,11 @@ fn response_local_accept_enabled(state: &AppState) -> bool {
 }
 
 fn refresh_response_authority(state: &AppState) {
-    if state.config.embedded_response_miner_enabled
+    let has_ms4_candidate = state
+        .ms4_external_candidate
+        .read()
+        .is_ok_and(|candidate| candidate.is_some());
+    if (state.config.embedded_response_miner_enabled || has_ms4_candidate)
         && let Err(error) = publish_embedded_response_candidates(state)
     {
         eprintln!("nando-response-candidate-publisher: {error}");
@@ -5074,7 +5137,15 @@ fn refresh_response_authority(state: &AppState) {
 fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String> {
     let response_miner = current_response_miner(state);
     let collection_miner = current_collection_miner(state);
-    if response_miner.is_none() && collection_miner.is_none() {
+    let ms4_external_candidates = state
+        .ms4_external_candidate
+        .read()
+        .map_err(|_| "ms4_candidate_cache_lock_poisoned".to_owned())?
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    if response_miner.is_none() && collection_miner.is_none() && ms4_external_candidates.is_empty()
+    {
         return Ok(false);
     }
     let collection_candidates = collection_miner
@@ -5169,6 +5240,10 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
                 "seal_sha256": candidate.seal_sha256(),
             })
         }).collect::<Vec<_>>(),
+        "ms4_external": ms4_external_candidates.iter().map(|candidate| serde_json::json!({
+            "candidate_root_sha256": candidate.candidate_root_sha256(),
+            "future_envelope_root_sha256": candidate.future_envelope_root_sha256(),
+        })).collect::<Vec<_>>(),
     });
     let revision_digest = sha256_bytes(
         &serde_json::to_vec(&revision_material)
@@ -5193,6 +5268,7 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         collection_candidates,
         crystallized_candidates,
         crystallized_collection_candidates,
+        ms4_external_candidates,
     };
     bundle.validate().map_err(str::to_owned)?;
     let bytes = serde_cbor::to_vec(&bundle)
@@ -5883,6 +5959,8 @@ fn execute_and_project(
                 "client_intent_id": turn_intent_id,
                 "request_event_id": request_event_id,
                 "intent_dedupe_eligible": natural_evidence_eligible,
+                "ordinary": natural_evidence_eligible,
+                "controlled": !natural_evidence_eligible,
                 "provider_attempt_id": Value::Null,
                 "request_sha256": request_hash,
                 "route": "local_actor",
@@ -7791,6 +7869,8 @@ mod tests {
             remote_evidence_spool_enabled: false,
             remote_evidence_spool_path: root.join("remote-evidence-spool-v1"),
             remote_evidence_client_keys_path: root.join("remote-evidence-keys"),
+            ms4_closed_loop_path: root.join("multi-source-live-v2/ms4-closed-loop-v1"),
+            ms4_ordinary_economics_path: root.join("economics.jsonl"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -7858,6 +7938,10 @@ mod tests {
             ms3_linked_frame_acquisition: None,
             ms3_frozen_version_space: None,
             remote_evidence_spool: None,
+            ms4_external_candidate: Arc::new(RwLock::new(None)),
+            ms4_closed_loop_report: Arc::new(RwLock::new(
+                ms4_closed_loop::Ms4ClosedLoopReportV1::default(),
+            )),
         };
         refresh_response_executor(&state);
         state

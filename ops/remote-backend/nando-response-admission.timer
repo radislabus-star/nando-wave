@@ -1,0 +1,12 @@
+[Unit]
+Description=Reconcile Nando response admission after missed filesystem events
+
+[Timer]
+OnBootSec=2s
+OnUnitInactiveSec=10s
+AccuracySec=1s
+Persistent=true
+Unit=nando-response-admission.service
+
+[Install]
+WantedBy=timers.target

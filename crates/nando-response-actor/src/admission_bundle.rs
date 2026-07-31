@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     CrystallizedCollectionAdmissionCandidateV1, LiveScalarAdmissionCandidate,
-    OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate,
+    Ms4ExternalAdmissionCandidateV1, OnlineCollectionAdmissionCandidate,
+    OnlineResponseAdmissionCandidate,
 };
 
 pub use nando_operator_admission::{
@@ -25,6 +26,8 @@ pub struct OnlineAdmissionCandidateBundle {
     pub crystallized_candidates: Vec<LiveScalarAdmissionCandidate>,
     #[serde(default)]
     pub crystallized_collection_candidates: Vec<CrystallizedCollectionAdmissionCandidateV1>,
+    #[serde(default)]
+    pub ms4_external_candidates: Vec<Ms4ExternalAdmissionCandidateV1>,
 }
 
 impl OnlineAdmissionCandidateBundle {
@@ -39,10 +42,14 @@ impl OnlineAdmissionCandidateBundle {
             || self.collection_candidates.len() > 256
             || self.crystallized_candidates.len() > 64
             || self.crystallized_collection_candidates.len() > 64
+            || self.ms4_external_candidates.len() > 8
         {
             return Err("online_admission_candidate_bundle_capacity_exceeded");
         }
         for candidate in &self.crystallized_collection_candidates {
+            candidate.validate()?;
+        }
+        for candidate in &self.ms4_external_candidates {
             candidate.validate()?;
         }
         Ok(())

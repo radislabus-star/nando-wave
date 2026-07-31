@@ -381,7 +381,7 @@ fn normalize_continuation_argument_roles(program: &mut ResponseProgram) {
     }
 }
 
-pub(super) fn pre_action_t1_binding_root(
+pub fn pre_action_t1_binding_root(
     program: &ResponseProgram,
     topology: &PreActionMultiSourceTopologyV1,
 ) -> Result<String, &'static str> {

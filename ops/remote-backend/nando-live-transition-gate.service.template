@@ -1,0 +1,27 @@
+[Unit]
+Description=Nando composite live-transition lease gate
+After=nando-response-admission.service nando-transition-serving.service nando-transport-gateway.service nando-gateway-control.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=@NANDO_SERVICE_USER@
+Group=@NANDO_SERVICE_GROUP@
+WorkingDirectory=@NANDO_PROJECT_ROOT@
+Environment=NANDO_RESPONSE_ADMISSION_BUILD=/opt/nando-wave/bin/nando-response-admission
+ExecStart=/opt/nando-wave/bin/nando-live-transition-gate --status-mode --project-root @NANDO_PROJECT_ROOT@
+TimeoutStartSec=20s
+CPUQuota=25%
+MemoryHigh=192M
+MemoryMax=256M
+MemorySwapMax=0
+TasksMax=16
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nando-wave/transition
+RestrictAddressFamilies=AF_INET AF_UNIX
+LockPersonality=true

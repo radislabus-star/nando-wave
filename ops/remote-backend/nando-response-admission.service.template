@@ -1,0 +1,26 @@
+[Unit]
+Description=Nando independent response admission controller
+After=nando-response-learning.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=@NANDO_SERVICE_USER@
+Group=@NANDO_SERVICE_GROUP@
+WorkingDirectory=/opt/nando-wave
+Environment=NANDO_TRANSITION_STATE_DIR=/var/lib/nando-wave/transition
+Environment=NANDO_LIVE_TRANSITION_GATE_BUILD=/opt/nando-wave/bin/nando-live-transition-gate
+ExecStart=/opt/nando-wave/bin/nando-response-admission
+TimeoutStartSec=30s
+MemoryMax=256M
+MemorySwapMax=0
+TasksMax=8
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nando-wave/transition
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true

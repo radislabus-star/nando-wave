@@ -90,6 +90,13 @@ impl MultiSourceFrameArchive {
             .collect()
     }
 
+    pub(super) fn frame_by_root(&self, frame_root_sha256: &str) -> Option<RelationFrame> {
+        self.by_frame
+            .values()
+            .find(|frame| canonical_json_sha256(*frame).is_ok_and(|root| root == frame_root_sha256))
+            .cloned()
+    }
+
     pub(super) fn len(&self) -> usize {
         self.by_frame.len()
     }

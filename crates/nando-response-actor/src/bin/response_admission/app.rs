@@ -10,11 +10,12 @@ use nando_response_actor::{
     CaptureCommitmentArchiveReader, CaptureCommitmentIndex, CaptureTransitionBindingArchiveReader,
     CompositeResponseAdmissionV2, OnlineAdmissionCandidateBundle,
     OnlineAdmissionCandidateRejection, OnlineAdmissionSnapshot, ResponseExecutor, ResponseRegistry,
-    build_crystallized_admission_snapshot, build_online_admission_evaluation,
-    build_online_collection_admission_snapshot, merge_online_admission_snapshots,
-    merge_with_proven_active_online_admission, reissue_unrevoked_active_online_admission,
-    remove_runtime_revoked_online_admission, response_execution_payload_digest,
-    response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance_durable,
+    build_crystallized_admission_snapshot, build_ms4_external_admission_snapshot,
+    build_online_admission_evaluation, build_online_collection_admission_snapshot,
+    merge_online_admission_snapshots, merge_with_proven_active_online_admission,
+    reissue_unrevoked_active_online_admission, remove_runtime_revoked_online_admission,
+    response_execution_payload_digest, response_runtime_contract_sha256, sha256_bytes,
+    verify_crystallized_capture_provenance_durable,
     verify_crystallized_collection_capture_provenance_durable,
 };
 use serde::Serialize;
@@ -35,6 +36,8 @@ struct AdmissionControllerReport {
     crystallized_held_candidates: usize,
     crystallized_held_semantic_guard_candidates: usize,
     crystallized_collection_candidates: usize,
+    ms4_external_candidates: usize,
+    ms4_admissible_candidates: usize,
     generation_delta_packages: Option<usize>,
     relation_max_future_rows: usize,
     relation_max_runtime_parity_cases: usize,
@@ -345,6 +348,8 @@ fn run(started: Instant) -> Result<(), String> {
                 crystallized_held_candidates: 0,
                 crystallized_held_semantic_guard_candidates: 0,
                 crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+                ms4_external_candidates: bundle.ms4_external_candidates.len(),
+                ms4_admissible_candidates: 0,
                 generation_delta_packages: None,
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
@@ -412,11 +417,24 @@ fn run(started: Instant) -> Result<(), String> {
         &runtime_sha256,
     )
     .map_err(str::to_owned)?;
+    let ms4 = build_ms4_external_admission_snapshot(
+        &bundle.ms4_external_candidates,
+        &bundle.project_id,
+        bundle.revision,
+        now_unix,
+        max_age_seconds,
+        &gate_sha256,
+        &runtime_sha256,
+    )
+    .map_err(str::to_owned)?;
+    let ms4_admissible_candidates = ms4
+        .as_ref()
+        .map_or(0, |snapshot| snapshot.registry.packages.len());
     // Legacy relation and collection routes remain observable controls. New
     // authority has one owner: a provenance-bound crystallized operator. The
     // collection builder receives only candidates sealed by capture provenance.
     let candidate = merge_online_admission_snapshots(
-        [crystallized, crystallized_collection]
+        [crystallized, crystallized_collection, ms4]
             .into_iter()
             .flatten()
             .collect(),
@@ -482,6 +500,8 @@ fn run(started: Instant) -> Result<(), String> {
                 crystallized_held_candidates,
                 crystallized_held_semantic_guard_candidates,
                 crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+                ms4_external_candidates: bundle.ms4_external_candidates.len(),
+                ms4_admissible_candidates,
                 generation_delta_packages: None,
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
@@ -520,6 +540,8 @@ fn run(started: Instant) -> Result<(), String> {
                 crystallized_held_candidates,
                 crystallized_held_semantic_guard_candidates,
                 crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+                ms4_external_candidates: bundle.ms4_external_candidates.len(),
+                ms4_admissible_candidates,
                 generation_delta_packages,
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
@@ -597,6 +619,8 @@ fn run(started: Instant) -> Result<(), String> {
             crystallized_held_candidates,
             crystallized_held_semantic_guard_candidates,
             crystallized_collection_candidates: bundle.crystallized_collection_candidates.len(),
+            ms4_external_candidates: bundle.ms4_external_candidates.len(),
+            ms4_admissible_candidates,
             generation_delta_packages,
             relation_max_future_rows,
             relation_max_runtime_parity_cases,
