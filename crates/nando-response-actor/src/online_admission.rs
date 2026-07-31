@@ -752,10 +752,6 @@ fn candidate_strictly_supersedes_legacy_continuation_adapter(
         || !active.anti_centers.is_empty()
         || candidate.required_routing_atom_ids.is_empty()
         || candidate.anti_centers.is_empty()
-        || active
-            .crystallized_operator
-            .as_ref()
-            .is_some_and(|bundle| bundle.has_canonical_bundle_v4())
         || candidate
             .crystallized_operator
             .as_ref()
