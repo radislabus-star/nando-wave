@@ -180,7 +180,7 @@ http {
             proxy_intercept_errors off;
             proxy_connect_timeout 100ms;
             proxy_send_timeout 2s;
-            proxy_read_timeout 300ms;
+            proxy_read_timeout 1s;
             add_header X-Nando-Fallback-Authority client always;
         }
 
@@ -197,7 +197,7 @@ http {
             error_page 418 502 503 504 = @nando_upstream_v2;
             proxy_connect_timeout 100ms;
             proxy_send_timeout 2s;
-            proxy_read_timeout 300ms;
+            proxy_read_timeout 1s;
         }
 
         location /v1/ {
@@ -213,7 +213,7 @@ http {
             error_page 418 502 503 504 = @nando_upstream_v1;
             proxy_connect_timeout 100ms;
             proxy_send_timeout 2s;
-            proxy_read_timeout 300ms;
+            proxy_read_timeout 1s;
         }
 
         location @nando_upstream_v2 {

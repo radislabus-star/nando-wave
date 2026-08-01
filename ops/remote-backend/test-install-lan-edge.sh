@@ -90,6 +90,8 @@ grep -Fq "~^/_nando/local/v[12]/chat/completions(?:\\?|$) 1;" "${config}"
 grep -Fq "location = /_nando/evidence/v1/batches" "${config}"
 grep -Fq "client_max_body_size 8m;" "${config}"
 grep -Fq "proxy_pass http://127.0.0.1:18790;" "${config}"
+! grep -Fq "proxy_read_timeout 300ms;" "${config}"
+[[ "$(grep -Fc "proxy_read_timeout 1s;" "${config}")" -ge 4 ]]
 EOF
 
 cat >"${BIN}/systemctl" <<'EOF'
@@ -160,6 +162,11 @@ printf '%s\n' "old unit" >"${SYSTEMD_DIR}/nando-transport-gateway.service"
 
 grep -Fq "resolver 127.0.0.53 " "${NGINX_DIR}/nginx.conf"
 grep -Fq "proxy_intercept_errors off;" "${NGINX_DIR}/nginx.conf"
+if grep -Fq "proxy_read_timeout 300ms;" "${NGINX_DIR}/nginx.conf"; then
+  printf '%s\n' "LAN edge retained the obsolete 300ms hot timeout" >&2
+  exit 1
+fi
+[[ "$(grep -Fc "proxy_read_timeout 1s;" "${NGINX_DIR}/nginx.conf")" -ge 4 ]]
 [[ "$(wc -l <"${STATE}/reloads")" == "1" ]]
 if compgen -G "${NGINX_DIR}/.nginx.conf.rollback.*" >/dev/null; then
   printf '%s\n' "installer left a rollback file after success" >&2
