@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
+use nando_operator_learning::multi_source::PreActionTopologyAuditRowV1;
 use nando_operator_learning::{FramedCborLedger, read_framed_cbor, write_atomic_cbor};
 use nando_response_actor::{
     Ms4ExternalAdmissionCandidateV1, ResponseExecutionStatus, ResponseExecutor, ResponsePackage,
@@ -22,12 +23,13 @@ const ROOT_DIR: &str = "exact-wave-holdout-v1";
 const ACTIVE_CONTRACT_FILE: &str = "active-contract.cbor";
 const PRECOMMIT_DIR: &str = "precommits";
 const PRECOMMIT_PREFIX: &str = "precommit";
+const CENSORED_VERDICT_SCHEMA: &str = "nando.ms4-exact-wave-censored-verdict.v1";
 const CONTRACT_WINDOW_SECONDS: u64 = 24 * 60 * 60;
 const SETTLEMENT_GRACE_SECONDS: u64 = 5 * 60;
 const MAX_HOLDOUT_ROWS: u64 = 256;
 const MAX_PRECOMMITS: usize = 4_096;
-const PROOF_SCHEMA: &str = "nando.ms4-independent-exact-wave-proof.v1";
-const EVALUATION_SCHEMA: &str = "nando.ms4-exact-wave-holdout-evaluation.v1";
+const PROOF_SCHEMA: &str = "nando.ms4-independent-exact-wave-proof.v2";
+const EVALUATION_SCHEMA: &str = "nando.ms4-exact-wave-holdout-evaluation.v2";
 const MIN_INDEPENDENT_LINEAGES: u64 = 2;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -131,6 +133,24 @@ pub(super) enum Ms4ExactWaveHoldoutStatusV1 {
     AcquisitionFail,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Ms4ExactWaveCensorReasonV1 {
+    PrecommitMissing,
+    PrecommitDisqualified,
+    SettlementUnavailable,
+    PrimaryControlsAbstained,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Ms4ExactWaveSettledOutcomeV1 {
+    Positive,
+    PhaseChallengingNegative,
+    FullWrong,
+    NoPhaseNotWorse,
+    PrimaryControlsAbstained,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Ms4ExactWaveControlScoreV1 {
@@ -154,6 +174,16 @@ pub(super) struct Ms4IndependentExactWaveProofV1 {
     pub positive_completion_roots_sha256: Vec<String>,
     pub negative_precommit_roots_sha256: Vec<String>,
     pub negative_binding_roots_sha256: Vec<String>,
+    pub censored_verdict_roots_sha256: Vec<String>,
+    pub independent_topology_rows: u64,
+    pub scored_rows: u64,
+    pub censored_rows: u64,
+    pub censored_precommit_missing_rows: u64,
+    pub censored_precommit_disqualified_rows: u64,
+    pub censored_settlement_unavailable_rows: u64,
+    pub censored_primary_controls_abstained_rows: u64,
+    pub counterexample_rows: u64,
+    pub unscored_settled_rows: u64,
     pub independent_lineages_sha256: Vec<String>,
     pub full: Ms4ExactWaveControlScoreV1,
     pub no_phase: Ms4ExactWaveControlScoreV1,
@@ -178,6 +208,16 @@ pub(super) struct Ms4ExactWaveHoldoutEvaluationV1 {
     pub settled_rows: u64,
     pub positive_holdout_rows: u64,
     pub phase_challenging_negative_rows: u64,
+    pub scored_rows: u64,
+    pub counterexample_rows: u64,
+    pub full_wrong_rows: u64,
+    pub no_phase_not_worse_rows: u64,
+    pub censored_rows: u64,
+    pub censored_precommit_missing_rows: u64,
+    pub censored_precommit_disqualified_rows: u64,
+    pub censored_settlement_unavailable_rows: u64,
+    pub censored_primary_controls_abstained_rows: u64,
+    pub unscored_settled_rows: u64,
     pub precommit_missing_rows: u64,
     pub precommit_disqualified_rows: u64,
     pub settlement_pending_rows: u64,
@@ -194,6 +234,12 @@ impl Ms4IndependentExactWaveProofV1 {
         positive_completion_roots_sha256: Vec<String>,
         negative_precommit_roots_sha256: Vec<String>,
         negative_binding_roots_sha256: Vec<String>,
+        censored_verdict_roots_sha256: Vec<String>,
+        independent_topology_rows: u64,
+        censored_precommit_missing_rows: u64,
+        censored_precommit_disqualified_rows: u64,
+        censored_settlement_unavailable_rows: u64,
+        censored_primary_controls_abstained_rows: u64,
         independent_lineages_sha256: Vec<String>,
         scores: BTreeMap<ResponsePhaseControlV1, Ms4ExactWaveControlScoreV1>,
     ) -> Result<Self, String> {
@@ -208,6 +254,13 @@ impl Ms4IndependentExactWaveProofV1 {
         let shuffled_phase = control(ResponsePhaseControlV1::ShuffledPhase)?;
         let magnitude_only = control(ResponsePhaseControlV1::MagnitudeOnly)?;
         let random_center = control(ResponsePhaseControlV1::RandomCenter)?;
+        let scored_rows = u64::try_from(
+            positive_precommit_roots_sha256
+                .len()
+                .saturating_add(negative_precommit_roots_sha256.len()),
+        )
+        .unwrap_or(u64::MAX);
+        let censored_rows = u64::try_from(censored_verdict_roots_sha256.len()).unwrap_or(u64::MAX);
         let strict_all_ablation_pass = full.wrong_rows == 0
             && [&no_phase, &shuffled_phase, &magnitude_only, &random_center]
                 .into_iter()
@@ -225,6 +278,16 @@ impl Ms4IndependentExactWaveProofV1 {
             positive_completion_roots_sha256,
             negative_precommit_roots_sha256,
             negative_binding_roots_sha256,
+            censored_verdict_roots_sha256,
+            independent_topology_rows,
+            scored_rows,
+            censored_rows,
+            censored_precommit_missing_rows,
+            censored_precommit_disqualified_rows,
+            censored_settlement_unavailable_rows,
+            censored_primary_controls_abstained_rows,
+            counterexample_rows: 0,
+            unscored_settled_rows: 0,
             independent_lineages_sha256,
             full,
             no_phase,
@@ -246,11 +309,18 @@ impl Ms4IndependentExactWaveProofV1 {
         let negative_rows =
             u64::try_from(self.negative_precommit_roots_sha256.len()).unwrap_or(u64::MAX);
         let total_rows = positive_rows.saturating_add(negative_rows);
+        let classified_rows = self.scored_rows.saturating_add(self.censored_rows);
+        let typed_censored_rows = self
+            .censored_precommit_missing_rows
+            .saturating_add(self.censored_precommit_disqualified_rows)
+            .saturating_add(self.censored_settlement_unavailable_rows)
+            .saturating_add(self.censored_primary_controls_abstained_rows);
         let roots = [
             &self.positive_precommit_roots_sha256,
             &self.positive_completion_roots_sha256,
             &self.negative_precommit_roots_sha256,
             &self.negative_binding_roots_sha256,
+            &self.censored_verdict_roots_sha256,
             &self.independent_lineages_sha256,
         ];
         let valid_score = |score: &Ms4ExactWaveControlScoreV1, mode: ResponsePhaseControlV1| {
@@ -271,6 +341,13 @@ impl Ms4IndependentExactWaveProofV1 {
                 != self.positive_precommit_roots_sha256.len()
             || self.negative_binding_roots_sha256.len()
                 != self.negative_precommit_roots_sha256.len()
+            || self.scored_rows != total_rows
+            || self.censored_rows
+                != u64::try_from(self.censored_verdict_roots_sha256.len()).unwrap_or(u64::MAX)
+            || self.censored_rows != typed_censored_rows
+            || self.independent_topology_rows != classified_rows
+            || self.counterexample_rows != 0
+            || self.unscored_settled_rows != 0
             || u64::try_from(self.independent_lineages_sha256.len()).unwrap_or(0)
                 < MIN_INDEPENDENT_LINEAGES
             || roots.iter().any(|values| {
@@ -310,7 +387,19 @@ impl Ms4IndependentExactWaveProofV1 {
                 &self.positive_completion_roots_sha256,
                 &self.negative_precommit_roots_sha256,
                 &self.negative_binding_roots_sha256,
+                &self.censored_verdict_roots_sha256,
                 &self.independent_lineages_sha256,
+            ),
+            (
+                self.independent_topology_rows,
+                self.scored_rows,
+                self.censored_rows,
+                self.censored_precommit_missing_rows,
+                self.censored_precommit_disqualified_rows,
+                self.censored_settlement_unavailable_rows,
+                self.censored_primary_controls_abstained_rows,
+                self.counterexample_rows,
+                self.unscored_settled_rows,
             ),
             (
                 &self.full,
@@ -531,9 +620,6 @@ impl Ms4ExactWavePrecommitWriter {
             request_text,
             provider_payload,
         )?;
-        if !full.executed && !no_phase.executed {
-            return Ok(None);
-        }
         let mut controls = vec![full, no_phase];
         for mode in [
             ResponsePhaseControlV1::ShuffledPhase,
@@ -797,12 +883,22 @@ pub(super) fn evaluate_holdout(
     let mut positive_completions = Vec::new();
     let mut negative_precommits = Vec::new();
     let mut negative_bindings = Vec::new();
+    let mut censored_verdicts = Vec::new();
     let mut proof_lineages = BTreeSet::new();
     let mut precommit_missing_rows = 0_u64;
     let mut precommit_disqualified_rows = 0_u64;
     let mut settlement_pending_rows = 0_u64;
     let mut precommitted_rows = 0_u64;
     let mut settled_rows = 0_u64;
+    let mut scored_rows = 0_u64;
+    let mut counterexample_rows = 0_u64;
+    let mut full_wrong_rows = 0_u64;
+    let mut no_phase_not_worse_rows = 0_u64;
+    let mut censored_precommit_missing_rows = 0_u64;
+    let mut censored_precommit_disqualified_rows = 0_u64;
+    let mut censored_settlement_unavailable_rows = 0_u64;
+    let mut censored_primary_controls_abstained_rows = 0_u64;
+    let mut censored_settled_rows = 0_u64;
 
     for row in &independent_rows {
         let Some(precommit) = precommits_by_request
@@ -814,6 +910,17 @@ pub(super) fn evaluate_holdout(
             })
         else {
             precommit_missing_rows = precommit_missing_rows.saturating_add(1);
+            if settlement_closed {
+                censored_precommit_missing_rows = censored_precommit_missing_rows.saturating_add(1);
+                censored_verdicts.push(censored_verdict_root(
+                    &contract,
+                    &row.commit.commitment_root_sha256,
+                    &row.structure.request_event_id_sha256,
+                    Ms4ExactWaveCensorReasonV1::PrecommitMissing,
+                    None,
+                    None,
+                )?);
+            }
             continue;
         };
         precommitted_rows = precommitted_rows.saturating_add(1);
@@ -828,7 +935,16 @@ pub(super) fn evaluate_holdout(
                 .get(precommit.economics_intent_sha256.as_str())
                 .copied()
             else {
-                settlement_pending_rows = settlement_pending_rows.saturating_add(1);
+                record_settlement_unavailable(
+                    settlement_closed,
+                    &contract,
+                    row,
+                    precommit,
+                    None,
+                    &mut settlement_pending_rows,
+                    &mut censored_settlement_unavailable_rows,
+                    &mut censored_verdicts,
+                )?;
                 continue;
             };
             let matching_bounds = transport
@@ -845,7 +961,16 @@ pub(super) fn evaluate_holdout(
                 .collect::<Vec<_>>();
             let Some(bound) = (matching_bounds.len() == 1).then(|| matching_bounds[0].clone())
             else {
-                settlement_pending_rows = settlement_pending_rows.saturating_add(1);
+                record_settlement_unavailable(
+                    settlement_closed,
+                    &contract,
+                    row,
+                    precommit,
+                    None,
+                    &mut settlement_pending_rows,
+                    &mut censored_settlement_unavailable_rows,
+                    &mut censored_verdicts,
+                )?;
                 continue;
             };
             let frame_root = &bound.binding.completed_frame_root_sha256;
@@ -856,34 +981,57 @@ pub(super) fn evaluate_holdout(
                     && receipt.turn_intent_id_sha256 == row.structure.turn_intent_id_sha256
             });
             let Some(parity) = parity_by_frame.get(frame_root).filter(|_| route_bound) else {
-                settlement_pending_rows = settlement_pending_rows.saturating_add(1);
+                record_settlement_unavailable(
+                    settlement_closed,
+                    &contract,
+                    row,
+                    precommit,
+                    Some(&bound.binding.binding_root_sha256),
+                    &mut settlement_pending_rows,
+                    &mut censored_settlement_unavailable_rows,
+                    &mut censored_verdicts,
+                )?;
                 continue;
             };
+            settled_rows = settled_rows.saturating_add(1);
             if precommit.predicted_at_unix_nanos >= bound.binding.action_observed_at_unix_nanos
                 || precommit.predicted_at_unix_nanos
                     >= bound.binding.request_completed_at_unix_nanos
             {
                 precommit_disqualified_rows = precommit_disqualified_rows.saturating_add(1);
+                censored_precommit_disqualified_rows =
+                    censored_precommit_disqualified_rows.saturating_add(1);
+                censored_settled_rows = censored_settled_rows.saturating_add(1);
+                censored_verdicts.push(censored_verdict_root(
+                    &contract,
+                    &row.commit.commitment_root_sha256,
+                    &row.structure.request_event_id_sha256,
+                    Ms4ExactWaveCensorReasonV1::PrecommitDisqualified,
+                    Some(&precommit.precommit_root_sha256),
+                    Some(&bound.binding.binding_root_sha256),
+                )?);
                 continue;
             }
-            let Some(expected_response_sha256) = full.response_sha256.as_deref() else {
-                return Err("ms4_exact_wave_full_response_missing".to_owned());
-            };
-            if canonical_json_sha256(&parity.expected_response).map_err(str::to_owned)?
-                != expected_response_sha256
-            {
-                continue;
+            let expected_response_sha256 =
+                canonical_json_sha256(&parity.expected_response).map_err(str::to_owned)?;
+            match classify_settled_outcome(full, no_phase, &expected_response_sha256) {
+                Ms4ExactWaveSettledOutcomeV1::Positive => {
+                    score_positive(&mut scores, precommit, &expected_response_sha256)?;
+                    scored_rows = scored_rows.saturating_add(1);
+                    positive_precommits.push(precommit.precommit_root_sha256.clone());
+                    positive_completions.push(completion.completion_root_sha256.clone());
+                    if let Some(lineage) = &row.session_lineage_sha256 {
+                        proof_lineages.insert(lineage.clone());
+                    }
+                }
+                Ms4ExactWaveSettledOutcomeV1::FullWrong => {
+                    score_negative(&mut scores, precommit, &expected_response_sha256)?;
+                    scored_rows = scored_rows.saturating_add(1);
+                    counterexample_rows = counterexample_rows.saturating_add(1);
+                    full_wrong_rows = full_wrong_rows.saturating_add(1);
+                }
+                _ => return Err("ms4_exact_wave_full_outcome_classification_invalid".to_owned()),
             }
-            score_positive(&mut scores, precommit, expected_response_sha256)?;
-            positive_precommits.push(precommit.precommit_root_sha256.clone());
-            positive_completions.push(completion.completion_root_sha256.clone());
-            if let Some(lineage) = &row.session_lineage_sha256 {
-                proof_lineages.insert(lineage.clone());
-            }
-            settled_rows = settled_rows.saturating_add(1);
-            continue;
-        }
-        if !no_phase.executed {
             continue;
         }
         let matching_bounds = transport
@@ -898,7 +1046,16 @@ pub(super) fn evaluate_holdout(
             .cloned()
             .collect::<Vec<_>>();
         let Some(bound) = (matching_bounds.len() == 1).then(|| matching_bounds[0].clone()) else {
-            settlement_pending_rows = settlement_pending_rows.saturating_add(1);
+            record_settlement_unavailable(
+                settlement_closed,
+                &contract,
+                row,
+                precommit,
+                None,
+                &mut settlement_pending_rows,
+                &mut censored_settlement_unavailable_rows,
+                &mut censored_verdicts,
+            )?;
             continue;
         };
         let frame_root = &bound.binding.completed_frame_root_sha256;
@@ -908,26 +1065,68 @@ pub(super) fn evaluate_holdout(
                 && receipt.turn_intent_id_sha256 == row.structure.turn_intent_id_sha256
         });
         let Some(parity) = parity_by_frame.get(frame_root).filter(|_| route_bound) else {
-            settlement_pending_rows = settlement_pending_rows.saturating_add(1);
+            record_settlement_unavailable(
+                settlement_closed,
+                &contract,
+                row,
+                precommit,
+                Some(&bound.binding.binding_root_sha256),
+                &mut settlement_pending_rows,
+                &mut censored_settlement_unavailable_rows,
+                &mut censored_verdicts,
+            )?;
             continue;
         };
+        settled_rows = settled_rows.saturating_add(1);
         if precommit.predicted_at_unix_nanos >= bound.binding.action_observed_at_unix_nanos
             || precommit.predicted_at_unix_nanos >= bound.binding.request_completed_at_unix_nanos
         {
             precommit_disqualified_rows = precommit_disqualified_rows.saturating_add(1);
+            censored_precommit_disqualified_rows =
+                censored_precommit_disqualified_rows.saturating_add(1);
+            censored_settled_rows = censored_settled_rows.saturating_add(1);
+            censored_verdicts.push(censored_verdict_root(
+                &contract,
+                &row.commit.commitment_root_sha256,
+                &row.structure.request_event_id_sha256,
+                Ms4ExactWaveCensorReasonV1::PrecommitDisqualified,
+                Some(&precommit.precommit_root_sha256),
+                Some(&bound.binding.binding_root_sha256),
+            )?);
             continue;
         }
-        settled_rows = settled_rows.saturating_add(1);
         let expected_response_sha256 =
             canonical_json_sha256(&parity.expected_response).map_err(str::to_owned)?;
-        if no_phase.response_sha256.as_deref() == Some(expected_response_sha256.as_str()) {
-            continue;
-        }
-        score_negative(&mut scores, precommit, &expected_response_sha256)?;
-        negative_precommits.push(precommit.precommit_root_sha256.clone());
-        negative_bindings.push(bound.binding.binding_root_sha256.clone());
-        if let Some(lineage) = &row.session_lineage_sha256 {
-            proof_lineages.insert(lineage.clone());
+        match classify_settled_outcome(full, no_phase, &expected_response_sha256) {
+            Ms4ExactWaveSettledOutcomeV1::PrimaryControlsAbstained => {
+                censored_primary_controls_abstained_rows =
+                    censored_primary_controls_abstained_rows.saturating_add(1);
+                censored_settled_rows = censored_settled_rows.saturating_add(1);
+                censored_verdicts.push(censored_verdict_root(
+                    &contract,
+                    &row.commit.commitment_root_sha256,
+                    &row.structure.request_event_id_sha256,
+                    Ms4ExactWaveCensorReasonV1::PrimaryControlsAbstained,
+                    Some(&precommit.precommit_root_sha256),
+                    Some(&bound.binding.binding_root_sha256),
+                )?);
+            }
+            Ms4ExactWaveSettledOutcomeV1::NoPhaseNotWorse => {
+                score_negative(&mut scores, precommit, &expected_response_sha256)?;
+                scored_rows = scored_rows.saturating_add(1);
+                counterexample_rows = counterexample_rows.saturating_add(1);
+                no_phase_not_worse_rows = no_phase_not_worse_rows.saturating_add(1);
+            }
+            Ms4ExactWaveSettledOutcomeV1::PhaseChallengingNegative => {
+                score_negative(&mut scores, precommit, &expected_response_sha256)?;
+                scored_rows = scored_rows.saturating_add(1);
+                negative_precommits.push(precommit.precommit_root_sha256.clone());
+                negative_bindings.push(bound.binding.binding_root_sha256.clone());
+                if let Some(lineage) = &row.session_lineage_sha256 {
+                    proof_lineages.insert(lineage.clone());
+                }
+            }
+            _ => return Err("ms4_exact_wave_abstain_outcome_classification_invalid".to_owned()),
         }
     }
 
@@ -935,15 +1134,25 @@ pub(super) fn evaluate_holdout(
     sort_dedup(&mut positive_completions);
     sort_dedup(&mut negative_precommits);
     sort_dedup(&mut negative_bindings);
+    sort_dedup(&mut censored_verdicts);
     let independent_lineages = proof_lineages.into_iter().collect::<Vec<_>>();
-    let proof_rows = u64::try_from(
-        positive_precommits
-            .len()
-            .saturating_add(negative_precommits.len()),
-    )
-    .unwrap_or(u64::MAX);
-    let ablation_pass = exact_ablation_pass(&scores, proof_rows)?;
-    let proof = if !positive_precommits.is_empty()
+    let independent_topology_rows = u64::try_from(independent_rows.len()).unwrap_or(u64::MAX);
+    let censored_rows = censored_precommit_missing_rows
+        .saturating_add(censored_precommit_disqualified_rows)
+        .saturating_add(censored_settlement_unavailable_rows)
+        .saturating_add(censored_primary_controls_abstained_rows);
+    let classified_rows = scored_rows.saturating_add(censored_rows);
+    let accounted_settled_rows = scored_rows.saturating_add(censored_settled_rows);
+    let unscored_settled_rows = settled_rows.saturating_sub(accounted_settled_rows);
+    let denominator_complete = denominator_closed
+        && settlement_closed
+        && settlement_pending_rows == 0
+        && classified_rows == independent_topology_rows
+        && unscored_settled_rows == 0;
+    let ablation_pass = exact_ablation_pass(&scores, scored_rows)?;
+    let proof = if denominator_complete
+        && counterexample_rows == 0
+        && !positive_precommits.is_empty()
         && !negative_precommits.is_empty()
         && u64::try_from(independent_lineages.len()).unwrap_or(0) >= MIN_INDEPENDENT_LINEAGES
         && ablation_pass
@@ -954,6 +1163,12 @@ pub(super) fn evaluate_holdout(
             positive_completions.clone(),
             negative_precommits.clone(),
             negative_bindings.clone(),
+            censored_verdicts.clone(),
+            independent_topology_rows,
+            censored_precommit_missing_rows,
+            censored_precommit_disqualified_rows,
+            censored_settlement_unavailable_rows,
+            censored_primary_controls_abstained_rows,
             independent_lineages.clone(),
             scores,
         )?)
@@ -963,12 +1178,27 @@ pub(super) fn evaluate_holdout(
     if let Some(proof) = &proof {
         persist_proof(&state.config.ms4_closed_loop_path, proof)?;
     }
-    let (status, blocker) = if proof.is_some() {
+    let (status, blocker) = if counterexample_rows > 0 {
+        (
+            Ms4ExactWaveHoldoutStatusV1::Fail,
+            "independent_exact_package_counterexample_observed".to_owned(),
+        )
+    } else if unscored_settled_rows > 0 {
+        (
+            Ms4ExactWaveHoldoutStatusV1::Fail,
+            "exact_wave_unscored_settled_rows".to_owned(),
+        )
+    } else if proof.is_some() {
         (Ms4ExactWaveHoldoutStatusV1::Pass, String::new())
-    } else if !denominator_closed || (settlement_pending_rows > 0 && !settlement_closed) {
+    } else if !denominator_closed || !settlement_closed {
         (
             Ms4ExactWaveHoldoutStatusV1::Collecting,
             "post_center_holdout_collecting".to_owned(),
+        )
+    } else if !denominator_complete {
+        (
+            Ms4ExactWaveHoldoutStatusV1::Fail,
+            "exact_wave_scored_denominator_incomplete".to_owned(),
         )
     } else if positive_precommits.is_empty()
         || negative_precommits.is_empty()
@@ -990,12 +1220,22 @@ pub(super) fn evaluate_holdout(
         status,
         blocker,
         scanned_topology_rows,
-        independent_topology_rows: u64::try_from(independent_rows.len()).unwrap_or(u64::MAX),
+        independent_topology_rows,
         precommitted_rows,
         settled_rows,
         positive_holdout_rows: u64::try_from(positive_precommits.len()).unwrap_or(u64::MAX),
         phase_challenging_negative_rows: u64::try_from(negative_precommits.len())
             .unwrap_or(u64::MAX),
+        scored_rows,
+        counterexample_rows,
+        full_wrong_rows,
+        no_phase_not_worse_rows,
+        censored_rows,
+        censored_precommit_missing_rows,
+        censored_precommit_disqualified_rows,
+        censored_settlement_unavailable_rows,
+        censored_primary_controls_abstained_rows,
+        unscored_settled_rows,
         precommit_missing_rows,
         precommit_disqualified_rows,
         settlement_pending_rows,
@@ -1028,6 +1268,78 @@ fn exact_ablation_pass(
             .get(&mode)
             .is_some_and(|score| score.correct_rows < full.correct_rows)
     }))
+}
+
+fn classify_settled_outcome(
+    full: &Ms4ExactWaveControlPredictionV1,
+    no_phase: &Ms4ExactWaveControlPredictionV1,
+    expected_response_sha256: &str,
+) -> Ms4ExactWaveSettledOutcomeV1 {
+    if full.executed {
+        return if full.response_sha256.as_deref() == Some(expected_response_sha256) {
+            Ms4ExactWaveSettledOutcomeV1::Positive
+        } else {
+            Ms4ExactWaveSettledOutcomeV1::FullWrong
+        };
+    }
+    if !no_phase.executed {
+        return Ms4ExactWaveSettledOutcomeV1::PrimaryControlsAbstained;
+    }
+    if no_phase.response_sha256.as_deref() == Some(expected_response_sha256) {
+        Ms4ExactWaveSettledOutcomeV1::NoPhaseNotWorse
+    } else {
+        Ms4ExactWaveSettledOutcomeV1::PhaseChallengingNegative
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn record_settlement_unavailable(
+    settlement_closed: bool,
+    contract: &Ms4ExactWaveHoldoutContractV1,
+    row: &PreActionTopologyAuditRowV1,
+    precommit: &Ms4ExactWavePrecommitV1,
+    binding_root_sha256: Option<&str>,
+    settlement_pending_rows: &mut u64,
+    censored_settlement_unavailable_rows: &mut u64,
+    censored_verdicts: &mut Vec<String>,
+) -> Result<(), String> {
+    if settlement_closed {
+        *censored_settlement_unavailable_rows =
+            censored_settlement_unavailable_rows.saturating_add(1);
+        censored_verdicts.push(censored_verdict_root(
+            contract,
+            &row.commit.commitment_root_sha256,
+            &row.structure.request_event_id_sha256,
+            Ms4ExactWaveCensorReasonV1::SettlementUnavailable,
+            Some(&precommit.precommit_root_sha256),
+            binding_root_sha256,
+        )?);
+    } else {
+        *settlement_pending_rows = settlement_pending_rows.saturating_add(1);
+    }
+    Ok(())
+}
+
+fn censored_verdict_root(
+    contract: &Ms4ExactWaveHoldoutContractV1,
+    topology_root_sha256: &str,
+    request_event_id_sha256: &str,
+    reason: Ms4ExactWaveCensorReasonV1,
+    precommit_root_sha256: Option<&str>,
+    binding_root_sha256: Option<&str>,
+) -> Result<String, String> {
+    canonical_json_sha256(&(
+        CENSORED_VERDICT_SCHEMA,
+        contract.contract_root_sha256.as_str(),
+        topology_root_sha256,
+        request_event_id_sha256,
+        reason,
+        precommit_root_sha256,
+        binding_root_sha256,
+        false,
+        false,
+    ))
+    .map_err(str::to_owned)
 }
 
 fn score_positive(
@@ -1248,6 +1560,99 @@ mod tests {
     }
 
     #[test]
+    fn settled_counterexamples_are_not_filtered_from_the_score() {
+        let expected = "b".repeat(64);
+        let full_wrong = test_prediction(ResponsePhaseControlV1::Full, true, Some("a".repeat(64)));
+        let no_phase_right = test_prediction(
+            ResponsePhaseControlV1::NoPhase,
+            true,
+            Some(expected.clone()),
+        );
+        assert_eq!(
+            classify_settled_outcome(&full_wrong, &no_phase_right, &expected),
+            Ms4ExactWaveSettledOutcomeV1::FullWrong
+        );
+
+        let full_abstained = test_prediction(ResponsePhaseControlV1::Full, false, None);
+        assert_eq!(
+            classify_settled_outcome(&full_abstained, &no_phase_right, &expected),
+            Ms4ExactWaveSettledOutcomeV1::NoPhaseNotWorse
+        );
+
+        let no_phase_wrong =
+            test_prediction(ResponsePhaseControlV1::NoPhase, true, Some("c".repeat(64)));
+        assert_eq!(
+            classify_settled_outcome(&full_abstained, &no_phase_wrong, &expected),
+            Ms4ExactWaveSettledOutcomeV1::PhaseChallengingNegative
+        );
+        let no_phase_abstained = test_prediction(ResponsePhaseControlV1::NoPhase, false, None);
+        assert_eq!(
+            classify_settled_outcome(&full_abstained, &no_phase_abstained, &expected),
+            Ms4ExactWaveSettledOutcomeV1::PrimaryControlsAbstained
+        );
+    }
+
+    #[test]
+    fn independent_proof_rejects_incomplete_scored_denominator() {
+        let contract = Ms4ExactWaveHoldoutContractV1::seal(
+            &"a".repeat(64),
+            "package-a",
+            &"b".repeat(64),
+            41,
+            57,
+            1_700_000_000,
+        )
+        .expect("contract");
+        let scores = ResponsePhaseControlV1::ALL
+            .into_iter()
+            .map(|mode| {
+                let correct_rows = u64::from(mode == ResponsePhaseControlV1::Full) + 1;
+                (
+                    mode,
+                    Ms4ExactWaveControlScoreV1 {
+                        mode: mode.label().to_owned(),
+                        correct_rows,
+                        wrong_rows: 2 - correct_rows,
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let proof = Ms4IndependentExactWaveProofV1::seal(
+            &contract,
+            vec!["c".repeat(64)],
+            vec!["d".repeat(64)],
+            vec!["e".repeat(64)],
+            vec!["f".repeat(64)],
+            vec!["1".repeat(64)],
+            3,
+            1,
+            0,
+            0,
+            0,
+            vec!["2".repeat(64), "3".repeat(64)],
+            scores,
+        )
+        .expect("complete proof");
+        proof.validate().expect("valid proof");
+
+        let mut incomplete = proof.clone();
+        incomplete.independent_topology_rows = 4;
+        incomplete.proof_root_sha256 = incomplete.expected_root().expect("incomplete root");
+        assert_eq!(
+            incomplete.validate(),
+            Err("ms4_independent_exact_wave_proof_invalid".to_owned())
+        );
+
+        let mut unscored = proof;
+        unscored.unscored_settled_rows = 1;
+        unscored.proof_root_sha256 = unscored.expected_root().expect("unscored root");
+        assert_eq!(
+            unscored.validate(),
+            Err("ms4_independent_exact_wave_proof_invalid".to_owned())
+        );
+    }
+
+    #[test]
     fn precommit_restart_rejects_duplicate_request_identity() {
         let root = std::env::temp_dir().join(format!(
             "nando-ms4-exact-wave-precommit-{}-{}",
@@ -1295,5 +1700,20 @@ mod tests {
                 .is_err_and(|error| error == "ms4_exact_wave_precommit_duplicate_request")
         );
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    fn test_prediction(
+        mode: ResponsePhaseControlV1,
+        executed: bool,
+        response_sha256: Option<String>,
+    ) -> Ms4ExactWaveControlPredictionV1 {
+        Ms4ExactWaveControlPredictionV1 {
+            mode,
+            executed,
+            reason: if executed { "executed" } else { "abstained" }.to_owned(),
+            response_sha256,
+            phase_margin_micro: None,
+            exact_actor_checks: u64::from(executed),
+        }
     }
 }

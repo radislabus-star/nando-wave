@@ -20,6 +20,7 @@ use crate::{AppState, bounded_reason, unix_now, write_bytes_atomic};
 const REPORT_SCHEMA_V1: &str = "nando.ms4-autonomous-closed-loop-report.v1";
 const REPORT_SCHEMA_V2: &str = "nando.ms4-autonomous-closed-loop-report.v2";
 const REPORT_SCHEMA_V3: &str = "nando.ms4-autonomous-closed-loop-report.v3";
+const REPORT_SCHEMA_V4: &str = "nando.ms4-autonomous-closed-loop-report.v4";
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -76,6 +77,30 @@ pub(super) struct Ms4ClosedLoopReportV1 {
     #[serde(default)]
     pub exact_wave_phase_challenging_negative_rows: u64,
     #[serde(default)]
+    pub exact_wave_scored_rows: u64,
+    #[serde(default)]
+    pub exact_wave_counterexample_rows: u64,
+    #[serde(default)]
+    pub exact_wave_full_wrong_rows: u64,
+    #[serde(default)]
+    pub exact_wave_no_phase_not_worse_rows: u64,
+    #[serde(default)]
+    pub exact_wave_censored_rows: u64,
+    #[serde(default)]
+    pub exact_wave_precommit_missing_rows: u64,
+    #[serde(default)]
+    pub exact_wave_settlement_pending_rows: u64,
+    #[serde(default)]
+    pub exact_wave_censored_precommit_missing_rows: u64,
+    #[serde(default)]
+    pub exact_wave_censored_precommit_disqualified_rows: u64,
+    #[serde(default)]
+    pub exact_wave_censored_settlement_unavailable_rows: u64,
+    #[serde(default)]
+    pub exact_wave_censored_primary_controls_abstained_rows: u64,
+    #[serde(default)]
+    pub exact_wave_unscored_settled_rows: u64,
+    #[serde(default)]
     pub exact_wave_independent_lineages: u64,
     pub external_admission_pass: bool,
     pub ordinary_cpu_receipt_root_sha256: Option<String>,
@@ -94,7 +119,7 @@ impl Default for Ms4ClosedLoopReportV1 {
 impl Ms4ClosedLoopReportV1 {
     fn seal(generation_sequence: u64, stage: Ms4ClosedLoopStageV1, blocker: &str) -> Self {
         let mut report = Self {
-            schema: REPORT_SCHEMA_V3.to_owned(),
+            schema: REPORT_SCHEMA_V4.to_owned(),
             report_root_sha256: String::new(),
             generated_at_unix: unix_now(),
             generation_sequence,
@@ -118,6 +143,18 @@ impl Ms4ClosedLoopReportV1 {
             exact_wave_settled_rows: 0,
             exact_wave_positive_holdout_rows: 0,
             exact_wave_phase_challenging_negative_rows: 0,
+            exact_wave_scored_rows: 0,
+            exact_wave_counterexample_rows: 0,
+            exact_wave_full_wrong_rows: 0,
+            exact_wave_no_phase_not_worse_rows: 0,
+            exact_wave_censored_rows: 0,
+            exact_wave_precommit_missing_rows: 0,
+            exact_wave_settlement_pending_rows: 0,
+            exact_wave_censored_precommit_missing_rows: 0,
+            exact_wave_censored_precommit_disqualified_rows: 0,
+            exact_wave_censored_settlement_unavailable_rows: 0,
+            exact_wave_censored_primary_controls_abstained_rows: 0,
+            exact_wave_unscored_settled_rows: 0,
             exact_wave_independent_lineages: 0,
             external_admission_pass: false,
             ordinary_cpu_receipt_root_sha256: None,
@@ -136,7 +173,7 @@ impl Ms4ClosedLoopReportV1 {
     fn validate(&self) -> Result<(), String> {
         if !matches!(
             self.schema.as_str(),
-            REPORT_SCHEMA_V1 | REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3
+            REPORT_SCHEMA_V1 | REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4
         ) || self.phase_mutation_allowed
             || self.report_root_sha256 != self.expected_root()?
         {
@@ -150,19 +187,38 @@ impl Ms4ClosedLoopReportV1 {
         {
             return Err("ms4_report_completion_proof_missing".to_owned());
         }
-        if self.schema == REPORT_SCHEMA_V3
+        if matches!(self.schema.as_str(), REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4)
             && self.stage == Ms4ClosedLoopStageV1::Complete
             && (self.ordinary_cpu_receipt_root_sha256.is_none()
                 || self.ordinary_cpu_completion_root_sha256.is_none())
         {
             return Err("ms4_report_operational_completion_proof_missing".to_owned());
         }
-        if self.schema == REPORT_SCHEMA_V3
+        if matches!(self.schema.as_str(), REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4)
             && ((self.exact_wave_status
                 == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass)
                 != self.exact_package_wave_proof_root_sha256.is_some())
         {
             return Err("ms4_report_exact_wave_status_invalid".to_owned());
+        }
+        let typed_censored_rows = self
+            .exact_wave_censored_precommit_missing_rows
+            .saturating_add(self.exact_wave_censored_precommit_disqualified_rows)
+            .saturating_add(self.exact_wave_censored_settlement_unavailable_rows)
+            .saturating_add(self.exact_wave_censored_primary_controls_abstained_rows);
+        if self.schema == REPORT_SCHEMA_V4
+            && self.exact_wave_status
+                == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass
+            && (self.exact_wave_counterexample_rows != 0
+                || self.exact_wave_unscored_settled_rows != 0
+                || self.exact_wave_settlement_pending_rows != 0
+                || self.exact_wave_censored_rows != typed_censored_rows
+                || self.exact_wave_independent_topology_rows
+                    != self
+                        .exact_wave_scored_rows
+                        .saturating_add(self.exact_wave_censored_rows))
+        {
+            return Err("ms4_report_exact_wave_denominator_incomplete".to_owned());
         }
         Ok(())
     }
@@ -208,8 +264,50 @@ impl Ms4ClosedLoopReportV1 {
             ))
             .map_err(str::to_owned);
         }
+        if self.schema == REPORT_SCHEMA_V3 {
+            return canonical_json_sha256(&(
+                REPORT_SCHEMA_V3,
+                self.generated_at_unix,
+                (
+                    self.generation_sequence,
+                    self.stage,
+                    self.blocker.as_str(),
+                    self.frozen_envelope_root_sha256.as_deref(),
+                    self.future_envelope_root_sha256.as_deref(),
+                    self.candidate_root_sha256.as_deref(),
+                    self.package_id.as_deref(),
+                ),
+                (
+                    self.in_sample_phase_ablation_root_sha256.as_deref(),
+                    self.exact_package_wave_proof_root_sha256.as_deref(),
+                    self.negative_controls,
+                    self.anti_center_atoms,
+                ),
+                (
+                    self.exact_wave_holdout_contract_root_sha256.as_deref(),
+                    self.exact_wave_status,
+                    self.exact_wave_blocker.as_str(),
+                    self.exact_wave_scanned_topology_rows,
+                    self.exact_wave_independent_topology_rows,
+                    self.exact_wave_precommitted_rows,
+                    self.exact_wave_precommit_disqualified_rows,
+                    self.exact_wave_settled_rows,
+                    self.exact_wave_positive_holdout_rows,
+                    self.exact_wave_phase_challenging_negative_rows,
+                    self.exact_wave_independent_lineages,
+                ),
+                (
+                    self.external_admission_pass,
+                    self.ordinary_cpu_receipt_root_sha256.as_deref(),
+                    self.ordinary_cpu_completion_root_sha256.as_deref(),
+                    self.authority_ready,
+                ),
+                false,
+            ))
+            .map_err(str::to_owned);
+        }
         canonical_json_sha256(&(
-            REPORT_SCHEMA_V3,
+            REPORT_SCHEMA_V4,
             self.generated_at_unix,
             (
                 self.generation_sequence,
@@ -238,6 +336,20 @@ impl Ms4ClosedLoopReportV1 {
                 self.exact_wave_positive_holdout_rows,
                 self.exact_wave_phase_challenging_negative_rows,
                 self.exact_wave_independent_lineages,
+            ),
+            (
+                self.exact_wave_scored_rows,
+                self.exact_wave_counterexample_rows,
+                self.exact_wave_full_wrong_rows,
+                self.exact_wave_no_phase_not_worse_rows,
+                self.exact_wave_censored_rows,
+                self.exact_wave_precommit_missing_rows,
+                self.exact_wave_settlement_pending_rows,
+                self.exact_wave_censored_precommit_missing_rows,
+                self.exact_wave_censored_precommit_disqualified_rows,
+                self.exact_wave_censored_settlement_unavailable_rows,
+                self.exact_wave_censored_primary_controls_abstained_rows,
+                self.exact_wave_unscored_settled_rows,
             ),
             (
                 self.external_admission_pass,
@@ -580,6 +692,22 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
             report.exact_wave_positive_holdout_rows = exact_wave.positive_holdout_rows;
             report.exact_wave_phase_challenging_negative_rows =
                 exact_wave.phase_challenging_negative_rows;
+            report.exact_wave_scored_rows = exact_wave.scored_rows;
+            report.exact_wave_counterexample_rows = exact_wave.counterexample_rows;
+            report.exact_wave_full_wrong_rows = exact_wave.full_wrong_rows;
+            report.exact_wave_no_phase_not_worse_rows = exact_wave.no_phase_not_worse_rows;
+            report.exact_wave_censored_rows = exact_wave.censored_rows;
+            report.exact_wave_precommit_missing_rows = exact_wave.precommit_missing_rows;
+            report.exact_wave_settlement_pending_rows = exact_wave.settlement_pending_rows;
+            report.exact_wave_censored_precommit_missing_rows =
+                exact_wave.censored_precommit_missing_rows;
+            report.exact_wave_censored_precommit_disqualified_rows =
+                exact_wave.censored_precommit_disqualified_rows;
+            report.exact_wave_censored_settlement_unavailable_rows =
+                exact_wave.censored_settlement_unavailable_rows;
+            report.exact_wave_censored_primary_controls_abstained_rows =
+                exact_wave.censored_primary_controls_abstained_rows;
+            report.exact_wave_unscored_settled_rows = exact_wave.unscored_settled_rows;
             report.exact_wave_independent_lineages = exact_wave.independent_lineages;
             report.exact_package_wave_proof_root_sha256 =
                 exact_wave.proof.map(|proof| proof.proof_root_sha256);
@@ -632,7 +760,7 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
                 .clone();
             let immutable_match = matches!(
                 existing.schema.as_str(),
-                REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3
+                REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4
             ) && existing.stage == Ms4ClosedLoopStageV1::Complete
                 && existing.generation_sequence == report.generation_sequence
                 && existing.candidate_root_sha256 == report.candidate_root_sha256

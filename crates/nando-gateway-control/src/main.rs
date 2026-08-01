@@ -1358,6 +1358,16 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                 &ms4_closed_loop,
                 "exact_wave_phase_challenging_negative_rows",
             ),
+            "exact_wave_scored_rows": metric_u64(&ms4_closed_loop, "exact_wave_scored_rows"),
+            "exact_wave_counterexample_rows": metric_u64(
+                &ms4_closed_loop,
+                "exact_wave_counterexample_rows",
+            ),
+            "exact_wave_censored_rows": metric_u64(&ms4_closed_loop, "exact_wave_censored_rows"),
+            "exact_wave_unscored_settled_rows": metric_u64(
+                &ms4_closed_loop,
+                "exact_wave_unscored_settled_rows",
+            ),
             "negative_topology_controls": metric_u64(&ms4_closed_loop, "negative_controls"),
             "anti_center_atoms": metric_u64(&ms4_closed_loop, "anti_center_atoms"),
             "false_accepts": metric_u64(economics, "false_accepts"),
