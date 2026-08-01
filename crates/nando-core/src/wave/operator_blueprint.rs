@@ -1387,6 +1387,19 @@ impl RoleGraph {
     pub fn canonical_roles(&self) -> &[StructuralRoleSignature] {
         &self.canonical_roles
     }
+
+    /// Source-neutral topology identity. Surface bindings and capability names
+    /// are proof provenance, not part of the canonical role shape.
+    #[must_use]
+    pub fn topology_commitment_sha256(&self) -> Commitment256 {
+        let mut hasher = Sha256::new();
+        hasher.update(b"nando.role-graph-topology.v1");
+        hasher.update([self.role_count]);
+        for role in &self.canonical_roles {
+            hasher.update(role_signature_commitment(role));
+        }
+        hasher.finalize().into()
+    }
 }
 
 impl CompositionDag {

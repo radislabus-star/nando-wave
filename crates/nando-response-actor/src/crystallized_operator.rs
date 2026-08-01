@@ -399,6 +399,11 @@ impl CrystallizedOperator {
     }
 
     #[must_use]
+    const fn role_graph(&self) -> &RoleGraph {
+        self.runtime_artifact.role_graph()
+    }
+
+    #[must_use]
     const fn blueprint_sha256(&self) -> &Commitment256 {
         &self.blueprint_sha256
     }
@@ -628,6 +633,11 @@ impl VerifiedCrystallizedOperator {
     #[must_use]
     pub const fn relation_program(&self) -> &OperatorCircuit {
         self.operator.relation_program()
+    }
+
+    #[must_use]
+    pub const fn role_graph(&self) -> &RoleGraph {
+        self.operator.role_graph()
     }
 
     #[must_use]

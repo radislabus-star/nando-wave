@@ -2,8 +2,8 @@
   "section": "structural",
   "verdict": "PASS",
   "source": "live_structural_tool",
-  "pass_count": 3,
-  "route_count": 3,
+  "pass_count": 4,
+  "route_count": 4,
   "blocked_routes": [],
   "routes": [
     {
@@ -32,6 +32,15 @@
       "evidence_gaps": [],
       "repair_queue": [],
       "trace_path": "/tmp/nanda-structural-gate/nando-live-03_serving_recovery.trace.json"
+    },
+    {
+      "route": "04_operator_certification",
+      "verdict": "PASS",
+      "weak_triads": [],
+      "conflicts": [],
+      "evidence_gaps": [],
+      "repair_queue": [],
+      "trace_path": "/tmp/nanda-structural-gate/nando-live-04_operator_certification.trace.json"
     }
   ]
 }

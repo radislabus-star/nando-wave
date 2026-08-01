@@ -286,6 +286,32 @@ impl Ms4ExternalAdmissionCandidateV1 {
         self.future.receipt.canonical_program_root_sha256.as_str()
     }
 
+    #[must_use]
+    pub fn future_runtime_parity_case(&self) -> &RuntimeParityCase {
+        &self.future_runtime_parity
+    }
+
+    #[must_use]
+    pub fn future_terminal_receipt_root_sha256(&self) -> &str {
+        &self.future_terminal.receipt_root_sha256
+    }
+
+    #[must_use]
+    pub fn future_runtime_receipt_root_sha256(&self) -> &str {
+        &self
+            .shadow_candidate
+            .future_runtime_receipt()
+            .receipt_sha256
+    }
+
+    #[must_use]
+    pub fn future_actor_response_sha256(&self) -> &str {
+        &self
+            .shadow_candidate
+            .future_runtime_receipt()
+            .actor_response_sha256
+    }
+
     pub fn admitted_package(&self) -> Result<ResponsePackage, &'static str> {
         self.validate()?;
         admitted_package(&self.shadow_candidate, &self.guard_proof)

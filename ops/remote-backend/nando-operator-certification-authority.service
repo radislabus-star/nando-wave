@@ -1,0 +1,28 @@
+[Unit]
+Description=Nando operator certification monotonic authority
+After=local-fs.target
+Before=nando-transition-serving.service nando-response-learning.service
+
+[Service]
+Type=simple
+User=root
+Group=nando-certification
+UMask=0027
+EnvironmentFile=-/etc/nando-wave/roles/response-learning.env
+Environment=NANDO_OPERATOR_CERTIFICATION_AUTHORITY_PRIVATE_KEY=/etc/nando-wave/certification/authority-ed25519.key
+RuntimeDirectory=nando-operator-certification
+RuntimeDirectoryMode=0750
+ExecStart=/opt/nando-wave/bin/nando-operator-certification-authority
+Restart=on-failure
+RestartSec=1s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/nando-wave/certification
+ReadWritePaths=/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1
+ReadWritePaths=/var/lib/nando-wave-certification-anchor
+ReadWritePaths=/run/nando-operator-certification
+
+[Install]
+WantedBy=multi-user.target

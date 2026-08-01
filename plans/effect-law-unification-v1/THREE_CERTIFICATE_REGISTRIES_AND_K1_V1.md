@@ -11,10 +11,12 @@ CrystallizedOperatorBundleV4
   bundle_id remains immutable
           |
           v
-append-only OperatorCertificationLedgerV1
+signed append-only OperatorCertificationJournalV1
   |- ExecutionCertificate
   |- LawCertificate
   `- MechanismCertificate
+          |
+          `-> external monotonic signed anchor
           |
           +-> Product Registry projection
           `-> Epistemic Registry projection
@@ -47,6 +49,44 @@ MechanismCertificate
 and does not erase a separately proven law. It means only that the exact
 package holdout did not establish causal necessity of Wave. Operational false
 accepts and runtime parity failures remain independent revocation evidence.
+
+## Trust Split
+
+The serving process cannot issue a cleanup receipt or advance certification
+history by itself.
+
+```text
+unprivileged serving
+  -> proposes certificate entry over Unix socket
+
+root-owned certification authority
+  -> validates signed cleanup evidence and durable runtime revocations
+  -> appends one create-new signed journal event
+  -> fsyncs the event and directory
+  -> advances a signed anchor outside the transition rollback root
+
+independent cleanup verifier
+  -> receives only BundleV4 plus an independent-future challenge
+  -> restores the canonical bundle
+  -> rebuilds entry Page32 exactly from canonical IR
+  -> binds pre-action roles
+  -> executes actor and independent verifier
+  -> matches the durable actor-response commitment
+  -> signs ExactMemoryCleanupReceiptV1 with a separate private key
+```
+
+The serving process holds only public keys. Restoring an old journal together
+with an old projection cannot pass against the newer external anchor. Missing,
+tampered, truncated, reordered, or unsigned history fails closed.
+
+`PASS -> REVOKED` is driven by the package-specific durable runtime revocation
+ledger. A late false apply sets `false_bad_apply > 0`, removes Product Registry
+and K1 eligibility, and cannot be hidden by the frozen package proof.
+
+Role-topology diversity is the digest of the canonical source-neutral
+`RoleGraph`. Tool names, capability names, routing atom IDs, verifier labels,
+and package IDs are excluded. A one-time authority-checked migration converts
+the pre-anchor capability-derived identity without changing any certificate.
 
 ## K1 Vocabulary Gate
 

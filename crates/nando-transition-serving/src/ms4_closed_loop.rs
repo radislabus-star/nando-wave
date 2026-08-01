@@ -14,8 +14,8 @@ use nando_operator_learning::multi_source::{
     Ms3FutureApplicabilityDispositionV1, Ms3IndependentFutureVerdictV1, TransportBindingLedgerV1,
 };
 use nando_response_actor::{
-    Ms4ExternalAdmissionCandidateV1, Ms4InSamplePhaseAblationV1, ResponseOperation,
-    ResponsePackage, ResponsePackageState, ResponseRegistry,
+    Ms4ExternalAdmissionCandidateV1, Ms4InSamplePhaseAblationV1, ResponsePackage,
+    ResponsePackageState, ResponseRegistry,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +40,7 @@ pub(super) enum Ms4ClosedLoopStageV1 {
     ExternalAdmissionPending,
     OrdinaryCpuPending,
     Complete,
+    Revoked,
     Blocked,
 }
 
@@ -210,9 +211,11 @@ impl Ms4ClosedLoopReportV1 {
         if matches!(
             self.schema.as_str(),
             REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4 | REPORT_SCHEMA_V5
-        ) && self.stage == Ms4ClosedLoopStageV1::Complete
-            && (self.ordinary_cpu_receipt_root_sha256.is_none()
-                || self.ordinary_cpu_completion_root_sha256.is_none())
+        ) && matches!(
+            self.stage,
+            Ms4ClosedLoopStageV1::Complete | Ms4ClosedLoopStageV1::Revoked
+        ) && (self.ordinary_cpu_receipt_root_sha256.is_none()
+            || self.ordinary_cpu_completion_root_sha256.is_none())
         {
             return Err("ms4_report_operational_completion_proof_missing".to_owned());
         }
@@ -269,6 +272,17 @@ impl Ms4ClosedLoopReportV1 {
                 })
             {
                 return Err("ms4_report_execution_certificate_missing".to_owned());
+            }
+            if self.stage == Ms4ClosedLoopStageV1::Revoked
+                && (self.authority_ready
+                    || self.operator_certification.as_ref().is_none_or(|entry| {
+                        entry.execution.status != ExecutionCertificateStatusV1::Revoked
+                            || entry.product_registry_member
+                            || entry.k1_unit_eligible
+                            || entry.false_bad_apply == 0
+                    }))
+            {
+                return Err("ms4_report_execution_revocation_missing".to_owned());
             }
             if self.exact_wave_status
                 == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass
@@ -488,7 +502,10 @@ impl Ms4ClosedLoopReportV1 {
     }
 }
 
-pub(super) fn restore_report(path: &Path) -> Result<Ms4ClosedLoopReportV1, String> {
+pub(super) fn restore_report(
+    path: &Path,
+    certification_config: Option<&crate::operator_certification::CertificationAuthorityConfigV1>,
+) -> Result<Ms4ClosedLoopReportV1, String> {
     let status_path = path.join("status.json");
     let bytes = match fs::read(&status_path) {
         Ok(bytes) => bytes,
@@ -505,7 +522,16 @@ pub(super) fn restore_report(path: &Path) -> Result<Ms4ClosedLoopReportV1, Strin
         report.operator_certification.as_ref(),
         report.k1_vocabulary_gate.as_ref(),
     ) {
-        crate::operator_certification::validate_projection(path, ledger_root, entry, gate)?;
+        let config = certification_config
+            .ok_or_else(|| "operator_certification_config_missing".to_owned())?;
+        crate::operator_certification::validate_projection(
+            config,
+            &crate::operator_certification::CertificationProjectionV1 {
+                ledger_root_sha256: ledger_root.to_owned(),
+                entry: entry.clone(),
+                k1_vocabulary_gate: gate.clone(),
+            },
+        )?;
     }
     Ok(report)
 }
@@ -918,6 +944,11 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
         report.stage = Ms4ClosedLoopStageV1::ExternalAdmissionPending;
     }
     let certification = certify_operator(state, &report, &candidate, &package)?;
+    if certification.entry.execution.status == ExecutionCertificateStatusV1::Revoked {
+        report.stage = Ms4ClosedLoopStageV1::Revoked;
+        report.blocker = "runtime_false_bad_apply".to_owned();
+        report.authority_ready = false;
+    }
     report.certification_ledger_root_sha256 = Some(certification.ledger_root_sha256);
     report.operator_certification = Some(certification.entry);
     report.k1_vocabulary_gate = Some(certification.k1_vocabulary_gate);
@@ -940,6 +971,12 @@ fn certify_operator(
         .map_err(|error| format!("operator_certification_law_id:{error:?}"))?
         .ok_or_else(|| "operator_certification_law_id_missing".to_owned())?;
     let role_topology_id = role_topology_id(package)?;
+    let certification_config = certification_config(&state.config);
+    let (false_bad_apply, live_safety_evidence) =
+        crate::operator_certification::durable_false_bad_apply_evidence(
+            &certification_config,
+            &package.package_id,
+        )?;
 
     let execution_pass = report.stage == Ms4ClosedLoopStageV1::Complete
         && report.external_admission_pass
@@ -951,16 +988,22 @@ fn certify_operator(
     ];
     execution_evidence.extend(report.ordinary_cpu_receipt_root_sha256.iter().cloned());
     execution_evidence.extend(report.ordinary_cpu_completion_root_sha256.iter().cloned());
+    execution_evidence.extend(live_safety_evidence);
+    let execution_revoked = false_bad_apply > 0;
     let execution = ExecutionCertificateV1::seal(
         bundle_id,
         &package.package_id,
-        if execution_pass {
+        if execution_revoked {
+            ExecutionCertificateStatusV1::Revoked
+        } else if execution_pass {
             ExecutionCertificateStatusV1::Pass
         } else {
             ExecutionCertificateStatusV1::Pending
         },
         execution_evidence,
-        if execution_pass {
+        if execution_revoked {
+            "runtime_false_bad_apply"
+        } else if execution_pass {
             ""
         } else {
             "ordinary_cpu_completion_pending"
@@ -969,7 +1012,7 @@ fn certify_operator(
     .map_err(str::to_owned)?;
 
     let cleanup = crate::operator_certification::restore_cleanup_receipt(
-        &state.config.ms4_closed_loop_path,
+        &certification_config,
         bundle_id,
         &package.package_id,
         candidate.candidate_root_sha256(),
@@ -1059,8 +1102,6 @@ fn certify_operator(
     )
     .map_err(str::to_owned)?;
 
-    let false_bad_apply = u64::try_from(package.proof.wrong_accepts)
-        .map_err(|_| "operator_certification_wrong_accept_count".to_owned())?;
     let entry = OperatorCertificationEntryV1::seal(
         bundle_id,
         &package.package_id,
@@ -1072,29 +1113,36 @@ fn certify_operator(
         false_bad_apply,
     )
     .map_err(str::to_owned)?;
-    crate::operator_certification::append_entry(&state.config.ms4_closed_loop_path, entry)
+    crate::operator_certification::append_entry(&certification_config, entry)
+}
+
+fn certification_config(
+    config: &crate::ServingConfig,
+) -> crate::operator_certification::CertificationAuthorityConfigV1 {
+    crate::operator_certification::CertificationAuthorityConfigV1 {
+        root: config.ms4_closed_loop_path.clone(),
+        cleanup_receipts_path: config.operator_cleanup_receipts_path.clone(),
+        anchor_path: config.operator_certification_anchor_path.clone(),
+        authority_socket_path: config.operator_certification_authority_socket_path.clone(),
+        authority_public_key_path: config
+            .operator_certification_authority_public_key_path
+            .clone(),
+        cleanup_public_key_path: config.operator_cleanup_verifier_public_key_path.clone(),
+        response_registry_path: config.response_registry_path.clone(),
+        runtime_revocations_path: config.runtime_package_revocations_path.clone(),
+    }
 }
 
 fn role_topology_id(package: &ResponsePackage) -> Result<String, String> {
-    let operation_class = match &package.program.operation {
-        ResponseOperation::UniqueConsensus { .. } => "unique_consensus",
-        ResponseOperation::AdvancePlan { .. } => "advance_plan",
-        ResponseOperation::FunctionCallFromRoles { .. } => "function_call_from_roles",
-        ResponseOperation::CustomToolCallFromRoles { .. } => "custom_tool_call_from_roles",
-        ResponseOperation::ProjectSelectedValue { .. } => "project_selected_value",
-        ResponseOperation::ProjectStatus { .. } => "project_status",
-        ResponseOperation::ComposeCollection { .. } => "compose_collection",
-        ResponseOperation::CopyAfterPrefix { .. } => "copy_after_prefix",
-        ResponseOperation::TestResultSummary { .. } => "test_result_summary",
-        ResponseOperation::WaitOnYieldedCell { .. } => "wait_on_yielded_cell",
-        ResponseOperation::WaitOnAnyYieldedCell { .. } => "wait_on_any_yielded_cell",
-        ResponseOperation::WaitOnYieldedSurfaces { .. } => "wait_on_yielded_surfaces",
-    };
+    let restored = package
+        .crystallized_operator
+        .as_ref()
+        .ok_or_else(|| "operator_role_topology_bundle_missing".to_owned())?
+        .restore_verified()
+        .map_err(|_| "operator_role_topology_restore_failed".to_owned())?;
     canonical_json_sha256(&(
         ROLE_TOPOLOGY_SCHEMA_V1,
-        operation_class,
-        &package.required_routing_atom_ids,
-        package.proof.verifier_schema.as_str(),
+        restored.role_graph().topology_commitment_sha256(),
     ))
     .map_err(str::to_owned)
 }
@@ -1329,7 +1377,7 @@ mod tests {
             serde_json::to_vec(&legacy).expect("legacy report encode"),
         )
         .expect("legacy report");
-        assert_eq!(restore_report(&root).expect("legacy restore"), legacy);
+        assert_eq!(restore_report(&root, None).expect("legacy restore"), legacy);
 
         let mut current = Ms4ClosedLoopReportV1::seal(31, Ms4ClosedLoopStageV1::Complete, "");
         current.schema = REPORT_SCHEMA_V4.to_owned();
@@ -1351,7 +1399,10 @@ mod tests {
             serde_json::to_vec(&current).expect("current report encode"),
         )
         .expect("current report");
-        assert_eq!(restore_report(&root).expect("current restore"), current);
+        assert_eq!(
+            restore_report(&root, None).expect("current restore"),
+            current
+        );
 
         let mut uncertified_v5 = current.clone();
         uncertified_v5.schema = REPORT_SCHEMA_V5.to_owned();
@@ -1361,5 +1412,74 @@ mod tests {
             Err("ms4_report_execution_certificate_missing".to_owned())
         );
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn revoked_report_preserves_completion_proof_and_closes_authority() {
+        let bundle = "a".repeat(64);
+        let package = "ms4-natural-revoked";
+        let execution = ExecutionCertificateV1::seal(
+            &bundle,
+            package,
+            ExecutionCertificateStatusV1::Revoked,
+            vec!["b".repeat(64)],
+            "runtime_false_bad_apply",
+        )
+        .expect("execution");
+        let law = LawCertificateV1::seal(
+            &bundle,
+            package,
+            LawCertificateStatusV1::Partial,
+            vec!["c".repeat(64)],
+            None,
+            "exact_memory_cleanup_receipt_missing",
+        )
+        .expect("law");
+        let mechanism = MechanismCertificateV1::seal(
+            &bundle,
+            package,
+            MechanismCertificateStatusV1::Collecting,
+            OperatorMechanismClassV1::Unresolved,
+            vec!["d".repeat(64)],
+            "post_center_holdout_collecting",
+        )
+        .expect("mechanism");
+        let entry = OperatorCertificationEntryV1::seal(
+            &bundle,
+            package,
+            &"e".repeat(64),
+            &"f".repeat(64),
+            execution,
+            law,
+            mechanism,
+            1,
+        )
+        .expect("entry");
+        let mut ledger =
+            nando_operator_admission::OperatorCertificationLedgerV1::empty().expect("ledger");
+        ledger.append(entry.clone()).expect("append");
+
+        let mut report = Ms4ClosedLoopReportV1::seal(
+            31,
+            Ms4ClosedLoopStageV1::Revoked,
+            "runtime_false_bad_apply",
+        );
+        report.package_id = Some(package.to_owned());
+        report.external_admission_pass = true;
+        report.authority_ready = false;
+        report.ordinary_cpu_receipt_root_sha256 = Some("1".repeat(64));
+        report.ordinary_cpu_completion_root_sha256 = Some("2".repeat(64));
+        report.certification_ledger_root_sha256 = Some(ledger.ledger_root_sha256.clone());
+        report.operator_certification = Some(entry);
+        report.k1_vocabulary_gate = Some(ledger.k1_vocabulary_gate().expect("k1 gate"));
+        report.reseal();
+        report.validate().expect("revoked report");
+
+        report.authority_ready = true;
+        report.reseal();
+        assert_eq!(
+            report.validate(),
+            Err("ms4_report_execution_revocation_missing".to_owned())
+        );
     }
 }

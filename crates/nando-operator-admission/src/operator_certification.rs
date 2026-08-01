@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 pub const OPERATOR_CERTIFICATION_LEDGER_SCHEMA_V1: &str = "nando.operator-certification-ledger.v1";
 pub const OPERATOR_CERTIFICATION_ENTRY_SCHEMA_V1: &str = "nando.operator-certification-entry.v1";
@@ -9,6 +11,9 @@ pub const EXECUTION_CERTIFICATE_SCHEMA_V1: &str = "nando.execution-certificate.v
 pub const LAW_CERTIFICATE_SCHEMA_V1: &str = "nando.law-certificate.v1";
 pub const MECHANISM_CERTIFICATE_SCHEMA_V1: &str = "nando.mechanism-certificate.v1";
 pub const EXACT_MEMORY_CLEANUP_RECEIPT_SCHEMA_V1: &str = "nando.exact-memory-cleanup-receipt.v1";
+pub const OPERATOR_CERTIFICATION_JOURNAL_EVENT_SCHEMA_V1: &str =
+    "nando.operator-certification-journal-event.v1";
+pub const OPERATOR_CERTIFICATION_ANCHOR_SCHEMA_V1: &str = "nando.operator-certification-anchor.v1";
 pub const K1_VOCABULARY_GATE_SCHEMA_V1: &str = "nando.k1-vocabulary-gate.v1";
 
 pub const K1_MIN_LAW_CERTIFICATES: u64 = 3;
@@ -96,10 +101,41 @@ pub struct ExactMemoryCleanupReceiptV1 {
     pub package_id: String,
     pub candidate_root_sha256: String,
     pub active_registry_root_sha256: String,
+    pub execution_payload_sha256: String,
     pub standalone_restart_root_sha256: String,
+    pub challenge_root_sha256: String,
+    pub source_receipt_root_sha256: String,
+    pub verifier_tcb_root_sha256: String,
+    pub signer_public_key_sha256: String,
+    pub signature_ed25519_hex: String,
     pub learner_state_absent: bool,
     pub raw_evidence_absent: bool,
     pub exact_example_authority_absent: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperatorCertificationJournalEventV1 {
+    pub schema: String,
+    pub event_root_sha256: String,
+    pub sequence: u64,
+    pub previous_event_root_sha256: String,
+    pub entry: OperatorCertificationEntryV1,
+    pub resulting_ledger_root_sha256: String,
+    pub signer_public_key_sha256: String,
+    pub signature_ed25519_hex: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperatorCertificationAnchorV1 {
+    pub schema: String,
+    pub anchor_root_sha256: String,
+    pub revision: u64,
+    pub journal_event_root_sha256: String,
+    pub ledger_root_sha256: String,
+    pub signer_public_key_sha256: String,
+    pub signature_ed25519_hex: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -302,12 +338,18 @@ impl MechanismCertificateV1 {
 }
 
 impl ExactMemoryCleanupReceiptV1 {
-    pub fn seal(
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal_verified(
         bundle_id_sha256: &str,
         package_id: &str,
         candidate_root_sha256: &str,
         active_registry_root_sha256: &str,
+        execution_payload_sha256: &str,
         standalone_restart_root_sha256: &str,
+        challenge_root_sha256: &str,
+        source_receipt_root_sha256: &str,
+        verifier_tcb_root_sha256: &str,
+        signing_key: &SigningKey,
     ) -> Result<Self, &'static str> {
         let mut receipt = Self {
             schema: EXACT_MEMORY_CLEANUP_RECEIPT_SCHEMA_V1.to_owned(),
@@ -316,13 +358,20 @@ impl ExactMemoryCleanupReceiptV1 {
             package_id: package_id.to_owned(),
             candidate_root_sha256: candidate_root_sha256.to_owned(),
             active_registry_root_sha256: active_registry_root_sha256.to_owned(),
+            execution_payload_sha256: execution_payload_sha256.to_owned(),
             standalone_restart_root_sha256: standalone_restart_root_sha256.to_owned(),
+            challenge_root_sha256: challenge_root_sha256.to_owned(),
+            source_receipt_root_sha256: source_receipt_root_sha256.to_owned(),
+            verifier_tcb_root_sha256: verifier_tcb_root_sha256.to_owned(),
+            signer_public_key_sha256: verifying_key_sha256(&signing_key.verifying_key()),
+            signature_ed25519_hex: String::new(),
             learner_state_absent: true,
             raw_evidence_absent: true,
             exact_example_authority_absent: true,
         };
         receipt.receipt_root_sha256 = receipt.expected_root()?;
-        receipt.validate()?;
+        receipt.signature_ed25519_hex = sign_root(signing_key, &receipt.receipt_root_sha256)?;
+        receipt.validate_with_public_key(&signing_key.verifying_key())?;
         Ok(receipt)
     }
 
@@ -332,11 +381,17 @@ impl ExactMemoryCleanupReceiptV1 {
             self.bundle_id_sha256.as_str(),
             self.candidate_root_sha256.as_str(),
             self.active_registry_root_sha256.as_str(),
+            self.execution_payload_sha256.as_str(),
             self.standalone_restart_root_sha256.as_str(),
+            self.challenge_root_sha256.as_str(),
+            self.source_receipt_root_sha256.as_str(),
+            self.verifier_tcb_root_sha256.as_str(),
+            self.signer_public_key_sha256.as_str(),
         ];
         if self.schema != EXACT_MEMORY_CLEANUP_RECEIPT_SCHEMA_V1
             || self.package_id.is_empty()
             || !roots.into_iter().all(valid_nonzero_sha256)
+            || decode_signature(&self.signature_ed25519_hex).is_err()
             || !self.learner_state_absent
             || !self.raw_evidence_absent
             || !self.exact_example_authority_absent
@@ -347,6 +402,22 @@ impl ExactMemoryCleanupReceiptV1 {
         Ok(())
     }
 
+    pub fn validate_with_public_key(
+        &self,
+        verifying_key: &VerifyingKey,
+    ) -> Result<(), &'static str> {
+        self.validate()?;
+        if self.signer_public_key_sha256 != verifying_key_sha256(verifying_key) {
+            return Err("exact_memory_cleanup_signer_mismatch");
+        }
+        verify_root_signature(
+            verifying_key,
+            &self.receipt_root_sha256,
+            &self.signature_ed25519_hex,
+        )
+        .map_err(|_| "exact_memory_cleanup_signature_invalid")
+    }
+
     fn expected_root(&self) -> Result<String, &'static str> {
         canonical_json_sha256(&(
             EXACT_MEMORY_CLEANUP_RECEIPT_SCHEMA_V1,
@@ -354,10 +425,147 @@ impl ExactMemoryCleanupReceiptV1 {
             self.package_id.as_str(),
             self.candidate_root_sha256.as_str(),
             self.active_registry_root_sha256.as_str(),
+            self.execution_payload_sha256.as_str(),
             self.standalone_restart_root_sha256.as_str(),
+            self.challenge_root_sha256.as_str(),
+            self.source_receipt_root_sha256.as_str(),
+            self.verifier_tcb_root_sha256.as_str(),
+            self.signer_public_key_sha256.as_str(),
             true,
             true,
             true,
+        ))
+    }
+}
+
+impl OperatorCertificationJournalEventV1 {
+    pub fn seal(
+        sequence: u64,
+        previous_event_root_sha256: &str,
+        entry: OperatorCertificationEntryV1,
+        resulting_ledger_root_sha256: &str,
+        signing_key: &SigningKey,
+    ) -> Result<Self, &'static str> {
+        let mut event = Self {
+            schema: OPERATOR_CERTIFICATION_JOURNAL_EVENT_SCHEMA_V1.to_owned(),
+            event_root_sha256: String::new(),
+            sequence,
+            previous_event_root_sha256: previous_event_root_sha256.to_owned(),
+            entry,
+            resulting_ledger_root_sha256: resulting_ledger_root_sha256.to_owned(),
+            signer_public_key_sha256: verifying_key_sha256(&signing_key.verifying_key()),
+            signature_ed25519_hex: String::new(),
+        };
+        event.event_root_sha256 = event.expected_root()?;
+        event.signature_ed25519_hex = sign_root(signing_key, &event.event_root_sha256)?;
+        event.validate_with_public_key(&signing_key.verifying_key())?;
+        Ok(event)
+    }
+
+    pub fn validate(&self) -> Result<(), &'static str> {
+        self.entry.validate()?;
+        if self.schema != OPERATOR_CERTIFICATION_JOURNAL_EVENT_SCHEMA_V1
+            || self.sequence == 0
+            || !valid_nonzero_sha256(&self.event_root_sha256)
+            || !valid_nonzero_sha256(&self.previous_event_root_sha256)
+            || !valid_nonzero_sha256(&self.resulting_ledger_root_sha256)
+            || !valid_nonzero_sha256(&self.signer_public_key_sha256)
+            || decode_signature(&self.signature_ed25519_hex).is_err()
+            || self.event_root_sha256 != self.expected_root()?
+        {
+            return Err("operator_certification_journal_event_invalid");
+        }
+        Ok(())
+    }
+
+    pub fn validate_with_public_key(
+        &self,
+        verifying_key: &VerifyingKey,
+    ) -> Result<(), &'static str> {
+        self.validate()?;
+        if self.signer_public_key_sha256 != verifying_key_sha256(verifying_key) {
+            return Err("operator_certification_journal_signer_mismatch");
+        }
+        verify_root_signature(
+            verifying_key,
+            &self.event_root_sha256,
+            &self.signature_ed25519_hex,
+        )
+        .map_err(|_| "operator_certification_journal_signature_invalid")
+    }
+
+    fn expected_root(&self) -> Result<String, &'static str> {
+        canonical_json_sha256(&(
+            OPERATOR_CERTIFICATION_JOURNAL_EVENT_SCHEMA_V1,
+            self.sequence,
+            self.previous_event_root_sha256.as_str(),
+            self.entry.entry_root_sha256.as_str(),
+            self.resulting_ledger_root_sha256.as_str(),
+            self.signer_public_key_sha256.as_str(),
+        ))
+    }
+}
+
+impl OperatorCertificationAnchorV1 {
+    pub fn seal(
+        revision: u64,
+        journal_event_root_sha256: &str,
+        ledger_root_sha256: &str,
+        signing_key: &SigningKey,
+    ) -> Result<Self, &'static str> {
+        let mut anchor = Self {
+            schema: OPERATOR_CERTIFICATION_ANCHOR_SCHEMA_V1.to_owned(),
+            anchor_root_sha256: String::new(),
+            revision,
+            journal_event_root_sha256: journal_event_root_sha256.to_owned(),
+            ledger_root_sha256: ledger_root_sha256.to_owned(),
+            signer_public_key_sha256: verifying_key_sha256(&signing_key.verifying_key()),
+            signature_ed25519_hex: String::new(),
+        };
+        anchor.anchor_root_sha256 = anchor.expected_root()?;
+        anchor.signature_ed25519_hex = sign_root(signing_key, &anchor.anchor_root_sha256)?;
+        anchor.validate_with_public_key(&signing_key.verifying_key())?;
+        Ok(anchor)
+    }
+
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.schema != OPERATOR_CERTIFICATION_ANCHOR_SCHEMA_V1
+            || self.revision == 0
+            || !valid_nonzero_sha256(&self.anchor_root_sha256)
+            || !valid_nonzero_sha256(&self.journal_event_root_sha256)
+            || !valid_nonzero_sha256(&self.ledger_root_sha256)
+            || !valid_nonzero_sha256(&self.signer_public_key_sha256)
+            || decode_signature(&self.signature_ed25519_hex).is_err()
+            || self.anchor_root_sha256 != self.expected_root()?
+        {
+            return Err("operator_certification_anchor_invalid");
+        }
+        Ok(())
+    }
+
+    pub fn validate_with_public_key(
+        &self,
+        verifying_key: &VerifyingKey,
+    ) -> Result<(), &'static str> {
+        self.validate()?;
+        if self.signer_public_key_sha256 != verifying_key_sha256(verifying_key) {
+            return Err("operator_certification_anchor_signer_mismatch");
+        }
+        verify_root_signature(
+            verifying_key,
+            &self.anchor_root_sha256,
+            &self.signature_ed25519_hex,
+        )
+        .map_err(|_| "operator_certification_anchor_signature_invalid")
+    }
+
+    fn expected_root(&self) -> Result<String, &'static str> {
+        canonical_json_sha256(&(
+            OPERATOR_CERTIFICATION_ANCHOR_SCHEMA_V1,
+            self.revision,
+            self.journal_event_root_sha256.as_str(),
+            self.ledger_root_sha256.as_str(),
+            self.signer_public_key_sha256.as_str(),
         ))
     }
 }
@@ -490,7 +698,54 @@ impl OperatorCertificationLedgerV1 {
         Ok(true)
     }
 
+    pub fn migrate_role_topology(
+        &mut self,
+        entry: OperatorCertificationEntryV1,
+        legacy_role_topology_id_sha256: &str,
+        canonical_role_topology_id_sha256: &str,
+    ) -> Result<bool, &'static str> {
+        self.validate()?;
+        entry.validate()?;
+        let previous = self
+            .entries
+            .iter()
+            .rev()
+            .find(|existing| existing.package_id == entry.package_id)
+            .ok_or("operator_certification_topology_migration_predecessor_missing")?;
+        if previous.role_topology_id_sha256 != legacy_role_topology_id_sha256
+            || entry.role_topology_id_sha256 != canonical_role_topology_id_sha256
+            || legacy_role_topology_id_sha256 == canonical_role_topology_id_sha256
+            || previous.bundle_id_sha256 != entry.bundle_id_sha256
+            || previous.semantic_law_id_sha256 != entry.semantic_law_id_sha256
+            || previous.execution != entry.execution
+            || previous.law != entry.law
+            || previous.mechanism != entry.mechanism
+            || previous.false_bad_apply != entry.false_bad_apply
+            || previous.product_registry_member != entry.product_registry_member
+            || previous.epistemic_registry_member != entry.epistemic_registry_member
+            || previous.k1_unit_eligible != entry.k1_unit_eligible
+        {
+            return Err("operator_certification_topology_migration_invalid");
+        }
+        self.entries.push(entry);
+        self.revision = u64::try_from(self.entries.len()).map_err(|_| "certification_revision")?;
+        self.reseal()?;
+        self.validate_with_topology_migration(
+            legacy_role_topology_id_sha256,
+            canonical_role_topology_id_sha256,
+        )?;
+        Ok(true)
+    }
+
     pub fn validate(&self) -> Result<(), &'static str> {
+        self.validate_with_topology_migration("", "")
+    }
+
+    fn validate_with_topology_migration(
+        &self,
+        legacy_role_topology_id_sha256: &str,
+        canonical_role_topology_id_sha256: &str,
+    ) -> Result<(), &'static str> {
         let expected_revision =
             u64::try_from(self.entries.len()).map_err(|_| "certification_revision")?;
         let mut roots = BTreeSet::new();
@@ -508,8 +763,16 @@ impl OperatorCertificationLedgerV1 {
         }
         let mut latest: BTreeMap<&str, &OperatorCertificationEntryV1> = BTreeMap::new();
         for entry in &self.entries {
-            if let Some(previous) = latest.insert(entry.package_id.as_str(), entry) {
-                validate_entry_transition(previous, entry)?;
+            if let Some(previous) = latest.insert(entry.package_id.as_str(), entry)
+                && validate_entry_transition(previous, entry).is_err()
+                && !valid_topology_migration_pair(
+                    previous,
+                    entry,
+                    legacy_role_topology_id_sha256,
+                    canonical_role_topology_id_sha256,
+                )
+            {
+                return Err("operator_certification_transition_invalid");
             }
         }
         Ok(())
@@ -693,6 +956,64 @@ certificate_binding!(ExecutionCertificateV1);
 certificate_binding!(LawCertificateV1);
 certificate_binding!(MechanismCertificateV1);
 
+#[must_use]
+pub fn verifying_key_sha256(verifying_key: &VerifyingKey) -> String {
+    format!("{:x}", Sha256::digest(verifying_key.as_bytes()))
+}
+
+fn sign_root(signing_key: &SigningKey, root_sha256: &str) -> Result<String, &'static str> {
+    let root = decode_hex_array::<32>(root_sha256).ok_or("signed_root_invalid")?;
+    Ok(encode_hex(&signing_key.sign(&root).to_bytes()))
+}
+
+fn verify_root_signature(
+    verifying_key: &VerifyingKey,
+    root_sha256: &str,
+    signature_hex: &str,
+) -> Result<(), &'static str> {
+    let root = decode_hex_array::<32>(root_sha256).ok_or("signed_root_invalid")?;
+    let signature = decode_signature(signature_hex)?;
+    verifying_key
+        .verify(&root, &signature)
+        .map_err(|_| "signature_invalid")
+}
+
+fn decode_signature(value: &str) -> Result<Signature, &'static str> {
+    let bytes = decode_hex_array::<64>(value).ok_or("signature_encoding_invalid")?;
+    Ok(Signature::from_bytes(&bytes))
+}
+
+fn decode_hex_array<const N: usize>(value: &str) -> Option<[u8; N]> {
+    if value.len() != N * 2 {
+        return None;
+    }
+    let mut output = [0_u8; N];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        let high = decode_hex_digit(pair[0])?;
+        let low = decode_hex_digit(pair[1])?;
+        output[index] = high << 4 | low;
+    }
+    Some(output)
+}
+
+fn decode_hex_digit(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        _ => None,
+    }
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
+}
+
 fn canonical_roots(mut roots: Vec<String>) -> Result<Vec<String>, &'static str> {
     roots.sort();
     roots.dedup();
@@ -757,6 +1078,29 @@ fn validate_entry_transition(
         return Err("operator_certification_transition_invalid");
     }
     Ok(())
+}
+
+fn valid_topology_migration_pair(
+    previous: &OperatorCertificationEntryV1,
+    next: &OperatorCertificationEntryV1,
+    legacy_role_topology_id_sha256: &str,
+    canonical_role_topology_id_sha256: &str,
+) -> bool {
+    previous.package_id == next.package_id
+        && previous.bundle_id_sha256 == next.bundle_id_sha256
+        && previous.semantic_law_id_sha256 == next.semantic_law_id_sha256
+        && previous.role_topology_id_sha256 != next.role_topology_id_sha256
+        && (legacy_role_topology_id_sha256.is_empty()
+            || previous.role_topology_id_sha256 == legacy_role_topology_id_sha256)
+        && (canonical_role_topology_id_sha256.is_empty()
+            || next.role_topology_id_sha256 == canonical_role_topology_id_sha256)
+        && previous.execution == next.execution
+        && previous.law == next.law
+        && previous.mechanism == next.mechanism
+        && previous.false_bad_apply == next.false_bad_apply
+        && previous.product_registry_member == next.product_registry_member
+        && previous.epistemic_registry_member == next.epistemic_registry_member
+        && previous.k1_unit_eligible == next.k1_unit_eligible
 }
 
 #[cfg(test)]
@@ -852,6 +1196,114 @@ mod tests {
         assert!(partial.product_registry_member);
         assert!(!partial.epistemic_registry_member);
         assert!(!partial.k1_unit_eligible);
+    }
+
+    #[test]
+    fn cleanup_receipt_requires_the_external_verifier_signature() {
+        let signer = SigningKey::from_bytes(&[7_u8; 32]);
+        let receipt = ExactMemoryCleanupReceiptV1::seal_verified(
+            &root('a'),
+            "package-one",
+            &root('b'),
+            &root('c'),
+            &root('d'),
+            &root('e'),
+            &root('f'),
+            &root('1'),
+            &root('2'),
+            &signer,
+        )
+        .expect("signed receipt");
+        assert_eq!(
+            receipt.validate_with_public_key(&signer.verifying_key()),
+            Ok(())
+        );
+        let unrelated = SigningKey::from_bytes(&[8_u8; 32]);
+        assert_eq!(
+            receipt.validate_with_public_key(&unrelated.verifying_key()),
+            Err("exact_memory_cleanup_signer_mismatch")
+        );
+
+        let mut self_attested = receipt;
+        self_attested.signature_ed25519_hex = "00".repeat(64);
+        assert_eq!(
+            self_attested.validate_with_public_key(&signer.verifying_key()),
+            Err("exact_memory_cleanup_signature_invalid")
+        );
+    }
+
+    #[test]
+    fn durable_false_apply_revokes_execution_and_closes_k1() {
+        let mut ledger = OperatorCertificationLedgerV1::empty().expect("ledger");
+        let passed = entry(
+            "operator-a",
+            '1',
+            'a',
+            LawCertificateStatusV1::Pass,
+            MechanismCertificateStatusV1::Collecting,
+            OperatorMechanismClassV1::Unresolved,
+        );
+        ledger.append(passed.clone()).expect("pass entry");
+
+        let execution = ExecutionCertificateV1::seal(
+            &passed.bundle_id_sha256,
+            &passed.package_id,
+            ExecutionCertificateStatusV1::Revoked,
+            vec![root('8')],
+            "runtime_false_bad_apply",
+        )
+        .expect("revoked execution");
+        let revoked = OperatorCertificationEntryV1::seal(
+            &passed.bundle_id_sha256,
+            &passed.package_id,
+            &passed.semantic_law_id_sha256,
+            &passed.role_topology_id_sha256,
+            execution,
+            passed.law,
+            passed.mechanism,
+            1,
+        )
+        .expect("revoked entry");
+        ledger
+            .append(revoked.clone())
+            .expect("revocation transition");
+        assert!(!revoked.product_registry_member);
+        assert!(!revoked.k1_unit_eligible);
+        assert_eq!(
+            ledger.k1_vocabulary_gate().expect("gate").law_certificates,
+            0
+        );
+    }
+
+    #[test]
+    fn topology_identity_migrates_only_when_certificates_are_unchanged() {
+        let mut ledger = OperatorCertificationLedgerV1::empty().expect("ledger");
+        let legacy = entry(
+            "operator-a",
+            '1',
+            'a',
+            LawCertificateStatusV1::Partial,
+            MechanismCertificateStatusV1::Collecting,
+            OperatorMechanismClassV1::Unresolved,
+        );
+        ledger.append(legacy.clone()).expect("legacy entry");
+        let mut canonical = legacy.clone();
+        canonical.role_topology_id_sha256 = root('b');
+        canonical.entry_root_sha256 = canonical.expected_root().expect("canonical root");
+        ledger
+            .migrate_role_topology(canonical.clone(), &root('a'), &root('b'))
+            .expect("topology migration");
+        assert_eq!(ledger.validate(), Ok(()));
+
+        let mut forged = canonical;
+        forged.role_topology_id_sha256 = root('c');
+        forged.false_bad_apply = 1;
+        forged.k1_unit_eligible = false;
+        forged.entry_root_sha256 = forged.expected_root().expect("forged root");
+        assert_eq!(
+            ledger.migrate_role_topology(forged, &root('b'), &root('c')),
+            Err("operator_certification_topology_migration_invalid")
+        );
     }
 
     #[test]

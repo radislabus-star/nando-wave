@@ -26,7 +26,7 @@ mod multi_source_frame_archive;
 mod multi_source_live;
 mod multi_source_topology_archive;
 mod nginx_terminal;
-mod operator_certification;
+pub mod operator_certification;
 mod opportunity_bridge;
 mod provider_capture;
 pub mod remote_evidence_spool;
@@ -196,6 +196,11 @@ pub struct ServingConfig {
     pub remote_evidence_client_keys_path: PathBuf,
     pub ms4_closed_loop_path: PathBuf,
     pub ms4_ordinary_economics_path: PathBuf,
+    pub operator_certification_anchor_path: PathBuf,
+    pub operator_certification_authority_socket_path: PathBuf,
+    pub operator_certification_authority_public_key_path: PathBuf,
+    pub operator_cleanup_verifier_public_key_path: PathBuf,
+    pub operator_cleanup_receipts_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -442,6 +447,26 @@ impl ServingConfig {
                 "NANDO_MS4_ORDINARY_ECONOMICS_JSONL",
                 &state_dir,
                 "economics-live.json",
+            ),
+            operator_certification_anchor_path: env_path(
+                "NANDO_OPERATOR_CERTIFICATION_ANCHOR",
+                "/var/lib/nando-wave-certification-anchor/operator-certification-anchor-v1.json",
+            ),
+            operator_certification_authority_socket_path: env_path(
+                "NANDO_OPERATOR_CERTIFICATION_AUTHORITY_SOCKET",
+                "/run/nando-operator-certification/authority.sock",
+            ),
+            operator_certification_authority_public_key_path: env_path(
+                "NANDO_OPERATOR_CERTIFICATION_AUTHORITY_PUBLIC_KEY",
+                "/etc/nando-wave/certification/authority-ed25519.pub",
+            ),
+            operator_cleanup_verifier_public_key_path: env_path(
+                "NANDO_OPERATOR_CLEANUP_VERIFIER_PUBLIC_KEY",
+                "/etc/nando-wave/certification/cleanup-verifier-ed25519.pub",
+            ),
+            operator_cleanup_receipts_path: env_path(
+                "NANDO_OPERATOR_CLEANUP_RECEIPTS",
+                "/var/lib/nando-wave-cleanup-receipts-v1",
             ),
         })
     }
@@ -955,8 +980,20 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
             runtime.observe_historical_topology(&row, observed_at)?;
         }
     }
+    let certification_config = operator_certification::CertificationAuthorityConfigV1 {
+        root: config.ms4_closed_loop_path.clone(),
+        cleanup_receipts_path: config.operator_cleanup_receipts_path.clone(),
+        anchor_path: config.operator_certification_anchor_path.clone(),
+        authority_socket_path: config.operator_certification_authority_socket_path.clone(),
+        authority_public_key_path: config
+            .operator_certification_authority_public_key_path
+            .clone(),
+        cleanup_public_key_path: config.operator_cleanup_verifier_public_key_path.clone(),
+        response_registry_path: config.response_registry_path.clone(),
+        runtime_revocations_path: config.runtime_package_revocations_path.clone(),
+    };
     let restored_ms4_closed_loop_report =
-        ms4_closed_loop::restore_report(&config.ms4_closed_loop_path)?;
+        ms4_closed_loop::restore_report(&config.ms4_closed_loop_path, Some(&certification_config))?;
     let ms4_exact_wave_precommit_writer = if config.client_allow_local_accept {
         Some(Arc::new(Mutex::new(
             ms4_exact_wave_holdout::Ms4ExactWavePrecommitWriter::open(
@@ -8159,6 +8196,12 @@ mod tests {
             remote_evidence_client_keys_path: root.join("remote-evidence-keys"),
             ms4_closed_loop_path: root.join("multi-source-live-v2/ms4-closed-loop-v1"),
             ms4_ordinary_economics_path: root.join("economics.jsonl"),
+            operator_certification_anchor_path: root.join("certification-anchor.json"),
+            operator_certification_authority_socket_path: root.join("certification.sock"),
+            operator_certification_authority_public_key_path: root
+                .join("certification-authority.pub"),
+            operator_cleanup_verifier_public_key_path: root.join("cleanup-verifier.pub"),
+            operator_cleanup_receipts_path: root.join("cleanup-receipts"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))

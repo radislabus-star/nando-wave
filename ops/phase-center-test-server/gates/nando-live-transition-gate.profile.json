@@ -11,7 +11,8 @@
   "structural_routes": [
     "01_ingest_induction",
     "02_package_lifecycle",
-    "03_serving_recovery"
+    "03_serving_recovery",
+    "04_operator_certification"
   ],
   "wave_causal": {
     "receipt": "ops/phase-center-test-server/gates/receipts/WAVE_CAUSAL_OPERATOR_PROOF_V1.json",
