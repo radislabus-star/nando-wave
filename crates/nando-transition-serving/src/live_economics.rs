@@ -3,13 +3,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::{FramedCborLedger, read_framed_cbor, write_atomic_cbor};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
 
 const EVENT_SCHEMA: &str = "nando.live-economics-event.v4";
 const SNAPSHOT_SCHEMA: &str = "nando.economics-snapshot.v4";
 const CHECKPOINT_SCHEMA: &str = "nando.live-economics-checkpoint.v4";
+const PACKAGE_COMPLETION_SCHEMA: &str = "nando.package-cpu-completion-receipt.v1";
 const MINIMUM_M3_INTENTS: usize = 10_000;
 const MINIMUM_M3_SECONDS: u64 = 24 * 60 * 60;
 const REQUIRED_M3_WINDOWS: usize = 3;
@@ -44,6 +46,12 @@ struct FallbackCounter {
 struct PackageVerifiedEconomics {
     ordinary_accepts: u64,
     exact_input_tokens: u64,
+    #[serde(default)]
+    first_accept_timestamp_unix: u64,
+    #[serde(default)]
+    first_exact_input_tokens: u64,
+    #[serde(default)]
+    first_receipt_root_sha256: String,
     last_accept_timestamp_unix: u64,
     last_receipt_root_sha256: String,
 }
@@ -54,6 +62,62 @@ struct VerifiedReceiptMetadata {
     exact_input_tokens: u64,
     accepted_at_unix: u64,
     receipt_root_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PackageCpuCompletionReceiptV1 {
+    pub schema: String,
+    pub completion_root_sha256: String,
+    pub package_id: String,
+    pub intent_sha256: String,
+    pub exact_input_tokens: u64,
+    pub accepted_at_unix: u64,
+    pub verification_receipt_root_sha256: String,
+}
+
+impl PackageCpuCompletionReceiptV1 {
+    fn seal(intent_sha256: &str, metadata: &VerifiedReceiptMetadata) -> Result<Self, String> {
+        let mut receipt = Self {
+            schema: PACKAGE_COMPLETION_SCHEMA.to_owned(),
+            completion_root_sha256: String::new(),
+            package_id: metadata.package_id.clone(),
+            intent_sha256: intent_sha256.to_owned(),
+            exact_input_tokens: metadata.exact_input_tokens,
+            accepted_at_unix: metadata.accepted_at_unix,
+            verification_receipt_root_sha256: metadata.receipt_root_sha256.clone(),
+        };
+        receipt.completion_root_sha256 = receipt.expected_root()?;
+        receipt.validate()?;
+        Ok(receipt)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != PACKAGE_COMPLETION_SCHEMA
+            || !valid_nonzero_sha256(&self.completion_root_sha256)
+            || !valid_package_id(&self.package_id)
+            || !valid_sha256_hex(&self.intent_sha256)
+            || self.exact_input_tokens == 0
+            || self.accepted_at_unix == 0
+            || !valid_sha256_hex(&self.verification_receipt_root_sha256)
+            || self.completion_root_sha256 != self.expected_root()?
+        {
+            return Err("package_cpu_completion_receipt_invalid".to_owned());
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> Result<String, String> {
+        canonical_json_sha256(&(
+            PACKAGE_COMPLETION_SCHEMA,
+            self.package_id.as_str(),
+            self.intent_sha256.as_str(),
+            self.exact_input_tokens,
+            self.accepted_at_unix,
+            self.verification_receipt_root_sha256.as_str(),
+        ))
+        .map_err(str::to_owned)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -112,6 +176,7 @@ struct EconomicsCheckpoint {
 
 pub struct LiveEconomicsLedger {
     journal: FramedCborLedger,
+    completion_journal: FramedCborLedger,
     checkpoint_path: PathBuf,
     snapshot_path: PathBuf,
     prior_epoch_schema: String,
@@ -134,6 +199,7 @@ pub struct LiveEconomicsLedger {
     parity_failure_intents: BTreeSet<String>,
     verified_receipt_by_intent: BTreeMap<String, VerifiedReceiptMetadata>,
     verified_by_package: BTreeMap<String, PackageVerifiedEconomics>,
+    completion_roots_by_key: BTreeMap<(String, String), String>,
     events_since_checkpoint: u64,
     last_checkpoint: Instant,
     last_snapshot: Instant,
@@ -146,6 +212,7 @@ impl LiveEconomicsLedger {
         // V3 used a user-turn identity for multiple provider calls. V4 keeps the
         // old ledger immutable and starts the corrected request-event domain.
         let ledger_dir = state_dir.join("economics-events-v4");
+        let completion_dir = state_dir.join("package-cpu-completions-v1");
         let checkpoint_path = state_dir.join("economics-live-v4.checkpoint");
         let snapshot_path = state_dir.join("economics-live.json");
         let checkpoint = fs::read(&checkpoint_path)
@@ -167,6 +234,12 @@ impl LiveEconomicsLedger {
                 };
             Self {
                 journal: FramedCborLedger::open(&ledger_dir, "economics")?,
+                completion_journal: FramedCborLedger::open_with_limits(
+                    &completion_dir,
+                    "completion",
+                    64 * 1024 * 1024,
+                    1,
+                )?,
                 checkpoint_path,
                 snapshot_path,
                 prior_epoch_schema,
@@ -189,6 +262,7 @@ impl LiveEconomicsLedger {
                 parity_failure_intents: checkpoint.parity_failure_intents,
                 verified_receipt_by_intent: checkpoint.verified_receipt_by_intent,
                 verified_by_package: checkpoint.verified_by_package,
+                completion_roots_by_key: BTreeMap::new(),
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 last_snapshot: Instant::now(),
@@ -196,6 +270,12 @@ impl LiveEconomicsLedger {
         } else {
             Self {
                 journal: FramedCborLedger::open(&ledger_dir, "economics")?,
+                completion_journal: FramedCborLedger::open_with_limits(
+                    &completion_dir,
+                    "completion",
+                    64 * 1024 * 1024,
+                    1,
+                )?,
                 checkpoint_path,
                 snapshot_path,
                 prior_epoch_schema: prior_epoch.0,
@@ -218,17 +298,33 @@ impl LiveEconomicsLedger {
                 parity_failure_intents: BTreeSet::new(),
                 verified_receipt_by_intent: BTreeMap::new(),
                 verified_by_package: BTreeMap::new(),
+                completion_roots_by_key: BTreeMap::new(),
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 last_snapshot: Instant::now(),
             }
         };
+        for receipt in
+            read_framed_cbor::<PackageCpuCompletionReceiptV1>(&completion_dir, "completion")?
+        {
+            receipt.validate()?;
+            let key = (receipt.package_id.clone(), receipt.intent_sha256.clone());
+            if ledger
+                .completion_roots_by_key
+                .insert(key, receipt.completion_root_sha256.clone())
+                .is_some_and(|existing| existing != receipt.completion_root_sha256)
+            {
+                return Err("package_cpu_completion_receipt_conflict".to_owned());
+            }
+        }
         for event in read_framed_cbor::<EconomicsEvent>(&ledger_dir, "economics")? {
             if event.schema == EVENT_SCHEMA {
                 ledger.apply(event);
             }
         }
         ledger.reconcile_false_accept_outcomes();
+        ledger.rebuild_verified_by_package();
+        ledger.backfill_package_completion_receipts()?;
         for intent_sha256 in ledger.eligible.keys() {
             if !ledger.verified.contains_key(intent_sha256)
                 && !ledger.fallback_by_intent.contains_key(intent_sha256)
@@ -381,13 +477,62 @@ impl LiveEconomicsLedger {
 
     fn record(&mut self, event: EconomicsEvent) -> Result<(), String> {
         let terminal = event.kind != "request";
+        let completion_intent =
+            (event.kind == "verified_accept").then(|| event.intent_sha256.clone());
         self.journal.append(&event)?;
+        if terminal {
+            self.journal.sync()?;
+        }
         self.apply(event);
+        if let Some(intent_sha256) = completion_intent {
+            self.append_package_completion_receipt(&intent_sha256)?;
+            self.persist_snapshot()?;
+            self.last_snapshot = Instant::now();
+        }
         self.events_since_checkpoint = self.events_since_checkpoint.saturating_add(1);
         if terminal {
             self.roll_window_if_mature();
         }
         self.maybe_persist(true)
+    }
+
+    fn backfill_package_completion_receipts(&mut self) -> Result<(), String> {
+        let mut intents = self
+            .verified_receipt_by_intent
+            .iter()
+            .map(|(intent, metadata)| {
+                (
+                    metadata.accepted_at_unix,
+                    intent.clone(),
+                    metadata.receipt_root_sha256.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        intents.sort();
+        for (_, intent_sha256, _) in intents {
+            self.append_package_completion_receipt(&intent_sha256)?;
+        }
+        Ok(())
+    }
+
+    fn append_package_completion_receipt(&mut self, intent_sha256: &str) -> Result<(), String> {
+        let Some(metadata) = self.verified_receipt_by_intent.get(intent_sha256) else {
+            return Ok(());
+        };
+        let receipt = PackageCpuCompletionReceiptV1::seal(intent_sha256, metadata)?;
+        let key = (receipt.package_id.clone(), receipt.intent_sha256.clone());
+        if let Some(existing) = self.completion_roots_by_key.get(&key) {
+            return if existing == &receipt.completion_root_sha256 {
+                Ok(())
+            } else {
+                Err("package_cpu_completion_receipt_conflict".to_owned())
+            };
+        }
+        self.completion_journal.append(&receipt)?;
+        self.completion_journal.sync()?;
+        self.completion_roots_by_key
+            .insert(key, receipt.completion_root_sha256);
+        Ok(())
     }
 
     fn apply(&mut self, event: EconomicsEvent) {
@@ -449,6 +594,14 @@ impl LiveEconomicsLedger {
                         .verified_by_package
                         .entry(event.package_id)
                         .or_default();
+                    if package.first_accept_timestamp_unix == 0
+                        || event.timestamp_unix < package.first_accept_timestamp_unix
+                    {
+                        package.first_accept_timestamp_unix = event.timestamp_unix;
+                        package.first_exact_input_tokens = exact_input_tokens;
+                        package.first_receipt_root_sha256 =
+                            event.verification_receipt_root_sha256.clone();
+                    }
                     package.ordinary_accepts = package.ordinary_accepts.saturating_add(1);
                     package.exact_input_tokens = package
                         .exact_input_tokens
@@ -528,6 +681,13 @@ impl LiveEconomicsLedger {
                 .verified_by_package
                 .entry(metadata.package_id.clone())
                 .or_default();
+            if package.first_accept_timestamp_unix == 0
+                || metadata.accepted_at_unix < package.first_accept_timestamp_unix
+            {
+                package.first_accept_timestamp_unix = metadata.accepted_at_unix;
+                package.first_exact_input_tokens = metadata.exact_input_tokens;
+                package.first_receipt_root_sha256 = metadata.receipt_root_sha256.clone();
+            }
             package.ordinary_accepts = package.ordinary_accepts.saturating_add(1);
             package.exact_input_tokens = package
                 .exact_input_tokens
@@ -784,6 +944,76 @@ impl LiveEconomicsLedger {
                 && self.dedupe_conflicts == 0,
         }
     }
+}
+
+pub(super) fn first_durable_package_completion(
+    snapshot_path: &Path,
+    package_id: &str,
+) -> Result<Option<PackageCpuCompletionReceiptV1>, String> {
+    let snapshot_bytes = match fs::read(snapshot_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("package_completion_snapshot_read:{error}")),
+    };
+    let snapshot: Value = serde_json::from_slice(&snapshot_bytes)
+        .map_err(|error| format!("package_completion_snapshot_decode:{error}"))?;
+    if snapshot.get("schema").and_then(Value::as_str) != Some(SNAPSHOT_SCHEMA) {
+        return Ok(None);
+    }
+    let clean = snapshot.get("false_accepts").and_then(Value::as_u64) == Some(0)
+        && snapshot
+            .get("runtime_parity_mismatches")
+            .and_then(Value::as_u64)
+            == Some(0)
+        && snapshot.get("pipeline_dropped").and_then(Value::as_u64) == Some(0);
+    if !clean {
+        return Ok(None);
+    }
+    let Some(package) = snapshot
+        .get("verified_by_package")
+        .and_then(Value::as_object)
+        .and_then(|packages| packages.get(package_id))
+    else {
+        return Ok(None);
+    };
+    if !package
+        .get("ordinary_accepts")
+        .and_then(Value::as_u64)
+        .is_some_and(|accepts| accepts > 0)
+    {
+        return Ok(None);
+    }
+    let state_dir = snapshot_path
+        .parent()
+        .ok_or_else(|| "package_completion_state_dir_missing".to_owned())?;
+    let completion_dir = state_dir.join("package-cpu-completions-v1");
+    if !completion_dir.exists() {
+        return Ok(None);
+    }
+    let receipts =
+        read_framed_cbor::<PackageCpuCompletionReceiptV1>(&completion_dir, "completion")?
+            .into_iter()
+            .filter(|receipt| receipt.package_id == package_id)
+            .collect::<Vec<_>>();
+    for receipt in &receipts {
+        receipt.validate()?;
+    }
+    let Some(first) = receipts.into_iter().next() else {
+        return Ok(None);
+    };
+    let snapshot_matches = package
+        .get("first_receipt_root_sha256")
+        .and_then(Value::as_str)
+        == Some(first.verification_receipt_root_sha256.as_str())
+        && package
+            .get("first_accept_timestamp_unix")
+            .and_then(Value::as_u64)
+            == Some(first.accepted_at_unix)
+        && package
+            .get("first_exact_input_tokens")
+            .and_then(Value::as_u64)
+            == Some(first.exact_input_tokens);
+    Ok(snapshot_matches.then_some(first))
 }
 
 fn read_prior_epoch_totals(state_dir: &Path) -> (String, u64, u64) {
@@ -1131,14 +1361,15 @@ mod tests {
             unix_now()
         ));
         let package_id = "ms4-natural-test";
+        let intent_sha256 = "b".repeat(64);
         let receipt_root = "a".repeat(64);
         let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
         ledger
-            .observe_request("natural-intent", 321, true)
+            .observe_request(&intent_sha256, 321, true)
             .expect("request");
         ledger
             .observe_verified_accept_with_receipt(
-                "natural-intent",
+                &intent_sha256,
                 999,
                 Some(package_id),
                 Some(&receipt_root),
@@ -1163,6 +1394,10 @@ mod tests {
             snapshot["verified_by_package"][package_id]["last_receipt_root_sha256"],
             receipt_root
         );
+        assert_eq!(
+            snapshot["verified_by_package"][package_id]["first_receipt_root_sha256"],
+            receipt_root
+        );
 
         drop(ledger);
         let mut replayed = LiveEconomicsLedger::open(&root).expect("restart");
@@ -1174,7 +1409,7 @@ mod tests {
             Some(321)
         );
         replayed
-            .observe_false_accept("natural-intent")
+            .observe_false_accept(&intent_sha256)
             .expect("false accept");
         replayed.persist_snapshot().expect("false snapshot");
         let snapshot: serde_json::Value = serde_json::from_slice(

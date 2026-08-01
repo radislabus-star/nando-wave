@@ -285,8 +285,9 @@ pub use lifecycle::{
     response_package_lineage_id, response_support_manifest_digest,
 };
 pub use ms4_external_admission::{
-    MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1, Ms4AdaptiveGuardProofV1,
-    Ms4ExternalAdmissionCandidateV1, build_ms4_external_admission_snapshot,
+    MS4_EXACT_PACKAGE_WAVE_PROOF_SCHEMA_V1, MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1,
+    Ms4AdaptiveGuardProofV1, Ms4ExactPackageWaveProofV1, Ms4ExternalAdmissionCandidateV1,
+    Ms4WaveControlOutcomeV1, build_ms4_external_admission_snapshot,
 };
 pub use ms4_frozen_future::{
     MS4_FROZEN_FUTURE_SHADOW_CANDIDATE_SCHEMA_V1, Ms4FrozenFutureShadowCandidateV1,

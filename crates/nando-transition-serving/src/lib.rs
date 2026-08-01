@@ -951,6 +951,8 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
             runtime.observe_historical_topology(&row, observed_at)?;
         }
     }
+    let restored_ms4_closed_loop_report =
+        ms4_closed_loop::restore_report(&config.ms4_closed_loop_path)?;
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -985,9 +987,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         ms3_frozen_version_space,
         remote_evidence_spool,
         ms4_external_candidate: Arc::new(RwLock::new(None)),
-        ms4_closed_loop_report: Arc::new(RwLock::new(
-            ms4_closed_loop::Ms4ClosedLoopReportV1::default(),
-        )),
+        ms4_closed_loop_report: Arc::new(RwLock::new(restored_ms4_closed_loop_report)),
     };
     validate_ms3_scientific_denominator_link(&state)?;
     if state.ms3_generation_lifecycle.is_some() {

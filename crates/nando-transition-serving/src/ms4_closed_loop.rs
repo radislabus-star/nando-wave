@@ -1,8 +1,7 @@
 //! Idempotent cold-path actuator from MS3 future PASS to ordinary CPU proof.
 
 use std::collections::BTreeSet;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::fs;
 use std::path::Path;
 
 use nando_operator_kernel::canonical_json_sha256;
@@ -10,15 +9,16 @@ use nando_operator_learning::multi_source::{
     Ms3FutureApplicabilityDispositionV1, Ms3IndependentFutureVerdictV1, TransportBindingLedgerV1,
 };
 use nando_response_actor::{
-    Ms4ExternalAdmissionCandidateV1, ResponsePackageState, ResponseRegistry,
+    Ms4ExactPackageWaveProofV1, Ms4ExternalAdmissionCandidateV1, ResponsePackageState,
+    ResponseRegistry,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
+use crate::live_economics::{PackageCpuCompletionReceiptV1, first_durable_package_completion};
 use crate::{AppState, bounded_reason, unix_now, write_bytes_atomic};
 
 const REPORT_SCHEMA_V1: &str = "nando.ms4-autonomous-closed-loop-report.v1";
-const ECONOMICS_TAIL_BYTES: u64 = 16 * 1024 * 1024;
+const REPORT_SCHEMA_V2: &str = "nando.ms4-autonomous-closed-loop-report.v2";
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -47,9 +47,13 @@ pub(super) struct Ms4ClosedLoopReportV1 {
     pub future_envelope_root_sha256: Option<String>,
     pub candidate_root_sha256: Option<String>,
     pub package_id: Option<String>,
+    #[serde(default)]
+    pub exact_package_wave_proof_root_sha256: Option<String>,
     pub negative_controls: u64,
     pub external_admission_pass: bool,
     pub ordinary_cpu_receipt_root_sha256: Option<String>,
+    #[serde(default)]
+    pub ordinary_cpu_completion_root_sha256: Option<String>,
     pub authority_ready: bool,
     pub phase_mutation_allowed: bool,
 }
@@ -63,7 +67,7 @@ impl Default for Ms4ClosedLoopReportV1 {
 impl Ms4ClosedLoopReportV1 {
     fn seal(generation_sequence: u64, stage: Ms4ClosedLoopStageV1, blocker: &str) -> Self {
         let mut report = Self {
-            schema: REPORT_SCHEMA_V1.to_owned(),
+            schema: REPORT_SCHEMA_V2.to_owned(),
             report_root_sha256: String::new(),
             generated_at_unix: unix_now(),
             generation_sequence,
@@ -73,9 +77,11 @@ impl Ms4ClosedLoopReportV1 {
             future_envelope_root_sha256: None,
             candidate_root_sha256: None,
             package_id: None,
+            exact_package_wave_proof_root_sha256: None,
             negative_controls: 0,
             external_admission_pass: false,
             ordinary_cpu_receipt_root_sha256: None,
+            ordinary_cpu_completion_root_sha256: None,
             authority_ready: false,
             phase_mutation_allowed: false,
         };
@@ -84,8 +90,49 @@ impl Ms4ClosedLoopReportV1 {
     }
 
     fn reseal(&mut self) {
-        self.report_root_sha256 = canonical_json_sha256(&(
-            REPORT_SCHEMA_V1,
+        self.report_root_sha256 = self.expected_root().unwrap_or_default();
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if !matches!(self.schema.as_str(), REPORT_SCHEMA_V1 | REPORT_SCHEMA_V2)
+            || self.phase_mutation_allowed
+            || self.report_root_sha256 != self.expected_root()?
+        {
+            return Err("ms4_report_invalid".to_owned());
+        }
+        if self.schema == REPORT_SCHEMA_V2
+            && self.stage == Ms4ClosedLoopStageV1::Complete
+            && (self.exact_package_wave_proof_root_sha256.is_none()
+                || self.ordinary_cpu_receipt_root_sha256.is_none()
+                || self.ordinary_cpu_completion_root_sha256.is_none())
+        {
+            return Err("ms4_report_completion_proof_missing".to_owned());
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> Result<String, String> {
+        if self.schema == REPORT_SCHEMA_V1 {
+            return canonical_json_sha256(&(
+                REPORT_SCHEMA_V1,
+                self.generated_at_unix,
+                self.generation_sequence,
+                self.stage,
+                self.blocker.as_str(),
+                self.frozen_envelope_root_sha256.as_deref(),
+                self.future_envelope_root_sha256.as_deref(),
+                self.candidate_root_sha256.as_deref(),
+                self.package_id.as_deref(),
+                self.negative_controls,
+                self.external_admission_pass,
+                self.ordinary_cpu_receipt_root_sha256.as_deref(),
+                self.authority_ready,
+                false,
+            ))
+            .map_err(str::to_owned);
+        }
+        canonical_json_sha256(&(
+            REPORT_SCHEMA_V2,
             self.generated_at_unix,
             self.generation_sequence,
             self.stage,
@@ -94,14 +141,31 @@ impl Ms4ClosedLoopReportV1 {
             self.future_envelope_root_sha256.as_deref(),
             self.candidate_root_sha256.as_deref(),
             self.package_id.as_deref(),
+            self.exact_package_wave_proof_root_sha256.as_deref(),
             self.negative_controls,
             self.external_admission_pass,
             self.ordinary_cpu_receipt_root_sha256.as_deref(),
+            self.ordinary_cpu_completion_root_sha256.as_deref(),
             self.authority_ready,
             false,
         ))
-        .unwrap_or_default();
+        .map_err(str::to_owned)
     }
+}
+
+pub(super) fn restore_report(path: &Path) -> Result<Ms4ClosedLoopReportV1, String> {
+    let status_path = path.join("status.json");
+    let bytes = match fs::read(&status_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Ms4ClosedLoopReportV1::default());
+        }
+        Err(error) => return Err(format!("ms4_report_restore_read:{error}")),
+    };
+    let report: Ms4ClosedLoopReportV1 = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("ms4_report_restore_decode:{error}"))?;
+    report.validate()?;
+    Ok(report)
 }
 
 pub(super) fn advance(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
@@ -386,6 +450,15 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
         candidate
     };
 
+    let exact_wave_proof = candidate
+        .exact_package_wave_proof()
+        .map_err(|error| format!("ms4_exact_package_wave_proof:{error}"))?;
+    persist_exact_package_wave_proof(
+        &state.config.ms4_closed_loop_path,
+        candidate.candidate_root_sha256(),
+        &exact_wave_proof,
+    )?;
+    report.exact_package_wave_proof_root_sha256 = Some(exact_wave_proof.proof_root_sha256.clone());
     let package = candidate
         .admitted_package()
         .map_err(|error| format!("ms4_package_rebuild:{error}"))?;
@@ -423,13 +496,34 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
     if admitted {
         report.stage = Ms4ClosedLoopStageV1::OrdinaryCpuPending;
         report.blocker = "ordinary_cpu_accept_pending".to_owned();
-        if let Some(receipt_root) = ordinary_cpu_receipt_root(
+        if let Some(completion) = ordinary_cpu_completion(
             &state.config.ms4_ordinary_economics_path,
             &package.package_id,
         )? {
+            let existing = state
+                .ms4_closed_loop_report
+                .read()
+                .map_err(|_| "ms4_report_cache_lock_poisoned".to_owned())?
+                .clone();
+            let immutable_match = existing.schema == REPORT_SCHEMA_V2
+                && existing.stage == Ms4ClosedLoopStageV1::Complete
+                && existing.generation_sequence == report.generation_sequence
+                && existing.candidate_root_sha256 == report.candidate_root_sha256
+                && existing.package_id == report.package_id
+                && existing.exact_package_wave_proof_root_sha256
+                    == report.exact_package_wave_proof_root_sha256
+                && existing.ordinary_cpu_receipt_root_sha256.as_deref()
+                    == Some(completion.verification_receipt_root_sha256.as_str())
+                && existing.ordinary_cpu_completion_root_sha256.as_deref()
+                    == Some(completion.completion_root_sha256.as_str());
+            if immutable_match {
+                return Ok(existing);
+            }
             report.stage = Ms4ClosedLoopStageV1::Complete;
             report.blocker.clear();
-            report.ordinary_cpu_receipt_root_sha256 = Some(receipt_root);
+            report.ordinary_cpu_receipt_root_sha256 =
+                Some(completion.verification_receipt_root_sha256);
+            report.ordinary_cpu_completion_root_sha256 = Some(completion.completion_root_sha256);
         }
     } else {
         report.stage = Ms4ClosedLoopStageV1::ExternalAdmissionPending;
@@ -456,138 +550,70 @@ fn package_is_admitted(state: &AppState, package_id: &str) -> Result<bool, Strin
     Ok(active && cache_ready)
 }
 
-fn ordinary_cpu_receipt_root(path: &Path, package_id: &str) -> Result<Option<String>, String> {
-    if let Some(receipt_root) = ordinary_cpu_receipt_root_from_snapshot(path, package_id)? {
-        return Ok(Some(receipt_root));
-    }
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("ms4_economics_open:{error}")),
-    };
-    let length = file
-        .metadata()
-        .map_err(|error| format!("ms4_economics_metadata:{error}"))?
-        .len();
-    let start = length.saturating_sub(ECONOMICS_TAIL_BYTES);
-    file.seek(SeekFrom::Start(start))
-        .map_err(|error| format!("ms4_economics_seek:{error}"))?;
-    let mut reader = BufReader::new(file);
-    let mut line = String::new();
-    if start > 0 {
-        reader
-            .read_line(&mut line)
-            .map_err(|error| format!("ms4_economics_partial:{error}"))?;
-        line.clear();
-    }
-    while reader
-        .read_line(&mut line)
-        .map_err(|error| format!("ms4_economics_read:{error}"))?
-        != 0
-    {
-        let value = serde_json::from_str::<Value>(&line).ok();
-        if value.as_ref().is_some_and(|row| {
-            let intent_dedupe_eligible =
-                row.get("intent_dedupe_eligible").and_then(Value::as_bool) == Some(true);
-            let ordinary = row
-                .get("ordinary")
-                .and_then(Value::as_bool)
-                .unwrap_or_else(|| {
-                    intent_dedupe_eligible
-                        && row.get("traffic_source").and_then(Value::as_str) == Some("ordinary")
-                });
-            let controlled = row
-                .get("controlled")
-                .and_then(Value::as_bool)
-                .unwrap_or(!ordinary);
-            row.get("schema").and_then(Value::as_str) == Some("nando.economics-terminal.v1")
-                && row.get("package_id").and_then(Value::as_str) == Some(package_id)
-                && intent_dedupe_eligible
-                && ordinary
-                && !controlled
-                && matches!(
-                    row.get("route").and_then(Value::as_str),
-                    Some("local_response_actor" | "local_actor")
-                )
-                && row.get("provider_attempt_id").is_some_and(Value::is_null)
-                && row.get("avoided_call").and_then(Value::as_bool) == Some(true)
-                && row.get("upstream_socket_opened").and_then(Value::as_bool) == Some(false)
-                && row.get("verification_status").and_then(Value::as_str) == Some("verified")
-                && row
-                    .get("input_tokens")
-                    .and_then(Value::as_u64)
-                    .is_some_and(|tokens| tokens > 0)
-        }) {
-            return value
-                .as_ref()
-                .map(canonical_json_sha256)
-                .transpose()
-                .map_err(str::to_owned);
-        }
-        line.clear();
-    }
-    Ok(None)
-}
-
-fn ordinary_cpu_receipt_root_from_snapshot(
+fn ordinary_cpu_completion(
     path: &Path,
     package_id: &str,
-) -> Result<Option<String>, String> {
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("ms4_economics_snapshot_read:{error}")),
-    };
-    let Ok(snapshot) = serde_json::from_slice::<Value>(&bytes) else {
-        return Ok(None);
-    };
-    if snapshot.get("schema").and_then(Value::as_str) != Some("nando.economics-snapshot.v4") {
-        return Ok(None);
+) -> Result<Option<PackageCpuCompletionReceiptV1>, String> {
+    first_durable_package_completion(path, package_id)
+}
+
+fn persist_exact_package_wave_proof(
+    root: &Path,
+    candidate_root_sha256: &str,
+    proof: &Ms4ExactPackageWaveProofV1,
+) -> Result<(), String> {
+    let proof_path = root
+        .join("exact-package-wave-proofs")
+        .join(format!("{candidate_root_sha256}.cbor"));
+    let bytes = proof
+        .canonical_bytes()
+        .map_err(|error| format!("ms4_exact_wave_proof_encode:{error}"))?;
+    if proof_path.exists() {
+        let restored = Ms4ExactPackageWaveProofV1::from_canonical_bytes(
+            &fs::read(&proof_path).map_err(|error| format!("ms4_exact_wave_proof_read:{error}"))?,
+        )
+        .map_err(|error| format!("ms4_exact_wave_proof_restore:{error}"))?;
+        if restored != *proof {
+            return Err("ms4_exact_wave_proof_rebound".to_owned());
+        }
+        return Ok(());
     }
-    let clean = snapshot.get("false_accepts").and_then(Value::as_u64) == Some(0)
-        && snapshot
-            .get("runtime_parity_mismatches")
-            .and_then(Value::as_u64)
-            == Some(0)
-        && snapshot.get("pipeline_dropped").and_then(Value::as_u64) == Some(0);
-    if !clean {
-        return Ok(None);
+    fs::create_dir_all(
+        proof_path
+            .parent()
+            .ok_or_else(|| "ms4_exact_wave_proof_parent_missing".to_owned())?,
+    )
+    .map_err(|error| format!("ms4_exact_wave_proof_parent_create:{error}"))?;
+    write_bytes_atomic(&proof_path, &bytes, "ms4-exact-package-wave-proof")?;
+    let restored = Ms4ExactPackageWaveProofV1::from_canonical_bytes(
+        &fs::read(&proof_path)
+            .map_err(|error| format!("ms4_exact_wave_proof_verify_read:{error}"))?,
+    )
+    .map_err(|error| format!("ms4_exact_wave_proof_verify:{error}"))?;
+    if restored != *proof {
+        return Err("ms4_exact_wave_proof_restart_parity_mismatch".to_owned());
     }
-    let Some(package) = snapshot
-        .get("verified_by_package")
-        .and_then(Value::as_object)
-        .and_then(|packages| packages.get(package_id))
-    else {
-        return Ok(None);
-    };
-    let receipt_root = package
-        .get("last_receipt_root_sha256")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let valid_root = receipt_root.len() == 64
-        && receipt_root
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
-    let proven = package
-        .get("ordinary_accepts")
-        .and_then(Value::as_u64)
-        .is_some_and(|accepts| accepts > 0)
-        && package
-            .get("exact_input_tokens")
-            .and_then(Value::as_u64)
-            .is_some_and(|tokens| tokens > 0)
-        && package
-            .get("last_accept_timestamp_unix")
-            .and_then(Value::as_u64)
-            .is_some_and(|timestamp| timestamp > 0)
-        && valid_root;
-    Ok(proven.then(|| receipt_root.to_owned()))
+    Ok(())
 }
 
 fn persist_report(
     state: &AppState,
     report: Ms4ClosedLoopReportV1,
 ) -> Result<Ms4ClosedLoopReportV1, String> {
+    report.validate()?;
+    if state
+        .ms4_closed_loop_report
+        .read()
+        .map_err(|_| "ms4_report_cache_lock_poisoned".to_owned())?
+        .eq(&report)
+        && state
+            .config
+            .ms4_closed_loop_path
+            .join("status.json")
+            .exists()
+    {
+        return Ok(report);
+    }
     fs::create_dir_all(&state.config.ms4_closed_loop_path)
         .map_err(|error| format!("ms4_report_parent_create:{error}"))?;
     let bytes =
@@ -608,141 +634,141 @@ fn persist_report(
 mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use serde_json::json;
-
     use super::*;
+    use crate::live_economics::LiveEconomicsLedger;
 
     static TEST_ID: AtomicU64 = AtomicU64::new(0);
 
     fn test_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "nando-ms4-economics-{label}-{}-{}.jsonl",
+            "nando-ms4-economics-{label}-{}-{}",
             std::process::id(),
             TEST_ID.fetch_add(1, Ordering::Relaxed)
         ))
     }
 
-    fn row(package_id: &str) -> Value {
-        json!({
-            "schema": "nando.economics-terminal.v1",
-            "package_id": package_id,
-            "intent_dedupe_eligible": true,
-            "ordinary": true,
-            "controlled": false,
-            "traffic_source": "ordinary",
-            "route": "local_response_actor",
-            "provider_attempt_id": null,
-            "avoided_call": true,
-            "upstream_socket_opened": false,
-            "verification_status": "verified",
-            "input_tokens": 100
-        })
-    }
-
     #[test]
-    fn completion_requires_an_ordinary_verified_avoided_upstream_receipt() {
-        let path = test_path("ordinary");
+    fn completion_requires_a_durable_framed_v4_receipt() {
+        let root = test_path("ordinary");
+        let path = root.join("economics-live.json");
         let package_id = "ms4-natural-test";
-        let mut controlled = row(package_id);
-        controlled["ordinary"] = Value::Bool(false);
-        controlled["controlled"] = Value::Bool(true);
-        let mut upstream = row(package_id);
-        upstream["upstream_socket_opened"] = Value::Bool(true);
-        let lines = [controlled, upstream]
-            .into_iter()
-            .map(|value| serde_json::to_string(&value).expect("row"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        std::fs::write(&path, format!("{lines}\n")).expect("economics");
-        assert_eq!(
-            ordinary_cpu_receipt_root(&path, package_id).expect("scan"),
-            None
-        );
-
-        let ordinary = row(package_id);
-        let mut file = std::fs::OpenOptions::new()
-            .append(true)
-            .open(&path)
-            .expect("append");
-        use std::io::Write;
-        writeln!(
-            file,
-            "{}",
-            serde_json::to_string(&ordinary).expect("ordinary row")
-        )
-        .expect("ordinary append");
-        file.sync_all().expect("ordinary sync");
-        assert_eq!(
-            ordinary_cpu_receipt_root(&path, package_id).expect("scan"),
-            Some(canonical_json_sha256(&ordinary).expect("receipt root"))
-        );
-
-        let legacy_path = test_path("legacy-ordinary");
-        let mut legacy = row(package_id);
-        legacy
-            .as_object_mut()
-            .expect("legacy row")
-            .remove("ordinary");
-        legacy
-            .as_object_mut()
-            .expect("legacy row")
-            .remove("controlled");
-        std::fs::write(
-            &legacy_path,
-            format!(
-                "{}\n",
-                serde_json::to_string(&legacy).expect("legacy row encode")
-            ),
-        )
-        .expect("legacy economics");
-        assert_eq!(
-            ordinary_cpu_receipt_root(&legacy_path, package_id).expect("legacy scan"),
-            Some(canonical_json_sha256(&legacy).expect("legacy receipt root"))
-        );
-        std::fs::remove_file(path).expect("cleanup");
-        std::fs::remove_file(legacy_path).expect("legacy cleanup");
-    }
-
-    #[test]
-    fn completion_accepts_clean_v4_package_receipt_snapshot() {
-        let path = test_path("v4-snapshot");
-        let package_id = "ms4-natural-test";
+        let intent = "a".repeat(64);
         let receipt_root = "b".repeat(64);
-        let snapshot = json!({
-            "schema": "nando.economics-snapshot.v4",
-            "false_accepts": 0,
-            "runtime_parity_mismatches": 0,
-            "pipeline_dropped": 0,
-            "verified_by_package": {
-                (package_id): {
-                    "ordinary_accepts": 1,
-                    "exact_input_tokens": 321,
-                    "last_accept_timestamp_unix": 123,
-                    "last_receipt_root_sha256": receipt_root,
-                }
-            }
-        });
-        std::fs::write(
-            &path,
-            serde_json::to_vec(&snapshot).expect("snapshot encode"),
-        )
-        .expect("snapshot");
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
+        ledger
+            .observe_request(&intent, 321, true)
+            .expect("ordinary request");
         assert_eq!(
-            ordinary_cpu_receipt_root(&path, package_id).expect("scan"),
-            Some("b".repeat(64))
-        );
-
-        let mut unsafe_snapshot = snapshot;
-        unsafe_snapshot["false_accepts"] = Value::from(1);
-        std::fs::write(
-            &path,
-            serde_json::to_vec(&unsafe_snapshot).expect("unsafe snapshot encode"),
-        )
-        .expect("unsafe snapshot");
-        assert_eq!(
-            ordinary_cpu_receipt_root(&path, package_id).expect("unsafe scan"),
+            ordinary_cpu_completion(&path, package_id).expect("scan"),
             None
         );
-        std::fs::remove_file(path).expect("cleanup");
+        ledger
+            .observe_verified_accept_with_receipt(
+                &intent,
+                321,
+                Some(package_id),
+                Some(&receipt_root),
+            )
+            .expect("verified accept");
+        let completion = ordinary_cpu_completion(&path, package_id)
+            .expect("scan")
+            .expect("durable completion");
+        assert_eq!(completion.verification_receipt_root_sha256, receipt_root);
+        assert_eq!(completion.exact_input_tokens, 321);
+        drop(ledger);
+        let restarted = ordinary_cpu_completion(&path, package_id)
+            .expect("restart scan")
+            .expect("restart completion");
+        assert_eq!(restarted, completion);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn completion_latches_first_receipt_and_rejects_mutable_snapshot_rebinding() {
+        let root = test_path("v4-latch");
+        let path = root.join("economics-live.json");
+        let package_id = "ms4-natural-test";
+        let first_intent = "c".repeat(64);
+        let second_intent = "d".repeat(64);
+        let first_root = "e".repeat(64);
+        let second_root = "f".repeat(64);
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
+        ledger
+            .observe_request(&first_intent, 100, true)
+            .expect("first request");
+        ledger
+            .observe_verified_accept_with_receipt(
+                &first_intent,
+                100,
+                Some(package_id),
+                Some(&first_root),
+            )
+            .expect("first accept");
+        ledger
+            .observe_request(&second_intent, 200, true)
+            .expect("second request");
+        ledger
+            .observe_verified_accept_with_receipt(
+                &second_intent,
+                200,
+                Some(package_id),
+                Some(&second_root),
+            )
+            .expect("second accept");
+        let completion = ordinary_cpu_completion(&path, package_id)
+            .expect("scan")
+            .expect("first completion");
+        assert_eq!(completion.verification_receipt_root_sha256, first_root);
+
+        let mut snapshot: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).expect("snapshot read"))
+                .expect("snapshot decode");
+        snapshot["verified_by_package"][package_id]["first_receipt_root_sha256"] =
+            serde_json::Value::String(second_root);
+        std::fs::write(&path, serde_json::to_vec(&snapshot).expect("tamper encode"))
+            .expect("tamper snapshot");
+        assert_eq!(
+            ordinary_cpu_completion(&path, package_id).expect("tampered scan"),
+            None
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn report_restore_accepts_v1_and_latches_complete_v2_roots() {
+        let root = test_path("report-restore");
+        std::fs::create_dir_all(&root).expect("report root");
+        let mut legacy = Ms4ClosedLoopReportV1::seal(31, Ms4ClosedLoopStageV1::Complete, "");
+        legacy.schema = REPORT_SCHEMA_V1.to_owned();
+        legacy.candidate_root_sha256 = Some("a".repeat(64));
+        legacy.package_id = Some("ms4-natural-test".to_owned());
+        legacy.external_admission_pass = true;
+        legacy.authority_ready = true;
+        legacy.ordinary_cpu_receipt_root_sha256 = Some("b".repeat(64));
+        legacy.reseal();
+        std::fs::write(
+            root.join("status.json"),
+            serde_json::to_vec(&legacy).expect("legacy report encode"),
+        )
+        .expect("legacy report");
+        assert_eq!(restore_report(&root).expect("legacy restore"), legacy);
+
+        let mut current = Ms4ClosedLoopReportV1::seal(31, Ms4ClosedLoopStageV1::Complete, "");
+        current.candidate_root_sha256 = Some("a".repeat(64));
+        current.package_id = Some("ms4-natural-test".to_owned());
+        current.exact_package_wave_proof_root_sha256 = Some("c".repeat(64));
+        current.external_admission_pass = true;
+        current.authority_ready = true;
+        current.ordinary_cpu_receipt_root_sha256 = Some("b".repeat(64));
+        current.ordinary_cpu_completion_root_sha256 = Some("d".repeat(64));
+        current.reseal();
+        current.validate().expect("current report");
+        std::fs::write(
+            root.join("status.json"),
+            serde_json::to_vec(&current).expect("current report encode"),
+        )
+        .expect("current report");
+        assert_eq!(restore_report(&root).expect("current restore"), current);
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

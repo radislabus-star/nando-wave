@@ -1319,11 +1319,23 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                 .map(|package| metric_u64(package, "last_accept_timestamp_unix"))
                 .unwrap_or(0),
             "receipt_root_sha256": ms4_package_economics
+                .and_then(|package| package.get("first_receipt_root_sha256"))
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            "latest_receipt_root_sha256": ms4_package_economics
                 .and_then(|package| package.get("last_receipt_root_sha256"))
                 .and_then(Value::as_str)
                 .unwrap_or(""),
             "lifecycle_receipt_root_sha256": ms4_closed_loop
                 .get("ordinary_cpu_receipt_root_sha256")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            "completion_root_sha256": ms4_closed_loop
+                .get("ordinary_cpu_completion_root_sha256")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            "exact_package_wave_proof_root_sha256": ms4_closed_loop
+                .get("exact_package_wave_proof_root_sha256")
                 .and_then(Value::as_str)
                 .unwrap_or(""),
             "false_accepts": metric_u64(economics, "false_accepts"),

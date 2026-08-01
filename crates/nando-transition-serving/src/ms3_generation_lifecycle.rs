@@ -1008,6 +1008,27 @@ mod tests {
                 .expect("candidate restart"),
             candidate
         );
+        let exact_wave = candidate
+            .exact_package_wave_proof()
+            .expect("exact package wave proof");
+        assert!(exact_wave.strict_all_ablation_pass);
+        assert_eq!(exact_wave.full.positive_accepts, 2);
+        assert_eq!(exact_wave.full.negative_accepts, 0);
+        for control in [
+            &exact_wave.no_phase,
+            &exact_wave.shuffled_phase,
+            &exact_wave.magnitude_only,
+            &exact_wave.random_center,
+        ] {
+            assert!(control.correct_classifications < exact_wave.full.correct_classifications);
+        }
+        assert_eq!(
+            nando_response_actor::Ms4ExactPackageWaveProofV1::from_canonical_bytes(
+                &exact_wave.canonical_bytes().expect("exact wave bytes")
+            )
+            .expect("exact wave restart"),
+            exact_wave
+        );
         let package = candidate.admitted_package().expect("admitted package");
         assert!(package.proof.wave_causal_pass);
         assert!(!package.phase_centers.is_empty());

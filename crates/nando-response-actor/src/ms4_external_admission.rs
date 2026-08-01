@@ -2,7 +2,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nando_core::wave::{phase_coherence, phase_margin_to_micro, phase_vector_from_atom_ids};
+use nando_core::wave::{
+    PhaseCenterCell, phase_coherence, phase_margin_to_micro, phase_vector_from_atom_ids,
+};
 use nando_operator_kernel::{RelationFrame, canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::multi_source::{
     FrozenVersionSpaceEnvelopeV1, Ms3FutureApplicabilityV1, Ms3IndependentFutureEnvelopeV1,
@@ -18,14 +20,47 @@ use crate::authority::build_composite_admission_for_registry;
 use crate::{
     Ms4FrozenFutureShadowCandidateV1, Ms4RuntimeEvidenceV1, OnlineAdmissionSnapshot,
     RESPONSE_REGISTRY_SCHEMA_V6, ResponsePackage, ResponsePackageState, ResponseRegistry,
-    crystallize_ms4_frozen_future_shadow_v1,
+    crystallize_ms4_frozen_future_shadow_v1, response_execution_payload_digest,
 };
 
 pub const MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1: &str =
     "nando.ms4-external-admission-candidate.v1";
 const MS4_ADAPTIVE_GUARD_PROOF_SCHEMA_V1: &str = "nando.ms4-adaptive-guard-proof.v1";
+pub const MS4_EXACT_PACKAGE_WAVE_PROOF_SCHEMA_V1: &str = "nando.ms4-exact-package-wave-proof.v1";
 const MS4_EXTERNAL_ADMISSION_MAX_BYTES_V1: usize = 64 * 1024 * 1024;
 const MS4_MAX_NEGATIVE_TOPOLOGIES_V1: usize = 64;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ms4WaveControlOutcomeV1 {
+    pub mode: String,
+    pub positive_accepts: u64,
+    pub negative_accepts: u64,
+    pub correct_classifications: u64,
+    pub support_margin_micro: Option<i64>,
+    pub future_margin_micro: Option<i64>,
+    pub max_negative_margin_micro: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ms4ExactPackageWaveProofV1 {
+    pub schema: String,
+    pub proof_root_sha256: String,
+    pub candidate_root_sha256: String,
+    pub package_id: String,
+    pub execution_payload_sha256: String,
+    pub support_topology_root_sha256: String,
+    pub future_topology_root_sha256: String,
+    pub negative_topology_roots_sha256: Vec<String>,
+    pub phase_threshold_micro: i64,
+    pub full: Ms4WaveControlOutcomeV1,
+    pub no_phase: Ms4WaveControlOutcomeV1,
+    pub shuffled_phase: Ms4WaveControlOutcomeV1,
+    pub magnitude_only: Ms4WaveControlOutcomeV1,
+    pub random_center: Ms4WaveControlOutcomeV1,
+    pub strict_all_ablation_pass: bool,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -243,7 +278,35 @@ impl Ms4ExternalAdmissionCandidateV1 {
 
     pub fn admitted_package(&self) -> Result<ResponsePackage, &'static str> {
         self.validate()?;
-        admitted_package(&self.shadow_candidate, &self.guard_proof)
+        let mut package = admitted_package(&self.shadow_candidate, &self.guard_proof)?;
+        let exact_proof = build_exact_package_wave_proof(
+            &self.candidate_root_sha256,
+            &package,
+            &self.support_topology,
+            &self.future_topology,
+            &self.negative_topologies,
+        )?;
+        exact_proof.validate()?;
+        package.proof.wave_causal_pass = exact_proof.strict_all_ablation_pass;
+        package.validate()?;
+        if package.admission_candidate_blocker().is_some() {
+            return Err("ms4_external_admitted_package_ineligible");
+        }
+        Ok(package)
+    }
+
+    pub fn exact_package_wave_proof(&self) -> Result<Ms4ExactPackageWaveProofV1, &'static str> {
+        self.validate()?;
+        let package = admitted_package(&self.shadow_candidate, &self.guard_proof)?;
+        let proof = build_exact_package_wave_proof(
+            &self.candidate_root_sha256,
+            &package,
+            &self.support_topology,
+            &self.future_topology,
+            &self.negative_topologies,
+        )?;
+        proof.validate()?;
+        Ok(proof)
     }
 
     fn expected_root(&self) -> Result<String, &'static str> {
@@ -318,6 +381,7 @@ pub fn build_ms4_external_admission_snapshot(
     let mut receipts = BTreeMap::new();
     for candidate in candidates {
         candidate.validate()?;
+        let exact_wave_proof = candidate.exact_package_wave_proof()?;
         let package = candidate.admitted_package()?;
         let package_id = package.package_id.clone();
         let adaptive_root = package
@@ -336,7 +400,7 @@ pub fn build_ms4_external_admission_snapshot(
             package_id,
             (
                 candidate.frozen.contract.support_rows_root_sha256.clone(),
-                candidate.guard_proof.proof_root_sha256.clone(),
+                exact_wave_proof.proof_root_sha256,
                 runtime_parity_root,
                 candidate.future.receipt.receipt_root_sha256.clone(),
                 adaptive_root,
@@ -595,6 +659,323 @@ impl Ms4AdaptiveGuardProofV1 {
     }
 }
 
+impl Ms4ExactPackageWaveProofV1 {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let negative_rows = u64::try_from(self.negative_topology_roots_sha256.len())
+            .map_err(|_| "ms4_exact_package_wave_proof_invalid")?;
+        let total_rows = negative_rows.saturating_add(2);
+        let valid_control = |control: &Ms4WaveControlOutcomeV1, mode: &str| {
+            control.mode == mode
+                && control.positive_accepts <= 2
+                && control.negative_accepts <= negative_rows
+                && control.correct_classifications
+                    == control
+                        .positive_accepts
+                        .saturating_add(negative_rows.saturating_sub(control.negative_accepts))
+        };
+        if self.schema != MS4_EXACT_PACKAGE_WAVE_PROOF_SCHEMA_V1
+            || !valid_nonzero_sha256(&self.proof_root_sha256)
+            || !valid_nonzero_sha256(&self.candidate_root_sha256)
+            || self.package_id.is_empty()
+            || !valid_nonzero_sha256(&self.execution_payload_sha256)
+            || !valid_nonzero_sha256(&self.support_topology_root_sha256)
+            || !valid_nonzero_sha256(&self.future_topology_root_sha256)
+            || self.negative_topology_roots_sha256.is_empty()
+            || self
+                .negative_topology_roots_sha256
+                .iter()
+                .any(|root| !valid_nonzero_sha256(root))
+            || !self
+                .negative_topology_roots_sha256
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+            || self.phase_threshold_micro <= 0
+            || !valid_control(&self.full, "full")
+            || !valid_control(&self.no_phase, "no_phase")
+            || !valid_control(&self.shuffled_phase, "shuffled_phase")
+            || !valid_control(&self.magnitude_only, "magnitude_only")
+            || !valid_control(&self.random_center, "random_center")
+            || self.full.positive_accepts != 2
+            || self.full.negative_accepts != 0
+            || self.full.correct_classifications != total_rows
+            || self.full.support_margin_micro.is_none()
+            || self.full.future_margin_micro.is_none()
+            || self.full.max_negative_margin_micro.is_none()
+            || self.no_phase.support_margin_micro.is_some()
+            || self.no_phase.future_margin_micro.is_some()
+            || self.no_phase.max_negative_margin_micro.is_some()
+            || self.shuffled_phase.support_margin_micro.is_none()
+            || self.shuffled_phase.future_margin_micro.is_none()
+            || self.shuffled_phase.max_negative_margin_micro.is_none()
+            || self.magnitude_only.support_margin_micro.is_none()
+            || self.magnitude_only.future_margin_micro.is_none()
+            || self.magnitude_only.max_negative_margin_micro.is_none()
+            || self.random_center.support_margin_micro.is_none()
+            || self.random_center.future_margin_micro.is_none()
+            || self.random_center.max_negative_margin_micro.is_none()
+            || self.no_phase.correct_classifications >= total_rows
+            || self.shuffled_phase.correct_classifications >= total_rows
+            || self.magnitude_only.correct_classifications >= total_rows
+            || self.random_center.correct_classifications >= total_rows
+            || self.proof_root_sha256 != self.expected_root()?
+        {
+            return Err("ms4_exact_package_wave_proof_invalid");
+        }
+        if !self.strict_all_ablation_pass {
+            return Err("ms4_exact_package_wave_ablation_failed");
+        }
+        Ok(())
+    }
+
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, &'static str> {
+        self.validate()?;
+        serde_cbor::to_vec(self).map_err(|_| "ms4_exact_package_wave_proof_encode_failed")
+    }
+
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
+        let proof: Self = serde_cbor::from_slice(bytes)
+            .map_err(|_| "ms4_exact_package_wave_proof_decode_failed")?;
+        proof.validate()?;
+        if proof.canonical_bytes()? != bytes {
+            return Err("ms4_exact_package_wave_proof_noncanonical");
+        }
+        Ok(proof)
+    }
+
+    fn expected_root(&self) -> Result<String, &'static str> {
+        canonical_json_sha256(&(
+            MS4_EXACT_PACKAGE_WAVE_PROOF_SCHEMA_V1,
+            self.candidate_root_sha256.as_str(),
+            self.package_id.as_str(),
+            self.execution_payload_sha256.as_str(),
+            self.support_topology_root_sha256.as_str(),
+            self.future_topology_root_sha256.as_str(),
+            &self.negative_topology_roots_sha256,
+            self.phase_threshold_micro,
+            &self.full,
+            &self.no_phase,
+            &self.shuffled_phase,
+            &self.magnitude_only,
+            &self.random_center,
+            self.strict_all_ablation_pass,
+        ))
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ExactWaveControlV1 {
+    Full,
+    ShuffledPhase,
+    MagnitudeOnly,
+    RandomCenter,
+}
+
+fn build_exact_package_wave_proof(
+    candidate_root_sha256: &str,
+    package: &ResponsePackage,
+    support: &PreActionTopologyAuditRowV1,
+    future: &PreActionTopologyAuditRowV1,
+    negatives: &[PreActionTopologyAuditRowV1],
+) -> Result<Ms4ExactPackageWaveProofV1, &'static str> {
+    let mut required =
+        nando_operator_kernel::response_program_required_routing_atom_ids(&package.program);
+    required.sort_unstable();
+    required.dedup();
+    let support_atoms = topology_runtime_atoms(support, &required);
+    let future_atoms = topology_runtime_atoms(future, &required);
+    let negative_atoms = negatives
+        .iter()
+        .map(|topology| topology_runtime_atoms(topology, &required))
+        .collect::<Vec<_>>();
+    let positive = phase_vector_from_atom_ids(package.phase_centers.iter().copied(), 16);
+    let negative = phase_vector_from_atom_ids(package.anti_centers.iter().copied(), 16);
+    let full = evaluate_exact_wave_control(
+        "full",
+        ExactWaveControlV1::Full,
+        &support_atoms,
+        &future_atoms,
+        &negative_atoms,
+        &positive,
+        &negative,
+        package.wave_margin_micro,
+    )?;
+    let negative_rows = u64::try_from(negative_atoms.len()).unwrap_or(u64::MAX);
+    let no_phase = Ms4WaveControlOutcomeV1 {
+        mode: "no_phase".to_owned(),
+        positive_accepts: 2,
+        negative_accepts: negative_rows,
+        correct_classifications: 2,
+        support_margin_micro: None,
+        future_margin_micro: None,
+        max_negative_margin_micro: None,
+    };
+    let shuffled_phase = evaluate_exact_wave_control(
+        "shuffled_phase",
+        ExactWaveControlV1::ShuffledPhase,
+        &support_atoms,
+        &future_atoms,
+        &negative_atoms,
+        &positive,
+        &negative,
+        package.wave_margin_micro,
+    )?;
+    let magnitude_only = evaluate_exact_wave_control(
+        "magnitude_only",
+        ExactWaveControlV1::MagnitudeOnly,
+        &support_atoms,
+        &future_atoms,
+        &negative_atoms,
+        &positive,
+        &negative,
+        package.wave_margin_micro,
+    )?;
+    let random_center = evaluate_exact_wave_control(
+        "random_center",
+        ExactWaveControlV1::RandomCenter,
+        &support_atoms,
+        &future_atoms,
+        &negative_atoms,
+        &positive,
+        &negative,
+        package.wave_margin_micro,
+    )?;
+    let full_correct = full.correct_classifications;
+    let strict_all_ablation_pass = full.positive_accepts == 2
+        && full.negative_accepts == 0
+        && [&no_phase, &shuffled_phase, &magnitude_only, &random_center]
+            .into_iter()
+            .all(|control| control.correct_classifications < full_correct);
+    let mut negative_roots = negatives
+        .iter()
+        .map(|topology| topology.commit.commitment_root_sha256.clone())
+        .collect::<Vec<_>>();
+    negative_roots.sort();
+    negative_roots.dedup();
+    let mut proof = Ms4ExactPackageWaveProofV1 {
+        schema: MS4_EXACT_PACKAGE_WAVE_PROOF_SCHEMA_V1.to_owned(),
+        proof_root_sha256: String::new(),
+        candidate_root_sha256: candidate_root_sha256.to_owned(),
+        package_id: package.package_id.clone(),
+        execution_payload_sha256: response_execution_payload_digest(package)?,
+        support_topology_root_sha256: support.commit.commitment_root_sha256.clone(),
+        future_topology_root_sha256: future.commit.commitment_root_sha256.clone(),
+        negative_topology_roots_sha256: negative_roots,
+        phase_threshold_micro: package.wave_margin_micro,
+        full,
+        no_phase,
+        shuffled_phase,
+        magnitude_only,
+        random_center,
+        strict_all_ablation_pass,
+    };
+    proof.proof_root_sha256 = proof.expected_root()?;
+    Ok(proof)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_exact_wave_control(
+    mode_name: &str,
+    mode: ExactWaveControlV1,
+    support_atoms: &[u64],
+    future_atoms: &[u64],
+    negative_atoms: &[Vec<u64>],
+    positive: &[PhaseCenterCell],
+    negative: &[PhaseCenterCell],
+    threshold_micro: i64,
+) -> Result<Ms4WaveControlOutcomeV1, &'static str> {
+    let margin = |atoms: &[u64]| exact_wave_control_margin(atoms, positive, negative, mode);
+    let support_margin_micro = margin(support_atoms)?;
+    let future_margin_micro = margin(future_atoms)?;
+    let negative_margins = negative_atoms
+        .iter()
+        .map(|atoms| margin(atoms))
+        .collect::<Result<Vec<_>, _>>()?;
+    let max_negative_margin_micro = negative_margins
+        .iter()
+        .copied()
+        .max()
+        .ok_or("ms4_exact_package_negative_control_missing")?;
+    let positive_accepts = u64::from(support_margin_micro >= threshold_micro)
+        .saturating_add(u64::from(future_margin_micro >= threshold_micro));
+    let negative_accepts = u64::try_from(
+        negative_margins
+            .iter()
+            .filter(|margin| **margin >= threshold_micro)
+            .count(),
+    )
+    .unwrap_or(u64::MAX);
+    let negative_rows = u64::try_from(negative_atoms.len()).unwrap_or(u64::MAX);
+    Ok(Ms4WaveControlOutcomeV1 {
+        mode: mode_name.to_owned(),
+        positive_accepts,
+        negative_accepts,
+        correct_classifications: positive_accepts
+            .saturating_add(negative_rows.saturating_sub(negative_accepts)),
+        support_margin_micro: Some(support_margin_micro),
+        future_margin_micro: Some(future_margin_micro),
+        max_negative_margin_micro: Some(max_negative_margin_micro),
+    })
+}
+
+fn exact_wave_control_margin(
+    atoms: &[u64],
+    positive: &[PhaseCenterCell],
+    negative: &[PhaseCenterCell],
+    mode: ExactWaveControlV1,
+) -> Result<i64, &'static str> {
+    let query = phase_vector_from_atom_ids(atoms.iter().copied(), positive.len());
+    let score = match mode {
+        ExactWaveControlV1::Full => {
+            phase_coherence(&query, positive) - phase_coherence(&query, negative)
+        }
+        ExactWaveControlV1::ShuffledPhase => {
+            let mut shuffled_positive = positive.to_vec();
+            let mut shuffled_negative = negative.to_vec();
+            let shift = (positive.len() / 3).max(1);
+            shuffled_positive.rotate_left(shift);
+            shuffled_negative.rotate_left(shift);
+            phase_coherence(&query, &shuffled_positive)
+                - phase_coherence(&query, &shuffled_negative)
+        }
+        ExactWaveControlV1::MagnitudeOnly => {
+            magnitude_coherence(&query, positive) - magnitude_coherence(&query, negative)
+        }
+        ExactWaveControlV1::RandomCenter => {
+            let random_positive = matched_random_center(positive);
+            let random_negative = matched_random_center(negative);
+            phase_coherence(&query, &random_positive) - phase_coherence(&query, &random_negative)
+        }
+    };
+    phase_margin_to_micro(score).map_err(|_| "ms4_exact_package_wave_margin_invalid")
+}
+
+fn magnitude_coherence(left: &[PhaseCenterCell], right: &[PhaseCenterCell]) -> f64 {
+    let cells = left.len().min(right.len());
+    if cells == 0 {
+        return 0.0;
+    }
+    left.iter()
+        .zip(right)
+        .map(|(left, right)| left.re.hypot(left.im) * right.re.hypot(right.im))
+        .sum::<f64>()
+        / cells as f64
+}
+
+fn matched_random_center(center: &[PhaseCenterCell]) -> Vec<PhaseCenterCell> {
+    center
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(index, cell)| {
+            let sign = if index % 2 == 0 { 1.0 } else { -1.0 };
+            PhaseCenterCell {
+                re: cell.im * sign,
+                im: cell.re * -sign,
+            }
+        })
+        .collect()
+}
+
 fn validate_transport_partition(
     topology: &PreActionTopologyAuditRowV1,
     frame: &RelationFrame,
@@ -717,11 +1098,7 @@ fn admitted_package(
         .anti_centers
         .clone_from(&guard.phase_anti_center_atom_ids);
     package.wave_margin_micro = guard.phase_threshold_micro;
-    package.proof.wave_causal_pass = guard.phase_ablation_pass;
-    package.validate()?;
-    if package.admission_candidate_blocker().is_some() {
-        return Err("ms4_external_admitted_package_ineligible");
-    }
+    package.proof.wave_causal_pass = false;
     Ok(package)
 }
 

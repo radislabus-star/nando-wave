@@ -794,7 +794,7 @@ const TEMPLATE: &str = r#"
     for (let index = completedWindows.length - 1; index >= 0 && completedWindows[index]?.pass === true; index -= 1) m3Streak += 1;
     const productM3 = accounting.product_m3_pass === true ? "PASS" : "WATCH";
     const currentM3 = accounting.m3_current_window_pass === true ? "PASS" : "WATCH";
-    text("current-v4-execution", `ТЕКУЩАЯ V4: ${number.format(epochCpu)} / ${number.format(epochTotal)} · ${ratio(epochCpu, epochTotal, 1)} · ${number.format(epochAccepts)} ACCEPTS · PRODUCT M3 ${productM3} · COMPLETED ${m3Streak}/${accounting.m3_required_consecutive_windows || 3} · CURRENT WINDOW ${currentM3}`);
+    text("current-v4-execution", `ТЕКУЩАЯ V4: ${number.format(epochCpu)} / ${number.format(epochTotal)} · ${ratio(epochCpu, epochTotal, 1)} · ${number.format(epochAccepts)} ACCEPTS · PRODUCT M3 ${productM3} · PASS STREAK ${m3Streak}/${accounting.m3_required_consecutive_windows || 3} · CURRENT WINDOW ${currentM3}`);
 
     const compression = snapshot.cpu_compression || {};
     const lifetimeCompression = compression.lifetime || {};
@@ -809,8 +809,10 @@ const TEMPLATE: &str = r#"
     const ms4Accepts = ms4Compression.cpu_accepts || 0;
     const ms4Receipt = ms4Compression.receipt_root_sha256 || "";
     const ms4LifecycleReceipt = ms4Compression.lifecycle_receipt_root_sha256 || "";
+    const ms4CompletionReceipt = ms4Compression.completion_root_sha256 || "";
+    const ms4ExactWaveReceipt = ms4Compression.exact_package_wave_proof_root_sha256 || "";
     const ms4ReceiptMatched = Boolean(ms4Receipt) && ms4Receipt === ms4LifecycleReceipt;
-    const ms4CompressionComplete = ms4Compression.stage === "complete" && ms4Accepts > 0 && ms4ReceiptMatched;
+    const ms4CompressionComplete = ms4Compression.stage === "complete" && ms4Accepts > 0 && ms4ReceiptMatched && Boolean(ms4CompletionReceipt) && Boolean(ms4ExactWaveReceipt);
     text("compression-lifetime-tokens", `${number.format(lifetimeAvoided)} / ${number.format(lifetimeEligible)}`);
     text("compression-lifetime-ratio", ratio(lifetimeAvoided, lifetimeEligible, 2));
     width("compression-lifetime-bar", lifetimeAvoided, lifetimeEligible);
@@ -825,8 +827,8 @@ const TEMPLATE: &str = r#"
     text("compression-ms4-calls", `${number.format(ms4Compression.ordinary_requests_seen || 0)} ORDINARY REQUEST · ${number.format(ms4Accepts)} CPU ACCEPT · ${number.format(ms4Compression.avoided_upstream_calls || 0)} UPSTREAM CALL AVOIDED`);
     const compactPackage = ms4Compression.package_id ? `${ms4Compression.package_id.slice(0, 28)}…${ms4Compression.package_id.slice(-12)}` : "—";
     text("compression-ms4-package", `PACKAGE ${compactPackage}`);
-    text("compression-ms4-status", ms4CompressionComplete ? "MS4 COMPLETE · ROOT MATCH" : "MS4 PROOF PENDING");
-    text("compression-ms4-time", `LAST ACCEPT ${localTime(ms4Compression.last_accept_timestamp_unix || 0)} · FALSE ACCEPTS ${number.format(ms4Compression.false_accepts || 0)} · PARITY ${number.format(ms4Compression.runtime_parity_mismatches || 0)}`);
+    text("compression-ms4-status", ms4CompressionComplete && ms4CompletionReceipt ? "MS4 COMPLETE · IMMUTABLE ROOT" : "MS4 PROOF PENDING");
+    text("compression-ms4-time", `LAST ACCEPT ${localTime(ms4Compression.last_accept_timestamp_unix || 0)} · FIRST RECEIPT LATCHED · FALSE ACCEPTS ${number.format(ms4Compression.false_accepts || 0)} · PARITY ${number.format(ms4Compression.runtime_parity_mismatches || 0)}`);
     text("compression-ms4-root", ms4Receipt || "—");
     stateClass("compression-ms4-status", ms4CompressionComplete ? "good" : "warning");
 
@@ -971,10 +973,11 @@ const TEMPLATE: &str = r#"
     const ms4Stage = (ms4.stage || "waiting_for_ms3").toUpperCase();
     const ms4Package = ms4.package_id || "";
     const ms4Complete = ms4.stage === "complete" && Boolean(ms4.ordinary_cpu_receipt_root_sha256);
+    const ms4ExactWave = Boolean(ms4.exact_package_wave_proof_root_sha256);
     text("ms4-stage", ms4Stage);
     text("ms4-package", ms4Package ? ms4Package.slice(0, 20) : "НЕ ЗАПЕЧАТАН");
     text("ms4-admission", ms4.external_admission_pass === true ? "PASS" : "FALSE");
-    text("ms4-ordinary-proof", ms4Complete ? "PASS" : "PENDING");
+    text("ms4-ordinary-proof", ms4Complete && ms4ExactWave ? "PASS · EXACT WAVE" : "PENDING");
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
     stateClass("ms3-future-applicability", `ms3-value ${!lawFrozen ? "muted" : futureAcquisitionFailed ? "locked" : "watch"}`);
@@ -1224,6 +1227,7 @@ mod tests {
         assert!(html.contains("id=\"server-cpu-share\" class=\"stage-share\">1,5%"));
         assert!(html.contains("ДОЛЯ ОТ RECORDED SERVER ACCOUNTING"));
         assert!(html.contains("PRODUCT M3 ${productM3}"));
+        assert!(html.contains("PASS STREAK ${m3Streak}"));
         assert!(html.contains("CURRENT WINDOW ${currentM3}"));
         assert!(html.contains("ОПУБЛИКОВАННЫЙ КОРПУС КЛАССИФИКАЦИИ"));
         assert!(html.contains("МАЙНЕР РАСПОЗНАЛ"));
@@ -1255,7 +1259,7 @@ mod tests {
         assert!(html.contains("id=\"compression-epoch-calls\""));
         assert!(html.contains("id=\"compression-ms4-root\""));
         assert!(html.contains("snapshot.cpu_compression"));
-        assert!(html.contains("MS4 COMPLETE · ROOT MATCH"));
+        assert!(html.contains("MS4 COMPLETE · IMMUTABLE ROOT"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3 → MS4"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));
