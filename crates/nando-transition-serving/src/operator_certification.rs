@@ -255,17 +255,17 @@ fn append_authoritative(
 ) -> Result<CertificationProjectionV1, String> {
     validate_external_evidence(config, &entry)?;
     let (mut ledger, last_event_root) = restore_signed_journal(config)?;
-    let changed = match ledger.append(entry.clone()) {
-        Ok(changed) => changed,
+    let package_id = entry.package_id.clone();
+    let (changed, persisted_entry) = match ledger.append(entry.clone()) {
+        Ok(changed) => (changed, entry),
         Err("operator_certification_transition_invalid") => {
             let package = restore_registry_package(config, &entry.package_id)?;
-            ledger
-                .migrate_role_topology(
-                    entry.clone(),
-                    &legacy_role_topology_id(&package)?,
-                    &canonical_role_topology_id(&package)?,
-                )
-                .map_err(str::to_owned)?
+            reconcile_topology_transition(
+                &mut ledger,
+                entry,
+                &legacy_role_topology_id(&package)?,
+                &canonical_role_topology_id(&package)?,
+            )?
         }
         Err(error) => return Err(error.to_owned()),
     };
@@ -273,7 +273,7 @@ fn append_authoritative(
         let event = OperatorCertificationJournalEventV1::seal(
             ledger.revision,
             &last_event_root,
-            entry.clone(),
+            persisted_entry,
             &ledger.ledger_root_sha256,
             signing_key,
         )
@@ -289,7 +289,65 @@ fn append_authoritative(
     if anchored != ledger || !valid_nonzero_sha256(&last_event_root) {
         return Err("operator_certification_authority_restart_parity".to_owned());
     }
-    projection_for(&ledger, &entry.package_id)
+    projection_for(&ledger, &package_id)
+}
+
+fn reconcile_topology_transition(
+    ledger: &mut OperatorCertificationLedgerV1,
+    requested: OperatorCertificationEntryV1,
+    legacy_role_topology_id_sha256: &str,
+    canonical_role_topology_id_sha256: &str,
+) -> Result<(bool, OperatorCertificationEntryV1), String> {
+    let previous = ledger
+        .latest_entries()
+        .into_iter()
+        .find(|entry| entry.package_id == requested.package_id)
+        .cloned()
+        .ok_or_else(|| {
+            "operator_certification_topology_migration_predecessor_missing".to_owned()
+        })?;
+    if previous.role_topology_id_sha256 != legacy_role_topology_id_sha256
+        || requested.role_topology_id_sha256 != canonical_role_topology_id_sha256
+        || legacy_role_topology_id_sha256 == canonical_role_topology_id_sha256
+    {
+        return Err("operator_certification_topology_migration_invalid".to_owned());
+    }
+    if previous.false_bad_apply != requested.false_bad_apply
+        || previous.execution.status != requested.execution.status
+    {
+        let safety_entry = OperatorCertificationEntryV1::seal(
+            &previous.bundle_id_sha256,
+            &previous.package_id,
+            &previous.semantic_law_id_sha256,
+            &previous.role_topology_id_sha256,
+            requested.execution,
+            previous.law,
+            previous.mechanism,
+            requested.false_bad_apply,
+        )
+        .map_err(str::to_owned)?;
+        let changed = ledger.append(safety_entry.clone()).map_err(str::to_owned)?;
+        return Ok((changed, safety_entry));
+    }
+    let migration_entry = OperatorCertificationEntryV1::seal(
+        &previous.bundle_id_sha256,
+        &previous.package_id,
+        &previous.semantic_law_id_sha256,
+        canonical_role_topology_id_sha256,
+        previous.execution,
+        previous.law,
+        previous.mechanism,
+        previous.false_bad_apply,
+    )
+    .map_err(str::to_owned)?;
+    let changed = ledger
+        .migrate_role_topology(
+            migration_entry.clone(),
+            legacy_role_topology_id_sha256,
+            canonical_role_topology_id_sha256,
+        )
+        .map_err(str::to_owned)?;
+    Ok((changed, migration_entry))
 }
 
 fn validate_external_evidence(
@@ -1085,6 +1143,99 @@ mod tests {
 
         assert_eq!(restore_anchored_ledger(&config).expect("restart"), ledger);
         fs::remove_dir_all(temp_root).expect("cleanup");
+    }
+
+    #[test]
+    fn topology_reconciliation_migrates_without_changing_certificates() {
+        let mut ledger = OperatorCertificationLedgerV1::empty().expect("empty");
+        let legacy = entry();
+        ledger.append(legacy.clone()).expect("legacy append");
+        let canonical_topology = root('8');
+        let requested = OperatorCertificationEntryV1::seal(
+            &legacy.bundle_id_sha256,
+            &legacy.package_id,
+            &legacy.semantic_law_id_sha256,
+            &canonical_topology,
+            legacy.execution.clone(),
+            legacy.law.clone(),
+            failed_mechanism_entry(&legacy).mechanism,
+            legacy.false_bad_apply,
+        )
+        .expect("requested entry");
+
+        let (changed, persisted) = reconcile_topology_transition(
+            &mut ledger,
+            requested.clone(),
+            &legacy.role_topology_id_sha256,
+            &canonical_topology,
+        )
+        .expect("topology reconciliation");
+
+        assert!(changed);
+        assert_eq!(persisted.role_topology_id_sha256, canonical_topology);
+        assert_eq!(persisted.execution, legacy.execution);
+        assert_eq!(persisted.law, legacy.law);
+        assert_eq!(persisted.mechanism, legacy.mechanism);
+        assert_eq!(ledger.revision, 2);
+
+        assert!(
+            ledger
+                .append(requested.clone())
+                .expect("certificate append")
+        );
+        assert_eq!(ledger.revision, 3);
+        assert_eq!(
+            projection_for(&ledger, &legacy.package_id)
+                .expect("projection")
+                .entry,
+            requested
+        );
+    }
+
+    #[test]
+    fn topology_reconciliation_applies_revocation_before_migration() {
+        let mut ledger = OperatorCertificationLedgerV1::empty().expect("empty");
+        let legacy = entry();
+        ledger.append(legacy.clone()).expect("legacy append");
+        let canonical_topology = root('8');
+        let revoked = revoked_entry(&legacy);
+        let requested = OperatorCertificationEntryV1::seal(
+            &legacy.bundle_id_sha256,
+            &legacy.package_id,
+            &legacy.semantic_law_id_sha256,
+            &canonical_topology,
+            revoked.execution.clone(),
+            legacy.law.clone(),
+            legacy.mechanism.clone(),
+            revoked.false_bad_apply,
+        )
+        .expect("requested revocation");
+
+        let (changed, persisted) = reconcile_topology_transition(
+            &mut ledger,
+            requested,
+            &legacy.role_topology_id_sha256,
+            &canonical_topology,
+        )
+        .expect("safety reconciliation");
+
+        assert!(changed);
+        assert_eq!(
+            persisted.role_topology_id_sha256,
+            legacy.role_topology_id_sha256
+        );
+        assert_eq!(
+            persisted.execution.status,
+            ExecutionCertificateStatusV1::Revoked
+        );
+        assert_eq!(persisted.false_bad_apply, 1);
+        assert_eq!(ledger.revision, 2);
+        let projection = projection_for(&ledger, &legacy.package_id).expect("projection");
+        assert_eq!(
+            projection.entry.execution.status,
+            ExecutionCertificateStatusV1::Revoked
+        );
+        assert_eq!(projection.entry.false_bad_apply, 1);
     }
 
     #[test]
