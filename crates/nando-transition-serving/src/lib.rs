@@ -19,6 +19,7 @@ mod ms3_generation_lifecycle;
 mod ms3_linked_frame_acquisition;
 mod ms3_receipt_health;
 mod ms4_closed_loop;
+mod ms4_exact_wave_holdout;
 pub mod multi_source_audit;
 mod multi_source_capture;
 mod multi_source_frame_archive;
@@ -722,6 +723,8 @@ struct AppState {
     ms4_external_candidate:
         Arc<RwLock<Option<nando_response_actor::Ms4ExternalAdmissionCandidateV1>>>,
     ms4_closed_loop_report: Arc<RwLock<ms4_closed_loop::Ms4ClosedLoopReportV1>>,
+    ms4_exact_wave_precommit_writer:
+        Option<Arc<Mutex<ms4_exact_wave_holdout::Ms4ExactWavePrecommitWriter>>>,
 }
 
 #[derive(Default)]
@@ -953,6 +956,15 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     }
     let restored_ms4_closed_loop_report =
         ms4_closed_loop::restore_report(&config.ms4_closed_loop_path)?;
+    let ms4_exact_wave_precommit_writer = if config.client_allow_local_accept {
+        Some(Arc::new(Mutex::new(
+            ms4_exact_wave_holdout::Ms4ExactWavePrecommitWriter::open(
+                &config.ms4_closed_loop_path,
+            )?,
+        )))
+    } else {
+        None
+    };
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -988,6 +1000,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         remote_evidence_spool,
         ms4_external_candidate: Arc::new(RwLock::new(None)),
         ms4_closed_loop_report: Arc::new(RwLock::new(restored_ms4_closed_loop_report)),
+        ms4_exact_wave_precommit_writer,
     };
     validate_ms3_scientific_denominator_link(&state)?;
     if state.ms3_generation_lifecycle.is_some() {
@@ -5078,6 +5091,31 @@ fn try_response_actor(
         }
         (executor, cache.runtime_build_sha256.clone())
     };
+    if let Some(writer) = &state.ms4_exact_wave_precommit_writer {
+        let request_event_id_sha256 = sha256_bytes(request_event_id.as_bytes());
+        let turn_intent_id_sha256 =
+            nando_operator_learning::evidence_client_intent_id_sha256(turn_intent_id);
+        let predicted_at_unix_nanos = unix_now_ms().saturating_mul(1_000_000);
+        if let Err(error) = writer.lock().map_or_else(
+            |_| Err("ms4_exact_wave_precommit_writer_lock_poisoned".to_owned()),
+            |mut writer| {
+                writer
+                    .record_pre_action(
+                        &executor,
+                        &request_event_id_sha256,
+                        &request_event_id_sha256,
+                        &turn_intent_id_sha256,
+                        request_hash,
+                        request_text,
+                        payload,
+                        predicted_at_unix_nanos,
+                    )
+                    .map(|_| ())
+            },
+        ) {
+            eprintln!("ms4_exact_wave_precommit_error={}", bounded_reason(&error));
+        }
+    }
     let execution = executor.execute(request_text, payload);
     if execution.status != ResponseExecutionStatus::Executed {
         let decidability = classify_cpu_decidability(request_text, payload);
@@ -8191,6 +8229,7 @@ mod tests {
             ms4_closed_loop_report: Arc::new(RwLock::new(
                 ms4_closed_loop::Ms4ClosedLoopReportV1::default(),
             )),
+            ms4_exact_wave_precommit_writer: None,
         };
         refresh_response_executor(&state);
         state

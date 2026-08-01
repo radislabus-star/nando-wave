@@ -464,7 +464,8 @@ mod tests {
     };
     use nando_operator_runtime::response_pre_action_context_atom_ids;
     use nando_response_actor::{
-        Ms4ExternalAdmissionCandidateV1, ResponseExecutionStatus, ResponseExecutor,
+        Ms4ExternalAdmissionCandidateV1, RESPONSE_REGISTRY_SCHEMA_V6, ResponseExecutionStatus,
+        ResponseExecutor, ResponsePhaseControlV1, ResponseRegistry,
         build_ms4_external_admission_snapshot, request_phase_atom_ids,
     };
     use serde_json::json;
@@ -986,6 +987,7 @@ mod tests {
             frozen.contract.future_min_sequence.saturating_add(10),
             future_ms.saturating_add(20_000),
         );
+        let support_parity = runtime_parity(&support_frame);
         let candidate = Ms4ExternalAdmissionCandidateV1::seal(
             frozen.clone(),
             future.clone(),
@@ -993,7 +995,7 @@ mod tests {
             support_frame.clone(),
             support_terminal.clone(),
             None,
-            runtime_parity(&support_frame),
+            support_parity.clone(),
             future_topology.clone(),
             future_frame.clone(),
             future_terminal.clone(),
@@ -1008,32 +1010,53 @@ mod tests {
                 .expect("candidate restart"),
             candidate
         );
-        let exact_wave = candidate
-            .exact_package_wave_proof()
-            .expect("exact package wave proof");
-        assert!(exact_wave.strict_all_ablation_pass);
-        assert_eq!(exact_wave.full.positive_accepts, 2);
-        assert_eq!(exact_wave.full.negative_accepts, 0);
+        let in_sample = candidate
+            .in_sample_phase_ablation()
+            .expect("in-sample phase ablation");
+        assert!(in_sample.strict_all_ablation_pass);
+        assert_eq!(in_sample.full.positive_accepts, 2);
+        assert_eq!(in_sample.full.negative_accepts, 0);
         for control in [
-            &exact_wave.no_phase,
-            &exact_wave.shuffled_phase,
-            &exact_wave.magnitude_only,
-            &exact_wave.random_center,
+            &in_sample.no_phase,
+            &in_sample.shuffled_phase,
+            &in_sample.magnitude_only,
+            &in_sample.random_center,
         ] {
-            assert!(control.correct_classifications < exact_wave.full.correct_classifications);
+            assert!(control.correct_classifications < in_sample.full.correct_classifications);
         }
         assert_eq!(
-            nando_response_actor::Ms4ExactPackageWaveProofV1::from_canonical_bytes(
-                &exact_wave.canonical_bytes().expect("exact wave bytes")
+            nando_response_actor::Ms4InSamplePhaseAblationV1::from_canonical_bytes(
+                &in_sample
+                    .canonical_bytes()
+                    .expect("in-sample ablation bytes")
             )
-            .expect("exact wave restart"),
-            exact_wave
+            .expect("in-sample ablation restart"),
+            in_sample
         );
         let package = candidate.admitted_package().expect("admitted package");
         assert!(package.proof.wave_causal_pass);
         assert!(!package.phase_centers.is_empty());
         assert!(!package.anti_centers.is_empty());
         assert_eq!(package.admission_candidate_blocker(), None);
+        let executor = ResponseExecutor::from_registry(ResponseRegistry {
+            schema: RESPONSE_REGISTRY_SCHEMA_V6.to_owned(),
+            revision: 1,
+            packages: vec![package.clone()],
+        })
+        .expect("proof executor");
+        for mode in ResponsePhaseControlV1::ALL {
+            let execution = executor.execute_package_control_shadow(
+                &package.package_id,
+                mode,
+                &support_parity.request_text,
+                &support_parity.provider_payload,
+            );
+            assert!(execution.exact_actor_checks <= 1);
+            if execution.status == ResponseExecutionStatus::Executed {
+                assert!(execution.response.is_some());
+                assert!(execution.reason.contains(mode.label()));
+            }
+        }
 
         let gate_root = hash("gate");
         let runtime_root = hash("runtime");

@@ -1,4 +1,6 @@
-use nando_core::wave::{phase_coherence, phase_margin_to_micro, phase_vector_from_atom_ids};
+use nando_core::wave::{
+    PhaseCenterCell, phase_coherence, phase_margin_to_micro, phase_vector_from_atom_ids,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -581,6 +583,37 @@ pub struct RoutedResponseExecution {
     verified: Option<IndependentlyVerifiedExecution>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponsePhaseControlV1 {
+    Full,
+    NoPhase,
+    ShuffledPhase,
+    MagnitudeOnly,
+    RandomCenter,
+}
+
+impl ResponsePhaseControlV1 {
+    pub const ALL: [Self; 5] = [
+        Self::Full,
+        Self::NoPhase,
+        Self::ShuffledPhase,
+        Self::MagnitudeOnly,
+        Self::RandomCenter,
+    ];
+
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::NoPhase => "no_phase",
+            Self::ShuffledPhase => "shuffled_phase",
+            Self::MagnitudeOnly => "magnitude_only",
+            Self::RandomCenter => "random_center",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ResponseExecutor {
     schema: String,
@@ -793,6 +826,117 @@ impl ResponseExecutor {
         provider_payload: &Value,
     ) -> RoutedResponseExecution {
         self.execute_inner(request_text, provider_payload, false)
+    }
+
+    /// Proof-only package-scoped execution. It never carries authority and
+    /// cannot produce a runtime receipt or a local accept.
+    #[must_use]
+    pub fn execute_package_control_shadow(
+        &self,
+        package_id: &str,
+        control: ResponsePhaseControlV1,
+        request_text: &str,
+        provider_payload: &Value,
+    ) -> RoutedResponseExecution {
+        let Some(package) = self
+            .packages
+            .iter()
+            .find(|package| package.package_id == package_id)
+        else {
+            return rejected(format!(
+                "proof_package_missing:package={package_id}:control={}",
+                control.label()
+            ));
+        };
+        let Some(operator) = self.crystallized_operators.get(package_id) else {
+            return rejected(format!(
+                "proof_crystallized_operator_missing:package={package_id}:control={}",
+                control.label()
+            ));
+        };
+        let context_counts = response_pre_action_context_counts(provider_payload);
+        if !routing_predicates_match_counts(&package.routing_predicates, &context_counts) {
+            return rejected(format!(
+                "proof_routing_predicate_rejected:package={package_id}:control={}",
+                control.label()
+            ));
+        }
+        let bound = match operator.bind_pre_action(request_text, provider_payload) {
+            Ok(bound) => bound,
+            Err(error) => {
+                return rejected(format!(
+                    "proof_crystallized_role_binding:{error:?}:package={package_id}:control={}",
+                    control.label()
+                ));
+            }
+        };
+        let structural_margin = operator.runtime_route_margin(&bound);
+        let margin = match control {
+            // Remove the learned phase-center guard, while preserving the
+            // crystallized RoleGraph/RelationProgram route margin.
+            ResponsePhaseControlV1::NoPhase => structural_margin,
+            ResponsePhaseControlV1::Full => {
+                if nando_operator_kernel::response_program_requires_semantic_applicability_guard(
+                    &package.program,
+                ) {
+                    let Some(applicability_margin) =
+                        runtime_applicability_margin_micro(package, request_text, provider_payload)
+                    else {
+                        return rejected(format!(
+                            "proof_applicability_guard_rejected:package={package_id}:control={}",
+                            control.label()
+                        ));
+                    };
+                    structural_margin.min(applicability_margin)
+                } else {
+                    structural_margin
+                }
+            }
+            ResponsePhaseControlV1::ShuffledPhase
+            | ResponsePhaseControlV1::MagnitudeOnly
+            | ResponsePhaseControlV1::RandomCenter => {
+                let Some(applicability_margin) = controlled_applicability_margin_micro(
+                    package,
+                    request_text,
+                    provider_payload,
+                    control,
+                ) else {
+                    return rejected(format!(
+                        "proof_control_applicability_rejected:package={package_id}:control={}",
+                        control.label()
+                    ));
+                };
+                structural_margin.min(applicability_margin)
+            }
+        };
+        if margin < package.wave_margin_micro {
+            return rejected(format!(
+                "proof_phase_rejected:package={package_id}:control={}:margin={margin}:threshold={}",
+                control.label(),
+                package.wave_margin_micro
+            ));
+        }
+        let response = match bound.execute_verified() {
+            Ok(response) => response,
+            Err(error) => {
+                return rejected(format!(
+                    "proof_crystallized_actor_verifier:{error:?}:package={package_id}:control={}",
+                    control.label()
+                ));
+            }
+        };
+        RoutedResponseExecution {
+            status: ResponseExecutionStatus::Executed,
+            reason: format!("proof_crystallized_operator_verified:{}", control.label()),
+            response: Some(response),
+            package_id: Some(package.package_id.clone()),
+            verification_receipt_id: None,
+            verifier_schema: Some(package.proof.verifier_schema.clone()),
+            phase_candidates: 1,
+            exact_actor_checks: 1,
+            phase_margin_micro: (control != ResponsePhaseControlV1::NoPhase).then_some(margin),
+            verified: None,
+        }
     }
 
     pub fn finalize_runtime_receipt(
@@ -1308,6 +1452,16 @@ fn runtime_applicability_margin_micro(
     request_text: &str,
     provider_payload: &Value,
 ) -> Option<i64> {
+    let query_atoms =
+        runtime_applicability_query_atom_ids(package, request_text, provider_payload)?;
+    package_phase_margin_micro(package, query_atoms)
+}
+
+fn runtime_applicability_query_atom_ids(
+    package: &ResponsePackage,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Option<Vec<u64>> {
     if package.anti_centers.is_empty() {
         return None;
     }
@@ -1360,7 +1514,116 @@ fn runtime_applicability_margin_micro(
     {
         return None;
     }
-    package_phase_margin_micro(package, query_atoms)
+    Some(query_atoms)
+}
+
+fn controlled_applicability_margin_micro(
+    package: &ResponsePackage,
+    request_text: &str,
+    provider_payload: &Value,
+    control: ResponsePhaseControlV1,
+) -> Option<i64> {
+    if matches!(
+        control,
+        ResponsePhaseControlV1::Full | ResponsePhaseControlV1::NoPhase
+    ) {
+        return None;
+    }
+    let atoms = runtime_applicability_query_atom_ids(package, request_text, provider_payload)?;
+    if package.learned_wave_route.is_some() {
+        let mut controlled = package.clone();
+        let route = controlled.learned_wave_route.as_mut()?;
+        transform_center_delta(&mut route.center_delta_micro, control);
+        for subcenter in &mut route.subcenters {
+            transform_center_delta(&mut subcenter.center_delta_micro, control);
+        }
+        return package_phase_margin_micro(&controlled, atoms);
+    }
+    let positive = phase_vector_from_atom_ids(package.phase_centers.iter().copied(), 16);
+    let negative = phase_vector_from_atom_ids(package.anti_centers.iter().copied(), 16);
+    let query = phase_vector_from_atom_ids(atoms, positive.len());
+    let score = match control {
+        ResponsePhaseControlV1::ShuffledPhase => {
+            let mut shuffled_positive = positive.clone();
+            let mut shuffled_negative = negative.clone();
+            let shift = (positive.len() / 3).max(1);
+            shuffled_positive.rotate_left(shift);
+            shuffled_negative.rotate_left(shift);
+            phase_coherence(&query, &shuffled_positive)
+                - phase_coherence(&query, &shuffled_negative)
+        }
+        ResponsePhaseControlV1::MagnitudeOnly => {
+            magnitude_coherence(&query, &positive) - magnitude_coherence(&query, &negative)
+        }
+        ResponsePhaseControlV1::RandomCenter => {
+            let random_positive = matched_random_center(&positive);
+            let random_negative = matched_random_center(&negative);
+            phase_coherence(&query, &random_positive) - phase_coherence(&query, &random_negative)
+        }
+        ResponsePhaseControlV1::Full | ResponsePhaseControlV1::NoPhase => return None,
+    };
+    phase_margin_to_micro(score).ok()
+}
+
+fn transform_center_delta(values: &mut Vec<i32>, control: ResponsePhaseControlV1) {
+    match control {
+        ResponsePhaseControlV1::ShuffledPhase => {
+            let cells = values.len() / 2;
+            values.rotate_left(2 * (cells / 3).max(1).min(cells));
+        }
+        ResponsePhaseControlV1::MagnitudeOnly => {
+            for value in values.chunks_exact_mut(2) {
+                let magnitude = f64::from(value[0])
+                    .hypot(f64::from(value[1]))
+                    .round()
+                    .clamp(f64::from(i32::MIN), f64::from(i32::MAX))
+                    as i32;
+                value[0] = magnitude;
+                value[1] = 0;
+            }
+        }
+        ResponsePhaseControlV1::RandomCenter => {
+            let mut cells = values
+                .chunks_exact(2)
+                .map(|value| [value[0], value[1]])
+                .collect::<Vec<_>>();
+            cells.reverse();
+            for (index, cell) in cells.iter_mut().enumerate() {
+                let sign = if index % 2 == 0 { 1 } else { -1 };
+                *cell = [cell[1].saturating_mul(sign), cell[0].saturating_mul(-sign)];
+            }
+            values.clear();
+            values.extend(cells.into_iter().flatten());
+        }
+        ResponsePhaseControlV1::Full | ResponsePhaseControlV1::NoPhase => {}
+    }
+}
+
+fn magnitude_coherence(left: &[PhaseCenterCell], right: &[PhaseCenterCell]) -> f64 {
+    let cells = left.len().min(right.len());
+    if cells == 0 {
+        return 0.0;
+    }
+    left.iter()
+        .zip(right)
+        .map(|(left, right)| left.re.hypot(left.im) * right.re.hypot(right.im))
+        .sum::<f64>()
+        / cells as f64
+}
+
+fn matched_random_center(center: &[PhaseCenterCell]) -> Vec<PhaseCenterCell> {
+    center
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(index, cell)| {
+            let sign = if index % 2 == 0 { 1.0 } else { -1.0 };
+            PhaseCenterCell {
+                re: cell.im * sign,
+                im: cell.re * -sign,
+            }
+        })
+        .collect()
 }
 
 fn insert_top_response_candidate<'a>(

@@ -950,15 +950,23 @@ pub(super) fn first_durable_package_completion(
     snapshot_path: &Path,
     package_id: &str,
 ) -> Result<Option<PackageCpuCompletionReceiptV1>, String> {
+    let receipts = durable_package_completions(snapshot_path, package_id)?;
+    Ok(receipts.into_iter().next())
+}
+
+pub(super) fn durable_package_completions(
+    snapshot_path: &Path,
+    package_id: &str,
+) -> Result<Vec<PackageCpuCompletionReceiptV1>, String> {
     let snapshot_bytes = match fs::read(snapshot_path) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(format!("package_completion_snapshot_read:{error}")),
     };
     let snapshot: Value = serde_json::from_slice(&snapshot_bytes)
         .map_err(|error| format!("package_completion_snapshot_decode:{error}"))?;
     if snapshot.get("schema").and_then(Value::as_str) != Some(SNAPSHOT_SCHEMA) {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let clean = snapshot.get("false_accepts").and_then(Value::as_u64) == Some(0)
         && snapshot
@@ -967,28 +975,28 @@ pub(super) fn first_durable_package_completion(
             == Some(0)
         && snapshot.get("pipeline_dropped").and_then(Value::as_u64) == Some(0);
     if !clean {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let Some(package) = snapshot
         .get("verified_by_package")
         .and_then(Value::as_object)
         .and_then(|packages| packages.get(package_id))
     else {
-        return Ok(None);
+        return Ok(Vec::new());
     };
     if !package
         .get("ordinary_accepts")
         .and_then(Value::as_u64)
         .is_some_and(|accepts| accepts > 0)
     {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let state_dir = snapshot_path
         .parent()
         .ok_or_else(|| "package_completion_state_dir_missing".to_owned())?;
     let completion_dir = state_dir.join("package-cpu-completions-v1");
     if !completion_dir.exists() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let receipts =
         read_framed_cbor::<PackageCpuCompletionReceiptV1>(&completion_dir, "completion")?
@@ -998,8 +1006,8 @@ pub(super) fn first_durable_package_completion(
     for receipt in &receipts {
         receipt.validate()?;
     }
-    let Some(first) = receipts.into_iter().next() else {
-        return Ok(None);
+    let Some(first) = receipts.first() else {
+        return Ok(Vec::new());
     };
     let snapshot_matches = package
         .get("first_receipt_root_sha256")
@@ -1013,7 +1021,10 @@ pub(super) fn first_durable_package_completion(
             .get("first_exact_input_tokens")
             .and_then(Value::as_u64)
             == Some(first.exact_input_tokens);
-    Ok(snapshot_matches.then_some(first))
+    if !snapshot_matches {
+        return Ok(Vec::new());
+    }
+    Ok(receipts)
 }
 
 fn read_prior_epoch_totals(state_dir: &Path) -> (String, u64, u64) {

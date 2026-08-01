@@ -685,6 +685,8 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">BUNDLE / PACKAGE</div><div id="ms4-package" class="ms3-value muted">НЕ ЗАПЕЧАТАН</div></div>
       <div class="ms3-cell"><div class="ms3-label">EXTERNAL ADMISSION</div><div id="ms4-admission" class="ms3-value locked">FALSE</div></div>
       <div class="ms3-cell"><div class="ms3-label">ORDINARY CPU PROOF</div><div id="ms4-ordinary-proof" class="ms3-value locked">PENDING</div></div>
+      <div class="ms3-cell"><div class="ms3-label">INDEPENDENT EXACT WAVE</div><div id="ms4-exact-wave" class="ms3-value watch">COLLECTING</div><div id="ms4-exact-wave-note" class="scope-note">POST-CENTER HOLDOUT</div></div>
+      <div class="ms3-cell"><div class="ms3-label">CALIBRATION CONTROLS / ATOMS</div><div id="ms4-calibration-controls" class="ms3-value watch">0 / 0</div><div id="ms4-calibration-note" class="scope-note">IN-SAMPLE DIAGNOSTIC ONLY</div></div>
     </div>
     <div id="ms3-note" class="ms3-note">Загрузка generation lifecycle и frozen acquisition…</div>
   </div></section>
@@ -810,9 +812,8 @@ const TEMPLATE: &str = r#"
     const ms4Receipt = ms4Compression.receipt_root_sha256 || "";
     const ms4LifecycleReceipt = ms4Compression.lifecycle_receipt_root_sha256 || "";
     const ms4CompletionReceipt = ms4Compression.completion_root_sha256 || "";
-    const ms4ExactWaveReceipt = ms4Compression.exact_package_wave_proof_root_sha256 || "";
     const ms4ReceiptMatched = Boolean(ms4Receipt) && ms4Receipt === ms4LifecycleReceipt;
-    const ms4CompressionComplete = ms4Compression.stage === "complete" && ms4Accepts > 0 && ms4ReceiptMatched && Boolean(ms4CompletionReceipt) && Boolean(ms4ExactWaveReceipt);
+    const ms4CompressionComplete = ms4Compression.stage === "complete" && ms4Accepts > 0 && ms4ReceiptMatched && Boolean(ms4CompletionReceipt);
     text("compression-lifetime-tokens", `${number.format(lifetimeAvoided)} / ${number.format(lifetimeEligible)}`);
     text("compression-lifetime-ratio", ratio(lifetimeAvoided, lifetimeEligible, 2));
     width("compression-lifetime-bar", lifetimeAvoided, lifetimeEligible);
@@ -827,7 +828,7 @@ const TEMPLATE: &str = r#"
     text("compression-ms4-calls", `${number.format(ms4Compression.ordinary_requests_seen || 0)} ORDINARY REQUEST · ${number.format(ms4Accepts)} CPU ACCEPT · ${number.format(ms4Compression.avoided_upstream_calls || 0)} UPSTREAM CALL AVOIDED`);
     const compactPackage = ms4Compression.package_id ? `${ms4Compression.package_id.slice(0, 28)}…${ms4Compression.package_id.slice(-12)}` : "—";
     text("compression-ms4-package", `PACKAGE ${compactPackage}`);
-    text("compression-ms4-status", ms4CompressionComplete && ms4CompletionReceipt ? "MS4 COMPLETE · IMMUTABLE ROOT" : "MS4 PROOF PENDING");
+    text("compression-ms4-status", ms4CompressionComplete && ms4CompletionReceipt ? "MS4 COMPLETE · IMMUTABLE CPU ROOT" : "MS4 OPERATIONAL PROOF PENDING");
     text("compression-ms4-time", `LAST ACCEPT ${localTime(ms4Compression.last_accept_timestamp_unix || 0)} · FIRST RECEIPT LATCHED · FALSE ACCEPTS ${number.format(ms4Compression.false_accepts || 0)} · PARITY ${number.format(ms4Compression.runtime_parity_mismatches || 0)}`);
     text("compression-ms4-root", ms4Receipt || "—");
     stateClass("compression-ms4-status", ms4CompressionComplete ? "good" : "warning");
@@ -972,12 +973,17 @@ const TEMPLATE: &str = r#"
     text("ms3-operational-note", `oldest ${duration(receiptLag)} · SLO ${duration(receiptSlo)} · stalled ${number.format(receiptStalled)}`);
     const ms4Stage = (ms4.stage || "waiting_for_ms3").toUpperCase();
     const ms4Package = ms4.package_id || "";
-    const ms4Complete = ms4.stage === "complete" && Boolean(ms4.ordinary_cpu_receipt_root_sha256);
-    const ms4ExactWave = Boolean(ms4.exact_package_wave_proof_root_sha256);
+    const ms4Complete = ms4.stage === "complete" && Boolean(ms4.ordinary_cpu_receipt_root_sha256) && Boolean(ms4.ordinary_cpu_completion_root_sha256);
+    const ms4ExactWaveStatus = (ms4.exact_wave_status || "collecting").toUpperCase();
+    const ms4ExactWave = ms4.exact_wave_status === "pass" && Boolean(ms4.exact_package_wave_proof_root_sha256);
     text("ms4-stage", ms4Stage);
     text("ms4-package", ms4Package ? ms4Package.slice(0, 20) : "НЕ ЗАПЕЧАТАН");
     text("ms4-admission", ms4.external_admission_pass === true ? "PASS" : "FALSE");
-    text("ms4-ordinary-proof", ms4Complete && ms4ExactWave ? "PASS · EXACT WAVE" : "PENDING");
+    text("ms4-ordinary-proof", ms4Complete ? "PASS · OPERATIONAL" : "PENDING");
+    text("ms4-exact-wave", ms4ExactWave ? "PASS · INDEPENDENT HOLDOUT" : ms4ExactWaveStatus);
+    text("ms4-exact-wave-note", `POST-CENTER +${number.format(ms4.exact_wave_positive_holdout_rows || 0)} / -${number.format(ms4.exact_wave_phase_challenging_negative_rows || 0)} · LINEAGES ${number.format(ms4.exact_wave_independent_lineages || 0)} · PRECOMMITTED ${number.format(ms4.exact_wave_precommitted_rows || 0)} · SETTLED ${number.format(ms4.exact_wave_settled_rows || 0)} · LATE ${number.format(ms4.exact_wave_precommit_disqualified_rows || 0)}`);
+    text("ms4-calibration-controls", `${number.format(ms4.negative_controls || 0)} / ${number.format(ms4.anti_center_atoms || 0)}`);
+    text("ms4-calibration-note", `TOPOLOGY NEGATIVES / ANTI-CENTER ATOMS · IN-SAMPLE ${ms4.in_sample_phase_ablation_root_sha256 ? "PASS" : "PENDING"}`);
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
     stateClass("ms3-future-applicability", `ms3-value ${!lawFrozen ? "muted" : futureAcquisitionFailed ? "locked" : "watch"}`);
@@ -992,13 +998,17 @@ const TEMPLATE: &str = r#"
     stateClass("ms4-package", `ms3-value ${ms4Package ? "good" : "muted"}`);
     stateClass("ms4-admission", `ms3-value ${ms4.external_admission_pass === true ? "good" : "locked"}`);
     stateClass("ms4-ordinary-proof", `ms3-value ${ms4Complete ? "good" : "locked"}`);
+    stateClass("ms4-exact-wave", `ms3-value ${ms4ExactWave ? "good" : ms4.exact_wave_status === "fail" || ms4.exact_wave_status === "acquisition_fail" ? "locked" : "watch"}`);
+    stateClass("ms4-calibration-controls", "ms3-value watch");
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
     const currentBlocker = lawFrozen ? futureBlocker : acquisitionBlocker || futureBlocker;
     text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN"} · MS4 ${ms4Stage} (${ms4.blocker || "none"}) · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
-    text("next-route", ms4Complete
-      ? "autonomous closed loop complete"
+    text("next-route", ms4Complete && ms4ExactWave
+      ? "operational loop complete · independent exact-package Wave proof complete"
+      : ms4Complete
+      ? "operational loop complete · post-center holdout → independent exact-package Wave proof"
       : authorityReady
       ? "ordinary CPU receipt → avoided upstream call"
       : futureVerdict === "future_pass"
@@ -1259,7 +1269,8 @@ mod tests {
         assert!(html.contains("id=\"compression-epoch-calls\""));
         assert!(html.contains("id=\"compression-ms4-root\""));
         assert!(html.contains("snapshot.cpu_compression"));
-        assert!(html.contains("MS4 COMPLETE · IMMUTABLE ROOT"));
+        assert!(html.contains("MS4 COMPLETE · IMMUTABLE CPU ROOT"));
+        assert!(html.contains("INDEPENDENT EXACT WAVE"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3 → MS4"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));

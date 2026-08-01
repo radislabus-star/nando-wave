@@ -1338,6 +1338,28 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
                 .get("exact_package_wave_proof_root_sha256")
                 .and_then(Value::as_str)
                 .unwrap_or(""),
+            "in_sample_phase_ablation_root_sha256": ms4_closed_loop
+                .get("in_sample_phase_ablation_root_sha256")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            "exact_wave_status": ms4_closed_loop
+                .get("exact_wave_status")
+                .and_then(Value::as_str)
+                .unwrap_or("collecting"),
+            "exact_wave_holdout_contract_root_sha256": ms4_closed_loop
+                .get("exact_wave_holdout_contract_root_sha256")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            "exact_wave_positive_holdout_rows": metric_u64(
+                &ms4_closed_loop,
+                "exact_wave_positive_holdout_rows",
+            ),
+            "exact_wave_phase_challenging_negative_rows": metric_u64(
+                &ms4_closed_loop,
+                "exact_wave_phase_challenging_negative_rows",
+            ),
+            "negative_topology_controls": metric_u64(&ms4_closed_loop, "negative_controls"),
+            "anti_center_atoms": metric_u64(&ms4_closed_loop, "anti_center_atoms"),
             "false_accepts": metric_u64(economics, "false_accepts"),
             "runtime_parity_mismatches": metric_u64(economics, "runtime_parity_mismatches"),
         },

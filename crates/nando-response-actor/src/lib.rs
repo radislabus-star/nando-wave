@@ -285,8 +285,8 @@ pub use lifecycle::{
     response_package_lineage_id, response_support_manifest_digest,
 };
 pub use ms4_external_admission::{
-    MS4_EXACT_PACKAGE_WAVE_PROOF_SCHEMA_V1, MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1,
-    Ms4AdaptiveGuardProofV1, Ms4ExactPackageWaveProofV1, Ms4ExternalAdmissionCandidateV1,
+    MS4_EXTERNAL_ADMISSION_CANDIDATE_SCHEMA_V1, MS4_IN_SAMPLE_PHASE_ABLATION_SCHEMA_V1,
+    Ms4AdaptiveGuardProofV1, Ms4ExternalAdmissionCandidateV1, Ms4InSamplePhaseAblationV1,
     Ms4WaveControlOutcomeV1, build_ms4_external_admission_snapshot,
 };
 pub use ms4_frozen_future::{
@@ -357,13 +357,13 @@ pub use package::{
     CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA, LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_MIN_SESSIONS,
     LEGACY_CONTROL_MIN_SURFACES, LEGACY_CONTROL_SUPPORT_ROWS, LearnedWaveRoute,
     LearnedWaveSubcenter, ResponseExecutor, ResponsePackage, ResponsePackageOrigin,
-    ResponsePackageProof, ResponsePackageState, ResponseRegistry, ResponseRoutingComparison,
-    ResponseRoutingPredicate, RoutedResponseExecution, SOURCE_VALUE_EXTERNAL_VERIFIER_SCHEMA,
-    STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA, VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA,
-    provider_tool_capability_atom_ids, relation_frame_online_routing_atom_ids,
-    relation_frame_phase_atom_ids, relation_frame_phase_margin_micro,
-    relation_frame_required_observable_atom_ids, relation_frame_routes_to_package,
-    relation_frame_routing_atom_ids, request_phase_atom_ids,
+    ResponsePackageProof, ResponsePackageState, ResponsePhaseControlV1, ResponseRegistry,
+    ResponseRoutingComparison, ResponseRoutingPredicate, RoutedResponseExecution,
+    SOURCE_VALUE_EXTERNAL_VERIFIER_SCHEMA, STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA,
+    VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA, provider_tool_capability_atom_ids,
+    relation_frame_online_routing_atom_ids, relation_frame_phase_atom_ids,
+    relation_frame_phase_margin_micro, relation_frame_required_observable_atom_ids,
+    relation_frame_routes_to_package, relation_frame_routing_atom_ids, request_phase_atom_ids,
     response_program_external_verifier_schema, response_program_required_routing_atom_ids,
 };
 pub use program::{

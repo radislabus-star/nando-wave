@@ -9,7 +9,7 @@ use nando_operator_learning::multi_source::{
     Ms3FutureApplicabilityDispositionV1, Ms3IndependentFutureVerdictV1, TransportBindingLedgerV1,
 };
 use nando_response_actor::{
-    Ms4ExactPackageWaveProofV1, Ms4ExternalAdmissionCandidateV1, ResponsePackageState,
+    Ms4ExternalAdmissionCandidateV1, Ms4InSamplePhaseAblationV1, ResponsePackageState,
     ResponseRegistry,
 };
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,7 @@ use crate::{AppState, bounded_reason, unix_now, write_bytes_atomic};
 
 const REPORT_SCHEMA_V1: &str = "nando.ms4-autonomous-closed-loop-report.v1";
 const REPORT_SCHEMA_V2: &str = "nando.ms4-autonomous-closed-loop-report.v2";
+const REPORT_SCHEMA_V3: &str = "nando.ms4-autonomous-closed-loop-report.v3";
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -48,8 +49,34 @@ pub(super) struct Ms4ClosedLoopReportV1 {
     pub candidate_root_sha256: Option<String>,
     pub package_id: Option<String>,
     #[serde(default)]
+    pub in_sample_phase_ablation_root_sha256: Option<String>,
+    #[serde(default)]
     pub exact_package_wave_proof_root_sha256: Option<String>,
     pub negative_controls: u64,
+    #[serde(default)]
+    pub anti_center_atoms: u64,
+    #[serde(default)]
+    pub exact_wave_holdout_contract_root_sha256: Option<String>,
+    #[serde(default)]
+    pub exact_wave_status: crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1,
+    #[serde(default)]
+    pub exact_wave_blocker: String,
+    #[serde(default)]
+    pub exact_wave_scanned_topology_rows: u64,
+    #[serde(default)]
+    pub exact_wave_independent_topology_rows: u64,
+    #[serde(default)]
+    pub exact_wave_precommitted_rows: u64,
+    #[serde(default)]
+    pub exact_wave_precommit_disqualified_rows: u64,
+    #[serde(default)]
+    pub exact_wave_settled_rows: u64,
+    #[serde(default)]
+    pub exact_wave_positive_holdout_rows: u64,
+    #[serde(default)]
+    pub exact_wave_phase_challenging_negative_rows: u64,
+    #[serde(default)]
+    pub exact_wave_independent_lineages: u64,
     pub external_admission_pass: bool,
     pub ordinary_cpu_receipt_root_sha256: Option<String>,
     #[serde(default)]
@@ -67,7 +94,7 @@ impl Default for Ms4ClosedLoopReportV1 {
 impl Ms4ClosedLoopReportV1 {
     fn seal(generation_sequence: u64, stage: Ms4ClosedLoopStageV1, blocker: &str) -> Self {
         let mut report = Self {
-            schema: REPORT_SCHEMA_V2.to_owned(),
+            schema: REPORT_SCHEMA_V3.to_owned(),
             report_root_sha256: String::new(),
             generated_at_unix: unix_now(),
             generation_sequence,
@@ -77,8 +104,21 @@ impl Ms4ClosedLoopReportV1 {
             future_envelope_root_sha256: None,
             candidate_root_sha256: None,
             package_id: None,
+            in_sample_phase_ablation_root_sha256: None,
             exact_package_wave_proof_root_sha256: None,
             negative_controls: 0,
+            anti_center_atoms: 0,
+            exact_wave_holdout_contract_root_sha256: None,
+            exact_wave_status: Default::default(),
+            exact_wave_blocker: String::new(),
+            exact_wave_scanned_topology_rows: 0,
+            exact_wave_independent_topology_rows: 0,
+            exact_wave_precommitted_rows: 0,
+            exact_wave_precommit_disqualified_rows: 0,
+            exact_wave_settled_rows: 0,
+            exact_wave_positive_holdout_rows: 0,
+            exact_wave_phase_challenging_negative_rows: 0,
+            exact_wave_independent_lineages: 0,
             external_admission_pass: false,
             ordinary_cpu_receipt_root_sha256: None,
             ordinary_cpu_completion_root_sha256: None,
@@ -94,8 +134,10 @@ impl Ms4ClosedLoopReportV1 {
     }
 
     fn validate(&self) -> Result<(), String> {
-        if !matches!(self.schema.as_str(), REPORT_SCHEMA_V1 | REPORT_SCHEMA_V2)
-            || self.phase_mutation_allowed
+        if !matches!(
+            self.schema.as_str(),
+            REPORT_SCHEMA_V1 | REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3
+        ) || self.phase_mutation_allowed
             || self.report_root_sha256 != self.expected_root()?
         {
             return Err("ms4_report_invalid".to_owned());
@@ -107,6 +149,20 @@ impl Ms4ClosedLoopReportV1 {
                 || self.ordinary_cpu_completion_root_sha256.is_none())
         {
             return Err("ms4_report_completion_proof_missing".to_owned());
+        }
+        if self.schema == REPORT_SCHEMA_V3
+            && self.stage == Ms4ClosedLoopStageV1::Complete
+            && (self.ordinary_cpu_receipt_root_sha256.is_none()
+                || self.ordinary_cpu_completion_root_sha256.is_none())
+        {
+            return Err("ms4_report_operational_completion_proof_missing".to_owned());
+        }
+        if self.schema == REPORT_SCHEMA_V3
+            && ((self.exact_wave_status
+                == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass)
+                != self.exact_package_wave_proof_root_sha256.is_some())
+        {
+            return Err("ms4_report_exact_wave_status_invalid".to_owned());
         }
         Ok(())
     }
@@ -131,22 +187,64 @@ impl Ms4ClosedLoopReportV1 {
             ))
             .map_err(str::to_owned);
         }
+        if self.schema == REPORT_SCHEMA_V2 {
+            return canonical_json_sha256(&(
+                REPORT_SCHEMA_V2,
+                self.generated_at_unix,
+                self.generation_sequence,
+                self.stage,
+                self.blocker.as_str(),
+                self.frozen_envelope_root_sha256.as_deref(),
+                self.future_envelope_root_sha256.as_deref(),
+                self.candidate_root_sha256.as_deref(),
+                self.package_id.as_deref(),
+                self.exact_package_wave_proof_root_sha256.as_deref(),
+                self.negative_controls,
+                self.external_admission_pass,
+                self.ordinary_cpu_receipt_root_sha256.as_deref(),
+                self.ordinary_cpu_completion_root_sha256.as_deref(),
+                self.authority_ready,
+                false,
+            ))
+            .map_err(str::to_owned);
+        }
         canonical_json_sha256(&(
-            REPORT_SCHEMA_V2,
+            REPORT_SCHEMA_V3,
             self.generated_at_unix,
-            self.generation_sequence,
-            self.stage,
-            self.blocker.as_str(),
-            self.frozen_envelope_root_sha256.as_deref(),
-            self.future_envelope_root_sha256.as_deref(),
-            self.candidate_root_sha256.as_deref(),
-            self.package_id.as_deref(),
-            self.exact_package_wave_proof_root_sha256.as_deref(),
-            self.negative_controls,
-            self.external_admission_pass,
-            self.ordinary_cpu_receipt_root_sha256.as_deref(),
-            self.ordinary_cpu_completion_root_sha256.as_deref(),
-            self.authority_ready,
+            (
+                self.generation_sequence,
+                self.stage,
+                self.blocker.as_str(),
+                self.frozen_envelope_root_sha256.as_deref(),
+                self.future_envelope_root_sha256.as_deref(),
+                self.candidate_root_sha256.as_deref(),
+                self.package_id.as_deref(),
+            ),
+            (
+                self.in_sample_phase_ablation_root_sha256.as_deref(),
+                self.exact_package_wave_proof_root_sha256.as_deref(),
+                self.negative_controls,
+                self.anti_center_atoms,
+            ),
+            (
+                self.exact_wave_holdout_contract_root_sha256.as_deref(),
+                self.exact_wave_status,
+                self.exact_wave_blocker.as_str(),
+                self.exact_wave_scanned_topology_rows,
+                self.exact_wave_independent_topology_rows,
+                self.exact_wave_precommitted_rows,
+                self.exact_wave_precommit_disqualified_rows,
+                self.exact_wave_settled_rows,
+                self.exact_wave_positive_holdout_rows,
+                self.exact_wave_phase_challenging_negative_rows,
+                self.exact_wave_independent_lineages,
+            ),
+            (
+                self.external_admission_pass,
+                self.ordinary_cpu_receipt_root_sha256.as_deref(),
+                self.ordinary_cpu_completion_root_sha256.as_deref(),
+                self.authority_ready,
+            ),
             false,
         ))
         .map_err(str::to_owned)
@@ -450,21 +548,48 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
         candidate
     };
 
-    let exact_wave_proof = candidate
-        .exact_package_wave_proof()
-        .map_err(|error| format!("ms4_exact_package_wave_proof:{error}"))?;
-    persist_exact_package_wave_proof(
+    let in_sample_phase_ablation = candidate
+        .in_sample_phase_ablation()
+        .map_err(|error| format!("ms4_in_sample_phase_ablation:{error}"))?;
+    persist_in_sample_phase_ablation(
         &state.config.ms4_closed_loop_path,
         candidate.candidate_root_sha256(),
-        &exact_wave_proof,
+        &in_sample_phase_ablation,
     )?;
-    report.exact_package_wave_proof_root_sha256 = Some(exact_wave_proof.proof_root_sha256.clone());
+    report.in_sample_phase_ablation_root_sha256 =
+        Some(in_sample_phase_ablation.proof_root_sha256.clone());
     let package = candidate
         .admitted_package()
         .map_err(|error| format!("ms4_package_rebuild:{error}"))?;
     report.candidate_root_sha256 = Some(candidate.candidate_root_sha256().to_owned());
     report.package_id = Some(package.package_id.clone());
-    report.negative_controls = package.anti_centers.len() as u64;
+    report.negative_controls =
+        u64::try_from(candidate.topology_negative_control_count()).unwrap_or(u64::MAX);
+    report.anti_center_atoms = u64::try_from(package.anti_centers.len()).unwrap_or(u64::MAX);
+    match crate::ms4_exact_wave_holdout::evaluate_holdout(state, &candidate, &package, unix_now()) {
+        Ok(exact_wave) => {
+            report.exact_wave_holdout_contract_root_sha256 =
+                Some(exact_wave.contract_root_sha256.clone());
+            report.exact_wave_status = exact_wave.status;
+            report.exact_wave_blocker = exact_wave.blocker;
+            report.exact_wave_scanned_topology_rows = exact_wave.scanned_topology_rows;
+            report.exact_wave_independent_topology_rows = exact_wave.independent_topology_rows;
+            report.exact_wave_precommitted_rows = exact_wave.precommitted_rows;
+            report.exact_wave_precommit_disqualified_rows = exact_wave.precommit_disqualified_rows;
+            report.exact_wave_settled_rows = exact_wave.settled_rows;
+            report.exact_wave_positive_holdout_rows = exact_wave.positive_holdout_rows;
+            report.exact_wave_phase_challenging_negative_rows =
+                exact_wave.phase_challenging_negative_rows;
+            report.exact_wave_independent_lineages = exact_wave.independent_lineages;
+            report.exact_package_wave_proof_root_sha256 =
+                exact_wave.proof.map(|proof| proof.proof_root_sha256);
+        }
+        Err(error) => {
+            report.exact_wave_status =
+                crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Fail;
+            report.exact_wave_blocker = bounded_reason(&error);
+        }
+    }
     let changed = state
         .ms4_external_candidate
         .write()
@@ -505,25 +630,29 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
                 .read()
                 .map_err(|_| "ms4_report_cache_lock_poisoned".to_owned())?
                 .clone();
-            let immutable_match = existing.schema == REPORT_SCHEMA_V2
-                && existing.stage == Ms4ClosedLoopStageV1::Complete
+            let immutable_match = matches!(
+                existing.schema.as_str(),
+                REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3
+            ) && existing.stage == Ms4ClosedLoopStageV1::Complete
                 && existing.generation_sequence == report.generation_sequence
                 && existing.candidate_root_sha256 == report.candidate_root_sha256
                 && existing.package_id == report.package_id
-                && existing.exact_package_wave_proof_root_sha256
-                    == report.exact_package_wave_proof_root_sha256
                 && existing.ordinary_cpu_receipt_root_sha256.as_deref()
                     == Some(completion.verification_receipt_root_sha256.as_str())
                 && existing.ordinary_cpu_completion_root_sha256.as_deref()
                     == Some(completion.completion_root_sha256.as_str());
             if immutable_match {
-                return Ok(existing);
+                report.ordinary_cpu_receipt_root_sha256 = existing.ordinary_cpu_receipt_root_sha256;
+                report.ordinary_cpu_completion_root_sha256 =
+                    existing.ordinary_cpu_completion_root_sha256;
+            } else {
+                report.ordinary_cpu_receipt_root_sha256 =
+                    Some(completion.verification_receipt_root_sha256);
+                report.ordinary_cpu_completion_root_sha256 =
+                    Some(completion.completion_root_sha256);
             }
             report.stage = Ms4ClosedLoopStageV1::Complete;
             report.blocker.clear();
-            report.ordinary_cpu_receipt_root_sha256 =
-                Some(completion.verification_receipt_root_sha256);
-            report.ordinary_cpu_completion_root_sha256 = Some(completion.completion_root_sha256);
         }
     } else {
         report.stage = Ms4ClosedLoopStageV1::ExternalAdmissionPending;
@@ -557,24 +686,24 @@ fn ordinary_cpu_completion(
     first_durable_package_completion(path, package_id)
 }
 
-fn persist_exact_package_wave_proof(
+fn persist_in_sample_phase_ablation(
     root: &Path,
     candidate_root_sha256: &str,
-    proof: &Ms4ExactPackageWaveProofV1,
+    proof: &Ms4InSamplePhaseAblationV1,
 ) -> Result<(), String> {
     let proof_path = root
-        .join("exact-package-wave-proofs")
+        .join("in-sample-phase-ablations")
         .join(format!("{candidate_root_sha256}.cbor"));
     let bytes = proof
         .canonical_bytes()
         .map_err(|error| format!("ms4_exact_wave_proof_encode:{error}"))?;
     if proof_path.exists() {
-        let restored = Ms4ExactPackageWaveProofV1::from_canonical_bytes(
+        let restored = Ms4InSamplePhaseAblationV1::from_canonical_bytes(
             &fs::read(&proof_path).map_err(|error| format!("ms4_exact_wave_proof_read:{error}"))?,
         )
         .map_err(|error| format!("ms4_exact_wave_proof_restore:{error}"))?;
         if restored != *proof {
-            return Err("ms4_exact_wave_proof_rebound".to_owned());
+            return Err("ms4_in_sample_phase_ablation_rebound".to_owned());
         }
         return Ok(());
     }
@@ -584,14 +713,14 @@ fn persist_exact_package_wave_proof(
             .ok_or_else(|| "ms4_exact_wave_proof_parent_missing".to_owned())?,
     )
     .map_err(|error| format!("ms4_exact_wave_proof_parent_create:{error}"))?;
-    write_bytes_atomic(&proof_path, &bytes, "ms4-exact-package-wave-proof")?;
-    let restored = Ms4ExactPackageWaveProofV1::from_canonical_bytes(
+    write_bytes_atomic(&proof_path, &bytes, "ms4-in-sample-phase-ablation")?;
+    let restored = Ms4InSamplePhaseAblationV1::from_canonical_bytes(
         &fs::read(&proof_path)
             .map_err(|error| format!("ms4_exact_wave_proof_verify_read:{error}"))?,
     )
     .map_err(|error| format!("ms4_exact_wave_proof_verify:{error}"))?;
     if restored != *proof {
-        return Err("ms4_exact_wave_proof_restart_parity_mismatch".to_owned());
+        return Err("ms4_in_sample_phase_ablation_restart_parity_mismatch".to_owned());
     }
     Ok(())
 }
@@ -601,18 +730,19 @@ fn persist_report(
     report: Ms4ClosedLoopReportV1,
 ) -> Result<Ms4ClosedLoopReportV1, String> {
     report.validate()?;
-    if state
+    let existing = state
         .ms4_closed_loop_report
         .read()
         .map_err(|_| "ms4_report_cache_lock_poisoned".to_owned())?
-        .eq(&report)
+        .clone();
+    if (existing == report || same_report_payload(&existing, &report))
         && state
             .config
             .ms4_closed_loop_path
             .join("status.json")
             .exists()
     {
-        return Ok(report);
+        return Ok(existing);
     }
     fs::create_dir_all(&state.config.ms4_closed_loop_path)
         .map_err(|error| format!("ms4_report_parent_create:{error}"))?;
@@ -628,6 +758,16 @@ fn persist_report(
         .write()
         .map_err(|_| "ms4_report_cache_lock_poisoned".to_owned())? = report.clone();
     Ok(report)
+}
+
+fn same_report_payload(left: &Ms4ClosedLoopReportV1, right: &Ms4ClosedLoopReportV1) -> bool {
+    let mut left = left.clone();
+    let mut right = right.clone();
+    left.generated_at_unix = 0;
+    right.generated_at_unix = 0;
+    left.report_root_sha256.clear();
+    right.report_root_sha256.clear();
+    left == right
 }
 
 #[cfg(test)]
@@ -735,7 +875,7 @@ mod tests {
     }
 
     #[test]
-    fn report_restore_accepts_v1_and_latches_complete_v2_roots() {
+    fn report_restore_accepts_legacy_and_v3_separates_operational_from_exact_wave() {
         let root = test_path("report-restore");
         std::fs::create_dir_all(&root).expect("report root");
         let mut legacy = Ms4ClosedLoopReportV1::seal(31, Ms4ClosedLoopStageV1::Complete, "");
@@ -756,13 +896,17 @@ mod tests {
         let mut current = Ms4ClosedLoopReportV1::seal(31, Ms4ClosedLoopStageV1::Complete, "");
         current.candidate_root_sha256 = Some("a".repeat(64));
         current.package_id = Some("ms4-natural-test".to_owned());
-        current.exact_package_wave_proof_root_sha256 = Some("c".repeat(64));
+        current.in_sample_phase_ablation_root_sha256 = Some("c".repeat(64));
         current.external_admission_pass = true;
         current.authority_ready = true;
         current.ordinary_cpu_receipt_root_sha256 = Some("b".repeat(64));
         current.ordinary_cpu_completion_root_sha256 = Some("d".repeat(64));
+        current.exact_wave_status =
+            crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Collecting;
+        current.exact_wave_blocker = "post_center_holdout_collecting".to_owned();
         current.reseal();
         current.validate().expect("current report");
+        assert!(current.exact_package_wave_proof_root_sha256.is_none());
         std::fs::write(
             root.join("status.json"),
             serde_json::to_vec(&current).expect("current report encode"),
