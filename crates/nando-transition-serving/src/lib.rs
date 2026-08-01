@@ -3315,16 +3315,20 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
             frozen.generation_registry(),
         )
     });
-    let terminal_contradiction = frozen.independent_future().is_some_and(|future| {
+    let independent_future = frozen.independent_future();
+    let terminal_contradiction = independent_future.is_some_and(|future| {
         future.receipt.verdict
             == nando_operator_learning::multi_source::Ms3IndependentFutureVerdictV1::Contradiction
     });
-    let applicability_failed = frozen
-        .applicability_report(unix_now())?
-        .is_some_and(|report| {
-            report.verdict
-                == nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail
-        });
+    let applicability_failed = applicability_failure_requires_rollover(
+        independent_future.is_some(),
+        frozen
+            .applicability_report(unix_now())?
+            .is_some_and(|report| {
+                report.verdict
+                    == nando_operator_learning::multi_source::Ms3FutureApplicabilityVerdictV1::AcquisitionFail
+            }),
+    );
     if linked_acquisition_failure.is_none()
         && linked_ineligible_probe_censor.is_none()
         && linked_capture_gap_repair.is_none()
@@ -3377,6 +3381,13 @@ fn rollover_ms3_generation_if_terminal(state: &AppState) -> Result<bool, String>
     *acquisition = runtimes.acquisition;
     *frozen = runtimes.frozen;
     Ok(true)
+}
+
+const fn applicability_failure_requires_rollover(
+    independent_future_present: bool,
+    applicability_acquisition_failed: bool,
+) -> bool {
+    !independent_future_present && applicability_acquisition_failed
 }
 
 fn frozen_contract_owns_linked_report(
@@ -7921,6 +7932,13 @@ mod tests {
     static PROJECT_STATUS_TEST_ID: AtomicU64 = AtomicU64::new(0);
     const STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA: &str =
         "status_projection_external_evidence.v1";
+
+    #[test]
+    fn independent_future_terminalizes_the_applicability_gate() {
+        assert!(applicability_failure_requires_rollover(false, true));
+        assert!(!applicability_failure_requires_rollover(true, true));
+        assert!(!applicability_failure_requires_rollover(true, false));
+    }
 
     #[test]
     fn sealed_ms3_future_owns_effective_lifecycle_status() {

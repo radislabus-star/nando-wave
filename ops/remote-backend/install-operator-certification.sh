@@ -116,7 +116,7 @@ if [[ -z "${learning_user}" ]]; then
 fi
 
 sudo -n install -d -o root -g root -m 0755 "${PREFIX}"
-sudo -n install -d -o root -g root -m 0700 "${KEY_DIR}"
+sudo -n install -d -o root -g "${GROUP}" -m 0750 "${KEY_DIR}"
 sudo -n install -d -o root -g "${GROUP}" -m 0750 "${ANCHOR_DIR}"
 sudo -n install -d -o root -g "${GROUP}" -m 0750 "${CLEANUP_RECEIPTS_DIR}"
 sudo -n install -d -o root -g "${GROUP}" -m 0770 "${STAGING_DIR}"
