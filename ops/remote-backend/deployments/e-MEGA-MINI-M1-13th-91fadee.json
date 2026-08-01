@@ -1,0 +1,154 @@
+{
+  "artifacts": [
+    {
+      "path": "/opt/nando-wave/bin/nando-transition-serving",
+      "sha256": "5b296b547cd5ffc0e4711dca75cd22398f350f506a423e7eae2375c60e32ccc0",
+      "size_bytes": 55607512
+    },
+    {
+      "path": "/opt/nando-wave/bin/nando-operator-certification-authority",
+      "sha256": "7c55a684c21d1178352b156b7d0fb307b180a9a8d3df2a2006191e0d2e08bc40",
+      "size_bytes": 7455440
+    },
+    {
+      "path": "/opt/nando-wave/bin/nando-operator-cleanup-verifier",
+      "sha256": "c330e7f43c8157417892890d05b6fb999795b3580be4f04c46fe2317a60e4d7c",
+      "size_bytes": 15400216
+    },
+    {
+      "path": "/etc/nando-wave/roles/response-learning.env",
+      "sha256": "4e12bae16f36cd1880ea0d5516d2e448dbd0ae30ffad76679121cb9973f5a598",
+      "size_bytes": 2416
+    },
+    {
+      "path": "/etc/systemd/system/nando-response-learning.service.d/30-certification.conf",
+      "sha256": "2e62a901855555e423219a30e6a4da9bb1f46b3e7200565939a39c769a57f4cf",
+      "size_bytes": 167
+    }
+  ],
+  "deployment_id": "20260801T202829Z-91fadee5860e",
+  "generated_at": "2026-08-01T20:28:44Z",
+  "invariants": {
+    "hot_pid_after": 2166527,
+    "hot_pid_before": 2166527,
+    "hot_pid_unchanged": true,
+    "nginx_pid_after": 682430,
+    "nginx_pid_before": 682430,
+    "nginx_pid_unchanged": true
+  },
+  "receipt_root_sha256": "7bbf7951df6ee11fd454ec9e0fb3473ff1eb1a091ecb0b86e4650cb76d35cc19",
+  "rollback": {
+    "manifest_root_sha256": "6a260ef8964696cf980b3844100fca0de4074f626a5bd20415ed645ddb716e47",
+    "path": "/var/lib/nando-wave/deployments/20260801T202829Z-91fadee5860e/rollback",
+    "source_commit": "ff07ba9fe05b012bc49557bfdc30e44dcb317f08"
+  },
+  "runtime_snapshots": [
+    {
+      "label": "hot_health",
+      "path": "evidence/hot_health.json",
+      "sha256": "2e35c4cab321eba4942b3582aa1a10f4caec8d4f1c90d60f61f3a72adddc4883",
+      "url": "http://127.0.0.1:18789/health"
+    },
+    {
+      "label": "cold_health",
+      "path": "evidence/cold_health.json",
+      "sha256": "308777ddf9858af4b11da715974e3881f948ee9635c2068ce25452a38c80df63",
+      "url": "http://127.0.0.1:18790/health"
+    },
+    {
+      "label": "control_health",
+      "path": "evidence/control_health.json",
+      "sha256": "8cb2488f791ad31f0e015f7641b021fb75a72065bb055894ac934549a641f042",
+      "url": "http://127.0.0.1:18788/health"
+    },
+    {
+      "label": "edge_health",
+      "path": "evidence/edge_health.json",
+      "sha256": "01bd5780521386cb332063105c03ad3ac52e159c3a6571ae5691a8aa033b33b9",
+      "url": "http://192.168.3.94:8787/health"
+    },
+    {
+      "label": "ms4",
+      "path": "evidence/ms4.json",
+      "sha256": "c3c109a00d459c82e4a6d6d9d7ee79d32683603f1aa46771dec7a7adc76fa4bd",
+      "url": "http://127.0.0.1:18790/v2/multi-source/ms4-closed-loop"
+    }
+  ],
+  "schema": "nando.deployment-receipt.v1",
+  "source": {
+    "commit": "91fadee5860e4b50936680d214e663ed6c9c24df",
+    "tree": "60d24a1d3b84f623aa797c0e95e39ccfc03a6137"
+  },
+  "state_roots": [
+    {
+      "manifest": "evidence/state-2cf27c049019.sha256",
+      "path": "/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1",
+      "tree_root_sha256": "a83447a535406ba01453e56e98d923e926c4ac1a0b0f46271dfcbda17c2993e6"
+    },
+    {
+      "manifest": "evidence/state-fbc765cfd08e.sha256",
+      "path": "/var/lib/nando-wave-certification-anchor",
+      "tree_root_sha256": "223e0681deb3fb9683c3eff98a9d63e61c26d4d5e158d25639f3b425d1edb05f"
+    },
+    {
+      "manifest": "evidence/state-d1d8725977c7.sha256",
+      "path": "/var/lib/nando-wave-cleanup-receipts-v1",
+      "tree_root_sha256": "951c589fe02004cc73acc2e153aa4b121723f39a546c3268acdd6f63e2cd055a"
+    },
+    {
+      "manifest": "evidence/state-231d5b5f27f0.sha256",
+      "path": "/var/lib/nando-wave/cleanup-verifier-staging/29eb219540fcdc4d7df3c574dd2ef85bf64971af50f75e838c158f87f473bfc8",
+      "tree_root_sha256": "862a6a4f3bcdfad7850661248a11c1218ba52e1314ff8daef8df5ab88516a071"
+    }
+  ],
+  "units": [
+    {
+      "active": "active",
+      "enabled": "enabled",
+      "fragment_path": "/etc/systemd/system/nando-transition-serving.service",
+      "fragment_sha256": "6e9d2fe41b1db95f94768d1ab41dffce1f15be92e2f774832c7fe392bb77b135",
+      "main_pid": 2166527,
+      "unit": "nando-transition-serving.service"
+    },
+    {
+      "active": "active",
+      "enabled": "enabled",
+      "fragment_path": "/etc/systemd/system/nando-response-learning.service",
+      "fragment_sha256": "c4b351c5afcdb1e8c4fcfa0ed42020f89c62f21af6dc0c9271efb8fe61ff6e1d",
+      "main_pid": 2346989,
+      "unit": "nando-response-learning.service"
+    },
+    {
+      "active": "active",
+      "enabled": "enabled",
+      "fragment_path": "/etc/systemd/system/nando-gateway-control.service",
+      "fragment_sha256": "250d6a11157b8304a8c8eaaadd573377574c14d1651b585056e746c51d17912f",
+      "main_pid": 2228308,
+      "unit": "nando-gateway-control.service"
+    },
+    {
+      "active": "active",
+      "enabled": "enabled",
+      "fragment_path": "/etc/systemd/system/nando-transport-gateway.service",
+      "fragment_sha256": "b1ce3017e70256c4bd6a065c312dcebfbb432b7511f10900766c1b3e4cf48138",
+      "main_pid": 682430,
+      "unit": "nando-transport-gateway.service"
+    },
+    {
+      "active": "active",
+      "enabled": "enabled",
+      "fragment_path": "/etc/systemd/system/nando-operator-certification-authority.service",
+      "fragment_sha256": "866188d2b6df3ab018b29bab1247f69bec4f4f1176f2add605d4ad2ce5ab97cb",
+      "main_pid": 2346951,
+      "unit": "nando-operator-certification-authority.service"
+    },
+    {
+      "active": "inactive",
+      "enabled": "disabled",
+      "fragment_path": "/etc/systemd/system/nando-operator-cleanup-verifier@.service",
+      "fragment_sha256": "c0d3579138f518890076f383311c3a6e9e9ca18b7d2cdd17470d1df7908ec2f1",
+      "main_pid": 0,
+      "unit": "nando-operator-cleanup-verifier@29eb219540fcdc4d7df3c574dd2ef85bf64971af50f75e838c158f87f473bfc8.service"
+    }
+  ]
+}
