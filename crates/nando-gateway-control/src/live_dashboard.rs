@@ -444,6 +444,20 @@ const TEMPLATE: &str = r#"
 .ms3-value.locked { color:var(--red); }
 .ms3-value.muted { color:var(--muted); }
 .ms3-note { margin-top:11px; color:var(--muted); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
+.certificate-head { display:flex; justify-content:space-between; gap:16px; align-items:baseline; margin-top:20px; }
+.certificate-head h3 { margin:0; color:#dce2e6; font-size:13px; }
+.certificate-head span { color:var(--muted); font-size:11px; text-align:right; }
+.certificate-scroll { margin-top:9px; overflow-x:auto; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.certificate-table { min-width:820px; }
+.certificate-row { display:grid; grid-template-columns:minmax(250px,2fr) repeat(4,minmax(120px,1fr)); gap:12px; align-items:center; min-height:48px; border-bottom:1px solid var(--line); }
+.certificate-row:last-child { border-bottom:0; }
+.certificate-row.header { min-height:32px; color:var(--muted); font-size:10px; font-weight:800; }
+.certificate-package { min-width:0; color:#dce2e6; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; overflow-wrap:anywhere; }
+.certificate-state { font-size:11px; font-weight:800; overflow-wrap:anywhere; }
+.certificate-state.good { color:var(--green); }
+.certificate-state.watch { color:var(--amber); }
+.certificate-state.locked { color:var(--red); }
+.certificate-state.muted { color:var(--muted); }
 .epoch-strip { display:flex; justify-content:center; gap:24px; align-items:center; flex-wrap:wrap; padding:15px 24px; border-bottom:1px solid var(--line); color:#d8dde1; text-align:center; font-size:14px; font-weight:700; }
 .epoch-strip b,.epoch-visibility { color:var(--green); }
 .window-head { display:flex; justify-content:space-between; gap:20px; align-items:baseline; margin-bottom:12px; }
@@ -541,6 +555,17 @@ const TEMPLATE: &str = r#"
   .ms3-grid { grid-template-columns:1fr; }
   .ms3-cell,.ms3-cell:last-child { grid-column:auto; padding:12px 0; border-right:0; border-bottom:1px solid var(--line); }
   .ms3-cell:last-child { border-bottom:0; }
+  .certificate-head { align-items:flex-start; flex-direction:column; gap:5px; }
+  .certificate-head span { text-align:left; }
+  .certificate-scroll { overflow-x:visible; }
+  .certificate-table { min-width:0; }
+  .certificate-row { grid-template-columns:minmax(0,1fr); gap:3px; padding:11px 0; }
+  .certificate-row.header { display:none; }
+  .certificate-state::before { color:var(--muted); font-weight:700; }
+  .certificate-state.execution::before { content:"CPU SAFE "; }
+  .certificate-state.law::before { content:"LAW PROVED "; }
+  .certificate-state.mechanism::before { content:"WAVE CAUSAL "; }
+  .certificate-state.k1::before { content:"K1 ELIGIBLE "; }
   .epoch-strip { padding:13px 12px; font-size:12px; }
   .window-scroll { max-height:430px; overflow-y:auto; overflow-x:visible; scrollbar-gutter:auto; }
   .pipeline-scroll { overflow-x:visible; }
@@ -688,6 +713,12 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">INDEPENDENT EXACT WAVE</div><div id="ms4-exact-wave" class="ms3-value watch">COLLECTING</div><div id="ms4-exact-wave-note" class="scope-note">POST-CENTER HOLDOUT</div></div>
       <div class="ms3-cell"><div class="ms3-label">CALIBRATION CONTROLS / ATOMS</div><div id="ms4-calibration-controls" class="ms3-value watch">0 / 0</div><div id="ms4-calibration-note" class="scope-note">IN-SAMPLE DIAGNOSTIC ONLY</div></div>
     </div>
+    <div class="certificate-head"><h3>PRODUCT REGISTRY / EPISTEMIC REGISTRY</h3><span id="k1-vocabulary-status">K1 VOCABULARY CLOSED</span></div>
+    <div class="certificate-scroll"><div class="certificate-table">
+      <div class="certificate-row header"><span>PACKAGE</span><span>CPU SAFE</span><span>LAW PROVED</span><span>WAVE CAUSAL</span><span>K1 ELIGIBLE</span></div>
+      <div id="operator-certificate-rows"></div>
+    </div></div>
+    <div id="k1-vocabulary-note" class="ms3-note">LAW 0 / 3 · SEMANTIC 0 / 3 · TOPOLOGY 0 / 2 · CLEANUP 0 / 0 · FALSE BAD APPLY 0</div>
     <div id="ms3-note" class="ms3-note">Загрузка generation lifecycle и frozen acquisition…</div>
   </div></section>
   <div class="epoch-strip"><span>МОСТ: <b>opportunity seq <span id="bridge-pair">— / —</span></b> · hot process tokens <span id="bridge-tokens">—</span> · pending <span id="bridge-queue">—</span></span><span id="epoch-visibility" class="epoch-visibility">STRUCTURE —</span></div>
@@ -765,6 +796,51 @@ const TEMPLATE: &str = r#"
     const bars = node("activity-bars"); if (!bars) return;
     bars.replaceChildren(); const max = Math.max(1, ...samples);
     for (let index = 0; index < 30; index += 1) { const bar = document.createElement("span"); bar.className = "activity-bar"; const value = samples[index] || 0; bar.style.height = `${Math.max(2, value * 36 / max)}px`; bars.appendChild(bar); }
+  };
+  const certificateTone = (kind, value) => {
+    if (value === "pass" || value === "yes" || value === "wave_causal" || value === "structural") return "good";
+    if (value === "partial" || value === "collecting" || value === "pending") return "watch";
+    if (value === "revoked" || value === "rejected" || value === "fail") return "locked";
+    return "muted";
+  };
+  const renderOperatorCertificates = (snapshot) => {
+    const rows = node("operator-certificate-rows");
+    if (!rows) return;
+    rows.replaceChildren();
+    for (const certificate of snapshot.operator_certificate_matrix || []) {
+      const row = document.createElement("div");
+      row.className = "certificate-row";
+      const packageCell = document.createElement("span");
+      packageCell.className = "certificate-package";
+      packageCell.textContent = certificate.package_id || "—";
+      packageCell.title = certificate.bundle_id_sha256 || certificate.law_blocker || "";
+      row.appendChild(packageCell);
+      const states = [
+        ["execution", certificate.execution_status || "pending"],
+        ["law", certificate.law_status || "partial"],
+        ["mechanism", certificate.mechanism_status === "pass" ? certificate.mechanism_classification || "pass" : certificate.mechanism_status || "not_evaluated"],
+        ["k1", certificate.k1_unit_eligible === true ? "yes" : "no"],
+      ];
+      for (const [kind, value] of states) {
+        const cell = document.createElement("span");
+        cell.className = `certificate-state ${kind} ${certificateTone(kind, value)}`;
+        cell.textContent = value.replaceAll("_", " ").toUpperCase();
+        row.appendChild(cell);
+      }
+      rows.appendChild(row);
+    }
+    if (rows.childElementCount === 0) {
+      const row = document.createElement("div");
+      row.className = "certificate-row";
+      const cell = document.createElement("span");
+      cell.className = "certificate-package";
+      cell.textContent = "ACTIVE PACKAGES NOT OBSERVED";
+      row.appendChild(cell);
+      rows.appendChild(row);
+    }
+    const gate = snapshot.ms4_closed_loop?.k1_vocabulary_gate || {};
+    text("k1-vocabulary-status", gate.open === true ? "K1 VOCABULARY OPEN" : `K1 VOCABULARY CLOSED · ${(gate.blocker || "LAW CERTIFICATES PENDING").replaceAll("_", " ").toUpperCase()}`);
+    text("k1-vocabulary-note", `LAW ${number.format(gate.law_certificates || 0)} / ${number.format(gate.min_law_certificates || 3)} · SEMANTIC ${number.format(gate.semantic_laws || 0)} / ${number.format(gate.min_semantic_laws || 3)} · TOPOLOGY ${number.format(gate.role_topologies || 0)} / ${number.format(gate.min_role_topologies || 2)} · CLEANUP ${number.format(gate.cleanup_receipts || 0)} / ${number.format(gate.law_certificates || 0)} · FALSE BAD APPLY ${number.format(gate.false_bad_apply || 0)}`);
   };
   const renderTokens = (snapshot) => {
     const accounting = snapshot.accounting || {};
@@ -1000,6 +1076,7 @@ const TEMPLATE: &str = r#"
     stateClass("ms4-ordinary-proof", `ms3-value ${ms4Complete ? "good" : "locked"}`);
     stateClass("ms4-exact-wave", `ms3-value ${ms4ExactWave ? "good" : ms4.exact_wave_status === "fail" || ms4.exact_wave_status === "acquisition_fail" ? "locked" : "watch"}`);
     stateClass("ms4-calibration-controls", "ms3-value watch");
+    renderOperatorCertificates(snapshot);
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
@@ -1271,6 +1348,13 @@ mod tests {
         assert!(html.contains("snapshot.cpu_compression"));
         assert!(html.contains("MS4 COMPLETE · IMMUTABLE CPU ROOT"));
         assert!(html.contains("INDEPENDENT EXACT WAVE"));
+        assert!(html.contains("PRODUCT REGISTRY / EPISTEMIC REGISTRY"));
+        assert!(html.contains("CPU SAFE"));
+        assert!(html.contains("LAW PROVED"));
+        assert!(html.contains("WAVE CAUSAL"));
+        assert!(html.contains("K1 ELIGIBLE"));
+        assert!(html.contains("snapshot.operator_certificate_matrix"));
+        assert!(html.contains("k1_vocabulary_gate"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3 → MS4"));
         assert!(html.contains("ACTIVE GENERATION"));
         assert!(html.contains("PREDECESSOR"));

@@ -1148,6 +1148,11 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         .unwrap_or(0);
     let online_opportunity = miner_opportunity;
     let response_package_count = active_response_package_count(&response_registry);
+    let response_packages = response_registry
+        .get("packages")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
     let controller_relation_candidates =
         metric_u64(&response_admission_controller, "relation_candidates");
     let controller_collection_candidates =
@@ -1290,6 +1295,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let ms4_package_accepts = ms4_package_economics
         .map(|package| metric_u64(package, "ordinary_accepts"))
         .unwrap_or(0);
+    let operator_certificate_matrix =
+        build_operator_certificate_matrix(response_packages, &ms4_closed_loop);
     let cpu_compression = json!({
         "schema": "nando.cpu-traffic-compression-view.v1",
         "lifetime": {
@@ -1453,6 +1460,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "ms3_acquisition": ms3_acquisition,
             "ms3_capture_health": ms3_capture_health,
             "ms4_closed_loop": ms4_closed_loop,
+            "operator_certificate_matrix": operator_certificate_matrix,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
             "controller_relation_candidates": controller_relation_candidates,
@@ -1594,6 +1602,63 @@ fn active_response_package_count(registry: &Value) -> u64 {
                 .filter(|package| package.get("state").and_then(Value::as_str) == Some("active"))
                 .count() as u64
         })
+}
+
+fn build_operator_certificate_matrix(packages: &[Value], ms4: &Value) -> Vec<Value> {
+    let certification = ms4
+        .get("operator_certification")
+        .filter(|value| value.is_object());
+    let certified_package_id = certification
+        .and_then(|entry| entry.get("package_id"))
+        .and_then(Value::as_str);
+    let mut rows = packages
+        .iter()
+        .filter(|package| package.get("state").and_then(Value::as_str) == Some("active"))
+        .filter_map(|package| {
+            let package_id = package.get("package_id")?.as_str()?;
+            if certified_package_id == Some(package_id) {
+                let entry = certification?;
+                return Some(json!({
+                    "package_id": package_id,
+                    "bundle_id_sha256": entry.get("bundle_id_sha256").and_then(Value::as_str).unwrap_or(""),
+                    "execution_status": entry.pointer("/execution/status").and_then(Value::as_str).unwrap_or("pending"),
+                    "execution_certificate_root_sha256": entry.pointer("/execution/certificate_root_sha256").and_then(Value::as_str).unwrap_or(""),
+                    "law_status": entry.pointer("/law/status").and_then(Value::as_str).unwrap_or("partial"),
+                    "law_certificate_root_sha256": entry.pointer("/law/certificate_root_sha256").and_then(Value::as_str).unwrap_or(""),
+                    "law_blocker": entry.pointer("/law/blocker").and_then(Value::as_str).unwrap_or(""),
+                    "mechanism_status": entry.pointer("/mechanism/status").and_then(Value::as_str).unwrap_or("not_evaluated"),
+                    "mechanism_classification": entry.pointer("/mechanism/classification").and_then(Value::as_str).unwrap_or("unresolved"),
+                    "mechanism_certificate_root_sha256": entry.pointer("/mechanism/certificate_root_sha256").and_then(Value::as_str).unwrap_or(""),
+                    "product_registry_member": entry.get("product_registry_member").and_then(Value::as_bool).unwrap_or(false),
+                    "epistemic_registry_member": entry.get("epistemic_registry_member").and_then(Value::as_bool).unwrap_or(false),
+                    "k1_unit_eligible": entry.get("k1_unit_eligible").and_then(Value::as_bool).unwrap_or(false),
+                    "legacy": false,
+                }));
+            }
+            Some(json!({
+                "package_id": package_id,
+                "bundle_id_sha256": "",
+                "execution_status": "pass_legacy",
+                "execution_certificate_root_sha256": "",
+                "law_status": "legacy",
+                "law_certificate_root_sha256": "",
+                "law_blocker": "legacy_package_has_no_law_certificate",
+                "mechanism_status": "not_evaluated",
+                "mechanism_classification": "unresolved",
+                "mechanism_certificate_root_sha256": "",
+                "product_registry_member": true,
+                "epistemic_registry_member": false,
+                "k1_unit_eligible": false,
+                "legacy": true,
+            }))
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        left.get("package_id")
+            .and_then(Value::as_str)
+            .cmp(&right.get("package_id").and_then(Value::as_str))
+    });
+    rows
 }
 
 fn metric_u64_any(metrics: &Value, keys: &[&str]) -> u64 {
@@ -1986,6 +2051,43 @@ mod tests {
             ]
         });
         assert_eq!(active_response_package_count(&registry), 1);
+    }
+
+    #[test]
+    fn certificate_matrix_keeps_execution_and_mechanism_authority_separate() {
+        let packages = vec![
+            json!({"package_id": "legacy", "state": "active"}),
+            json!({"package_id": "natural", "state": "active"}),
+        ];
+        let ms4 = json!({
+            "operator_certification": {
+                "package_id": "natural",
+                "bundle_id_sha256": "aa",
+                "execution": {"status": "pass", "certificate_root_sha256": "bb"},
+                "law": {
+                    "status": "partial",
+                    "certificate_root_sha256": "cc",
+                    "blocker": "exact_memory_cleanup_receipt_missing"
+                },
+                "mechanism": {
+                    "status": "collecting",
+                    "classification": "unresolved",
+                    "certificate_root_sha256": "dd"
+                },
+                "product_registry_member": true,
+                "epistemic_registry_member": false,
+                "k1_unit_eligible": false
+            }
+        });
+        let rows = build_operator_certificate_matrix(&packages, &ms4);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["execution_status"], "pass_legacy");
+        assert_eq!(rows[0]["law_status"], "legacy");
+        assert_eq!(rows[1]["execution_status"], "pass");
+        assert_eq!(rows[1]["law_status"], "partial");
+        assert_eq!(rows[1]["mechanism_status"], "collecting");
+        assert_eq!(rows[1]["product_registry_member"], true);
+        assert_eq!(rows[1]["epistemic_registry_member"], false);
     }
 
     #[test]

@@ -26,6 +26,7 @@ mod multi_source_frame_archive;
 mod multi_source_live;
 mod multi_source_topology_archive;
 mod nginx_terminal;
+mod operator_certification;
 mod opportunity_bridge;
 mod provider_capture;
 pub mod remote_evidence_spool;

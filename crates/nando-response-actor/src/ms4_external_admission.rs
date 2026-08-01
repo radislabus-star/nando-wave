@@ -276,6 +276,16 @@ impl Ms4ExternalAdmissionCandidateV1 {
         &self.future.envelope_root_sha256
     }
 
+    #[must_use]
+    pub fn canonical_bundle_id_sha256(&self) -> &str {
+        self.shadow_candidate.canonical_bundle_id_sha256()
+    }
+
+    #[must_use]
+    pub fn canonical_program_root_sha256(&self) -> &str {
+        self.future.receipt.canonical_program_root_sha256.as_str()
+    }
+
     pub fn admitted_package(&self) -> Result<ResponsePackage, &'static str> {
         self.validate()?;
         admitted_package(&self.shadow_candidate, &self.guard_proof)

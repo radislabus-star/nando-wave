@@ -1,0 +1,99 @@
+# Three Certificates, Two Registries, One K1 Gate
+
+Status: implemented as a fail-closed cold-path contract. The current MS4
+operator remains executable, but is not yet eligible for the epistemic K1
+vocabulary because its bundle-bound exact-memory cleanup receipt is missing.
+
+## Immutable Boundary
+
+```text
+CrystallizedOperatorBundleV4
+  bundle_id remains immutable
+          |
+          v
+append-only OperatorCertificationLedgerV1
+  |- ExecutionCertificate
+  |- LawCertificate
+  `- MechanismCertificate
+          |
+          +-> Product Registry projection
+          `-> Epistemic Registry projection
+```
+
+Certificates are not serialized back into BundleV4. Exact Wave changes from
+`COLLECTING` to `PASS` or `FAIL` after the bundle is sealed; embedding that
+state would change `bundle_id` and destroy content-addressed identity.
+
+## Independent Meanings
+
+```text
+ExecutionCertificate PASS
+  external admission + immutable ordinary CPU completion
+  + verifier/runtime parity clean
+  -> Product Registry
+
+LawCertificate PASS
+  frozen unique law + independent future transfer
+  + bundle-bound exact-memory cleanup receipt
+  -> Epistemic Registry
+
+MechanismCertificate
+  WAVE_CAUSAL | STRUCTURAL | UNRESOLVED
+  with NOT_EVALUATED | COLLECTING | PASS | FAIL assessment
+  -> provenance of discovery, never execution authority
+```
+
+`WAVE_CAUSAL_FAIL` does not revoke an otherwise valid execution certificate
+and does not erase a separately proven law. It means only that the exact
+package holdout did not establish causal necessity of Wave. Operational false
+accepts and runtime parity failures remain independent revocation evidence.
+
+## K1 Vocabulary Gate
+
+An individual K1 unit requires:
+
+```text
+ExecutionCertificate PASS
++ LawCertificate PASS
++ false_bad_apply = 0
+```
+
+Opening the natural L2 experiment requires the full vocabulary gate:
+
+```text
+law certificates       >= 3
+distinct semantic laws >= 3
+distinct role topology >= 2
+cleanup receipts       == law certificates
+false_bad_apply        == 0
+```
+
+Mechanism classification is recorded but does not block K1. This preserves
+the distinction between discovering a real transferable law and proving that
+Wave was the necessary discovery mechanism.
+
+L2 receives only opcode identity, role contract, verified consequence, cost,
+and applicability. It does not receive a prepared composition DAG, family
+mapping, meta-skill name, correct ordering, exact episode identity, tool name,
+or field name.
+
+## Current Honest Projection
+
+```text
+MS4 natural package
+|- CPU SAFE        PASS
+|- LAW PROVED      PARTIAL
+|  `- blocker      exact_memory_cleanup_receipt_missing
+|- WAVE CAUSAL     COLLECTING / UNRESOLVED
+`- K1 ELIGIBLE     NO
+
+legacy ACTIVE packages
+|- CPU SAFE        PASS / LEGACY ADMISSION
+|- LAW PROVED      LEGACY
+|- WAVE CAUSAL     NOT_EVALUATED
+`- K1 ELIGIBLE     NO
+```
+
+MS5-MS8 remain free to improve product breadth in shadow. They enter K1 only
+through the same certificates and diversity gate; generated capability tests
+cannot manufacture natural LawCertificate status.

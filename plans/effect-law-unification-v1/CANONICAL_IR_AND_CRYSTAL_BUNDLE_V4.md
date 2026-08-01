@@ -48,6 +48,11 @@ nando-operator-admission
 The bundle cannot authorize itself. `AuthorityLease`, rollout state, live
 metrics, raw evidence, and learner state are absent from its serialized bytes.
 
+Certificates issued after sealing are also absent from BundleV4. They bind to
+its immutable `bundle_id` through an append-only external ledger, so a later
+Wave verdict cannot rewrite content identity or silently revoke execution.
+See `THREE_CERTIFICATE_REGISTRIES_AND_K1_V1.md`.
+
 ## Identity
 
 ```text

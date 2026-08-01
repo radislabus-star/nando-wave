@@ -4,13 +4,18 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
+use nando_operator_admission::{
+    ExecutionCertificateStatusV1, ExecutionCertificateV1, K1VocabularyGateV1,
+    LawCertificateStatusV1, LawCertificateV1, MechanismCertificateStatusV1, MechanismCertificateV1,
+    OperatorCertificationEntryV1, OperatorMechanismClassV1,
+};
 use nando_operator_kernel::canonical_json_sha256;
 use nando_operator_learning::multi_source::{
     Ms3FutureApplicabilityDispositionV1, Ms3IndependentFutureVerdictV1, TransportBindingLedgerV1,
 };
 use nando_response_actor::{
-    Ms4ExternalAdmissionCandidateV1, Ms4InSamplePhaseAblationV1, ResponsePackageState,
-    ResponseRegistry,
+    Ms4ExternalAdmissionCandidateV1, Ms4InSamplePhaseAblationV1, ResponseOperation,
+    ResponsePackage, ResponsePackageState, ResponseRegistry,
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +26,8 @@ const REPORT_SCHEMA_V1: &str = "nando.ms4-autonomous-closed-loop-report.v1";
 const REPORT_SCHEMA_V2: &str = "nando.ms4-autonomous-closed-loop-report.v2";
 const REPORT_SCHEMA_V3: &str = "nando.ms4-autonomous-closed-loop-report.v3";
 const REPORT_SCHEMA_V4: &str = "nando.ms4-autonomous-closed-loop-report.v4";
+const REPORT_SCHEMA_V5: &str = "nando.ms4-autonomous-closed-loop-report.v5";
+const ROLE_TOPOLOGY_SCHEMA_V1: &str = "nando.operator-role-topology.v1";
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -49,6 +56,12 @@ pub(super) struct Ms4ClosedLoopReportV1 {
     pub future_envelope_root_sha256: Option<String>,
     pub candidate_root_sha256: Option<String>,
     pub package_id: Option<String>,
+    #[serde(default)]
+    pub certification_ledger_root_sha256: Option<String>,
+    #[serde(default)]
+    pub operator_certification: Option<OperatorCertificationEntryV1>,
+    #[serde(default)]
+    pub k1_vocabulary_gate: Option<K1VocabularyGateV1>,
     #[serde(default)]
     pub in_sample_phase_ablation_root_sha256: Option<String>,
     #[serde(default)]
@@ -119,7 +132,7 @@ impl Default for Ms4ClosedLoopReportV1 {
 impl Ms4ClosedLoopReportV1 {
     fn seal(generation_sequence: u64, stage: Ms4ClosedLoopStageV1, blocker: &str) -> Self {
         let mut report = Self {
-            schema: REPORT_SCHEMA_V4.to_owned(),
+            schema: REPORT_SCHEMA_V5.to_owned(),
             report_root_sha256: String::new(),
             generated_at_unix: unix_now(),
             generation_sequence,
@@ -129,6 +142,9 @@ impl Ms4ClosedLoopReportV1 {
             future_envelope_root_sha256: None,
             candidate_root_sha256: None,
             package_id: None,
+            certification_ledger_root_sha256: None,
+            operator_certification: None,
+            k1_vocabulary_gate: None,
             in_sample_phase_ablation_root_sha256: None,
             exact_package_wave_proof_root_sha256: None,
             negative_controls: 0,
@@ -173,7 +189,11 @@ impl Ms4ClosedLoopReportV1 {
     fn validate(&self) -> Result<(), String> {
         if !matches!(
             self.schema.as_str(),
-            REPORT_SCHEMA_V1 | REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4
+            REPORT_SCHEMA_V1
+                | REPORT_SCHEMA_V2
+                | REPORT_SCHEMA_V3
+                | REPORT_SCHEMA_V4
+                | REPORT_SCHEMA_V5
         ) || self.phase_mutation_allowed
             || self.report_root_sha256 != self.expected_root()?
         {
@@ -187,17 +207,21 @@ impl Ms4ClosedLoopReportV1 {
         {
             return Err("ms4_report_completion_proof_missing".to_owned());
         }
-        if matches!(self.schema.as_str(), REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4)
-            && self.stage == Ms4ClosedLoopStageV1::Complete
+        if matches!(
+            self.schema.as_str(),
+            REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4 | REPORT_SCHEMA_V5
+        ) && self.stage == Ms4ClosedLoopStageV1::Complete
             && (self.ordinary_cpu_receipt_root_sha256.is_none()
                 || self.ordinary_cpu_completion_root_sha256.is_none())
         {
             return Err("ms4_report_operational_completion_proof_missing".to_owned());
         }
-        if matches!(self.schema.as_str(), REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4)
-            && ((self.exact_wave_status
-                == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass)
-                != self.exact_package_wave_proof_root_sha256.is_some())
+        if matches!(
+            self.schema.as_str(),
+            REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4 | REPORT_SCHEMA_V5
+        ) && ((self.exact_wave_status
+            == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass)
+            != self.exact_package_wave_proof_root_sha256.is_some())
         {
             return Err("ms4_report_exact_wave_status_invalid".to_owned());
         }
@@ -206,7 +230,7 @@ impl Ms4ClosedLoopReportV1 {
             .saturating_add(self.exact_wave_censored_precommit_disqualified_rows)
             .saturating_add(self.exact_wave_censored_settlement_unavailable_rows)
             .saturating_add(self.exact_wave_censored_primary_controls_abstained_rows);
-        if self.schema == REPORT_SCHEMA_V4
+        if matches!(self.schema.as_str(), REPORT_SCHEMA_V4 | REPORT_SCHEMA_V5)
             && self.exact_wave_status
                 == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass
             && (self.exact_wave_counterexample_rows != 0
@@ -219,6 +243,42 @@ impl Ms4ClosedLoopReportV1 {
                         .saturating_add(self.exact_wave_censored_rows))
         {
             return Err("ms4_report_exact_wave_denominator_incomplete".to_owned());
+        }
+        if self.schema == REPORT_SCHEMA_V5 {
+            if self
+                .operator_certification
+                .as_ref()
+                .is_some_and(|entry| entry.validate().is_err())
+                || self
+                    .k1_vocabulary_gate
+                    .as_ref()
+                    .is_some_and(|gate| gate.validate().is_err())
+                || self.operator_certification.is_some()
+                    != (self.certification_ledger_root_sha256.is_some()
+                        && self.k1_vocabulary_gate.is_some())
+                || self.operator_certification.as_ref().is_some_and(|entry| {
+                    self.package_id.as_deref() != Some(entry.package_id.as_str())
+                })
+            {
+                return Err("ms4_report_certification_projection_invalid".to_owned());
+            }
+            if self.stage == Ms4ClosedLoopStageV1::Complete
+                && self.operator_certification.as_ref().is_none_or(|entry| {
+                    entry.execution.status != ExecutionCertificateStatusV1::Pass
+                        || !entry.product_registry_member
+                })
+            {
+                return Err("ms4_report_execution_certificate_missing".to_owned());
+            }
+            if self.exact_wave_status
+                == crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass
+                && self.operator_certification.as_ref().is_none_or(|entry| {
+                    entry.mechanism.status != MechanismCertificateStatusV1::Pass
+                        || entry.mechanism.classification != OperatorMechanismClassV1::WaveCausal
+                })
+            {
+                return Err("ms4_report_wave_mechanism_certificate_missing".to_owned());
+            }
         }
         Ok(())
     }
@@ -306,8 +366,64 @@ impl Ms4ClosedLoopReportV1 {
             ))
             .map_err(str::to_owned);
         }
+        if self.schema == REPORT_SCHEMA_V4 {
+            return canonical_json_sha256(&(
+                REPORT_SCHEMA_V4,
+                self.generated_at_unix,
+                (
+                    self.generation_sequence,
+                    self.stage,
+                    self.blocker.as_str(),
+                    self.frozen_envelope_root_sha256.as_deref(),
+                    self.future_envelope_root_sha256.as_deref(),
+                    self.candidate_root_sha256.as_deref(),
+                    self.package_id.as_deref(),
+                ),
+                (
+                    self.in_sample_phase_ablation_root_sha256.as_deref(),
+                    self.exact_package_wave_proof_root_sha256.as_deref(),
+                    self.negative_controls,
+                    self.anti_center_atoms,
+                ),
+                (
+                    self.exact_wave_holdout_contract_root_sha256.as_deref(),
+                    self.exact_wave_status,
+                    self.exact_wave_blocker.as_str(),
+                    self.exact_wave_scanned_topology_rows,
+                    self.exact_wave_independent_topology_rows,
+                    self.exact_wave_precommitted_rows,
+                    self.exact_wave_precommit_disqualified_rows,
+                    self.exact_wave_settled_rows,
+                    self.exact_wave_positive_holdout_rows,
+                    self.exact_wave_phase_challenging_negative_rows,
+                    self.exact_wave_independent_lineages,
+                ),
+                (
+                    self.exact_wave_scored_rows,
+                    self.exact_wave_counterexample_rows,
+                    self.exact_wave_full_wrong_rows,
+                    self.exact_wave_no_phase_not_worse_rows,
+                    self.exact_wave_censored_rows,
+                    self.exact_wave_precommit_missing_rows,
+                    self.exact_wave_settlement_pending_rows,
+                    self.exact_wave_censored_precommit_missing_rows,
+                    self.exact_wave_censored_precommit_disqualified_rows,
+                    self.exact_wave_censored_settlement_unavailable_rows,
+                    self.exact_wave_censored_primary_controls_abstained_rows,
+                    self.exact_wave_unscored_settled_rows,
+                ),
+                (
+                    self.external_admission_pass,
+                    self.ordinary_cpu_receipt_root_sha256.as_deref(),
+                    self.ordinary_cpu_completion_root_sha256.as_deref(),
+                    self.authority_ready,
+                ),
+                false,
+            ))
+            .map_err(str::to_owned);
+        }
         canonical_json_sha256(&(
-            REPORT_SCHEMA_V4,
+            REPORT_SCHEMA_V5,
             self.generated_at_unix,
             (
                 self.generation_sequence,
@@ -357,6 +473,15 @@ impl Ms4ClosedLoopReportV1 {
                 self.ordinary_cpu_completion_root_sha256.as_deref(),
                 self.authority_ready,
             ),
+            (
+                self.certification_ledger_root_sha256.as_deref(),
+                self.operator_certification
+                    .as_ref()
+                    .map(|entry| entry.entry_root_sha256.as_str()),
+                self.k1_vocabulary_gate
+                    .as_ref()
+                    .map(|gate| gate.gate_root_sha256.as_str()),
+            ),
             false,
         ))
         .map_err(str::to_owned)
@@ -375,6 +500,13 @@ pub(super) fn restore_report(path: &Path) -> Result<Ms4ClosedLoopReportV1, Strin
     let report: Ms4ClosedLoopReportV1 = serde_json::from_slice(&bytes)
         .map_err(|error| format!("ms4_report_restore_decode:{error}"))?;
     report.validate()?;
+    if let (Some(ledger_root), Some(entry), Some(gate)) = (
+        report.certification_ledger_root_sha256.as_deref(),
+        report.operator_certification.as_ref(),
+        report.k1_vocabulary_gate.as_ref(),
+    ) {
+        crate::operator_certification::validate_projection(path, ledger_root, entry, gate)?;
+    }
     Ok(report)
 }
 
@@ -730,7 +862,7 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
         *state
             .ms4_external_candidate
             .write()
-            .map_err(|_| "ms4_candidate_cache_lock_poisoned".to_owned())? = Some(candidate);
+            .map_err(|_| "ms4_candidate_cache_lock_poisoned".to_owned())? = Some(candidate.clone());
         if let Some(trigger) = state
             .authority_trigger
             .lock()
@@ -760,7 +892,7 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
                 .clone();
             let immutable_match = matches!(
                 existing.schema.as_str(),
-                REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4
+                REPORT_SCHEMA_V2 | REPORT_SCHEMA_V3 | REPORT_SCHEMA_V4 | REPORT_SCHEMA_V5
             ) && existing.stage == Ms4ClosedLoopStageV1::Complete
                 && existing.generation_sequence == report.generation_sequence
                 && existing.candidate_root_sha256 == report.candidate_root_sha256
@@ -785,8 +917,186 @@ fn advance_inner(state: &AppState) -> Result<Ms4ClosedLoopReportV1, String> {
     } else {
         report.stage = Ms4ClosedLoopStageV1::ExternalAdmissionPending;
     }
+    let certification = certify_operator(state, &report, &candidate, &package)?;
+    report.certification_ledger_root_sha256 = Some(certification.ledger_root_sha256);
+    report.operator_certification = Some(certification.entry);
+    report.k1_vocabulary_gate = Some(certification.k1_vocabulary_gate);
     report.reseal();
     Ok(report)
+}
+
+fn certify_operator(
+    state: &AppState,
+    report: &Ms4ClosedLoopReportV1,
+    candidate: &Ms4ExternalAdmissionCandidateV1,
+    package: &ResponsePackage,
+) -> Result<crate::operator_certification::CertificationProjectionV1, String> {
+    let bundle_id = candidate.canonical_bundle_id_sha256();
+    let law_id = package
+        .crystallized_operator
+        .as_ref()
+        .ok_or_else(|| "operator_certification_bundle_missing".to_owned())?
+        .canonical_law_id_sha256()
+        .map_err(|error| format!("operator_certification_law_id:{error:?}"))?
+        .ok_or_else(|| "operator_certification_law_id_missing".to_owned())?;
+    let role_topology_id = role_topology_id(package)?;
+
+    let execution_pass = report.stage == Ms4ClosedLoopStageV1::Complete
+        && report.external_admission_pass
+        && report.ordinary_cpu_receipt_root_sha256.is_some()
+        && report.ordinary_cpu_completion_root_sha256.is_some();
+    let mut execution_evidence = vec![
+        candidate.candidate_root_sha256().to_owned(),
+        candidate.future_envelope_root_sha256().to_owned(),
+    ];
+    execution_evidence.extend(report.ordinary_cpu_receipt_root_sha256.iter().cloned());
+    execution_evidence.extend(report.ordinary_cpu_completion_root_sha256.iter().cloned());
+    let execution = ExecutionCertificateV1::seal(
+        bundle_id,
+        &package.package_id,
+        if execution_pass {
+            ExecutionCertificateStatusV1::Pass
+        } else {
+            ExecutionCertificateStatusV1::Pending
+        },
+        execution_evidence,
+        if execution_pass {
+            ""
+        } else {
+            "ordinary_cpu_completion_pending"
+        },
+    )
+    .map_err(str::to_owned)?;
+
+    let cleanup = crate::operator_certification::restore_cleanup_receipt(
+        &state.config.ms4_closed_loop_path,
+        bundle_id,
+        &package.package_id,
+        candidate.candidate_root_sha256(),
+    )?;
+    let mut law_evidence = vec![
+        report
+            .frozen_envelope_root_sha256
+            .clone()
+            .ok_or_else(|| "operator_certification_frozen_root_missing".to_owned())?,
+        candidate.future_envelope_root_sha256().to_owned(),
+        candidate.candidate_root_sha256().to_owned(),
+        package
+            .proof
+            .adaptive_identification
+            .as_ref()
+            .ok_or_else(|| "operator_certification_adaptive_proof_missing".to_owned())?
+            .proof_root_sha256()
+            .to_owned(),
+    ];
+    law_evidence.extend(
+        cleanup
+            .iter()
+            .map(|receipt| receipt.receipt_root_sha256.clone()),
+    );
+    let cleanup_present = cleanup.is_some();
+    let cleanup_root = cleanup.map(|receipt| receipt.receipt_root_sha256);
+    let law = LawCertificateV1::seal(
+        bundle_id,
+        &package.package_id,
+        if cleanup_present {
+            LawCertificateStatusV1::Pass
+        } else {
+            LawCertificateStatusV1::Partial
+        },
+        law_evidence,
+        cleanup_root,
+        if cleanup_present {
+            ""
+        } else {
+            "exact_memory_cleanup_receipt_missing"
+        },
+    )
+    .map_err(str::to_owned)?;
+
+    let (mechanism_status, mechanism_classification, mechanism_blocker) =
+        match report.exact_wave_status {
+            crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Pass => (
+                MechanismCertificateStatusV1::Pass,
+                OperatorMechanismClassV1::WaveCausal,
+                "",
+            ),
+            crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Collecting => (
+                MechanismCertificateStatusV1::Collecting,
+                OperatorMechanismClassV1::Unresolved,
+                if report.exact_wave_blocker.is_empty() {
+                    "post_center_holdout_collecting"
+                } else {
+                    report.exact_wave_blocker.as_str()
+                },
+            ),
+            crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::Fail
+            | crate::ms4_exact_wave_holdout::Ms4ExactWaveHoldoutStatusV1::AcquisitionFail => (
+                MechanismCertificateStatusV1::Fail,
+                OperatorMechanismClassV1::Unresolved,
+                if report.exact_wave_blocker.is_empty() {
+                    "wave_causal_not_proven"
+                } else {
+                    report.exact_wave_blocker.as_str()
+                },
+            ),
+        };
+    let mut mechanism_evidence = vec![candidate.candidate_root_sha256().to_owned()];
+    mechanism_evidence.extend(
+        report
+            .exact_wave_holdout_contract_root_sha256
+            .iter()
+            .cloned(),
+    );
+    mechanism_evidence.extend(report.exact_package_wave_proof_root_sha256.iter().cloned());
+    let mechanism = MechanismCertificateV1::seal(
+        bundle_id,
+        &package.package_id,
+        mechanism_status,
+        mechanism_classification,
+        mechanism_evidence,
+        mechanism_blocker,
+    )
+    .map_err(str::to_owned)?;
+
+    let false_bad_apply = u64::try_from(package.proof.wrong_accepts)
+        .map_err(|_| "operator_certification_wrong_accept_count".to_owned())?;
+    let entry = OperatorCertificationEntryV1::seal(
+        bundle_id,
+        &package.package_id,
+        &law_id,
+        &role_topology_id,
+        execution,
+        law,
+        mechanism,
+        false_bad_apply,
+    )
+    .map_err(str::to_owned)?;
+    crate::operator_certification::append_entry(&state.config.ms4_closed_loop_path, entry)
+}
+
+fn role_topology_id(package: &ResponsePackage) -> Result<String, String> {
+    let operation_class = match &package.program.operation {
+        ResponseOperation::UniqueConsensus { .. } => "unique_consensus",
+        ResponseOperation::AdvancePlan { .. } => "advance_plan",
+        ResponseOperation::FunctionCallFromRoles { .. } => "function_call_from_roles",
+        ResponseOperation::CustomToolCallFromRoles { .. } => "custom_tool_call_from_roles",
+        ResponseOperation::ProjectSelectedValue { .. } => "project_selected_value",
+        ResponseOperation::ProjectStatus { .. } => "project_status",
+        ResponseOperation::ComposeCollection { .. } => "compose_collection",
+        ResponseOperation::CopyAfterPrefix { .. } => "copy_after_prefix",
+        ResponseOperation::TestResultSummary { .. } => "test_result_summary",
+        ResponseOperation::WaitOnYieldedCell { .. } => "wait_on_yielded_cell",
+        ResponseOperation::WaitOnAnyYieldedCell { .. } => "wait_on_any_yielded_cell",
+        ResponseOperation::WaitOnYieldedSurfaces { .. } => "wait_on_yielded_surfaces",
+    };
+    canonical_json_sha256(&(
+        ROLE_TOPOLOGY_SCHEMA_V1,
+        operation_class,
+        &package.required_routing_atom_ids,
+        package.proof.verifier_schema.as_str(),
+    ))
+    .map_err(str::to_owned)
 }
 
 fn package_is_admitted(state: &AppState, package_id: &str) -> Result<bool, String> {
@@ -1022,6 +1332,7 @@ mod tests {
         assert_eq!(restore_report(&root).expect("legacy restore"), legacy);
 
         let mut current = Ms4ClosedLoopReportV1::seal(31, Ms4ClosedLoopStageV1::Complete, "");
+        current.schema = REPORT_SCHEMA_V4.to_owned();
         current.candidate_root_sha256 = Some("a".repeat(64));
         current.package_id = Some("ms4-natural-test".to_owned());
         current.in_sample_phase_ablation_root_sha256 = Some("c".repeat(64));
@@ -1041,6 +1352,14 @@ mod tests {
         )
         .expect("current report");
         assert_eq!(restore_report(&root).expect("current restore"), current);
+
+        let mut uncertified_v5 = current.clone();
+        uncertified_v5.schema = REPORT_SCHEMA_V5.to_owned();
+        uncertified_v5.reseal();
+        assert_eq!(
+            uncertified_v5.validate(),
+            Err("ms4_report_execution_certificate_missing".to_owned())
+        );
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

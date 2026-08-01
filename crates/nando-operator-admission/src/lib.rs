@@ -1,11 +1,13 @@
 mod authority;
 mod external_generation_v3;
+mod operator_certification;
 mod package_policy;
 mod parity;
 mod runtime_revocation;
 
 pub use authority::*;
 pub use external_generation_v3::*;
+pub use operator_certification::*;
 pub use package_policy::*;
 pub use parity::*;
 pub use runtime_revocation::*;

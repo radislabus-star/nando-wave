@@ -868,6 +868,33 @@ impl VerifiedOperatorRestartBundle {
         self.canonical_bundle_id.as_ref()
     }
 
+    pub fn canonical_law_id_sha256(&self) -> Result<Option<String>, CrystallizedOperatorError> {
+        match (
+            self.crystallized_bundle_v4_cbor.as_deref(),
+            self.canonical_bundle_id.as_ref(),
+        ) {
+            (None, None) => Ok(None),
+            (Some(bytes), Some(expected_bundle_id)) => {
+                let bundle =
+                    nando_operator_persistence::CrystallizedOperatorBundleV4::from_canonical_bytes(
+                        bytes,
+                    )
+                    .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+                if bundle.manifest().bundle_id() != expected_bundle_id {
+                    return Err(CrystallizedOperatorError::RestartDigestMismatch);
+                }
+                let mut output = String::with_capacity(64);
+                for byte in bundle.manifest().law_id() {
+                    use std::fmt::Write as _;
+                    write!(&mut output, "{byte:02x}")
+                        .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+                }
+                Ok(Some(output))
+            }
+            _ => Err(CrystallizedOperatorError::RestartDigestMismatch),
+        }
+    }
+
     #[must_use]
     pub const fn has_canonical_bundle_v4(&self) -> bool {
         self.crystallized_bundle_v4_cbor.is_some() && self.canonical_bundle_id.is_some()
