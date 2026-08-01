@@ -373,7 +373,7 @@ fn run(started: Instant) -> Result<(), String> {
         &gate_sha256,
         &runtime_sha256,
     )
-    .map_err(str::to_owned)?;
+    .map_err(|error| format!("relation_candidate_admission:{error}"))?;
     let relation_rejections = relation_evaluation.candidate_rejections;
     let relation_shadow_ready = relation_evaluation.snapshot.is_some();
     let collection_shadow_ready = build_online_collection_admission_snapshot(
@@ -385,7 +385,7 @@ fn run(started: Instant) -> Result<(), String> {
         &gate_sha256,
         &runtime_sha256,
     )
-    .map_err(str::to_owned)?
+    .map_err(|error| format!("collection_candidate_admission:{error}"))?
     .is_some();
     let crystallized = build_crystallized_admission_snapshot(
         &bundle.crystallized_candidates,
@@ -396,7 +396,7 @@ fn run(started: Instant) -> Result<(), String> {
         &gate_sha256,
         &runtime_sha256,
     )
-    .map_err(str::to_owned)?;
+    .map_err(|error| format!("crystallized_candidate_admission:{error}"))?;
     let crystallized_admissible_candidates = crystallized
         .as_ref()
         .map_or(0, |snapshot| snapshot.registry.packages.len());
@@ -416,7 +416,7 @@ fn run(started: Instant) -> Result<(), String> {
         &gate_sha256,
         &runtime_sha256,
     )
-    .map_err(str::to_owned)?;
+    .map_err(|error| format!("crystallized_collection_admission:{error}"))?;
     let ms4 = build_ms4_external_admission_snapshot(
         &bundle.ms4_external_candidates,
         &bundle.project_id,
@@ -426,7 +426,7 @@ fn run(started: Instant) -> Result<(), String> {
         &gate_sha256,
         &runtime_sha256,
     )
-    .map_err(str::to_owned)?;
+    .map_err(|error| format!("ms4_external_candidate_admission:{error}"))?;
     let ms4_admissible_candidates = ms4
         .as_ref()
         .map_or(0, |snapshot| snapshot.registry.packages.len());
@@ -439,10 +439,10 @@ fn run(started: Instant) -> Result<(), String> {
             .flatten()
             .collect(),
     )
-    .map_err(str::to_owned)?
+    .map_err(|error| format!("candidate_snapshot_merge:{error}"))?
     .map(|candidate| remove_runtime_revoked_online_admission(candidate, &runtime_revocations))
     .transpose()
-    .map_err(str::to_owned)?
+    .map_err(|error| format!("candidate_runtime_revocation:{error}"))?
     .flatten();
     let active = load_reissued_active_generation_files(
         &registry_path,
@@ -453,7 +453,8 @@ fn run(started: Instant) -> Result<(), String> {
         &runtime_sha256,
         now_unix,
         max_age_seconds,
-    )?;
+    )
+    .map_err(|error| format!("active_generation_reissue:{error}"))?;
     let snapshot = match (candidate, active) {
         (Some(candidate), Some(active)) => Some(
             merge_with_proven_active_online_admission(
@@ -466,7 +467,7 @@ fn run(started: Instant) -> Result<(), String> {
                 now_unix,
                 max_age_seconds,
             )
-            .map_err(str::to_owned)?,
+            .map_err(|error| format!("candidate_active_merge:{error}"))?,
         ),
         (Some(candidate), None) => Some(candidate),
         (None, Some(active)) => Some(active),
