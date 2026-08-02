@@ -2,16 +2,18 @@ mod cohort;
 mod evidence;
 mod freeze;
 mod queue;
+mod readiness;
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
-pub use cohort::{K1CandidateReadinessV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1};
+pub use cohort::{K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1};
 pub use evidence::{K1ConsequenceTypeV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1};
 pub use freeze::{K1GenerationBudgetV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1};
 pub use queue::{
     K1CandidateScoreV1, K1DeficitSnapshotV1, K1NaturalCandidateQueueRowV1,
     K1NaturalCandidateQueueV1,
 };
+pub use readiness::K1CandidateReadinessV1;
 
 pub const K1_DEFICIT_SNAPSHOT_SCHEMA_V1: &str = "nando.k1-deficit-snapshot.v1";
 pub const K1_NATURAL_COHORT_CATALOG_SCHEMA_V1: &str = "nando.k1-natural-cohort-catalog.v1";
