@@ -158,7 +158,12 @@ sudo -n systemd-analyze verify \
   "${SYSTEMD_DIR}/nando-operator-certification-authority.service" \
   "${SYSTEMD_DIR}/nando-operator-cleanup-verifier@.service"
 sudo -n systemctl daemon-reload
-sudo -n systemctl enable --now nando-operator-certification-authority.service
+sudo -n systemctl enable nando-operator-certification-authority.service
+if [[ "${AUTHORITY_WAS_ACTIVE}" == true ]]; then
+  sudo -n systemctl restart nando-operator-certification-authority.service
+else
+  sudo -n systemctl start nando-operator-certification-authority.service
+fi
 
 for _ in $(seq 1 50); do
   if systemctl is-active --quiet nando-operator-certification-authority.service \

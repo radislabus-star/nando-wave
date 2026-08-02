@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AUTHORITY="${ROOT}/ops/remote-backend/nando-operator-certification-authority.service"
 CLEANUP="${ROOT}/ops/remote-backend/nando-operator-cleanup-verifier@.service"
+INSTALLER="${ROOT}/ops/remote-backend/install-operator-certification.sh"
 
 require_line() {
   local file="$1"
@@ -33,5 +34,13 @@ if grep -Eq '^AmbientCapabilities=.+$' "${AUTHORITY}" "${CLEANUP}"; then
   printf 'ambient capabilities must remain empty\n' >&2
   exit 1
 fi
+
+# The installer expression is checked literally.
+# shellcheck disable=SC2016
+require_line "${INSTALLER}" 'if [[ "${AUTHORITY_WAS_ACTIVE}" == true ]]; then'
+require_line "${INSTALLER}" \
+  '  sudo -n systemctl restart nando-operator-certification-authority.service'
+require_line "${INSTALLER}" \
+  '  sudo -n systemctl start nando-operator-certification-authority.service'
 
 printf 'operator certification unit contracts: PASS\n'
