@@ -9,7 +9,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
                 && !binding.row.safety_veto
-                && binding.row.capture_sequence <= freeze.contract_watermark
+                && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
         })
         .collect::<Vec<_>>();
     let manifest = canonical_json_sha256(&(
@@ -54,7 +54,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
                 && !binding.row.safety_veto
-                && (binding.row.capture_sequence <= freeze.contract_watermark
+                && (frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
                     || applied_roots.contains(&binding.joined.join_root_sha256)
                     || trial_roots.contains(&binding.joined.join_root_sha256))
         })
@@ -88,6 +88,10 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         return Err("k1_runtime_identification_report_invalid".to_owned());
     }
     Ok(report)
+}
+
+fn frozen_support_contains(capture_sequence: u64, support_watermark: u64) -> bool {
+    capture_sequence <= support_watermark
 }
 
 pub(in crate::k1_natural_scheduler_runtime) fn identification_can_freeze(
@@ -238,3 +242,6 @@ pub(in crate::k1_natural_scheduler_runtime) fn next_future_binding<'a>(
                 .then_with(|| left.row.row_root_sha256.cmp(&right.row.row_root_sha256))
         })
 }
+
+#[cfg(test)]
+mod tests;

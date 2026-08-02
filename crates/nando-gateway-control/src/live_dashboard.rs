@@ -417,7 +417,7 @@ const TEMPLATE: &str = r#"
 .scope-label { color:var(--muted); font-size:11px; font-weight:800; }
 .scope-value { margin-top:7px; color:#dce2e6; font-size:15px; font-weight:800; overflow-wrap:anywhere; }
 .scope-share { display:block; margin-top:5px; color:var(--green); font-size:22px; font-weight:800; }
-.scope-note { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.35; }
+.scope-note { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.35; overflow-wrap:anywhere; }
 .scope-metric.ceiling .scope-share { color:var(--amber); }
 .scope-metric.unresolved .scope-share { color:var(--amber); }
 .ingestion-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--line); }
