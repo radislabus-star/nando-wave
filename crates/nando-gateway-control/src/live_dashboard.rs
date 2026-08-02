@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.31-b046";
+const DASHBOARD_BUILD: &str = "2026.08.02-b047";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -722,7 +722,7 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">PROBE ROUNDS / BUDGET</div><div id="k1-scheduler-probes" class="ms3-value watch">0 / 0</div><div id="k1-scheduler-probe-state" class="scope-note">NO PENDING PROBE</div></div>
       <div class="ms3-cell"><div class="ms3-label">POST-PRECOMMIT FUTURE</div><div id="k1-scheduler-future" class="ms3-value watch">0</div><div id="k1-scheduler-future-note" class="scope-note">OUTCOME ROOTS 0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">SCHEDULER AUTHORITY</div><div id="k1-scheduler-authority" class="ms3-value locked">FALSE</div><div class="scope-note">PHASE MUTATION FALSE</div></div>
-      <div class="ms3-cell"><div class="ms3-label">BLOCKER / TERMINAL</div><div id="k1-scheduler-blocker" class="ms3-value watch">WAITING</div><div id="k1-scheduler-root" class="scope-note">ROOT —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">CURRENT BLOCKER / ACTIVE ROOT</div><div id="k1-scheduler-blocker" class="ms3-value watch">WAITING</div><div id="k1-scheduler-root" class="scope-note">ROOT —</div></div>
     </div>
     <div class="certificate-head"><h3>PRODUCT REGISTRY / EPISTEMIC REGISTRY</h3><span id="k1-vocabulary-status">K1 VOCABULARY CLOSED</span></div>
     <div class="certificate-scroll"><div class="certificate-table">
@@ -1090,14 +1090,16 @@ const TEMPLATE: &str = r#"
         ? k1Probe.next_semantic_class_roots_sha256
         : k1Projection.identification_freeze?.initial_semantic_class_roots_sha256 || [];
     const k1CandidateRoot = k1Candidate.candidate_root_sha256 || k1Transfer.package_candidate_root_sha256 || "";
+    const k1ActiveRoot = k1Probe.receipt_root_sha256
+      || k1Projection.identification_freeze?.freeze_root_sha256
+      || k1Candidate.freeze_root_sha256;
+    const k1TerminalRoot = k1Projection.latest_terminal_verdict?.verdict_root_sha256;
     const k1LatestRoot = k1Transfer.settlement_root_sha256
       || k1Transfer.law_certificate_root_sha256
       || k1Transfer.cleanup_receipt_root_sha256
       || k1Transfer.package_candidate_root_sha256
-      || k1Projection.latest_terminal_verdict?.verdict_root_sha256
-      || k1Probe.receipt_root_sha256
-      || k1Projection.identification_freeze?.freeze_root_sha256
-      || k1Candidate.freeze_root_sha256
+      || (k1TerminalPass || k1TerminalFail ? k1TerminalRoot : k1ActiveRoot)
+      || k1TerminalRoot
       || k1Scheduler.report_root_sha256
       || "";
     text("k1-scheduler-state", k1State);
@@ -1419,6 +1421,8 @@ mod tests {
         assert!(html.contains("LAW PROVED"));
         assert!(html.contains("WAVE CAUSAL"));
         assert!(html.contains("K1 ELIGIBLE"));
+        assert!(html.contains("CURRENT BLOCKER / ACTIVE ROOT"));
+        assert!(html.contains("k1TerminalPass || k1TerminalFail ? k1TerminalRoot : k1ActiveRoot"));
         assert!(html.contains("snapshot.operator_certificate_matrix"));
         assert!(html.contains("k1_vocabulary_gate"));
         assert!(html.contains("АВТОНОМНЫЙ ЦИКЛ ЕСТЕСТВЕННОГО ОПЕРАТОРА · MS3 → MS4"));
