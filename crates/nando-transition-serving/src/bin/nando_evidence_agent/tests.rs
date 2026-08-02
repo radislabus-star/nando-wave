@@ -20,9 +20,10 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        HttpEndpoint, LocalEvidenceOutbox, OutboxSink, RouteBindingMetrics,
-        VerifiedRelationFrameSink, decode_chunked_body, parse_http_response, retry_backoff,
-        valid_root,
+        HttpEndpoint, LocalEvidenceOutbox, OutboxSink,
+        RemoteEvidenceFrameValidationBlockerV1, RouteBindingMetrics, TRANSPORT_CENSOR_PREFIX,
+        TransportCensorLedger, VerifiedRelationFrameSink, decode_chunked_body,
+        parse_http_response, retry_backoff, valid_root,
     };
 
     fn hash(value: &str) -> String {
@@ -231,6 +232,10 @@ mod tests {
         let outbox = Arc::new(Mutex::new(
             LocalEvidenceOutbox::open(&root.join("outbox")).expect("outbox"),
         ));
+        let transport_censors = Arc::new(Mutex::new(
+            TransportCensorLedger::open(&root.join("transport-censors"))
+                .expect("transport censors"),
+        ));
         let route_index = Arc::new(Mutex::new(
             NandoRouteReceiptIndex::open(&route_path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
                 .expect("route index"),
@@ -238,6 +243,7 @@ mod tests {
         let metrics = Arc::new(RouteBindingMetrics::default());
         let sink = OutboxSink {
             outbox: Arc::clone(&outbox),
+            transport_censors,
             route_receipts: Arc::clone(&route_index),
             route_metrics: Arc::clone(&metrics),
         };
@@ -277,6 +283,99 @@ mod tests {
                 && bound.route_receipt.receipt_root_sha256 == bound.route_receipt_root_sha256
         }));
         assert_eq!(metrics.route_bound_frames.load(Ordering::Relaxed), 1);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn invalid_transport_frame_is_censored_before_next_valid_frame() {
+        let root = temporary_root("transport-censor-continue");
+        let censor_directory = root.join("transport-censors");
+        let outbox = Arc::new(Mutex::new(
+            LocalEvidenceOutbox::open(&root.join("outbox")).expect("outbox"),
+        ));
+        let transport_censors = Arc::new(Mutex::new(
+            TransportCensorLedger::open(&censor_directory).expect("transport censors"),
+        ));
+        let route_index = Arc::new(Mutex::new(
+            NandoRouteReceiptIndex::open(
+                &root.join("route-receipts-v1.jsonl"),
+                DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES,
+            )
+            .expect("route index"),
+        ));
+        let metrics = Arc::new(RouteBindingMetrics::default());
+        let sink = OutboxSink {
+            outbox: Arc::clone(&outbox),
+            transport_censors: Arc::clone(&transport_censors),
+            route_receipts: route_index,
+            route_metrics: Arc::clone(&metrics),
+        };
+
+        let invalid = completed_frame("invalid-parity");
+        let mut invalid_parity = runtime_parity(&invalid, "7");
+        invalid_parity.evidence_ref_sha256 = hash("wrong-evidence-reference");
+        sink.append_route_bound_frame(
+            invalid.clone(),
+            route_receipt_for_frame(&invalid),
+            Some(invalid_parity),
+        )
+        .expect("invalid transport frame is terminally censored");
+        assert!(outbox.lock().expect("outbox lock").frames.is_empty());
+        assert_eq!(
+            metrics
+                .transport_censored_frames
+                .load(Ordering::Relaxed),
+            1
+        );
+
+        let valid = completed_frame("valid-after-censor");
+        sink.append_route_bound_frame(
+            valid.clone(),
+            route_receipt_for_frame(&valid),
+            Some(runtime_parity(&valid, "7")),
+        )
+        .expect("next valid frame reaches outbox");
+        assert_eq!(outbox.lock().expect("outbox lock").frames.len(), 1);
+        assert_eq!(metrics.route_bound_frames.load(Ordering::Relaxed), 1);
+
+        let restored = TransportCensorLedger::open(&censor_directory).expect("restart restore");
+        assert_eq!(restored.len(), 1);
+        assert!(restored.receipts.values().all(|receipt| {
+            receipt.blocker
+                == RemoteEvidenceFrameValidationBlockerV1::ParityEvidenceReferenceMismatch
+                && !receipt.authority_ready
+                && !receipt.phase_mutation_allowed
+        }));
+        drop(sink);
+        drop(transport_censors);
+        drop(outbox);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn corrupted_transport_censor_ledger_is_fatal_on_restart() {
+        let root = temporary_root("transport-censor-corrupt");
+        let directory = root.join("transport-censors");
+        let frame = completed_frame("corrupt-censor");
+        let bound = super::RouteBoundOutboxFrameV1::new(
+            frame.clone(),
+            route_receipt_for_frame(&frame),
+            None,
+        );
+        let mut ledger = TransportCensorLedger::open(&directory).expect("transport censors");
+        ledger
+            .append(
+                &bound,
+                RemoteEvidenceFrameValidationBlockerV1::ParityRequestMissing,
+            )
+            .expect("append censor");
+        drop(ledger);
+
+        let segment = directory.join(format!("{TRANSPORT_CENSOR_PREFIX}-{:020}.cbor", 0));
+        let mut bytes = fs::read(&segment).expect("segment bytes");
+        bytes[0] ^= 0xff;
+        fs::write(&segment, bytes).expect("corrupt segment");
+        assert!(TransportCensorLedger::open(&directory).is_err());
         fs::remove_dir_all(root).expect("cleanup");
     }
 }

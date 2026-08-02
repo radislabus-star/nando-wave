@@ -15,11 +15,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use nando_client_evidence::{
     DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES, NandoRouteReceiptIndex, NandoRouteReceiptV1,
 };
-use nando_operator_kernel::{RelationFrame, sha256_bytes};
+use nando_operator_kernel::{RelationFrame, canonical_json_sha256, sha256_bytes};
 use nando_operator_learning::{FramedCborLedger, RuntimeParityCase, read_framed_cbor};
 use nando_transition_serving::remote_evidence_spool::{
     REMOTE_EVIDENCE_ENDPOINT_V1, REMOTE_EVIDENCE_MAX_FRAMES_V1, RemoteEvidenceAckV1,
-    RemoteEvidenceBatchV1, RemoteEvidenceFrameV1, RouteBoundEvidenceFrameV1,
+    RemoteEvidenceBatchV1, RemoteEvidenceFrameSealErrorV1, RemoteEvidenceFrameV1,
+    RemoteEvidenceFrameValidationBlockerV1, RouteBoundEvidenceFrameV1,
     parse_remote_evidence_key_v1, remote_evidence_genesis_root, sign_remote_evidence_request_v1,
 };
 use nando_transition_serving::{
@@ -29,11 +30,14 @@ use serde::{Deserialize, Serialize};
 
 include!("nando_evidence_agent/outbox.rs");
 include!("nando_evidence_agent/transport.rs");
+include!("nando_evidence_agent/transport_censor.rs");
 
 const AGENT_STATE_SCHEMA_V1: &str = "nando.local-evidence-agent-state.v1";
 const AGENT_PENDING_SCHEMA_V2: &str = "nando.local-evidence-agent-pending.v2";
 const ROUTE_BOUND_OUTBOX_SCHEMA_V1: &str = "nando.route-bound-evidence-outbox-frame.v1";
 const OUTBOX_PREFIX: &str = "route-bound-relation-frame";
+const TRANSPORT_CENSOR_SCHEMA_V1: &str = "nando.evidence-agent-transport-censor.v1";
+const TRANSPORT_CENSOR_PREFIX: &str = "transport-censor-receipt";
 const STATE_FILE: &str = "state-v1.cbor";
 const PENDING_FILE: &str = "pending-v2.cbor";
 const MAX_OUTBOX_FRAMES: usize = 65_536;
@@ -85,6 +89,7 @@ struct EvidenceAgent {
     key: Vec<u8>,
     state: EvidenceAgentStateV1,
     outbox: Arc<Mutex<LocalEvidenceOutbox>>,
+    transport_censors: Arc<Mutex<TransportCensorLedger>>,
     stream_metrics: Arc<SessionStreamMetrics>,
     route_receipts: Arc<Mutex<NandoRouteReceiptIndex>>,
     route_metrics: Arc<RouteBindingMetrics>,
@@ -246,6 +251,9 @@ impl EvidenceAgent {
         let outbox = Arc::new(Mutex::new(LocalEvidenceOutbox::open(
             &config.state_directory.join("outbox-v2"),
         )?));
+        let transport_censors = Arc::new(Mutex::new(TransportCensorLedger::open(
+            &config.state_directory.join("transport-censors-v1"),
+        )?));
         let route_receipts = Arc::new(Mutex::new(NandoRouteReceiptIndex::open(
             &config.route_receipts_path,
             DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES,
@@ -257,6 +265,7 @@ impl EvidenceAgent {
             config.state_directory.join("session-capture-evidence-v1"),
             Arc::new(OutboxSink {
                 outbox: Arc::clone(&outbox),
+                transport_censors: Arc::clone(&transport_censors),
                 route_receipts: Arc::clone(&route_receipts),
                 route_metrics: Arc::clone(&route_metrics),
             }),
@@ -269,6 +278,7 @@ impl EvidenceAgent {
             key,
             state,
             outbox,
+            transport_censors,
             stream_metrics,
             route_receipts,
             route_metrics,
@@ -436,6 +446,11 @@ impl EvidenceAgent {
             .lock()
             .map_err(|_| "evidence_agent_route_receipt_lock_poisoned".to_owned())?
             .len();
+        let durable_transport_censors = self
+            .transport_censors
+            .lock()
+            .map_err(|_| "evidence_agent_transport_censor_lock_poisoned".to_owned())?
+            .len();
         serde_json::to_string(&serde_json::json!({
             "ok": true,
             "client_id_sha256": self.state.client_id_sha256,
@@ -451,6 +466,8 @@ impl EvidenceAgent {
             "route_bound_frames": self.route_metrics.route_bound_frames.load(Ordering::Relaxed),
             "route_unbound_frames": self.route_metrics.route_unbound_frames.load(Ordering::Relaxed),
             "route_receipt_refresh_failures": self.route_metrics.route_receipt_refresh_failures.load(Ordering::Relaxed),
+            "transport_censored_frames": self.route_metrics.transport_censored_frames.load(Ordering::Relaxed),
+            "durable_transport_censors": durable_transport_censors,
             "route_provenance_required": true,
             "accepted_batches": self.state.accepted_batches,
             "accepted_frames": self.state.accepted_frames,

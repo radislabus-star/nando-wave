@@ -17,6 +17,7 @@ struct LocalEvidenceOutbox {
 
 struct OutboxSink {
     outbox: Arc<Mutex<LocalEvidenceOutbox>>,
+    transport_censors: Arc<Mutex<TransportCensorLedger>>,
     route_receipts: Arc<Mutex<NandoRouteReceiptIndex>>,
     route_metrics: Arc<RouteBindingMetrics>,
 }
@@ -26,6 +27,7 @@ struct RouteBindingMetrics {
     route_bound_frames: AtomicU64,
     route_unbound_frames: AtomicU64,
     route_receipt_refresh_failures: AtomicU64,
+    transport_censored_frames: AtomicU64,
 }
 
 impl LocalEvidenceOutbox {
@@ -64,6 +66,7 @@ impl LocalEvidenceOutbox {
         })
     }
 
+    #[cfg(test)]
     fn append(
         &mut self,
         frame: RelationFrame,
@@ -78,6 +81,14 @@ impl LocalEvidenceOutbox {
             runtime_parity_case,
         };
         let sealed = bound.seal()?;
+        self.append_sealed(bound, sealed)
+    }
+
+    fn append_sealed(
+        &mut self,
+        bound: RouteBoundOutboxFrameV1,
+        sealed: RemoteEvidenceFrameV1,
+    ) -> Result<(), String> {
         let new_root = !self.frames.contains_key(&sealed.frame_root_sha256);
         if let Some(existing) = self.frames.get(&sealed.frame_root_sha256) {
             if existing == &bound
@@ -115,6 +126,46 @@ impl LocalEvidenceOutbox {
     }
 }
 
+impl OutboxSink {
+    fn append_route_bound_frame(
+        &self,
+        frame: RelationFrame,
+        route_receipt: NandoRouteReceiptV1,
+        runtime_parity_case: Option<RuntimeParityCase>,
+    ) -> Result<(), String> {
+        let bound = RouteBoundOutboxFrameV1::new(frame, route_receipt, runtime_parity_case);
+        let sealed = match bound.seal_classified() {
+            Ok(sealed) => sealed,
+            Err(error) => {
+                let Some(blocker) = error.censor_blocker() else {
+                    return Err(error.to_string());
+                };
+                self.transport_censors
+                    .lock()
+                    .map_err(|_| "evidence_agent_transport_censor_lock_poisoned".to_owned())?
+                    .append(&bound, blocker)?;
+                self.route_metrics
+                    .transport_censored_frames
+                    .fetch_add(1, Ordering::Relaxed);
+                eprintln!(
+                    "nando-evidence-agent: transport frame censored blocker={} frame={}",
+                    blocker.code(),
+                    bound.frame.frame_id_sha256
+                );
+                return Ok(());
+            }
+        };
+        self.outbox
+            .lock()
+            .map_err(|_| "evidence_agent_outbox_lock_poisoned".to_owned())?
+            .append_sealed(bound, sealed)?;
+        self.route_metrics
+            .route_bound_frames
+            .fetch_add(1, Ordering::Relaxed);
+        Ok(())
+    }
+}
+
 impl VerifiedRelationFrameSink for OutboxSink {
     fn append_verified_frame_with_parity(
         &self,
@@ -146,23 +197,38 @@ impl VerifiedRelationFrameSink for OutboxSink {
                 .fetch_add(1, Ordering::Relaxed);
             return Ok(());
         };
-        self.outbox
-            .lock()
-            .map_err(|_| "evidence_agent_outbox_lock_poisoned".to_owned())?
-            .append(frame, route_receipt, runtime_parity_case)?;
-        self.route_metrics
-            .route_bound_frames
-            .fetch_add(1, Ordering::Relaxed);
-        Ok(())
+        self.append_route_bound_frame(frame, route_receipt, runtime_parity_case)
     }
 }
 
 impl RouteBoundOutboxFrameV1 {
-    fn seal(&self) -> Result<RemoteEvidenceFrameV1, String> {
-        if self.schema != ROUTE_BOUND_OUTBOX_SCHEMA_V1 {
-            return Err("evidence_agent_outbox_schema_invalid".to_owned());
+    fn new(
+        frame: RelationFrame,
+        route_receipt: NandoRouteReceiptV1,
+        runtime_parity_case: Option<RuntimeParityCase>,
+    ) -> Self {
+        Self {
+            schema: ROUTE_BOUND_OUTBOX_SCHEMA_V1.to_owned(),
+            route_receipt_root_sha256: route_receipt.receipt_root_sha256.clone(),
+            route_receipt,
+            frame,
+            runtime_parity_case,
         }
-        RemoteEvidenceFrameV1::seal_route_bound_with_parity(
+    }
+
+    fn seal(&self) -> Result<RemoteEvidenceFrameV1, String> {
+        self.seal_classified().map_err(|error| error.to_string())
+    }
+
+    fn seal_classified(
+        &self,
+    ) -> Result<RemoteEvidenceFrameV1, RemoteEvidenceFrameSealErrorV1> {
+        if self.schema != ROUTE_BOUND_OUTBOX_SCHEMA_V1 {
+            return Err(RemoteEvidenceFrameSealErrorV1::Fatal(
+                "evidence_agent_outbox_schema_invalid".to_owned(),
+            ));
+        }
+        RemoteEvidenceFrameV1::seal_route_bound_with_parity_classified(
             self.frame.clone(),
             self.route_receipt.clone(),
             self.runtime_parity_case.clone(),
@@ -185,4 +251,3 @@ fn frame_bytes<T: Serialize>(frame: &T) -> Result<u64, String> {
     }
     Ok(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
 }
-

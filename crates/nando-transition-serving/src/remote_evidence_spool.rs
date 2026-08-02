@@ -20,6 +20,11 @@ use sha2::Sha256;
 
 use crate::multi_source_frame_archive::MultiSourceFrameArchive;
 
+mod frame_validation;
+pub use frame_validation::{
+    RemoteEvidenceFrameSealErrorV1, RemoteEvidenceFrameValidationBlockerV1,
+};
+
 pub const REMOTE_EVIDENCE_ENDPOINT_V1: &str = "/_nando/evidence/v1/batches";
 pub const REMOTE_EVIDENCE_BATCH_SCHEMA_V1: &str = "nando.remote-evidence-batch.v1";
 pub const REMOTE_EVIDENCE_FRAME_SCHEMA_V1: &str = "nando.remote-evidence-frame.v1";
@@ -149,14 +154,16 @@ type AcceptedFrameEvidenceV1 = (
 
 impl RemoteEvidenceFrameV1 {
     pub fn seal(frame: RelationFrame) -> Result<Self, String> {
-        Self::seal_with_route_receipt(frame, None, None)
+        Self::seal_with_route_receipt_classified(frame, None, None)
+            .map_err(|error| error.to_string())
     }
 
     pub fn seal_route_bound(
         frame: RelationFrame,
         route_receipt: NandoRouteReceiptV1,
     ) -> Result<Self, String> {
-        Self::seal_route_bound_with_parity(frame, route_receipt, None)
+        Self::seal_route_bound_with_parity_classified(frame, route_receipt, None)
+            .map_err(|error| error.to_string())
     }
 
     pub fn seal_route_bound_with_parity(
@@ -164,26 +171,52 @@ impl RemoteEvidenceFrameV1 {
         route_receipt: NandoRouteReceiptV1,
         runtime_parity_case: Option<RuntimeParityCase>,
     ) -> Result<Self, String> {
-        Self::seal_with_route_receipt(frame, Some(route_receipt), runtime_parity_case)
+        Self::seal_route_bound_with_parity_classified(frame, route_receipt, runtime_parity_case)
+            .map_err(|error| error.to_string())
     }
 
-    fn seal_with_route_receipt(
+    pub fn seal_route_bound_with_parity_classified(
+        frame: RelationFrame,
+        route_receipt: NandoRouteReceiptV1,
+        runtime_parity_case: Option<RuntimeParityCase>,
+    ) -> Result<Self, RemoteEvidenceFrameSealErrorV1> {
+        Self::seal_with_route_receipt_classified(frame, Some(route_receipt), runtime_parity_case)
+    }
+
+    fn seal_with_route_receipt_classified(
         frame: RelationFrame,
         route_receipt: Option<NandoRouteReceiptV1>,
         runtime_parity_case: Option<RuntimeParityCase>,
-    ) -> Result<Self, String> {
-        let outcome = teacher_outcome_from_completed(&frame)
-            .map_err(|error| format!("remote_evidence_verifier:{error:?}"))?;
-        if !outcome.verifier.accepted
-            || frame.verifier_label != Some(true)
-            || !is_source_neutral_relation_frame(&frame)
-        {
-            return Err("remote_evidence_frame_not_verified".to_owned());
+    ) -> Result<Self, RemoteEvidenceFrameSealErrorV1> {
+        if frame.verifier_label != Some(true) {
+            return Err(RemoteEvidenceFrameSealErrorV1::Censored(
+                RemoteEvidenceFrameValidationBlockerV1::VerifierLabelNotAccepted,
+            ));
         }
-        let frame_root_sha256 = canonical_json_sha256(&frame)
-            .map_err(|error| format!("remote_evidence_frame_root:{error}"))?;
-        let verifier_receipt_root_sha256 = canonical_json_sha256(&outcome.verifier)
-            .map_err(|error| format!("remote_evidence_verifier_root:{error}"))?;
+        if !is_source_neutral_relation_frame(&frame) {
+            return Err(RemoteEvidenceFrameSealErrorV1::Censored(
+                RemoteEvidenceFrameValidationBlockerV1::SourceSpecificFrame,
+            ));
+        }
+        let outcome = teacher_outcome_from_completed(&frame).map_err(|_| {
+            RemoteEvidenceFrameSealErrorV1::Censored(
+                RemoteEvidenceFrameValidationBlockerV1::TeacherOutcomeInvalid,
+            )
+        })?;
+        if !outcome.verifier.accepted {
+            return Err(RemoteEvidenceFrameSealErrorV1::Censored(
+                RemoteEvidenceFrameValidationBlockerV1::VerifierRejected,
+            ));
+        }
+        let frame_root_sha256 = canonical_json_sha256(&frame).map_err(|error| {
+            RemoteEvidenceFrameSealErrorV1::Fatal(format!("remote_evidence_frame_root:{error}"))
+        })?;
+        let verifier_receipt_root_sha256 =
+            canonical_json_sha256(&outcome.verifier).map_err(|error| {
+                RemoteEvidenceFrameSealErrorV1::Fatal(format!(
+                    "remote_evidence_verifier_root:{error}"
+                ))
+            })?;
         let route_receipt_root_sha256 = route_receipt
             .as_ref()
             .map(|receipt| receipt.receipt_root_sha256.clone());
@@ -200,80 +233,9 @@ impl RemoteEvidenceFrameV1 {
             frame,
             runtime_parity_case,
         };
-        receipt
-            .validate()
-            .then_some(receipt)
-            .ok_or_else(|| "remote_evidence_frame_invalid".to_owned())
-    }
-
-    #[must_use]
-    pub fn validate(&self) -> bool {
-        if self.schema != REMOTE_EVIDENCE_FRAME_SCHEMA_V1
-            || self.frame.verifier_label != Some(true)
-            || !is_source_neutral_relation_frame(&self.frame)
-            || self.observed_at_unix_nanos == 0
-            || ![
-                self.frame_root_sha256.as_str(),
-                self.verifier_receipt_root_sha256.as_str(),
-                self.session_id_sha256.as_str(),
-                self.turn_intent_id_sha256.as_str(),
-                self.action_event_id_sha256.as_str(),
-            ]
-            .into_iter()
-            .all(valid_nonzero_sha256)
-            || self
-                .route_receipt_root_sha256
-                .as_deref()
-                .is_some_and(|root| !valid_nonzero_sha256(root))
-            || !self.route_binding_is_valid()
-            || self.session_id_sha256 != self.frame.session_id_sha256
-            || self.turn_intent_id_sha256 != self.frame.client_intent_id_sha256
-            || self.action_event_id_sha256 != self.frame.event_id_sha256
-            || self.observed_at_unix_nanos != self.frame.observed_at_unix_nanos
-            || self.runtime_parity_case.as_ref().is_some_and(|parity| {
-                parity.evidence_ref_sha256 != self.frame.frame_id_sha256
-                    || parity.request_text.is_empty()
-                    || parity.expected_response.is_empty()
-                    || serde_cbor::to_vec(parity).map_or(true, |bytes| {
-                        bytes.len() > REMOTE_EVIDENCE_MAX_FRAME_BYTES_V1
-                    })
-            })
-            || !matches!(
-                canonical_json_sha256(&self.frame),
-                Ok(root) if root == self.frame_root_sha256
-            )
-        {
-            return false;
-        }
-        teacher_outcome_from_completed(&self.frame).is_ok_and(|outcome| {
-            outcome.verifier.accepted
-                && canonical_json_sha256(&outcome.verifier)
-                    .is_ok_and(|root| root == self.verifier_receipt_root_sha256)
-        })
-    }
-
-    #[must_use]
-    pub fn is_route_bound(&self) -> bool {
-        self.route_receipt.is_some() && self.route_binding_is_valid()
-    }
-
-    fn route_binding_is_valid(&self) -> bool {
-        match (
-            self.route_receipt_root_sha256.as_deref(),
-            self.route_receipt.as_ref(),
-        ) {
-            (None, None) => true,
-            // Root-only V1 frames remain decodable but are not proven route bindings.
-            (Some(_), None) => true,
-            (None, Some(_)) => false,
-            (Some(root), Some(receipt)) => {
-                receipt.validate()
-                    && root == receipt.receipt_root_sha256
-                    && receipt.turn_intent_id_sha256 == self.frame.client_intent_id_sha256
-                    && receipt.session_id_sha256 == self.frame.session_id_sha256
-                    && receipt.request_observed_at_unix_nanos <= self.frame.observed_at_unix_nanos
-                    && receipt.route_confirmed_at_unix_nanos <= self.frame.observed_at_unix_nanos
-            }
+        match receipt.validation_blocker() {
+            Some(blocker) => Err(RemoteEvidenceFrameSealErrorV1::Censored(blocker)),
+            None => Ok(receipt),
         }
     }
 }
