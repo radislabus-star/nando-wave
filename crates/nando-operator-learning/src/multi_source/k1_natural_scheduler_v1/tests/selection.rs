@@ -4,7 +4,7 @@ use super::*;
 fn queue_can_rank_immature_novel_cohort_first_but_freezes_first_ready_cohort() {
     let mut rows = ready_rows();
     rows.push(evidence_row(
-        20,
+        15,
         101,
         201,
         K1ConsequenceTypeV1::Collection,
@@ -15,7 +15,9 @@ fn queue_can_rank_immature_novel_cohort_first_but_freezes_first_ready_cohort() {
     ));
     let catalog = catalog(&rows);
     let deficit = deficit(vec![K1ConsequenceTypeV1::Scalar]);
-    let queue = build_k1_natural_candidate_queue_v1(&catalog, &deficit).expect("queue");
+    let queue =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, catalog_watermark(&catalog))
+            .expect("queue");
 
     assert_eq!(queue.rows[0].score.total_k1_gain, 3);
     assert_eq!(queue.rows[0].score.readiness_rank, 0);
@@ -134,7 +136,9 @@ fn oversized_catalog_keeps_a_complete_denominator_and_a_bounded_ready_queue() {
 
     let catalog = catalog(&rows);
     let deficit = deficit(vec![K1ConsequenceTypeV1::Scalar]);
-    let queue = build_k1_natural_candidate_queue_v1(&catalog, &deficit).expect("bounded queue");
+    let queue =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, catalog_watermark(&catalog))
+            .expect("bounded queue");
     let ready_candidate = catalog
         .candidates
         .iter()

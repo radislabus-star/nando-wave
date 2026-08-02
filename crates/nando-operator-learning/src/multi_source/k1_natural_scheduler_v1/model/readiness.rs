@@ -75,6 +75,27 @@ impl K1CandidateReadinessV1 {
         Ok(())
     }
 
+    pub fn freeze_ready_at(
+        &self,
+        evidence_rows: u64,
+        first_capture_sequence: u64,
+        last_capture_sequence: u64,
+        contract_watermark: u64,
+    ) -> Result<bool, &'static str> {
+        self.validate()?;
+        if evidence_rows == 0
+            || first_capture_sequence == 0
+            || last_capture_sequence < first_capture_sequence
+            || contract_watermark < last_capture_sequence
+        {
+            return Err("k1_candidate_recency_input_invalid");
+        }
+        let observed_span = last_capture_sequence - first_capture_sequence;
+        let maximum_staleness = observed_span.max(evidence_rows);
+        let staleness = contract_watermark - last_capture_sequence;
+        Ok(self.pass && staleness <= maximum_staleness)
+    }
+
     fn expected_root(&self) -> Result<String, &'static str> {
         canonical_json_sha256(&(
             self.schema.as_str(),

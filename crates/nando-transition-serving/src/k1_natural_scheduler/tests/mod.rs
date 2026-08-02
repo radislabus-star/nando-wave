@@ -18,6 +18,15 @@ fn root(value: u64) -> String {
     format!("{value:064x}")
 }
 
+fn candidate_watermark(catalog: &K1NaturalCohortCatalogV1) -> u64 {
+    catalog
+        .candidates
+        .iter()
+        .map(|candidate| candidate.last_capture_sequence)
+        .max()
+        .unwrap_or(0)
+}
+
 fn test_context() -> (PathBuf, CertificationAuthorityConfigV1, SigningKey) {
     let root = std::env::temp_dir().join(format!(
         "nando-k1-scheduler-{}-{}",
@@ -91,7 +100,9 @@ fn candidate_freeze() -> K1NaturalCandidateFreezeV1 {
         false,
     )
     .expect("deficit");
-    let queue = build_k1_natural_candidate_queue_v1(&catalog, &deficit).expect("queue");
+    let queue =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, candidate_watermark(&catalog))
+            .expect("queue");
     let row = queue.first_readiness_pass().expect("ready row");
     let candidate = catalog
         .candidates

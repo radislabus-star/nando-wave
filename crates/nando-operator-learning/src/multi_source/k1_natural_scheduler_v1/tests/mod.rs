@@ -2,6 +2,7 @@ use super::*;
 
 mod lifecycle;
 mod probe;
+mod recency;
 mod selection;
 
 const GENERATOR_SCHEMA: &str = "nando.operator-blind-version-space-generator.v1";
@@ -90,6 +91,15 @@ fn catalog(rows: &[K1NaturalEvidenceRowV1]) -> K1NaturalCohortCatalogV1 {
         .expect("catalog")
 }
 
+fn catalog_watermark(catalog: &K1NaturalCohortCatalogV1) -> u64 {
+    catalog
+        .candidates
+        .iter()
+        .map(|candidate| candidate.last_capture_sequence)
+        .max()
+        .unwrap_or(0)
+}
+
 fn ready_rows() -> Vec<K1NaturalEvidenceRowV1> {
     (1..=8)
         .map(|index| {
@@ -111,7 +121,9 @@ fn candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV1 {
     let rows = ready_rows();
     let catalog = catalog(&rows);
     let deficit = deficit(Vec::new());
-    let queue = build_k1_natural_candidate_queue_v1(&catalog, &deficit).expect("queue");
+    let queue =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, catalog_watermark(&catalog))
+            .expect("queue");
     let queue_row = queue.first_readiness_pass().expect("ready queue row");
     let candidate = catalog
         .candidates

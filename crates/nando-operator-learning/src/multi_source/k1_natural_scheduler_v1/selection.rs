@@ -106,14 +106,21 @@ pub fn build_k1_natural_cohort_catalog_v1(
 pub fn build_k1_natural_candidate_queue_v1(
     catalog: &K1NaturalCohortCatalogV1,
     deficit: &K1DeficitSnapshotV1,
+    contract_watermark: u64,
 ) -> Result<K1NaturalCandidateQueueV1, &'static str> {
-    build_k1_natural_candidate_queue_with_exclusions_v1(catalog, deficit, &BTreeSet::new())
+    build_k1_natural_candidate_queue_with_exclusions_v1(
+        catalog,
+        deficit,
+        &BTreeSet::new(),
+        contract_watermark,
+    )
 }
 
 pub fn build_k1_natural_candidate_queue_with_exclusions_v1(
     catalog: &K1NaturalCohortCatalogV1,
     deficit: &K1DeficitSnapshotV1,
     excluded_candidate_roots_sha256: &BTreeSet<String>,
+    contract_watermark: u64,
 ) -> Result<K1NaturalCandidateQueueV1, &'static str> {
     catalog.validate()?;
     deficit.validate()?;
@@ -162,6 +169,12 @@ pub fn build_k1_natural_candidate_queue_with_exclusions_v1(
                     && !known_topologies
                         .contains(candidate.source_neutral_topology_root_sha256.as_str()),
             );
+            let freeze_ready = candidate.readiness.freeze_ready_at(
+                candidate.evidence_rows,
+                candidate.first_capture_sequence,
+                candidate.last_capture_sequence,
+                contract_watermark,
+            )?;
             let score = K1CandidateScoreV1 {
                 total_k1_gain: law_gain
                     .saturating_add(semantic_gain)
@@ -169,7 +182,7 @@ pub fn build_k1_natural_candidate_queue_with_exclusions_v1(
                 law_gain,
                 semantic_gain,
                 topology_gain,
-                readiness_rank: u8::from(candidate.readiness.pass),
+                readiness_rank: u8::from(freeze_ready),
                 bounded_discovery_cost_units: candidate.bounded_discovery_cost_units,
                 expected_verified_input_tokens: candidate.expected_verified_input_tokens,
                 stable_hash_sha256: candidate.candidate_root_sha256.clone(),

@@ -133,8 +133,14 @@ impl K1NaturalCandidateFreezeV1 {
             .iter()
             .find(|row| row.candidate_root_sha256 == candidate.candidate_root_sha256)
             .ok_or("k1_freeze_candidate_not_queued")?;
+        let freeze_ready = candidate.readiness.freeze_ready_at(
+            candidate.evidence_rows,
+            candidate.first_capture_sequence,
+            candidate.last_capture_sequence,
+            contract_watermark,
+        )?;
         if deficit.k1_open
-            || !candidate.readiness.pass
+            || !freeze_ready
             || queue.first_readiness_pass() != Some(queued)
             || queued.readiness_receipt_root_sha256
                 != candidate.readiness.readiness_receipt_root_sha256

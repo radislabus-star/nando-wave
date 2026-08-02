@@ -149,10 +149,23 @@ fn authority_rebuilds_queue_and_rejects_a_valid_omission() {
         false,
     )
     .expect("deficit");
-    let proposed = build_k1_natural_candidate_queue_v1(&catalog, &deficit).expect("queue");
+    let contract_watermark = catalog
+        .candidates
+        .iter()
+        .map(|candidate| candidate.last_capture_sequence)
+        .max()
+        .expect("candidate watermark");
+    let proposed =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, contract_watermark).expect("queue");
     let completed = BTreeSet::new();
-    validate_queue_derivation(&catalog, &deficit, &completed, &proposed)
-        .expect("authoritative derivation");
+    validate_queue_derivation(
+        &catalog,
+        &deficit,
+        &completed,
+        contract_watermark,
+        &proposed,
+    )
+    .expect("authoritative derivation");
 
     let omitted = proposed.rows[0].candidate_root_sha256.clone();
     let tampered =
@@ -160,10 +173,17 @@ fn authority_rebuilds_queue_and_rejects_a_valid_omission() {
             &catalog,
             &deficit,
             &BTreeSet::from([omitted]),
+            contract_watermark,
         )
         .expect("internally valid omitted queue");
     assert_eq!(
-        validate_queue_derivation(&catalog, &deficit, &completed, &tampered),
+        validate_queue_derivation(
+            &catalog,
+            &deficit,
+            &completed,
+            contract_watermark,
+            &tampered,
+        ),
         Err("k1_candidate_queue_derivation_mismatch".to_owned())
     );
 }

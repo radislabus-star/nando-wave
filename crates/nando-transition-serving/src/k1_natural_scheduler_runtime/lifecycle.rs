@@ -29,8 +29,18 @@ pub(super) fn advance(
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
-    let queue = build_k1_natural_candidate_queue_with_exclusions_v1(&catalog, &deficit, &completed)
-        .map_err(str::to_owned)?;
+    let contract_watermark = bindings
+        .iter()
+        .map(|binding| binding.row.capture_sequence)
+        .max()
+        .unwrap_or(0);
+    let queue = build_k1_natural_candidate_queue_with_exclusions_v1(
+        &catalog,
+        &deficit,
+        &completed,
+        contract_watermark,
+    )
+    .map_err(str::to_owned)?;
 
     if let Some(terminal) = projection.pending_terminal_transfer.as_ref() {
         return runtime_report(
@@ -92,11 +102,7 @@ pub(super) fn advance(
             K1_SCHEDULER_SCHEMA_V1.to_owned(),
             generation_budget(),
             candidate.last_capture_sequence,
-            bindings
-                .iter()
-                .map(|binding| binding.row.capture_sequence)
-                .max()
-                .unwrap_or(candidate.last_capture_sequence),
+            contract_watermark,
             generated_at_unix,
         )
         .map_err(str::to_owned)?;

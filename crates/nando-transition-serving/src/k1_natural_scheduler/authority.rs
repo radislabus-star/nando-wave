@@ -104,6 +104,7 @@ fn append_candidate_freeze_authoritative(
         &request.catalog,
         &request.deficit_snapshot,
         &completed_candidate_roots_sha256,
+        request.freeze.contract_watermark,
         &request.queue,
     )?;
     if scheduler
