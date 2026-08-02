@@ -34,6 +34,8 @@ use time::format_description::well_known::Rfc3339;
 
 mod request_text;
 use request_text::bounded_runtime_request_text;
+#[cfg(test)]
+mod capture_bound_tests;
 
 use crate::miner_worker::MinerWorkerHandle;
 #[cfg(test)]
@@ -695,7 +697,12 @@ pub fn verified_capture_bound_training_cases_from_sessions(
 
     for path in paths {
         let mut state = match canonical_session_state(&path, 0) {
-            Ok(state) => state,
+            Ok(mut state) => {
+                // A compacted or copied prefix may begin inside a turn. Only an
+                // authoritative boundary can establish its canonical identity.
+                state.censor_until_turn_boundary = true;
+                state
+            }
             Err(error) if is_censored_session_identity_error(&error) => {
                 censored_session_identities.insert(path.display().to_string(), error);
                 continue;
@@ -1339,6 +1346,14 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             state.replay_source_offset = None;
             continue;
         }
+        if let Some(session_id) = parsed.as_ref().and_then(session_id_from_meta) {
+            if state.session_identity_pinned && state.session_id != session_id {
+                return Err("session_identity_changed".to_owned());
+            }
+            state.session_id = session_id.to_owned();
+            state.session_id_sha256 = sha256_bytes(session_id.as_bytes());
+            state.session_identity_pinned = true;
+        }
         if state.censor_until_turn_boundary {
             if parsed.as_ref().is_some_and(is_authoritative_turn_boundary) {
                 state.censor_until_turn_boundary = false;
@@ -1365,14 +1380,6 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         {
             finalize_turn_evidence_graph(state, evidence_graphs, metrics)?;
             begin_turn_identity(turn_boundary, state);
-        }
-        if let Some(session_id) = parsed.as_ref().and_then(session_id_from_meta) {
-            if state.session_identity_pinned && state.session_id != session_id {
-                return Err("session_identity_changed".to_owned());
-            }
-            state.session_id = session_id.to_owned();
-            state.session_id_sha256 = sha256_bytes(session_id.as_bytes());
-            state.session_identity_pinned = true;
         }
         let event_time_unix_nanos = parsed.as_ref().and_then(event_time_unix_nanos);
         let event_id = parsed
