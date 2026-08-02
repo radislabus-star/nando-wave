@@ -13,6 +13,7 @@ pub enum K1GenerationVerdictClassV1 {
     Pass,
     Abstain,
     AcquisitionFail,
+    IndependentFutureNotObserved,
     ProbeExhausted,
 }
 

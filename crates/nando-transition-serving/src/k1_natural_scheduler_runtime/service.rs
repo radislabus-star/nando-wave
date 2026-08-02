@@ -105,6 +105,7 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
                 | RuntimeState::AwaitingIndependentFuture
                 | RuntimeState::TerminalAbstain
                 | RuntimeState::TerminalAcquisitionFail
+                | RuntimeState::TerminalIndependentFutureNotObserved
                 | RuntimeState::TerminalProbeExhausted
                 | RuntimeState::K1VocabularyOpen
         );

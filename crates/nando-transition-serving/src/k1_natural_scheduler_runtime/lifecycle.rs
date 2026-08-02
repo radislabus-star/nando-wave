@@ -289,6 +289,11 @@ pub(super) fn advance(
     }
 
     if generation_expired(&candidate_freeze, generated_at_unix) {
+        let deadline = deadline::classify_deadline(
+            &classes,
+            future_eligible_rows,
+            durable_future_prediction_contract(&identification_freeze),
+        );
         let verdict = terminal_verdict(
             &candidate_freeze,
             Some(&identification_freeze),
@@ -300,8 +305,8 @@ pub(super) fn advance(
                     |receipt| receipt.receipt_root_sha256.clone(),
                 ),
             ],
-            K1GenerationVerdictClassV1::ProbeExhausted,
-            "generation_deadline_exhausted",
+            deadline.verdict,
+            deadline.blocker,
             generated_at_unix,
             None,
         )?;
@@ -311,8 +316,8 @@ pub(super) fn advance(
         )?;
         return runtime_report(
             generated_at_unix,
-            K1NaturalSchedulerRuntimeStateV1::TerminalProbeExhausted,
-            "generation_deadline_exhausted".to_owned(),
+            deadline.runtime_state,
+            deadline.blocker.to_owned(),
             projection,
             join_report,
             catalog,

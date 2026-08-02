@@ -18,6 +18,20 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
     frozen_evidence_rows: u64,
     future_eligible_rows: u64,
 ) -> Result<K1NaturalSchedulerRuntimeReportV1, String> {
+    if !durable_future_prediction_contract(&identification_freeze) {
+        return runtime_report(
+            generated_at_unix,
+            K1NaturalSchedulerRuntimeStateV1::AwaitingIndependentFuture,
+            "independent_future_prediction_contract_missing".to_owned(),
+            projection,
+            join,
+            catalog,
+            queue,
+            Some(base_identification),
+            frozen_evidence_rows,
+            future_eligible_rows,
+        );
+    }
     let consumed = projection
         .consumed_outcome_roots_sha256
         .iter()

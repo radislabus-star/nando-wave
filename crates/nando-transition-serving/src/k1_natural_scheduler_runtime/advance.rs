@@ -1,9 +1,11 @@
 use super::*;
 
 mod future;
+mod future_prediction;
 mod probe;
 
 pub(super) use future::advance_independent_future;
+pub(super) use future_prediction::durable_future_prediction_contract;
 pub(super) use probe::advance_probe;
 
 pub(super) fn generation_expired(

@@ -28,6 +28,7 @@ use crate::k1_transfer_lifecycle::K1TransferLifecycleReportV1;
 use crate::operator_certification::CertificationAuthorityConfigV1;
 
 mod advance;
+mod deadline;
 mod evidence;
 mod lifecycle;
 mod report;
@@ -67,6 +68,7 @@ pub(crate) enum K1NaturalSchedulerRuntimeStateV1 {
     TerminalPass,
     TerminalAbstain,
     TerminalAcquisitionFail,
+    TerminalIndependentFutureNotObserved,
     TerminalProbeExhausted,
     K1VocabularyOpen,
 }
