@@ -77,7 +77,7 @@ pub(super) fn enumerate_source_neutral_t1_candidates(
     Ok(candidates)
 }
 
-pub(super) fn t1_program_is_consistent(
+pub fn t1_program_is_consistent(
     program: &ResponseProgram,
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,

@@ -7,6 +7,9 @@ pub(super) fn projection_for(
     ledger.validate().map_err(str::to_owned)?;
     let mut active_candidate_freeze = None;
     let mut identification_freeze = None;
+    let mut future_prediction_contract = None;
+    let mut future_predictions = Vec::new();
+    let mut future_outcomes = Vec::new();
     let mut latest_probe_round = None;
     let mut completed_probe_rounds = 0u64;
     let mut latest_applied_outcome = None;
@@ -23,6 +26,9 @@ pub(super) fn projection_for(
             K1SchedulerEventPayloadV1::CandidateFreeze(freeze) => {
                 active_candidate_freeze = Some(freeze.clone());
                 identification_freeze = None;
+                future_prediction_contract = None;
+                future_predictions.clear();
+                future_outcomes.clear();
                 latest_probe_round = None;
                 completed_probe_rounds = 0;
                 latest_applied_outcome = None;
@@ -36,6 +42,15 @@ pub(super) fn projection_for(
                     probe_rounds: freeze.budget.maximum_probe_rounds,
                     probe_cost_units: freeze.budget.maximum_probe_cost_units,
                 });
+            }
+            K1SchedulerEventPayloadV1::FuturePredictionContract(contract) => {
+                future_prediction_contract = Some(contract.clone());
+            }
+            K1SchedulerEventPayloadV1::FuturePrediction(prediction) => {
+                future_predictions.push(prediction.clone());
+            }
+            K1SchedulerEventPayloadV1::FutureOutcome(outcome) => {
+                future_outcomes.push(outcome.clone());
             }
             K1SchedulerEventPayloadV1::ProbeRound(receipt) => {
                 latest_probe_round = Some(receipt.clone());
@@ -73,6 +88,9 @@ pub(super) fn projection_for(
                     .then(|| verdict.as_ref().clone());
                 active_candidate_freeze = None;
                 identification_freeze = None;
+                future_prediction_contract = None;
+                future_predictions.clear();
+                future_outcomes.clear();
                 latest_probe_round = None;
                 completed_probe_rounds = 0;
                 latest_applied_outcome = None;
@@ -105,6 +123,11 @@ pub(super) fn projection_for(
     {
         return Err("k1_scheduler_projection_candidate_reused".to_owned());
     }
+    future_predictions.sort_by(|left, right| {
+        left.prediction_root_sha256
+            .cmp(&right.prediction_root_sha256)
+    });
+    future_outcomes.sort_by(|left, right| left.outcome_root_sha256.cmp(&right.outcome_root_sha256));
     let mut projection = K1SchedulerProjectionV1 {
         schema: K1_SCHEDULER_PROJECTION_SCHEMA_V1.to_owned(),
         projection_root_sha256: String::new(),
@@ -120,6 +143,9 @@ pub(super) fn projection_for(
         next_generation_sequence: completed_generations.saturating_add(1),
         active_candidate_freeze,
         identification_freeze,
+        future_prediction_contract,
+        future_predictions,
+        future_outcomes,
         latest_probe_round,
         completed_probe_rounds,
         latest_applied_outcome,
@@ -155,6 +181,18 @@ impl K1SchedulerProjectionV1 {
                 .as_ref()
                 .is_some_and(|value| value.validate().is_err())
             || self
+                .future_prediction_contract
+                .as_ref()
+                .is_some_and(|value| value.validate().is_err())
+            || self
+                .future_predictions
+                .iter()
+                .any(|value| value.validate().is_err())
+            || self
+                .future_outcomes
+                .iter()
+                .any(|value| value.validate().is_err())
+            || self
                 .latest_probe_round
                 .as_ref()
                 .is_some_and(|value| value.validate().is_err())
@@ -184,6 +222,9 @@ impl K1SchedulerProjectionV1 {
             || self.active_candidate_freeze.is_none()
                 && (self.identification_freeze.is_some()
                     || self.latest_probe_round.is_some()
+                    || self.future_prediction_contract.is_some()
+                    || !self.future_predictions.is_empty()
+                    || !self.future_outcomes.is_empty()
                     || self.latest_applied_outcome.is_some()
                     || self.completed_probe_rounds != 0
                     || !self.consumed_outcome_roots_sha256.is_empty()
@@ -204,6 +245,20 @@ impl K1SchedulerProjectionV1 {
                 != u64::try_from(self.completed_candidate_roots_sha256.len())
                     .map_err(|_| "k1_scheduler_projection_generation_count".to_owned())?
             || !strict_unique_roots(&self.completed_candidate_roots_sha256)
+            || !strict_unique_roots(
+                &self
+                    .future_predictions
+                    .iter()
+                    .map(|value| value.prediction_root_sha256.clone())
+                    .collect::<Vec<_>>(),
+            )
+            || !strict_unique_roots(
+                &self
+                    .future_outcomes
+                    .iter()
+                    .map(|value| value.outcome_root_sha256.clone())
+                    .collect::<Vec<_>>(),
+            )
             || self.authority_ready
             || self.phase_mutation_allowed
             || self.projection_root_sha256 != self.expected_root()?
@@ -230,6 +285,20 @@ impl K1SchedulerProjectionV1 {
                 .identification_freeze
                 .as_ref()
                 .map(|value| value.freeze_root_sha256.as_str()),
+            future_prediction_contract_root_sha256: self
+                .future_prediction_contract
+                .as_ref()
+                .map(|value| value.contract_root_sha256.as_str()),
+            future_prediction_roots_sha256: self
+                .future_predictions
+                .iter()
+                .map(|value| value.prediction_root_sha256.as_str())
+                .collect(),
+            future_outcome_roots_sha256: self
+                .future_outcomes
+                .iter()
+                .map(|value| value.outcome_root_sha256.as_str())
+                .collect(),
             latest_probe_round_root_sha256: self
                 .latest_probe_round
                 .as_ref()

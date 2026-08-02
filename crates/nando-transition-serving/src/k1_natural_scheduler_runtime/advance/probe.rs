@@ -10,6 +10,7 @@ enum ProbeOutcomeDisposition {
 #[allow(clippy::too_many_arguments)]
 pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
     certification: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
     generated_at_unix: u64,
     mut projection: K1SchedulerProjectionV1,
     join: MultiSourceJoinReportV1,
@@ -54,6 +55,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
         ) else {
             return runtime_report(
                 generated_at_unix,
+                lane,
                 K1NaturalSchedulerRuntimeStateV1::ProbePending,
                 "eligible_probe_outcome_pending".to_owned(),
                 projection,
@@ -100,8 +102,9 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
         )
         .map_err(str::to_owned)?;
         let outcome_root = outcome.receipt_root_sha256.clone();
-        projection = append_scheduler_payload(
+        projection = append_scheduler_payload_for(
             certification,
+            lane,
             K1SchedulerEventPayloadV1::ProbeRound(outcome),
         )?;
         if let ProbeOutcomeDisposition::Contradiction(blocker) = disposition {
@@ -120,12 +123,14 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
                 generated_at_unix,
                 None,
             )?;
-            projection = append_scheduler_payload(
+            projection = append_scheduler_payload_for(
                 certification,
+                lane,
                 K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
             )?;
             return runtime_report(
                 generated_at_unix,
+                lane,
                 K1NaturalSchedulerRuntimeStateV1::TerminalAbstain,
                 blocker.to_owned(),
                 projection,
@@ -144,6 +149,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
         };
         return runtime_report(
             generated_at_unix,
+            lane,
             state,
             String::new(),
             projection,
@@ -177,12 +183,14 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
             generated_at_unix,
             None,
         )?;
-        projection = append_scheduler_payload(
+        projection = append_scheduler_payload_for(
             certification,
+            lane,
             K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
         )?;
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::TerminalProbeExhausted,
             "distinguishing_probe_budget_exhausted".to_owned(),
             projection,
@@ -218,12 +226,14 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
         },
     )
     .map_err(str::to_owned)?;
-    projection = append_scheduler_payload(
+    projection = append_scheduler_payload_for(
         certification,
+        lane,
         K1SchedulerEventPayloadV1::ProbeRound(pending),
     )?;
     runtime_report(
         generated_at_unix,
+        lane,
         K1NaturalSchedulerRuntimeStateV1::ProbePending,
         String::new(),
         projection,

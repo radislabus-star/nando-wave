@@ -15,8 +15,10 @@ pub use model::{
     K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
 };
 pub use probe::{
-    K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1ProbeBudgetRemainingV1,
-    K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1TransferSettlementV1,
+    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1FutureOutcomeReceiptV1, K1FuturePredictionContractV1,
+    K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
+    K1ProbeBudgetRemainingV1, K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
+    K1TransferSettlementV1,
 };
 pub use selection::{
     build_k1_natural_candidate_queue_v1, build_k1_natural_candidate_queue_with_exclusions_v1,

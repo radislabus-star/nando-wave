@@ -3,6 +3,7 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(super) fn runtime_report(
     generated_at_unix: u64,
+    lane: K1SchedulerLaneV1,
     state: K1NaturalSchedulerRuntimeStateV1,
     blocker: String,
     projection: K1SchedulerProjectionV1,
@@ -17,6 +18,7 @@ pub(super) fn runtime_report(
         schema: K1_RUNTIME_REPORT_SCHEMA_V1.to_owned(),
         report_root_sha256: String::new(),
         generated_at_unix,
+        lane,
         state,
         blocker,
         projection,
@@ -40,6 +42,7 @@ impl K1NaturalSchedulerRuntimeReportV1 {
         canonical_json_sha256(&RuntimeReportDigestV1 {
             schema: K1_RUNTIME_REPORT_SCHEMA_V1,
             generated_at_unix: self.generated_at_unix,
+            lane: self.lane,
             state: self.state,
             blocker: &self.blocker,
             projection_root_sha256: &self.projection.projection_root_sha256,

@@ -3,6 +3,7 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
     certification: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
     generated_at_unix: u64,
     mut projection: K1SchedulerProjectionV1,
     join: MultiSourceJoinReportV1,
@@ -21,6 +22,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
     if !durable_future_prediction_contract(&identification_freeze) {
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::AwaitingIndependentFuture,
             "independent_future_prediction_contract_missing".to_owned(),
             projection,
@@ -47,15 +49,39 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
         })
         .map(|binding| binding.row.lineage_root_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let Some(future) = next_future_binding(
-        bindings,
-        &candidate_freeze,
-        &consumed,
-        candidate_freeze.future_min_sequence,
-        Some(&used_lineages),
-    ) else {
+    let Some((future, prediction, outcome)) = bindings
+        .iter()
+        .filter_map(|binding| {
+            let outcome = projection.future_outcomes.iter().find(|outcome| {
+                outcome.join_root_sha256 == binding.joined.join_root_sha256
+                    && outcome.independent_verifier_pass
+            })?;
+            let prediction = projection.future_predictions.iter().find(|prediction| {
+                prediction.prediction_root_sha256 == outcome.prediction_root_sha256
+                    && prediction.topology_commitment_root_sha256
+                        == binding.joined.topology_commitment_root_sha256
+            })?;
+            (binding_matches_freeze(binding, &candidate_freeze)
+                && !binding.row.safety_veto
+                && binding.row.capture_sequence >= candidate_freeze.future_min_sequence
+                && !consumed.contains(&binding.joined.join_root_sha256)
+                && !used_lineages.contains(&binding.row.lineage_root_sha256))
+            .then_some((binding, prediction, outcome))
+        })
+        .min_by(|(left, _, _), (right, _, _)| {
+            left.row
+                .capture_sequence
+                .cmp(&right.row.capture_sequence)
+                .then_with(|| {
+                    left.joined
+                        .join_root_sha256
+                        .cmp(&right.joined.join_root_sha256)
+                })
+        })
+    else {
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::AwaitingIndependentFuture,
             "independent_post_identification_future_pending".to_owned(),
             projection,
@@ -75,6 +101,10 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
                 && binding.row.capture_sequence >= candidate_freeze.future_min_sequence
                 && binding.row.capture_sequence <= future.row.capture_sequence
                 && !consumed.contains(&binding.joined.join_root_sha256)
+                && projection.future_outcomes.iter().any(|outcome| {
+                    outcome.join_root_sha256 == binding.joined.join_root_sha256
+                        && outcome.independent_verifier_pass
+                })
         })
         .map(|binding| binding.joined.join_root_sha256.clone())
         .collect::<BTreeSet<_>>();
@@ -124,6 +154,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
         _ => {
             return runtime_report(
                 generated_at_unix,
+                lane,
                 K1NaturalSchedulerRuntimeStateV1::AwaitingIndependentFuture,
                 "independent_future_not_yet_transfer_complete".to_owned(),
                 projection,
@@ -139,7 +170,12 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
     let mut evidence = vec![
         trial.report_root_sha256.clone(),
         future.joined.join_root_sha256.clone(),
+        prediction.prediction_root_sha256.clone(),
+        outcome.outcome_root_sha256.clone(),
     ];
+    if let Some(contract) = &projection.future_prediction_contract {
+        evidence.push(contract.contract_root_sha256.clone());
+    }
     if let Some(basis) = &trial.proof_basis {
         evidence.push(basis.basis_root_sha256.clone());
     }
@@ -153,12 +189,14 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
         generated_at_unix,
         (verdict_class == K1GenerationVerdictClassV1::Pass).then(|| trial.clone()),
     )?;
-    projection = append_scheduler_payload(
+    projection = append_scheduler_payload_for(
         certification,
+        lane,
         K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
     )?;
     runtime_report(
         generated_at_unix,
+        lane,
         runtime_state,
         blocker,
         projection,

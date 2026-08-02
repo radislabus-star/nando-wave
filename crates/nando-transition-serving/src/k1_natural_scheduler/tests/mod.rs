@@ -10,6 +10,7 @@ use super::journal::encode_hex;
 use super::*;
 
 mod authority;
+mod fork;
 mod journal;
 
 static TEST_ID: AtomicU64 = AtomicU64::new(0);

@@ -4,13 +4,24 @@ use axum::response::Response;
 use serde_json::json;
 
 use super::{
-    K1NaturalSchedulerRuntimeReportV1, K1NaturalSchedulerRuntimeStateV1 as RuntimeState, advance,
+    K1NaturalSchedulerRuntimeReportV1, K1NaturalSchedulerRuntimeStateV1 as RuntimeState,
+    K1SchedulerLaneV1, advance,
 };
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
 
 pub(crate) async fn report_handler(State(state): State<AppState>) -> Response {
-    match state.k1_natural_scheduler_report.read() {
+    report_response(&state.k1_natural_scheduler_report)
+}
+
+pub(crate) async fn mechanism_report_handler(State(state): State<AppState>) -> Response {
+    report_response(&state.k1_mechanism_watch_report)
+}
+
+fn report_response(
+    slot: &std::sync::RwLock<Option<K1NaturalSchedulerRuntimeReportV1>>,
+) -> Response {
+    match slot.read() {
         Ok(report) => match report.as_ref() {
             Some(report) => json_response(
                 StatusCode::OK,
@@ -56,10 +67,22 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         .frames();
     let active_protocols =
         multi_source_live::active_protocol_mode_roots(&state.config.response_registry_path)?;
+    let mechanism = advance(
+        &state.operator_certification_config,
+        K1SchedulerLaneV1::Mechanism,
+        false,
+        &topologies,
+        &frames,
+        &active_protocols,
+        unix_now(),
+    )?;
+    store_mechanism_report(state, mechanism)?;
     for _ in 0..16 {
         let now = unix_now();
         let mut report = advance(
             &state.operator_certification_config,
+            K1SchedulerLaneV1::Epistemic,
+            true,
             &topologies,
             &frames,
             &active_protocols,
@@ -108,6 +131,7 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
                 | RuntimeState::TerminalIndependentFutureNotObserved
                 | RuntimeState::TerminalProbeExhausted
                 | RuntimeState::K1VocabularyOpen
+                | RuntimeState::MechanismWatchComplete
         );
         store_report(state, report)?;
         if stable {
@@ -141,5 +165,16 @@ fn store_report(state: &AppState, report: K1NaturalSchedulerRuntimeReportV1) -> 
         .k1_natural_scheduler_report
         .write()
         .map_err(|_| "k1_scheduler_report_lock_poisoned".to_owned())? = Some(report);
+    Ok(())
+}
+
+fn store_mechanism_report(
+    state: &AppState,
+    report: K1NaturalSchedulerRuntimeReportV1,
+) -> Result<(), String> {
+    *state
+        .k1_mechanism_watch_report
+        .write()
+        .map_err(|_| "k1_mechanism_watch_report_lock_poisoned".to_owned())? = Some(report);
     Ok(())
 }

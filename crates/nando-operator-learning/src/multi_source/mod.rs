@@ -36,6 +36,7 @@ pub use coverage_portfolio_shadow_v1::{
 pub use factorizer::{
     CompletedEffectFormV1, FactorizedMultiSourceRowV1, MULTI_SOURCE_FACTORIZED_ROW_SCHEMA_V1,
     MultiSourceReasonV1, PreActionShapeClassV1, factor_multi_source_row_v1,
+    pre_action_applicability_shape_root_v1, source_neutral_topology_root_v1,
 };
 pub use failure_corpus::{
     MS3_FAILURE_CORPUS_MAX_ROWS_V1, MS3_FAILURE_CORPUS_SCHEMA_V1, Ms3FailureCorpusRowV1,
@@ -77,18 +78,19 @@ pub use join::{
 pub use k1_natural_scheduler_v1::{
     K1_CANDIDATE_READINESS_MIN_LINEAGES_V1, K1_CANDIDATE_READINESS_MIN_SETTLED_ROWS_V1,
     K1_CANDIDATE_READINESS_MIN_VERIFIED_ROWS_V1, K1_DEFICIT_SNAPSHOT_SCHEMA_V1,
-    K1_IDENTIFICATION_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
-    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1,
-    K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, K1_PROBE_ROUND_RECEIPT_SCHEMA_V1, K1_SCHEDULER_SCHEMA_V1,
-    K1CandidateReadinessV1, K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
-    K1GenerationBudgetV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
-    K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueRowV1,
-    K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
-    K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1,
-    K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
-    K1SchedulerEventPayloadV1, K1SchedulerEventV1, K1SchedulerLedgerV1, K1TransferSettlementV1,
-    build_k1_natural_candidate_queue_v1, build_k1_natural_candidate_queue_with_exclusions_v1,
-    build_k1_natural_cohort_catalog_v1,
+    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1_IDENTIFICATION_FREEZE_SCHEMA_V1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
+    K1_PROBE_ROUND_RECEIPT_SCHEMA_V1, K1_SCHEDULER_SCHEMA_V1, K1CandidateReadinessV1,
+    K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1FutureOutcomeReceiptV1,
+    K1FuturePredictionContractV1, K1FuturePredictionReceiptV1, K1GenerationBudgetV1,
+    K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
+    K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueRowV1, K1NaturalCandidateQueueV1,
+    K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1,
+    K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1, K1ProbeClassPredictionV1,
+    K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
+    K1SchedulerLedgerV1, K1TransferSettlementV1, build_k1_natural_candidate_queue_v1,
+    build_k1_natural_candidate_queue_with_exclusions_v1, build_k1_natural_cohort_catalog_v1,
 };
 pub use linked_frame_acquisition::{
     MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH,
@@ -152,7 +154,7 @@ pub use representation_gap::{
     RepresentationGapAdjudicationReportV1, RepresentationGapAdjudicationV1,
     RepresentationGapClassV1, build_representation_gap_adjudication_report_v1,
 };
-pub use source_neutral_t1::pre_action_t1_binding_root;
+pub use source_neutral_t1::{pre_action_t1_binding_root, t1_program_is_consistent};
 pub use transport_binding::{
     REQUEST_ACTION_BINDING_SCHEMA_V1, RequestActionBindingV1, TRANSPORT_BOUND_JOIN_MAX_ROWS_V1,
     TRANSPORT_TERMINAL_RECEIPT_SCHEMA_V1, TransportBindingFailureV1, TransportBindingLedgerV1,

@@ -127,6 +127,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identification_can_freeze(
 pub(in crate::k1_natural_scheduler_runtime) fn seal_identification_freeze(
     candidate: &K1NaturalCandidateFreezeV1,
     report: &MultiSourceT1IdentificationV3,
+    prediction_schema: &str,
 ) -> Result<K1IdentificationFreezeV1, String> {
     let quotient = canonical_json_sha256(&(
         K1_SEMANTIC_QUOTIENT_SCHEMA_V1,
@@ -158,7 +159,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn seal_identification_freeze(
         report.remaining_semantic_class_roots_sha256.clone(),
         quotient,
         probe_policy,
-        K1_PREDICTION_SCHEMA_V1.to_owned(),
+        prediction_schema.to_owned(),
     )
     .map_err(str::to_owned)
 }

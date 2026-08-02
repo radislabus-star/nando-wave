@@ -11,11 +11,12 @@ use std::time::Duration;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::multi_source::{
-    K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1GenerationTerminalVerdictV1,
+    K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1FutureOutcomeReceiptV1,
+    K1FuturePredictionContractV1, K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1,
     K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1,
     K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1ProbeBudgetRemainingV1,
     K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
-    K1SchedulerLedgerV1, K1TransferSettlementV1,
+    K1SchedulerLedgerV1, K1TransferSettlementV1, PreActionTopologyAuditRowV1,
 };
 use nando_response_actor::{
     CollectionOutputRenderer, ResponseOperation, ResponseProgram, ResponseRegistry,
@@ -30,13 +31,15 @@ use crate::operator_certification::{
 use crate::write_bytes_atomic;
 
 mod authority;
+mod fork;
+mod future_authority;
 mod journal;
 mod projection;
 mod selection_authority;
 
 use authority::send_authority_request;
 pub(crate) use authority::{handle_authority_line, recover_authority};
-use journal::restore_anchored_scheduler;
+use journal::restore_anchored_scheduler_for;
 use projection::projection_for;
 
 pub(crate) const K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1: &str =
@@ -45,6 +48,12 @@ pub(crate) const K1_SCHEDULER_APPEND_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-scheduler-append-authority-request.v1";
 pub(crate) const K1_TRANSFER_SETTLEMENT_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-transfer-settlement-authority-request.v1";
+pub(crate) const K1_FUTURE_CONTRACT_AUTHORITY_REQUEST_SCHEMA_V1: &str =
+    "nando.k1-future-contract-authority-request.v1";
+pub(crate) const K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1: &str =
+    "nando.k1-future-prediction-authority-request.v1";
+pub(crate) const K1_FUTURE_OUTCOME_AUTHORITY_REQUEST_SCHEMA_V1: &str =
+    "nando.k1-future-outcome-authority-request.v1";
 const K1_SCHEDULER_AUTHORITY_RESPONSE_SCHEMA_V1: &str = "nando.k1-scheduler-authority-response.v1";
 const K1_SCHEDULER_SIGNED_EVENT_SCHEMA_V1: &str = "nando.k1-scheduler-signed-event.v1";
 const K1_SCHEDULER_ANCHOR_SCHEMA_V1: &str = "nando.k1-scheduler-anchor.v1";
@@ -52,12 +61,25 @@ const K1_SCHEDULER_PROJECTION_SCHEMA_V1: &str = "nando.k1-scheduler-projection.v
 const K1_SCHEDULER_JOURNAL_DIR: &str = "k1-natural-scheduler-journal-v1";
 const K1_SCHEDULER_CACHE_FILE: &str = "k1-natural-scheduler-ledger-v1.json";
 const K1_SCHEDULER_ANCHOR_FILE: &str = "k1-natural-scheduler-anchor-v1.json";
+const K1_EPISTEMIC_SCHEDULER_JOURNAL_DIR: &str = "k1-epistemic-scheduler-journal-v1";
+const K1_EPISTEMIC_SCHEDULER_CACHE_FILE: &str = "k1-epistemic-scheduler-ledger-v1.json";
+const K1_EPISTEMIC_SCHEDULER_ANCHOR_FILE: &str = "k1-epistemic-scheduler-anchor-v1.json";
 const K1_SCHEDULER_MAX_REQUEST_BYTES: usize = 4 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum K1SchedulerLaneV1 {
+    #[default]
+    Mechanism,
+    Epistemic,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct K1CandidateFreezeAuthorityRequestV1 {
     pub schema: String,
+    #[serde(default)]
+    pub lane: K1SchedulerLaneV1,
     pub catalog: K1NaturalCohortCatalogV1,
     pub deficit_snapshot: K1DeficitSnapshotV1,
     pub queue: K1NaturalCandidateQueueV1,
@@ -69,6 +91,8 @@ pub(crate) struct K1CandidateFreezeAuthorityRequestV1 {
 #[serde(deny_unknown_fields)]
 pub(crate) struct K1SchedulerAppendAuthorityRequestV1 {
     pub schema: String,
+    #[serde(default)]
+    pub lane: K1SchedulerLaneV1,
     pub payload: K1SchedulerEventPayloadV1,
 }
 
@@ -76,7 +100,40 @@ pub(crate) struct K1SchedulerAppendAuthorityRequestV1 {
 #[serde(deny_unknown_fields)]
 pub(crate) struct K1TransferSettlementAuthorityRequestV1 {
     pub schema: String,
+    #[serde(default)]
+    pub lane: K1SchedulerLaneV1,
     pub settlement: K1TransferSettlementV1,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct K1FutureContractAuthorityRequestV1 {
+    pub schema: String,
+    pub lane: K1SchedulerLaneV1,
+    pub candidate_freeze_root_sha256: String,
+    pub identification_freeze_root_sha256: String,
+    pub semantic_class_root_sha256: String,
+    pub protocol_mode_root_sha256: String,
+    pub canonical_program: ResponseProgram,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct K1FuturePredictionAuthorityRequestV1 {
+    pub schema: String,
+    pub lane: K1SchedulerLaneV1,
+    pub contract_root_sha256: String,
+    pub topology: PreActionTopologyAuditRowV1,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct K1FutureOutcomeAuthorityRequestV1 {
+    pub schema: String,
+    pub lane: K1SchedulerLaneV1,
+    pub prediction_root_sha256: String,
+    pub topology: PreActionTopologyAuditRowV1,
+    pub frame: nando_operator_kernel::RelationFrame,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -123,6 +180,9 @@ pub(crate) struct K1SchedulerProjectionV1 {
     pub next_generation_sequence: u64,
     pub active_candidate_freeze: Option<K1NaturalCandidateFreezeV1>,
     pub identification_freeze: Option<K1IdentificationFreezeV1>,
+    pub future_prediction_contract: Option<K1FuturePredictionContractV1>,
+    pub future_predictions: Vec<K1FuturePredictionReceiptV1>,
+    pub future_outcomes: Vec<K1FutureOutcomeReceiptV1>,
     pub latest_probe_round: Option<K1ProbeRoundReceiptV1>,
     pub completed_probe_rounds: u64,
     pub latest_applied_outcome: Option<K1ProbeRoundReceiptV1>,
@@ -147,6 +207,9 @@ struct K1SchedulerProjectionDigestV1<'a> {
     next_generation_sequence: u64,
     active_candidate_freeze_root_sha256: Option<&'a str>,
     identification_freeze_root_sha256: Option<&'a str>,
+    future_prediction_contract_root_sha256: Option<&'a str>,
+    future_prediction_roots_sha256: Vec<&'a str>,
+    future_outcome_roots_sha256: Vec<&'a str>,
     latest_probe_round_root_sha256: Option<&'a str>,
     completed_probe_rounds: u64,
     latest_applied_outcome_root_sha256: Option<&'a str>,
@@ -160,15 +223,18 @@ struct K1SchedulerProjectionDigestV1<'a> {
     phase_mutation_allowed: bool,
 }
 
-pub(crate) fn append_candidate_freeze(
+pub(crate) fn append_candidate_freeze_for(
     config: &CertificationAuthorityConfigV1,
-    request: K1CandidateFreezeAuthorityRequestV1,
+    lane: K1SchedulerLaneV1,
+    mut request: K1CandidateFreezeAuthorityRequestV1,
 ) -> Result<K1SchedulerProjectionV1, String> {
+    request.lane = lane;
     send_authority_request(config, &request)
 }
 
-pub(crate) fn append_scheduler_payload(
+pub(crate) fn append_scheduler_payload_for(
     config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
     payload: K1SchedulerEventPayloadV1,
 ) -> Result<K1SchedulerProjectionV1, String> {
     if matches!(
@@ -182,6 +248,7 @@ pub(crate) fn append_scheduler_payload(
         config,
         &K1SchedulerAppendAuthorityRequestV1 {
             schema: K1_SCHEDULER_APPEND_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane,
             payload,
         },
     )
@@ -195,15 +262,54 @@ pub(crate) fn append_transfer_settlement(
         config,
         &K1TransferSettlementAuthorityRequestV1 {
             schema: K1_TRANSFER_SETTLEMENT_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane: K1SchedulerLaneV1::Epistemic,
             settlement,
         },
     )
 }
 
+pub(crate) fn append_future_contract(
+    config: &CertificationAuthorityConfigV1,
+    request: K1FutureContractAuthorityRequestV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    send_authority_request(config, &request)
+}
+
+pub(crate) fn append_future_prediction(
+    config: &CertificationAuthorityConfigV1,
+    request: K1FuturePredictionAuthorityRequestV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    send_authority_request(config, &request)
+}
+
+pub(crate) fn append_future_outcome(
+    config: &CertificationAuthorityConfigV1,
+    request: K1FutureOutcomeAuthorityRequestV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    send_authority_request(config, &request)
+}
+
 pub(crate) fn restore_projection(
     config: &CertificationAuthorityConfigV1,
 ) -> Result<K1SchedulerProjectionV1, String> {
-    projection_for(&restore_anchored_scheduler(config)?)
+    restore_projection_for(config, K1SchedulerLaneV1::Epistemic)
+}
+
+pub(crate) fn restore_projection_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    projection_for(&restore_anchored_scheduler_for(config, lane)?)
+}
+
+pub(crate) fn candidate_exclusions_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+) -> Result<BTreeSet<String>, String> {
+    match lane {
+        K1SchedulerLaneV1::Mechanism => Ok(BTreeSet::new()),
+        K1SchedulerLaneV1::Epistemic => fork::epistemic_exclusions(config),
+    }
 }
 
 pub(crate) fn current_deficit_snapshot(

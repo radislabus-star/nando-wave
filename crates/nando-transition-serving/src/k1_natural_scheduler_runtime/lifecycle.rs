@@ -2,6 +2,8 @@ use super::*;
 
 pub(super) fn advance(
     certification: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+    allow_candidate_freeze: bool,
     topologies: &[PreActionTopologyAuditRowV1],
     frames: &[RelationFrame],
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
@@ -23,12 +25,13 @@ pub(super) fn advance(
     )
     .map_err(str::to_owned)?;
     let deficit = current_deficit_snapshot(certification)?;
-    let mut projection = restore_projection(certification)?;
-    let completed = projection
+    let mut projection = restore_projection_for(certification, lane)?;
+    let mut completed = projection
         .completed_candidate_roots_sha256
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
+    completed.extend(candidate_exclusions_for(certification, lane)?);
     let contract_watermark = bindings
         .iter()
         .map(|binding| binding.row.capture_sequence)
@@ -45,6 +48,7 @@ pub(super) fn advance(
     if let Some(terminal) = projection.pending_terminal_transfer.as_ref() {
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::AwaitingCertification,
             "package_certification_pending".to_owned(),
             projection.clone(),
@@ -58,9 +62,25 @@ pub(super) fn advance(
     }
 
     if projection.active_candidate_freeze.is_none() {
+        if !allow_candidate_freeze {
+            return runtime_report(
+                generated_at_unix,
+                lane,
+                K1NaturalSchedulerRuntimeStateV1::MechanismWatchComplete,
+                "mechanism_watch_terminal".to_owned(),
+                projection,
+                join_report,
+                catalog,
+                queue,
+                None,
+                0,
+                0,
+            );
+        }
         if deficit.k1_open {
             return runtime_report(
                 generated_at_unix,
+                lane,
                 K1NaturalSchedulerRuntimeStateV1::K1VocabularyOpen,
                 String::new(),
                 projection,
@@ -75,6 +95,7 @@ pub(super) fn advance(
         let Some(queue_row) = queue.first_readiness_pass() else {
             return runtime_report(
                 generated_at_unix,
+                lane,
                 K1NaturalSchedulerRuntimeStateV1::WaitingForEvidence,
                 "no_readiness_pass_candidate".to_owned(),
                 projection,
@@ -106,10 +127,12 @@ pub(super) fn advance(
             generated_at_unix,
         )
         .map_err(str::to_owned)?;
-        projection = append_candidate_freeze(
+        projection = append_candidate_freeze_for(
             certification,
+            lane,
             K1CandidateFreezeAuthorityRequestV1 {
                 schema: K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+                lane,
                 catalog: catalog.clone(),
                 deficit_snapshot: deficit,
                 queue: queue.clone(),
@@ -119,6 +142,7 @@ pub(super) fn advance(
         )?;
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::CandidateFrozen,
             String::new(),
             projection,
@@ -163,12 +187,14 @@ pub(super) fn advance(
             generated_at_unix,
             None,
         )?;
-        projection = append_scheduler_payload(
+        projection = append_scheduler_payload_for(
             certification,
+            lane,
             K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
         )?;
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::TerminalAbstain,
             "k1_vocabulary_opened_during_generation".to_owned(),
             projection,
@@ -214,12 +240,14 @@ pub(super) fn advance(
                 generated_at_unix,
                 None,
             )?;
-            projection = append_scheduler_payload(
+            projection = append_scheduler_payload_for(
                 certification,
+                lane,
                 K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
             )?;
             return runtime_report(
                 generated_at_unix,
+                lane,
                 K1NaturalSchedulerRuntimeStateV1::TerminalAcquisitionFail,
                 blocker,
                 projection,
@@ -231,14 +259,20 @@ pub(super) fn advance(
                 future_eligible_rows,
             );
         }
+        let prediction_schema = match lane {
+            K1SchedulerLaneV1::Mechanism => K1_PREDICTION_SCHEMA_V1,
+            K1SchedulerLaneV1::Epistemic => K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1,
+        };
         let identification_freeze =
-            seal_identification_freeze(&candidate_freeze, &base_identification)?;
-        projection = append_scheduler_payload(
+            seal_identification_freeze(&candidate_freeze, &base_identification, prediction_schema)?;
+        projection = append_scheduler_payload_for(
             certification,
+            lane,
             K1SchedulerEventPayloadV1::IdentificationFreeze(identification_freeze),
         )?;
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::IdentificationFrozen,
             String::new(),
             projection,
@@ -270,12 +304,14 @@ pub(super) fn advance(
             generated_at_unix,
             None,
         )?;
-        projection = append_scheduler_payload(
+        projection = append_scheduler_payload_for(
             certification,
+            lane,
             K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
         )?;
         return runtime_report(
             generated_at_unix,
+            lane,
             K1NaturalSchedulerRuntimeStateV1::TerminalAbstain,
             "durable_version_space_replay_mismatch".to_owned(),
             projection,
@@ -292,7 +328,14 @@ pub(super) fn advance(
         let deadline = deadline::classify_deadline(
             &classes,
             future_eligible_rows,
-            durable_future_prediction_contract(&identification_freeze),
+            durable_future_prediction_contract(&identification_freeze)
+                && projection.future_prediction_contract.is_some(),
+            projection.future_predictions.len(),
+            projection
+                .future_outcomes
+                .iter()
+                .filter(|outcome| outcome.independent_verifier_pass)
+                .count(),
         );
         let verdict = terminal_verdict(
             &candidate_freeze,
@@ -310,12 +353,14 @@ pub(super) fn advance(
             generated_at_unix,
             None,
         )?;
-        projection = append_scheduler_payload(
+        projection = append_scheduler_payload_for(
             certification,
+            lane,
             K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
         )?;
         return runtime_report(
             generated_at_unix,
+            lane,
             deadline.runtime_state,
             deadline.blocker.to_owned(),
             projection,
@@ -331,6 +376,7 @@ pub(super) fn advance(
     if classes.len() > 1 {
         return advance_probe(
             certification,
+            lane,
             generated_at_unix,
             projection,
             join_report,
@@ -348,8 +394,42 @@ pub(super) fn advance(
         );
     }
 
+    projection = match advance_future_evidence(
+        certification,
+        lane,
+        projection,
+        &candidate_freeze,
+        &identification_freeze,
+        &base_identification,
+        topologies,
+        &bindings,
+        frames,
+    )? {
+        FutureEvidenceAdvance::Pending {
+            projection,
+            state,
+            blocker,
+        } => {
+            return runtime_report(
+                generated_at_unix,
+                lane,
+                state,
+                blocker.to_owned(),
+                projection,
+                join_report,
+                catalog,
+                queue,
+                Some(base_identification),
+                frozen_evidence_rows,
+                future_eligible_rows,
+            );
+        }
+        FutureEvidenceAdvance::Ready(projection) => projection,
+    };
+
     advance_independent_future(
         certification,
+        lane,
         generated_at_unix,
         projection,
         join_report,

@@ -64,7 +64,8 @@ fn candidate_identity(
     let consequence_type = consequence_type(joined, factorized.completed_effect);
     Ok(CandidateIdentity {
         candidate_structural_root_sha256: factorized.applicability_shape_root_sha256.clone(),
-        source_neutral_topology_root_sha256: source_neutral_topology_root(joined)?,
+        source_neutral_topology_root_sha256: source_neutral_topology_root_v1(&joined.topology)
+            .map_err(str::to_owned)?,
         semantic_novelty_signature_root_sha256: canonical_json_sha256(&(
             K1_SEMANTIC_NOVELTY_SCHEMA_V1,
             consequence_type,
@@ -72,57 +73,6 @@ fn candidate_identity(
         .map_err(str::to_owned)?,
         consequence_type,
     })
-}
-
-fn source_neutral_topology_root(
-    joined: &BlindThenRevealJoinedTransitionV1,
-) -> Result<String, String> {
-    let role_index = joined
-        .topology
-        .roles
-        .iter()
-        .enumerate()
-        .map(|(index, role)| (role.local_role_id, index))
-        .collect::<BTreeMap<_, _>>();
-    let roles = joined
-        .topology
-        .roles
-        .iter()
-        .map(|role| {
-            (
-                role.type_class,
-                role.container_class,
-                role.cardinality_class,
-                role.temporal_class,
-                role.depth_bucket,
-                role.structural_flags,
-            )
-        })
-        .collect::<Vec<_>>();
-    let relations = joined
-        .topology
-        .relations
-        .iter()
-        .map(|edge| {
-            Ok((
-                edge.relation,
-                *role_index
-                    .get(&edge.source_role_id)
-                    .ok_or_else(|| "k1_runtime_topology_source_role_missing".to_owned())?,
-                *role_index
-                    .get(&edge.target_role_id)
-                    .ok_or_else(|| "k1_runtime_topology_target_role_missing".to_owned())?,
-            ))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    canonical_json_sha256(&(
-        K1_SOURCE_NEUTRAL_TOPOLOGY_SCHEMA_V1,
-        joined.topology.grounded_output_count,
-        joined.topology.output_part_count,
-        roles,
-        relations,
-    ))
-    .map_err(str::to_owned)
 }
 
 fn consequence_type(

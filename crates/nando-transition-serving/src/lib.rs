@@ -756,6 +756,8 @@ struct AppState {
     ms4_exact_wave_precommit_writer:
         Option<Arc<Mutex<ms4_exact_wave_holdout::Ms4ExactWavePrecommitWriter>>>,
     operator_certification_config: Arc<operator_certification::CertificationAuthorityConfigV1>,
+    k1_mechanism_watch_report:
+        Arc<RwLock<Option<k1_natural_scheduler_runtime::K1NaturalSchedulerRuntimeReportV1>>>,
     k1_natural_scheduler_report:
         Arc<RwLock<Option<k1_natural_scheduler_runtime::K1NaturalSchedulerRuntimeReportV1>>>,
 }
@@ -1047,6 +1049,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         ms4_closed_loop_report: Arc::new(RwLock::new(restored_ms4_closed_loop_report)),
         ms4_exact_wave_precommit_writer,
         operator_certification_config: Arc::new(certification_config),
+        k1_mechanism_watch_report: Arc::new(RwLock::new(None)),
         k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
     };
     validate_ms3_scientific_denominator_link(&state)?;
@@ -1106,6 +1109,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/k1-natural-scheduler",
             get(k1_natural_scheduler_runtime::report_handler),
+        )
+        .route(
+            "/v2/multi-source/k1-mechanism-watch",
+            get(k1_natural_scheduler_runtime::mechanism_report_handler),
         )
         .route(
             remote_evidence_spool::REMOTE_EVIDENCE_ENDPOINT_V1,
@@ -8361,6 +8368,7 @@ mod tests {
             )),
             ms4_exact_wave_precommit_writer: None,
             operator_certification_config: certification_config,
+            k1_mechanism_watch_report: Arc::new(RwLock::new(None)),
             k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
         };
         refresh_response_executor(&state);

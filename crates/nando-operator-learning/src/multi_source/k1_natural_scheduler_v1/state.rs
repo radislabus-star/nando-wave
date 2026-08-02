@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
@@ -6,9 +6,10 @@ use sha2::{Digest, Sha256};
 
 use super::model::K1_SCHEDULER_SCHEMA_V1;
 use super::{
-    K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
-    K1NaturalCandidateFreezeV1, K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1,
-    K1ProbeRoundStateV1, K1TransferSettlementV1,
+    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1FutureOutcomeReceiptV1, K1FuturePredictionContractV1,
+    K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
+    K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1ProbeBudgetRemainingV1,
+    K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1TransferSettlementV1,
 };
 
 const K1_SCHEDULER_EVENT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-event.v1";
@@ -18,6 +19,9 @@ const K1_SCHEDULER_EVENT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-event.v1"
 pub enum K1SchedulerEventPayloadV1 {
     CandidateFreeze(K1NaturalCandidateFreezeV1),
     IdentificationFreeze(K1IdentificationFreezeV1),
+    FuturePredictionContract(K1FuturePredictionContractV1),
+    FuturePrediction(K1FuturePredictionReceiptV1),
+    FutureOutcome(K1FutureOutcomeReceiptV1),
     ProbeRound(K1ProbeRoundReceiptV1),
     TerminalVerdict(Box<K1GenerationTerminalVerdictV1>),
     TransferSettlement(K1TransferSettlementV1),
@@ -48,6 +52,9 @@ struct ReplayState {
     completed_candidates: BTreeSet<String>,
     candidate: Option<K1NaturalCandidateFreezeV1>,
     identification: Option<K1IdentificationFreezeV1>,
+    future_contract: Option<K1FuturePredictionContractV1>,
+    future_predictions: BTreeMap<String, K1FuturePredictionReceiptV1>,
+    future_outcomes: BTreeMap<String, K1FutureOutcomeReceiptV1>,
     pending: Option<K1ProbeRoundReceiptV1>,
     latest_outcome: Option<K1ProbeRoundReceiptV1>,
     pending_transfer: Option<K1GenerationTerminalVerdictV1>,
@@ -58,6 +65,9 @@ impl K1SchedulerEventPayloadV1 {
         match self {
             Self::CandidateFreeze(receipt) => receipt.validate(),
             Self::IdentificationFreeze(receipt) => receipt.validate(),
+            Self::FuturePredictionContract(receipt) => receipt.validate(),
+            Self::FuturePrediction(receipt) => receipt.validate(),
+            Self::FutureOutcome(receipt) => receipt.validate(),
             Self::ProbeRound(receipt) => receipt.validate(),
             Self::TerminalVerdict(receipt) => receipt.validate(),
             Self::TransferSettlement(receipt) => receipt.validate(),
@@ -68,6 +78,9 @@ impl K1SchedulerEventPayloadV1 {
         match self {
             Self::CandidateFreeze(receipt) => &receipt.freeze_root_sha256,
             Self::IdentificationFreeze(receipt) => &receipt.freeze_root_sha256,
+            Self::FuturePredictionContract(receipt) => &receipt.contract_root_sha256,
+            Self::FuturePrediction(receipt) => &receipt.prediction_root_sha256,
+            Self::FutureOutcome(receipt) => &receipt.outcome_root_sha256,
             Self::ProbeRound(receipt) => &receipt.receipt_root_sha256,
             Self::TerminalVerdict(receipt) => &receipt.verdict_root_sha256,
             Self::TransferSettlement(receipt) => &receipt.settlement_root_sha256,
@@ -228,6 +241,9 @@ impl ReplayState {
                 }
                 self.candidate = Some(freeze.clone());
                 self.identification = None;
+                self.future_contract = None;
+                self.future_predictions.clear();
+                self.future_outcomes.clear();
                 self.pending = None;
                 self.latest_outcome = None;
             }
@@ -244,6 +260,15 @@ impl ReplayState {
                 }
                 self.identification = Some(freeze.clone());
             }
+            K1SchedulerEventPayloadV1::FuturePredictionContract(contract) => {
+                self.apply_future_contract(contract)?;
+            }
+            K1SchedulerEventPayloadV1::FuturePrediction(prediction) => {
+                self.apply_future_prediction(prediction)?;
+            }
+            K1SchedulerEventPayloadV1::FutureOutcome(outcome) => {
+                self.apply_future_outcome(outcome)?;
+            }
             K1SchedulerEventPayloadV1::ProbeRound(receipt) => {
                 self.apply_probe(receipt)?;
             }
@@ -253,6 +278,78 @@ impl ReplayState {
             K1SchedulerEventPayloadV1::TransferSettlement(settlement) => {
                 self.apply_transfer_settlement(settlement)?;
             }
+        }
+        Ok(())
+    }
+
+    fn apply_future_contract(
+        &mut self,
+        contract: &K1FuturePredictionContractV1,
+    ) -> Result<(), &'static str> {
+        let candidate = self
+            .candidate
+            .as_ref()
+            .ok_or("k1_scheduler_candidate_freeze_missing")?;
+        let identification = self
+            .identification
+            .as_ref()
+            .ok_or("k1_scheduler_identification_freeze_missing")?;
+        if self.future_contract.is_some()
+            || contract.candidate_freeze_root_sha256 != candidate.freeze_root_sha256
+            || contract.identification_freeze_root_sha256 != identification.freeze_root_sha256
+            || identification.prediction_schema != K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1
+            || identification.initial_semantic_class_roots_sha256.len() != 1
+            || identification.initial_semantic_class_roots_sha256[0]
+                != contract.semantic_class_root_sha256
+        {
+            return Err("k1_scheduler_future_contract_invalid");
+        }
+        self.future_contract = Some(contract.clone());
+        Ok(())
+    }
+
+    fn apply_future_prediction(
+        &mut self,
+        prediction: &K1FuturePredictionReceiptV1,
+    ) -> Result<(), &'static str> {
+        let contract = self
+            .future_contract
+            .as_ref()
+            .ok_or("k1_scheduler_future_contract_missing")?;
+        if prediction.contract_root_sha256 != contract.contract_root_sha256
+            || prediction.candidate_freeze_root_sha256 != contract.candidate_freeze_root_sha256
+            || prediction.identification_freeze_root_sha256
+                != contract.identification_freeze_root_sha256
+            || prediction.semantic_class_root_sha256 != contract.semantic_class_root_sha256
+            || self
+                .future_predictions
+                .contains_key(&prediction.topology_commitment_root_sha256)
+        {
+            return Err("k1_scheduler_future_prediction_invalid");
+        }
+        self.future_predictions.insert(
+            prediction.topology_commitment_root_sha256.clone(),
+            prediction.clone(),
+        );
+        Ok(())
+    }
+
+    fn apply_future_outcome(
+        &mut self,
+        outcome: &K1FutureOutcomeReceiptV1,
+    ) -> Result<(), &'static str> {
+        let prediction = self
+            .future_predictions
+            .values()
+            .find(|prediction| prediction.prediction_root_sha256 == outcome.prediction_root_sha256)
+            .ok_or("k1_scheduler_future_prediction_missing")?;
+        if outcome.observed_at_unix_nanos <= prediction.predicted_at_unix_nanos
+            || self
+                .future_outcomes
+                .insert(outcome.prediction_root_sha256.clone(), outcome.clone())
+                .is_some()
+        {
+            return Err("k1_scheduler_future_outcome_invalid");
         }
         Ok(())
     }
@@ -370,6 +467,24 @@ impl ReplayState {
             if verdict.surviving_semantic_class_roots_sha256 != expected_classes {
                 return Err("k1_scheduler_terminal_version_space_mismatch");
             }
+            if identification.prediction_schema == K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1
+                && verdict.verdict == K1GenerationVerdictClassV1::Pass
+                && !self.future_outcomes.values().any(|outcome| {
+                    outcome.program_consistent
+                        && outcome.independent_verifier_pass
+                        && verdict
+                            .evidence_roots_sha256
+                            .contains(&outcome.outcome_root_sha256)
+                        && self.future_predictions.values().any(|prediction| {
+                            prediction.prediction_root_sha256 == outcome.prediction_root_sha256
+                                && verdict
+                                    .evidence_roots_sha256
+                                    .contains(&prediction.prediction_root_sha256)
+                        })
+                })
+            {
+                return Err("k1_scheduler_terminal_future_proof_missing");
+            }
         }
         self.completed_generations = self.completed_generations.saturating_add(1);
         self.completed_candidates
@@ -379,6 +494,9 @@ impl ReplayState {
         }
         self.candidate = None;
         self.identification = None;
+        self.future_contract = None;
+        self.future_predictions.clear();
+        self.future_outcomes.clear();
         self.pending = None;
         self.latest_outcome = None;
         Ok(())

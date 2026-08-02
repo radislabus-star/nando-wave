@@ -1,10 +1,18 @@
 use super::*;
 
+#[cfg(test)]
 pub(super) fn restore_anchored_scheduler(
     config: &CertificationAuthorityConfigV1,
 ) -> Result<K1SchedulerLedgerV1, String> {
-    let (ledger, last_event_root) = restore_signed_scheduler_journal(config)?;
-    let anchor = restore_scheduler_anchor(config)?;
+    restore_anchored_scheduler_for(config, K1SchedulerLaneV1::Mechanism)
+}
+
+pub(super) fn restore_anchored_scheduler_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+) -> Result<K1SchedulerLedgerV1, String> {
+    let (ledger, last_event_root) = restore_signed_scheduler_journal_for(config, lane)?;
+    let anchor = restore_scheduler_anchor_for(config, lane)?;
     if anchor.revision != ledger.revision
         || anchor.journal_event_root_sha256 != last_event_root
         || anchor.ledger_root_sha256 != ledger.ledger_root_sha256
@@ -14,12 +22,13 @@ pub(super) fn restore_anchored_scheduler(
     Ok(ledger)
 }
 
-pub(super) fn restore_signed_scheduler_journal(
+pub(super) fn restore_signed_scheduler_journal_for(
     config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
 ) -> Result<(K1SchedulerLedgerV1, String), String> {
     let mut ledger = K1SchedulerLedgerV1::empty().map_err(str::to_owned)?;
     let mut previous_root = scheduler_genesis_root();
-    let directory = scheduler_journal_path(config);
+    let directory = scheduler_journal_path_for(config, lane);
     let mut paths = match fs::read_dir(&directory) {
         Ok(entries) => entries
             .map(|entry| entry.map(|entry| entry.path()))
@@ -59,15 +68,16 @@ pub(super) fn restore_signed_scheduler_journal(
     Ok((ledger, previous_root))
 }
 
-pub(super) fn restore_scheduler_journal_prefix(
+pub(super) fn restore_scheduler_journal_prefix_for(
     config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
     revision: u64,
 ) -> Result<(K1SchedulerLedgerV1, String), String> {
     let mut ledger = K1SchedulerLedgerV1::empty().map_err(str::to_owned)?;
     let mut previous_root = scheduler_genesis_root();
     let public_key = read_verifying_key(&config.authority_public_key_path)?;
     for sequence in 1..=revision {
-        let path = scheduler_journal_path(config).join(format!("{sequence:020}.json"));
+        let path = scheduler_journal_path_for(config, lane).join(format!("{sequence:020}.json"));
         let signed: SignedSchedulerEventV1 = serde_json::from_slice(
             &fs::read(path).map_err(|error| format!("k1_scheduler_journal_read:{error}"))?,
         )
@@ -89,11 +99,12 @@ pub(super) fn restore_scheduler_journal_prefix(
     Ok((ledger, previous_root))
 }
 
-pub(super) fn restore_scheduler_anchor(
+pub(super) fn restore_scheduler_anchor_for(
     config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
 ) -> Result<SchedulerAnchorV1, String> {
     let anchor: SchedulerAnchorV1 = serde_json::from_slice(
-        &fs::read(scheduler_anchor_path(config)?)
+        &fs::read(scheduler_anchor_path_for(config, lane)?)
             .map_err(|error| format!("k1_scheduler_anchor_read:{error}"))?,
     )
     .map_err(|error| format!("k1_scheduler_anchor_decode:{error}"))?;
@@ -101,11 +112,20 @@ pub(super) fn restore_scheduler_anchor(
     Ok(anchor)
 }
 
+#[cfg(test)]
 pub(super) fn persist_scheduler_event(
     config: &CertificationAuthorityConfigV1,
     event: &SignedSchedulerEventV1,
 ) -> Result<(), String> {
-    let directory = scheduler_journal_path(config);
+    persist_scheduler_event_for(config, K1SchedulerLaneV1::Mechanism, event)
+}
+
+pub(super) fn persist_scheduler_event_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+    event: &SignedSchedulerEventV1,
+) -> Result<(), String> {
+    let directory = scheduler_journal_path_for(config, lane);
     fs::create_dir_all(&directory)
         .map_err(|error| format!("k1_scheduler_journal_parent:{error}"))?;
     let path = directory.join(format!("{:020}.json", event.event.sequence));
@@ -127,13 +147,30 @@ pub(super) fn persist_scheduler_event(
         .map_err(|error| format!("k1_scheduler_journal_dir_sync:{error}"))
 }
 
+#[cfg(test)]
 pub(super) fn persist_scheduler_anchor(
     config: &CertificationAuthorityConfigV1,
     signing_key: &SigningKey,
     ledger: &K1SchedulerLedgerV1,
     last_event_root_sha256: &str,
 ) -> Result<(), String> {
-    let anchor_path = scheduler_anchor_path(config)?;
+    persist_scheduler_anchor_for(
+        config,
+        K1SchedulerLaneV1::Mechanism,
+        signing_key,
+        ledger,
+        last_event_root_sha256,
+    )
+}
+
+pub(super) fn persist_scheduler_anchor_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+    signing_key: &SigningKey,
+    ledger: &K1SchedulerLedgerV1,
+    last_event_root_sha256: &str,
+) -> Result<(), String> {
+    let anchor_path = scheduler_anchor_path_for(config, lane)?;
     let anchor_parent = anchor_path
         .parent()
         .ok_or_else(|| "k1_scheduler_anchor_parent_missing".to_owned())?;
@@ -153,31 +190,59 @@ pub(super) fn persist_scheduler_anchor(
     )
 }
 
-pub(super) fn persist_scheduler_cache(
+pub(super) fn persist_scheduler_cache_for(
     config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
     ledger: &K1SchedulerLedgerV1,
 ) -> Result<(), String> {
     fs::create_dir_all(&config.root)
         .map_err(|error| format!("k1_scheduler_cache_parent:{error}"))?;
     write_bytes_atomic(
-        &config.root.join(K1_SCHEDULER_CACHE_FILE),
+        &config.root.join(match lane {
+            K1SchedulerLaneV1::Mechanism => K1_SCHEDULER_CACHE_FILE,
+            K1SchedulerLaneV1::Epistemic => K1_EPISTEMIC_SCHEDULER_CACHE_FILE,
+        }),
         &serde_json::to_vec(ledger)
             .map_err(|error| format!("k1_scheduler_cache_encode:{error}"))?,
         "k1-scheduler-cache",
     )
 }
 
+#[cfg(test)]
 pub(super) fn scheduler_journal_path(config: &CertificationAuthorityConfigV1) -> PathBuf {
-    config.root.join(K1_SCHEDULER_JOURNAL_DIR)
+    scheduler_journal_path_for(config, K1SchedulerLaneV1::Mechanism)
 }
 
+pub(super) fn scheduler_journal_path_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+) -> PathBuf {
+    config.root.join(match lane {
+        K1SchedulerLaneV1::Mechanism => K1_SCHEDULER_JOURNAL_DIR,
+        K1SchedulerLaneV1::Epistemic => K1_EPISTEMIC_SCHEDULER_JOURNAL_DIR,
+    })
+}
+
+#[cfg(test)]
 pub(super) fn scheduler_anchor_path(
     config: &CertificationAuthorityConfigV1,
+) -> Result<PathBuf, String> {
+    scheduler_anchor_path_for(config, K1SchedulerLaneV1::Mechanism)
+}
+
+pub(super) fn scheduler_anchor_path_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
 ) -> Result<PathBuf, String> {
     config
         .anchor_path
         .parent()
-        .map(|parent| parent.join(K1_SCHEDULER_ANCHOR_FILE))
+        .map(|parent| {
+            parent.join(match lane {
+                K1SchedulerLaneV1::Mechanism => K1_SCHEDULER_ANCHOR_FILE,
+                K1SchedulerLaneV1::Epistemic => K1_EPISTEMIC_SCHEDULER_ANCHOR_FILE,
+            })
+        })
         .ok_or_else(|| "k1_scheduler_anchor_parent_missing".to_owned())
 }
 
@@ -284,6 +349,9 @@ pub(super) fn payload_root(payload: &K1SchedulerEventPayloadV1) -> &str {
     match payload {
         K1SchedulerEventPayloadV1::CandidateFreeze(value) => &value.freeze_root_sha256,
         K1SchedulerEventPayloadV1::IdentificationFreeze(value) => &value.freeze_root_sha256,
+        K1SchedulerEventPayloadV1::FuturePredictionContract(value) => &value.contract_root_sha256,
+        K1SchedulerEventPayloadV1::FuturePrediction(value) => &value.prediction_root_sha256,
+        K1SchedulerEventPayloadV1::FutureOutcome(value) => &value.outcome_root_sha256,
         K1SchedulerEventPayloadV1::ProbeRound(value) => &value.receipt_root_sha256,
         K1SchedulerEventPayloadV1::TerminalVerdict(value) => &value.verdict_root_sha256,
         K1SchedulerEventPayloadV1::TransferSettlement(value) => &value.settlement_root_sha256,
@@ -297,17 +365,17 @@ pub(super) fn scheduler_genesis_root() -> String {
     )
 }
 
-fn verifying_key_sha256(key: &VerifyingKey) -> String {
+pub(super) fn verifying_key_sha256(key: &VerifyingKey) -> String {
     format!("{:x}", Sha256::digest(key.as_bytes()))
 }
 
-fn sign_root(signing_key: &SigningKey, root_sha256: &str) -> Result<String, String> {
+pub(super) fn sign_root(signing_key: &SigningKey, root_sha256: &str) -> Result<String, String> {
     let root = decode_hex_array::<32>(root_sha256)
         .ok_or_else(|| "k1_scheduler_signed_root_invalid".to_owned())?;
     Ok(encode_hex(&signing_key.sign(&root).to_bytes()))
 }
 
-fn verify_root(
+pub(super) fn verify_root(
     public_key: &VerifyingKey,
     root_sha256: &str,
     signature_hex: &str,

@@ -1,3 +1,4 @@
+use super::future_authority::*;
 use super::journal::*;
 use super::projection::projection_for;
 use super::selection_authority::validate_queue_derivation;
@@ -29,6 +30,21 @@ pub(crate) fn handle_authority_line(
         >(value)
         .map_err(|error| format!("k1_transfer_settlement_request_decode:{error}"))
         .and_then(|request| append_transfer_settlement_authoritative(config, signing_key, request)),
+        K1_FUTURE_CONTRACT_AUTHORITY_REQUEST_SCHEMA_V1 => serde_json::from_value::<
+            K1FutureContractAuthorityRequestV1,
+        >(value)
+        .map_err(|error| format!("k1_future_contract_request_decode:{error}"))
+        .and_then(|request| append_future_contract_authoritative(config, signing_key, request)),
+        K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1 => serde_json::from_value::<
+            K1FuturePredictionAuthorityRequestV1,
+        >(value)
+        .map_err(|error| format!("k1_future_prediction_request_decode:{error}"))
+        .and_then(|request| append_future_prediction_authoritative(config, signing_key, request)),
+        K1_FUTURE_OUTCOME_AUTHORITY_REQUEST_SCHEMA_V1 => serde_json::from_value::<
+            K1FutureOutcomeAuthorityRequestV1,
+        >(value)
+        .map_err(|error| format!("k1_future_outcome_request_decode:{error}"))
+        .and_then(|request| append_future_outcome_authoritative(config, signing_key, request)),
         _ => return None,
     };
     let response = match result {
@@ -54,15 +70,29 @@ pub(crate) fn recover_authority(
     config: &CertificationAuthorityConfigV1,
     signing_key: &SigningKey,
 ) -> Result<(), String> {
-    let (ledger, last_event_root) = restore_signed_scheduler_journal(config)?;
-    let anchor_path = scheduler_anchor_path(config)?;
+    recover_lane(config, signing_key, K1SchedulerLaneV1::Mechanism)?;
+    let mechanism = restore_projection_for(config, K1SchedulerLaneV1::Mechanism)?;
+    if mechanism.active_candidate_freeze.is_some() && mechanism.identification_freeze.is_some() {
+        fork::ensure_epistemic_lane(config, signing_key)?;
+        recover_lane(config, signing_key, K1SchedulerLaneV1::Epistemic)?;
+    }
+    Ok(())
+}
+
+fn recover_lane(
+    config: &CertificationAuthorityConfigV1,
+    signing_key: &SigningKey,
+    lane: K1SchedulerLaneV1,
+) -> Result<(), String> {
+    let (ledger, last_event_root) = restore_signed_scheduler_journal_for(config, lane)?;
+    let anchor_path = scheduler_anchor_path_for(config, lane)?;
     if !anchor_path.exists() {
         if ledger.revision != 0 {
             return Err("k1_scheduler_anchor_missing_for_nonempty_journal".to_owned());
         }
-        return persist_scheduler_anchor(config, signing_key, &ledger, &last_event_root);
+        return persist_scheduler_anchor_for(config, lane, signing_key, &ledger, &last_event_root);
     }
-    let anchor = restore_scheduler_anchor(config)?;
+    let anchor = restore_scheduler_anchor_for(config, lane)?;
     if anchor.revision == ledger.revision
         && anchor.journal_event_root_sha256 == last_event_root
         && anchor.ledger_root_sha256 == ledger.ledger_root_sha256
@@ -72,13 +102,14 @@ pub(crate) fn recover_authority(
     if anchor.revision >= ledger.revision {
         return Err("k1_scheduler_rollback_detected".to_owned());
     }
-    let (prefix, prefix_event_root) = restore_scheduler_journal_prefix(config, anchor.revision)?;
+    let (prefix, prefix_event_root) =
+        restore_scheduler_journal_prefix_for(config, lane, anchor.revision)?;
     if prefix.ledger_root_sha256 != anchor.ledger_root_sha256
         || prefix_event_root != anchor.journal_event_root_sha256
     {
         return Err("k1_scheduler_rollback_detected".to_owned());
     }
-    persist_scheduler_anchor(config, signing_key, &ledger, &last_event_root)
+    persist_scheduler_anchor_for(config, lane, signing_key, &ledger, &last_event_root)
 }
 
 fn append_candidate_freeze_authoritative(
@@ -95,11 +126,14 @@ fn append_candidate_freeze_authoritative(
     request.candidate.validate().map_err(str::to_owned)?;
     request.freeze.validate().map_err(str::to_owned)?;
 
-    let mut scheduler = restore_anchored_scheduler(config)?;
-    let completed_candidate_roots_sha256 = projection_for(&scheduler)?
+    let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
+    let mut completed_candidate_roots_sha256 = projection_for(&scheduler)?
         .completed_candidate_roots_sha256
         .into_iter()
         .collect::<BTreeSet<_>>();
+    if request.lane == K1SchedulerLaneV1::Epistemic {
+        completed_candidate_roots_sha256.extend(fork::epistemic_exclusions(config)?);
+    }
     validate_queue_derivation(
         &request.catalog,
         &request.deficit_snapshot,
@@ -134,6 +168,7 @@ fn append_candidate_freeze_authoritative(
     }
     append_and_persist(
         config,
+        request.lane,
         signing_key,
         &mut scheduler,
         K1SchedulerEventPayloadV1::CandidateFreeze(request.freeze),
@@ -150,19 +185,28 @@ fn append_payload_authoritative(
             request.payload,
             K1SchedulerEventPayloadV1::CandidateFreeze(_)
                 | K1SchedulerEventPayloadV1::TransferSettlement(_)
+                | K1SchedulerEventPayloadV1::FuturePredictionContract(_)
+                | K1SchedulerEventPayloadV1::FuturePrediction(_)
+                | K1SchedulerEventPayloadV1::FutureOutcome(_)
         )
     {
         return Err("k1_scheduler_append_request_invalid".to_owned());
     }
     request.payload.validate().map_err(str::to_owned)?;
-    let mut scheduler = restore_anchored_scheduler(config)?;
+    let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
     if scheduler
         .latest_event()
         .is_some_and(|event| payload_root(&event.payload) == payload_root(&request.payload))
     {
         return projection_for(&scheduler);
     }
-    append_and_persist(config, signing_key, &mut scheduler, request.payload)
+    append_and_persist(
+        config,
+        request.lane,
+        signing_key,
+        &mut scheduler,
+        request.payload,
+    )
 }
 
 fn append_transfer_settlement_authoritative(
@@ -186,7 +230,7 @@ fn append_transfer_settlement_authoritative(
     if !certification_authorizes_settlement(entry, &request.settlement) {
         return Err("k1_transfer_settlement_certification_invalid".to_owned());
     }
-    let mut scheduler = restore_anchored_scheduler(config)?;
+    let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
     if scheduler.latest_event().is_some_and(|event| {
         matches!(
             &event.payload,
@@ -198,6 +242,7 @@ fn append_transfer_settlement_authoritative(
     }
     append_and_persist(
         config,
+        request.lane,
         signing_key,
         &mut scheduler,
         K1SchedulerEventPayloadV1::TransferSettlement(request.settlement),
@@ -230,8 +275,9 @@ pub(super) fn certification_authorizes_settlement(
             .contains(&settlement.identification_report_root_sha256)
 }
 
-fn append_and_persist(
+pub(super) fn append_and_persist(
     config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
     signing_key: &SigningKey,
     ledger: &mut K1SchedulerLedgerV1,
     payload: K1SchedulerEventPayloadV1,
@@ -239,10 +285,16 @@ fn append_and_persist(
     let event = ledger.append(payload).map_err(str::to_owned)?.clone();
     let signed =
         SignedSchedulerEventV1::seal(event, ledger.ledger_root_sha256.clone(), signing_key)?;
-    persist_scheduler_event(config, &signed)?;
-    persist_scheduler_anchor(config, signing_key, ledger, &signed.event.event_root_sha256)?;
-    persist_scheduler_cache(config, ledger)?;
-    let restored = restore_anchored_scheduler(config)?;
+    persist_scheduler_event_for(config, lane, &signed)?;
+    persist_scheduler_anchor_for(
+        config,
+        lane,
+        signing_key,
+        ledger,
+        &signed.event.event_root_sha256,
+    )?;
+    persist_scheduler_cache_for(config, lane, ledger)?;
+    let restored = restore_anchored_scheduler_for(config, lane)?;
     if &restored != ledger {
         return Err("k1_scheduler_restart_parity_failed".to_owned());
     }

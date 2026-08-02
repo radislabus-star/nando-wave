@@ -1,5 +1,6 @@
 use super::*;
 
+mod future;
 mod lifecycle;
 mod probe;
 mod recency;

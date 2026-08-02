@@ -6,23 +6,31 @@ use nando_operator_kernel::{
 };
 use nando_operator_learning::multi_source::{
     BlindThenRevealJoinedTransitionV1, CompletedEffectFormV1, FactorizedMultiSourceRowV1,
-    K1ConsequenceTypeV1, K1GenerationBudgetV1, K1GenerationTerminalVerdictV1,
-    K1GenerationVerdictClassV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1,
-    K1NaturalCandidateQueueV1, K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1,
-    K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1, K1ProbeClassPredictionV1,
-    K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1,
-    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MultiSourceJoinLedgerV1, MultiSourceJoinReportV1,
-    MultiSourceReasonV1, MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3,
-    PassiveT1ProbeContractV1, PreActionShapeClassV1, PreActionTopologyAuditRowV1,
-    build_k1_natural_candidate_queue_with_exclusions_v1, build_k1_natural_cohort_catalog_v1,
-    factor_multi_source_row_v1, identify_multi_source_t1_operator_with_active_protocols_v1,
+    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1ConsequenceTypeV1, K1GenerationBudgetV1,
+    K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
+    K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1, K1NaturalCohortCatalogV1,
+    K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1,
+    K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
+    K1SchedulerEventPayloadV1, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MultiSourceJoinLedgerV1,
+    MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
+    MultiSourceT1IdentificationV3, PassiveT1ProbeContractV1, PreActionShapeClassV1,
+    PreActionTopologyAuditRowV1, build_k1_natural_candidate_queue_with_exclusions_v1,
+    build_k1_natural_cohort_catalog_v1, factor_multi_source_row_v1,
+    identify_multi_source_t1_operator_with_active_protocols_v1,
+    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
+    source_neutral_topology_root_v1,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::k1_natural_scheduler::{
-    K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1, K1CandidateFreezeAuthorityRequestV1,
-    K1SchedulerProjectionV1, append_candidate_freeze, append_scheduler_payload,
-    current_deficit_snapshot, restore_projection,
+    K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1,
+    K1_FUTURE_CONTRACT_AUTHORITY_REQUEST_SCHEMA_V1, K1_FUTURE_OUTCOME_AUTHORITY_REQUEST_SCHEMA_V1,
+    K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1, K1CandidateFreezeAuthorityRequestV1,
+    K1FutureContractAuthorityRequestV1, K1FutureOutcomeAuthorityRequestV1,
+    K1FuturePredictionAuthorityRequestV1, K1SchedulerLaneV1, K1SchedulerProjectionV1,
+    append_candidate_freeze_for, append_future_contract, append_future_outcome,
+    append_future_prediction, append_scheduler_payload_for, candidate_exclusions_for,
+    current_deficit_snapshot, restore_projection_for,
 };
 use crate::k1_transfer_lifecycle::K1TransferLifecycleReportV1;
 use crate::operator_certification::CertificationAuthorityConfigV1;
@@ -34,7 +42,7 @@ mod lifecycle;
 mod report;
 mod service;
 
-pub(crate) use service::{advance_state, report_handler};
+pub(crate) use service::{advance_state, mechanism_report_handler, report_handler};
 
 use advance::*;
 use evidence::*;
@@ -44,7 +52,6 @@ use report::*;
 const K1_RUNTIME_REPORT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-runtime-report.v1";
 const K1_SCHEDULER_SCHEMA_V1: &str = "nando.k1-operator-blind-scheduler.v1";
 const K1_FIXTURE_EXCLUSION_SCHEMA_V1: &str = "nando.k1-natural-fixture-exclusion.v1";
-const K1_SOURCE_NEUTRAL_TOPOLOGY_SCHEMA_V1: &str = "nando.k1-source-neutral-role-graph.v1";
 const K1_SEMANTIC_NOVELTY_SCHEMA_V1: &str = "nando.k1-coarse-semantic-novelty.v1";
 const K1_SEMANTIC_QUOTIENT_SCHEMA_V1: &str = "nando.k1-semantic-quotient.v1";
 const K1_PROBE_POLICY_SCHEMA_V1: &str = "nando.k1-passive-probe-policy.v1";
@@ -60,6 +67,8 @@ pub(crate) enum K1NaturalSchedulerRuntimeStateV1 {
     WaitingForEvidence,
     CandidateFrozen,
     IdentificationFrozen,
+    FuturePredictionContractSealed,
+    FutureOutcomeSettled,
     ProbePending,
     ProbeOutcomeApplied,
     ProbeOutcomeCensored,
@@ -71,6 +80,7 @@ pub(crate) enum K1NaturalSchedulerRuntimeStateV1 {
     TerminalIndependentFutureNotObserved,
     TerminalProbeExhausted,
     K1VocabularyOpen,
+    MechanismWatchComplete,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -79,6 +89,7 @@ pub(crate) struct K1NaturalSchedulerRuntimeReportV1 {
     pub schema: String,
     pub report_root_sha256: String,
     pub generated_at_unix: u64,
+    pub lane: K1SchedulerLaneV1,
     pub state: K1NaturalSchedulerRuntimeStateV1,
     pub blocker: String,
     pub projection: K1SchedulerProjectionV1,
@@ -97,6 +108,7 @@ pub(crate) struct K1NaturalSchedulerRuntimeReportV1 {
 struct RuntimeReportDigestV1<'a> {
     schema: &'static str,
     generated_at_unix: u64,
+    lane: K1SchedulerLaneV1,
     state: K1NaturalSchedulerRuntimeStateV1,
     blocker: &'a str,
     projection_root_sha256: &'a str,
