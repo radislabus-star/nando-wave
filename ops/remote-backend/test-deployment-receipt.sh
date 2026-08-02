@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="${ROOT}/deployment-receipt.sh"
 WORK="$(mktemp -d)"
+
+grep -Fq '/opt/nando-wave/bin/nando-operator-certification-authority' "${SCRIPT}"
+grep -Fq '/opt/nando-wave/bin/nando-operator-cleanup-verifier' "${SCRIPT}"
+
 cleanup() {
   chmod -R u+w "${WORK}" 2>/dev/null || true
   rm -rf "${WORK}"

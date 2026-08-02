@@ -3,7 +3,7 @@ set -euo pipefail
 
 RECEIPT_ROOT="${NANDO_DEPLOY_RECEIPT_ROOT-/var/lib/nando-wave/deployments}"
 USE_SUDO="${NANDO_DEPLOY_USE_SUDO-1}"
-BINARIES="${NANDO_DEPLOY_RECEIPT_BINARIES-/opt/nando-wave/bin/nando-transition-serving /opt/nando-wave/bin/nando-gateway-control /opt/nando-wave/bin/nando-response-admission}"
+BINARIES="${NANDO_DEPLOY_RECEIPT_BINARIES-/opt/nando-wave/bin/nando-transition-serving /opt/nando-wave/bin/nando-operator-certification-authority /opt/nando-wave/bin/nando-operator-cleanup-verifier /opt/nando-wave/bin/nando-gateway-control /opt/nando-wave/bin/nando-response-admission}"
 UNITS="${NANDO_DEPLOY_RECEIPT_UNITS-nando-transition-serving.service nando-response-learning.service nando-gateway-control.service nando-transport-gateway.service nando-live-transition-gate.service nando-live-transition-gate.path nando-live-transition-gate.timer nando-response-admission.service nando-response-admission.path nando-response-admission.timer}"
 STATE_ROOTS="${NANDO_DEPLOY_RECEIPT_STATE_ROOTS-/var/lib/nando-wave/transition/multi-source-live-v2}"
 CONFIG_PATHS="${NANDO_DEPLOY_RECEIPT_CONFIGS-/etc/nando-gateway/nginx.conf /etc/nando-wave/roles/response-learning.env}"

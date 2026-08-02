@@ -29,10 +29,7 @@ pub(super) fn natural_t1_program_artifacts(
                 .programs
                 .iter()
                 .filter(|(root, program)| {
-                    verified.contains(*root)
-                        && is_source_neutral_response_program(program)
-                        && is_learned_bounded_response_program(program)
-                        && is_privacy_safe_online_response_program(program)
+                    verified.contains(*root) && artifact_program(root, program)
                 })
                 .map(|(root, program)| (root.clone(), program.clone()))
                 .collect::<BTreeMap<_, _>>();
@@ -61,4 +58,38 @@ pub(super) fn natural_t1_program_artifacts(
     artifacts.sort_by(|left, right| left.artifact_root_sha256.cmp(&right.artifact_root_sha256));
     artifacts.dedup_by(|left, right| left.artifact_root_sha256 == right.artifact_root_sha256);
     Ok(artifacts)
+}
+
+fn artifact_program(root: &str, program: &ResponseProgram) -> bool {
+    program.validate().is_ok()
+        && nando_operator_kernel::response_program_version_root_sha256(program).as_deref()
+            == Ok(root)
+        && is_source_neutral_response_program(program)
+        && is_learned_bounded_response_program(program)
+        && is_privacy_safe_online_response_program(program)
+}
+
+#[cfg(test)]
+mod tests {
+    use nando_operator_kernel::{
+        CollectionProgramStep, ValueProjectionFormat, response_program_version_root_sha256,
+    };
+
+    use super::*;
+
+    #[test]
+    fn artifact_filter_rejects_invalid_or_rebound_checkpoint_programs() {
+        let program = ResponseProgram::compose_collection(
+            vec![CollectionProgramStep::Count],
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let root = response_program_version_root_sha256(&program).expect("program root");
+        assert!(artifact_program(&root, &program));
+        assert!(!artifact_program(&"0".repeat(64), &program));
+
+        let mut invalid = program;
+        invalid.schema = "legacy-invalid".to_owned();
+        assert!(!artifact_program(&root, &invalid));
+    }
 }
