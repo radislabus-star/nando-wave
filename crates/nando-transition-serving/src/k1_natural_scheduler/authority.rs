@@ -1,5 +1,6 @@
 use super::journal::*;
 use super::projection::projection_for;
+use super::selection_authority::validate_queue_derivation;
 use super::*;
 
 pub(crate) fn handle_authority_line(
@@ -95,6 +96,16 @@ fn append_candidate_freeze_authoritative(
     request.freeze.validate().map_err(str::to_owned)?;
 
     let mut scheduler = restore_anchored_scheduler(config)?;
+    let completed_candidate_roots_sha256 = projection_for(&scheduler)?
+        .completed_candidate_roots_sha256
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    validate_queue_derivation(
+        &request.catalog,
+        &request.deficit_snapshot,
+        &completed_candidate_roots_sha256,
+        &request.queue,
+    )?;
     if scheduler
         .active_candidate_freeze()
         .is_some_and(|freeze| freeze == &request.freeze)

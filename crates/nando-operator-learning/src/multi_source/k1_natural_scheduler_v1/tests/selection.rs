@@ -102,3 +102,58 @@ fn generated_and_controlled_rows_never_enter_natural_candidates() {
     assert_eq!(catalog.controlled_rows_excluded, 1);
     assert_eq!(catalog.candidates[0].evidence_rows, 1);
 }
+
+#[test]
+fn oversized_catalog_keeps_a_complete_denominator_and_a_bounded_ready_queue() {
+    let mut rows = (1..=256)
+        .map(|index| {
+            evidence_row(
+                index,
+                1_000 + index,
+                2_000 + index,
+                K1ConsequenceTypeV1::Collection,
+                K1NaturalEvidenceClassV1::NaturalLive,
+                3_000 + index,
+                false,
+                false,
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.extend((400..408).map(|index| {
+        evidence_row(
+            index,
+            9_000,
+            9_001,
+            K1ConsequenceTypeV1::Scalar,
+            K1NaturalEvidenceClassV1::NaturalLive,
+            if index < 404 { 9_100 } else { 9_101 },
+            true,
+            index < 402,
+        )
+    }));
+
+    let catalog = catalog(&rows);
+    let deficit = deficit(vec![K1ConsequenceTypeV1::Scalar]);
+    let queue = build_k1_natural_candidate_queue_v1(&catalog, &deficit).expect("bounded queue");
+    let ready_candidate = catalog
+        .candidates
+        .iter()
+        .find(|candidate| candidate.readiness.pass)
+        .expect("ready candidate");
+
+    assert_eq!(catalog.natural_rows, 264);
+    assert_eq!(catalog.candidates.len(), 257);
+    assert_eq!(queue.catalog_candidates, 257);
+    assert_eq!(queue.completed_candidates_excluded, 0);
+    assert_eq!(queue.scored_candidates, 257);
+    assert_eq!(queue.capacity_excluded_candidates, 1);
+    assert_eq!(queue.rows.len(), 256);
+    assert!(queue.readiness_rescue_included);
+    assert_eq!(
+        queue
+            .first_readiness_pass()
+            .expect("retained readiness pass")
+            .candidate_root_sha256,
+        ready_candidate.candidate_root_sha256
+    );
+}

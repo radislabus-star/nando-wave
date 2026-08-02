@@ -716,7 +716,7 @@ const TEMPLATE: &str = r#"
     <div class="certificate-head"><h3>OPERATOR-BLIND K1 DISCOVERY</h3><span id="k1-scheduler-state">RUNTIME PENDING</span></div>
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">GENERATION / JOURNAL</div><div id="k1-scheduler-generation" class="ms3-value watch">— / —</div></div>
-      <div class="ms3-cell"><div class="ms3-label">CATALOG / READY QUEUE</div><div id="k1-scheduler-queue" class="ms3-value watch">0 / 0</div><div id="k1-scheduler-exclusions" class="scope-note">EXCLUSIONS —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">CATALOG / RETAINED / READY</div><div id="k1-scheduler-queue" class="ms3-value watch">0 / 0 / 0</div><div id="k1-scheduler-exclusions" class="scope-note">EXCLUSIONS —</div></div>
       <div class="ms3-cell"><div class="ms3-label">FROZEN COHORT</div><div id="k1-scheduler-cohort" class="ms3-value muted">NOT FROZEN</div><div id="k1-scheduler-watermark" class="scope-note">WATERMARK —</div></div>
       <div class="ms3-cell"><div class="ms3-label">MONOTONIC VERSION SPACE</div><div id="k1-scheduler-version-space" class="ms3-value watch">NOT IDENTIFIED</div><div id="k1-scheduler-identification" class="scope-note">IDENTIFICATION —</div></div>
       <div class="ms3-cell"><div class="ms3-label">PROBE ROUNDS / BUDGET</div><div id="k1-scheduler-probes" class="ms3-value watch">0 / 0</div><div id="k1-scheduler-probe-state" class="scope-note">NO PENDING PROBE</div></div>
@@ -1102,8 +1102,10 @@ const TEMPLATE: &str = r#"
       || "";
     text("k1-scheduler-state", k1State);
     text("k1-scheduler-generation", `G${number.format(k1Candidate.generation_sequence || k1Projection.next_generation_sequence || 0)} / R${number.format(k1Projection.ledger_revision || 0)}`);
-    text("k1-scheduler-queue", `${number.format((k1Catalog.candidates || []).length)} / ${number.format(k1ReadyRows)}`);
-    text("k1-scheduler-exclusions", `CONTROLLED ${number.format(k1Catalog.controlled_rows_excluded || 0)} · GENERATED ${number.format(k1Catalog.generated_fixture_rows_excluded || 0)} · SAFETY ${number.format(k1Catalog.safety_veto_rows_excluded || 0)}`);
+    const k1CatalogCandidates = k1Queue.catalog_candidates ?? (k1Catalog.candidates || []).length;
+    const k1RetainedCandidates = (k1Queue.rows || []).length;
+    text("k1-scheduler-queue", `${number.format(k1CatalogCandidates)} / ${number.format(k1RetainedCandidates)} / ${number.format(k1ReadyRows)}`);
+    text("k1-scheduler-exclusions", `CONTROLLED ${number.format(k1Catalog.controlled_rows_excluded || 0)} · GENERATED ${number.format(k1Catalog.generated_fixture_rows_excluded || 0)} · SAFETY ${number.format(k1Catalog.safety_veto_rows_excluded || 0)} · COMPLETED ${number.format(k1Queue.completed_candidates_excluded || 0)} · CAPACITY ${number.format(k1Queue.capacity_excluded_candidates || 0)}`);
     text("k1-scheduler-cohort", k1CandidateRoot ? `${k1Candidate.consequence_type || k1Transfer.package_id || "cohort"} · ${k1CandidateRoot.slice(0, 12)}`.toUpperCase() : "NOT FROZEN");
     text("k1-scheduler-watermark", k1CandidateRoot ? `SUPPORT ${number.format(k1Candidate.support_watermark || 0)} · CONTRACT ${number.format(k1Candidate.contract_watermark || 0)} · FUTURE ≥ ${number.format(k1Candidate.future_min_sequence || 0)}` : "WATERMARK —");
     text("k1-scheduler-version-space", k1Classes.length > 0 ? `${number.format(k1Classes.length)} SEMANTIC CLASS${k1Classes.length === 1 ? "" : "ES"}` : "NOT IDENTIFIED");

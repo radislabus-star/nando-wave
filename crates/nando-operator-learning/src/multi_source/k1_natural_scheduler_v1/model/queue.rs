@@ -63,6 +63,11 @@ pub struct K1NaturalCandidateQueueV1 {
     pub catalog_root_sha256: String,
     pub k1_deficit_snapshot_root_sha256: String,
     pub fixture_exclusion_root_sha256: String,
+    pub catalog_candidates: u64,
+    pub completed_candidates_excluded: u64,
+    pub scored_candidates: u64,
+    pub capacity_excluded_candidates: u64,
+    pub readiness_rescue_included: bool,
     pub rows: Vec<K1NaturalCandidateQueueRowV1>,
     pub authority_ready: bool,
 }
@@ -222,11 +227,22 @@ impl K1CandidateScoreV1 {
 
 impl K1NaturalCandidateQueueV1 {
     pub fn validate(&self) -> Result<(), &'static str> {
+        let retained_candidates =
+            u64::try_from(self.rows.len()).map_err(|_| "k1_natural_candidate_queue_count")?;
+        let catalog_partition = self
+            .completed_candidates_excluded
+            .checked_add(self.scored_candidates);
+        let scored_partition = retained_candidates.checked_add(self.capacity_excluded_candidates);
         if self.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1
             || !valid_nonzero_sha256(&self.queue_root_sha256)
             || !valid_nonzero_sha256(&self.catalog_root_sha256)
             || !valid_nonzero_sha256(&self.k1_deficit_snapshot_root_sha256)
             || !valid_nonzero_sha256(&self.fixture_exclusion_root_sha256)
+            || catalog_partition != Some(self.catalog_candidates)
+            || scored_partition != Some(self.scored_candidates)
+            || (self.readiness_rescue_included
+                && (self.capacity_excluded_candidates == 0
+                    || !self.rows.iter().any(|row| row.score.readiness_rank == 1)))
             || self.rows.len() > K1_NATURAL_CANDIDATE_MAX_ROWS_V1
             || self.rows.iter().any(|row| {
                 !valid_nonzero_sha256(&row.candidate_root_sha256)
@@ -258,6 +274,11 @@ impl K1NaturalCandidateQueueV1 {
             self.catalog_root_sha256.as_str(),
             self.k1_deficit_snapshot_root_sha256.as_str(),
             self.fixture_exclusion_root_sha256.as_str(),
+            self.catalog_candidates,
+            self.completed_candidates_excluded,
+            self.scored_candidates,
+            self.capacity_excluded_candidates,
+            self.readiness_rescue_included,
             &self.rows,
             false,
         ))

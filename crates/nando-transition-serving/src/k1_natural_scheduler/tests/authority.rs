@@ -8,6 +8,7 @@ use super::*;
 use crate::k1_natural_scheduler::authority::{
     certification_authorizes_settlement, validate_registry_cas,
 };
+use crate::k1_natural_scheduler::selection_authority::validate_queue_derivation;
 
 #[test]
 fn stale_registry_snapshot_cannot_freeze_a_generation() {
@@ -99,4 +100,70 @@ fn transfer_settlement_cannot_precede_law_certificate_pass() {
     };
 
     assert!(!certification_authorizes_settlement(&entry, &settlement));
+}
+
+#[test]
+fn authority_rebuilds_queue_and_rejects_a_valid_omission() {
+    let rows = (1..=8)
+        .map(|index| {
+            K1NaturalEvidenceRowV1::seal(
+                root(700 + index),
+                root(800),
+                root(801),
+                root(802),
+                root(if index <= 4 { 803 } else { 804 }),
+                K1ConsequenceTypeV1::Scalar,
+                K1NaturalEvidenceClassV1::NaturalLive,
+                index,
+                100,
+                1_000,
+                true,
+                index <= 2,
+                false,
+            )
+            .expect("evidence")
+        })
+        .collect::<Vec<_>>();
+    let catalog = build_k1_natural_cohort_catalog_v1(
+        &rows,
+        root(805),
+        root(806),
+        "nando.operator-blind-version-space-generator.v1".to_owned(),
+    )
+    .expect("catalog");
+    let deficit = K1DeficitSnapshotV1::seal(
+        0,
+        root(807),
+        root(808),
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        2,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        false,
+    )
+    .expect("deficit");
+    let proposed = build_k1_natural_candidate_queue_v1(&catalog, &deficit).expect("queue");
+    let completed = BTreeSet::new();
+    validate_queue_derivation(&catalog, &deficit, &completed, &proposed)
+        .expect("authoritative derivation");
+
+    let omitted = proposed.rows[0].candidate_root_sha256.clone();
+    let tampered =
+        nando_operator_learning::multi_source::build_k1_natural_candidate_queue_with_exclusions_v1(
+            &catalog,
+            &deficit,
+            &BTreeSet::from([omitted]),
+        )
+        .expect("internally valid omitted queue");
+    assert_eq!(
+        validate_queue_derivation(&catalog, &deficit, &completed, &tampered),
+        Err("k1_candidate_queue_derivation_mismatch".to_owned())
+    );
 }

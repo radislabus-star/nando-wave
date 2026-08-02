@@ -4,11 +4,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
 use super::model::{
-    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1,
-    K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, K1CandidateReadinessV1, K1CandidateScoreV1,
-    K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1NaturalCandidateQueueRowV1,
-    K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
-    K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
+    K1_NATURAL_CANDIDATE_MAX_ROWS_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
+    K1CandidateReadinessV1, K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
+    K1NaturalCandidateQueueRowV1, K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1,
+    K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
 };
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -133,6 +133,18 @@ pub fn build_k1_natural_candidate_queue_with_exclusions_v1(
         .iter()
         .copied()
         .collect::<BTreeSet<_>>();
+    let catalog_candidates =
+        u64::try_from(catalog.candidates.len()).map_err(|_| "k1_natural_candidate_count")?;
+    let completed_candidates_excluded = u64::try_from(
+        catalog
+            .candidates
+            .iter()
+            .filter(|candidate| {
+                excluded_candidate_roots_sha256.contains(&candidate.candidate_root_sha256)
+            })
+            .count(),
+    )
+    .map_err(|_| "k1_natural_candidate_count")?;
     let mut rows = catalog
         .candidates
         .iter()
@@ -174,12 +186,38 @@ pub fn build_k1_natural_candidate_queue_with_exclusions_v1(
         })
         .collect::<Result<Vec<_>, &'static str>>()?;
     rows.sort_by(rank_candidates);
+    let scored_candidates = u64::try_from(rows.len()).map_err(|_| "k1_natural_candidate_count")?;
+    let first_ready = rows
+        .iter()
+        .find(|row| row.score.readiness_rank == 1)
+        .cloned();
+    rows.truncate(K1_NATURAL_CANDIDATE_MAX_ROWS_V1);
+    let mut readiness_rescue_included = false;
+    if !rows.iter().any(|row| row.score.readiness_rank == 1)
+        && let Some(first_ready) = first_ready
+        && rows.len() == K1_NATURAL_CANDIDATE_MAX_ROWS_V1
+    {
+        rows.pop();
+        rows.push(first_ready);
+        rows.sort_by(rank_candidates);
+        readiness_rescue_included = true;
+    }
+    let retained_candidates =
+        u64::try_from(rows.len()).map_err(|_| "k1_natural_candidate_count")?;
+    let capacity_excluded_candidates = scored_candidates
+        .checked_sub(retained_candidates)
+        .ok_or("k1_natural_candidate_count")?;
     let mut queue = K1NaturalCandidateQueueV1 {
         schema: K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1.to_owned(),
         queue_root_sha256: String::new(),
         catalog_root_sha256: catalog.catalog_root_sha256.clone(),
         k1_deficit_snapshot_root_sha256: deficit.snapshot_root_sha256.clone(),
         fixture_exclusion_root_sha256: catalog.fixture_exclusion_root_sha256.clone(),
+        catalog_candidates,
+        completed_candidates_excluded,
+        scored_candidates,
+        capacity_excluded_candidates,
+        readiness_rescue_included,
         rows,
         authority_ready: false,
     };

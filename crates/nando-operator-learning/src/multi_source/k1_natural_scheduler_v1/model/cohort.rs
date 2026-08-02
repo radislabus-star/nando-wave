@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use super::evidence::K1ConsequenceTypeV1;
 use super::{
     K1_CANDIDATE_READINESS_MIN_LINEAGES_V1, K1_CANDIDATE_READINESS_MIN_SETTLED_ROWS_V1,
-    K1_CANDIDATE_READINESS_MIN_VERIFIED_ROWS_V1, K1_NATURAL_CANDIDATE_MAX_ROWS_V1,
-    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, strict_roots,
+    K1_CANDIDATE_READINESS_MIN_VERIFIED_ROWS_V1, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1,
+    K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, strict_roots,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -208,12 +208,18 @@ impl K1NaturalCohortCandidateV1 {
 
 impl K1NaturalCohortCatalogV1 {
     pub fn validate(&self) -> Result<(), &'static str> {
+        let candidate_evidence_rows = self
+            .candidates
+            .iter()
+            .map(|candidate| candidate.evidence_rows)
+            .try_fold(0u64, u64::checked_add)
+            .ok_or("k1_natural_cohort_catalog_count")?;
         if self.schema != K1_NATURAL_COHORT_CATALOG_SCHEMA_V1
             || !valid_nonzero_sha256(&self.catalog_root_sha256)
             || !valid_nonzero_sha256(&self.evidence_epoch_root_sha256)
             || !valid_nonzero_sha256(&self.fixture_exclusion_root_sha256)
-            || self.candidates.len() > K1_NATURAL_CANDIDATE_MAX_ROWS_V1
             || self.candidates.iter().any(|row| row.validate().is_err())
+            || candidate_evidence_rows != self.natural_rows
             || !strict_roots(
                 self.candidates
                     .iter()

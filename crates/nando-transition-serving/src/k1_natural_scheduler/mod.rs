@@ -32,6 +32,7 @@ use crate::write_bytes_atomic;
 mod authority;
 mod journal;
 mod projection;
+mod selection_authority;
 
 use authority::send_authority_request;
 pub(crate) use authority::{handle_authority_line, recover_authority};
