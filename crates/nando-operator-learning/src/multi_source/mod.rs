@@ -9,6 +9,7 @@ mod failure_corpus;
 mod frozen_version_space;
 mod identification;
 mod join;
+mod k1_natural_scheduler_v1;
 mod linked_frame_acquisition;
 mod live_snapshot;
 mod marginal;
@@ -61,10 +62,10 @@ pub use frozen_version_space::{
     seal_ms3_independent_future_with_route_receipt_v1,
 };
 pub use identification::{
-    MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
-    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1,
-    PassiveT1ProbeContractV1, active_t1_protocol_mode_root_v1,
-    identify_multi_source_t1_operator_v1,
+    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3,
+    MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1, MultiSourceT1IdentificationStateV1,
+    MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1, PassiveT1ProbeContractV1,
+    active_t1_protocol_mode_root_v1, identify_multi_source_t1_operator_v1,
     identify_multi_source_t1_operator_with_active_protocols_v1,
 };
 pub use join::{
@@ -72,6 +73,22 @@ pub use join::{
     MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, ObservedTeacherActionRefV1, VerifiedOutcomeReceiptRefV1,
     validate_pre_action_topology_join_eligibility_v1,
+};
+pub use k1_natural_scheduler_v1::{
+    K1_CANDIDATE_READINESS_MIN_LINEAGES_V1, K1_CANDIDATE_READINESS_MIN_SETTLED_ROWS_V1,
+    K1_CANDIDATE_READINESS_MIN_VERIFIED_ROWS_V1, K1_DEFICIT_SNAPSHOT_SCHEMA_V1,
+    K1_IDENTIFICATION_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
+    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1,
+    K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, K1_PROBE_ROUND_RECEIPT_SCHEMA_V1, K1_SCHEDULER_SCHEMA_V1,
+    K1CandidateReadinessV1, K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
+    K1GenerationBudgetV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
+    K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueRowV1,
+    K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
+    K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1,
+    K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
+    K1SchedulerEventPayloadV1, K1SchedulerEventV1, K1SchedulerLedgerV1, K1TransferSettlementV1,
+    build_k1_natural_candidate_queue_v1, build_k1_natural_candidate_queue_with_exclusions_v1,
+    build_k1_natural_cohort_catalog_v1,
 };
 pub use linked_frame_acquisition::{
     MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH,

@@ -11,13 +11,17 @@ Group=nando-certification
 UMask=0027
 ExecStart=/opt/nando-wave/bin/nando-operator-cleanup-verifier verify --bundle /var/lib/nando-wave/cleanup-verifier-staging/%i/bundle.json --challenge /var/lib/nando-wave/cleanup-verifier-staging/%i/challenge.json --private-key /etc/nando-wave/certification/cleanup-verifier-ed25519.key --output /var/lib/nando-wave-cleanup-receipts-v1/%i.json
 ExecStartPost=/usr/bin/chmod 0640 /var/lib/nando-wave-cleanup-receipts-v1/%i.json
+ExecStartPost=/usr/bin/rm -rf /var/lib/nando-wave/cleanup-verifier-staging/%i
 NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadOnlyPaths=/etc/nando-wave/certification
-ReadOnlyPaths=/var/lib/nando-wave/cleanup-verifier-staging/%i
+ReadWritePaths=/var/lib/nando-wave/cleanup-verifier-staging/%i
 ReadWritePaths=/var/lib/nando-wave-cleanup-receipts-v1
+InaccessiblePaths=/etc/nando-wave/certification/authority-ed25519.key
 InaccessiblePaths=/var/lib/nando-wave/transition
 
 [Install]

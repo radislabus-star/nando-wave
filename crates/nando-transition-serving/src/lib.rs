@@ -9,6 +9,9 @@ mod capture_transition_binding_archive;
 mod custom_tool_projection;
 mod economics_worker;
 pub mod generation_shadow;
+mod k1_natural_scheduler;
+mod k1_natural_scheduler_runtime;
+mod k1_transfer_lifecycle;
 mod learning_evidence_bridge;
 mod learning_structure_bridge;
 mod live_economics;
@@ -27,6 +30,7 @@ mod multi_source_live;
 mod multi_source_topology_archive;
 mod nginx_terminal;
 pub mod operator_certification;
+pub mod operator_cleanup;
 mod opportunity_bridge;
 mod provider_capture;
 pub mod remote_evidence_spool;
@@ -751,6 +755,9 @@ struct AppState {
     ms4_closed_loop_report: Arc<RwLock<ms4_closed_loop::Ms4ClosedLoopReportV1>>,
     ms4_exact_wave_precommit_writer:
         Option<Arc<Mutex<ms4_exact_wave_holdout::Ms4ExactWavePrecommitWriter>>>,
+    operator_certification_config: Arc<operator_certification::CertificationAuthorityConfigV1>,
+    k1_natural_scheduler_report:
+        Arc<RwLock<Option<k1_natural_scheduler_runtime::K1NaturalSchedulerRuntimeReportV1>>>,
 }
 
 #[derive(Default)]
@@ -1039,6 +1046,8 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         ms4_external_candidate: Arc::new(RwLock::new(None)),
         ms4_closed_loop_report: Arc::new(RwLock::new(restored_ms4_closed_loop_report)),
         ms4_exact_wave_precommit_writer,
+        operator_certification_config: Arc::new(certification_config),
+        k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
     };
     validate_ms3_scientific_denominator_link(&state)?;
     if state.ms3_generation_lifecycle.is_some() {
@@ -1093,6 +1102,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route(
             "/v2/multi-source/ms4-closed-loop",
             get(ms4_closed_loop_report),
+        )
+        .route(
+            "/v2/multi-source/k1-natural-scheduler",
+            get(k1_natural_scheduler_runtime::report_handler),
         )
         .route(
             remote_evidence_spool::REMOTE_EVIDENCE_ENDPOINT_V1,
@@ -2947,6 +2960,9 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                     }
                     if let Err(error) = ms4_closed_loop::advance(&state) {
                         eprintln!("nando-ms4-closed-loop: {error}");
+                    }
+                    if let Err(error) = k1_natural_scheduler_runtime::advance_state(&state) {
+                        eprintln!("nando-k1-natural-scheduler: {error}");
                     }
                 }
                 let snapshot_generation = state
@@ -5473,7 +5489,18 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         .iter()
         .cloned()
         .collect::<Vec<_>>();
-    if response_miner.is_none() && collection_miner.is_none() && ms4_external_candidates.is_empty()
+    let k1_terminal_transfers = state
+        .k1_natural_scheduler_report
+        .read()
+        .ok()
+        .and_then(|report| report.as_ref().cloned())
+        .and_then(|report| report.projection.pending_terminal_transfer)
+        .into_iter()
+        .collect::<Vec<_>>();
+    if response_miner.is_none()
+        && collection_miner.is_none()
+        && ms4_external_candidates.is_empty()
+        && k1_terminal_transfers.is_empty()
     {
         return Ok(false);
     }
@@ -5508,13 +5535,16 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
                 .lock()
                 .map_err(|_| "response_miner_lock_poisoned".to_owned())
                 .map(|miner| {
+                    let retained_transitions =
+                        if multi_source_snapshot.is_some() || !k1_terminal_transfers.is_empty() {
+                            miner.retained_teacher_transitions_for_multi_source_proof_v1()
+                        } else {
+                            Vec::new()
+                        };
                     (
                         miner.admission_candidates(),
                         miner.crystallized_admission_candidates(),
-                        multi_source_snapshot
-                            .as_ref()
-                            .map(|_| miner.retained_teacher_transitions_for_multi_source_proof_v1())
-                            .unwrap_or_default(),
+                        retained_transitions,
                     )
                 })
         })
@@ -5537,6 +5567,24 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
                 eprintln!(
                     "nando-multi-source-crystallizer:{}:{error}",
                     snapshot.snapshot_root_sha256
+                );
+            }
+        }
+    }
+    for terminal in &k1_terminal_transfers {
+        match k1_transfer_lifecycle::candidate_from_terminal(terminal, &retained_transitions) {
+            Ok(candidate)
+                if !crystallized_candidates.iter().any(|existing| {
+                    existing.package.package_id == candidate.package.package_id
+                }) =>
+            {
+                crystallized_candidates.push(candidate);
+            }
+            Ok(_) => {}
+            Err(error) => {
+                eprintln!(
+                    "nando-k1-transfer-crystallizer:{}:{error}",
+                    terminal.verdict_root_sha256
                 );
             }
         }
@@ -5573,6 +5621,13 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
             "candidate_root_sha256": candidate.candidate_root_sha256(),
             "future_envelope_root_sha256": candidate.future_envelope_root_sha256(),
         })).collect::<Vec<_>>(),
+        "k1_terminal_transfers": k1_terminal_transfers.iter().map(|terminal| {
+            serde_json::json!({
+                "terminal_verdict_root_sha256": terminal.verdict_root_sha256,
+                "identification_root_sha256": terminal.transfer_identification.as_ref().map(|identification| &identification.report_root_sha256),
+                "semantic_classes": terminal.transfer_identification.as_ref().map(|identification| &identification.remaining_semantic_class_roots_sha256),
+            })
+        }).collect::<Vec<_>>(),
     });
     let revision_digest = sha256_bytes(
         &serde_json::to_vec(&revision_material)
@@ -8250,6 +8305,19 @@ mod tests {
             Duration::from_millis(100),
         )
         .expect("learning structure bridge");
+        let certification_config =
+            Arc::new(operator_certification::CertificationAuthorityConfigV1 {
+                root: config.ms4_closed_loop_path.clone(),
+                cleanup_receipts_path: config.operator_cleanup_receipts_path.clone(),
+                anchor_path: config.operator_certification_anchor_path.clone(),
+                authority_socket_path: config.operator_certification_authority_socket_path.clone(),
+                authority_public_key_path: config
+                    .operator_certification_authority_public_key_path
+                    .clone(),
+                cleanup_public_key_path: config.operator_cleanup_verifier_public_key_path.clone(),
+                response_registry_path: config.response_registry_path.clone(),
+                runtime_revocations_path: config.runtime_package_revocations_path.clone(),
+            });
         let state = AppState {
             config: Arc::new(config),
             cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -8292,6 +8360,8 @@ mod tests {
                 ms4_closed_loop::Ms4ClosedLoopReportV1::default(),
             )),
             ms4_exact_wave_precommit_writer: None,
+            operator_certification_config: certification_config,
+            k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
         };
         refresh_response_executor(&state);
         state

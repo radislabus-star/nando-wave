@@ -4,6 +4,7 @@ use nando_transition_serving::ServingConfig;
 use nando_transition_serving::operator_certification::{
     CertificationAuthorityConfigV1, read_signing_key, run_authority,
 };
+use nando_transition_serving::operator_cleanup::CleanupAuthorityRuntimeConfigV1;
 
 fn main() {
     if let Err(error) = run() {
@@ -46,5 +47,9 @@ fn run() -> Result<(), String> {
     let private_key_path = std::env::var_os("NANDO_OPERATOR_CERTIFICATION_AUTHORITY_PRIVATE_KEY")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/etc/nando-wave/certification/authority-ed25519.key"));
-    run_authority(config, &private_key_path)
+    run_authority(
+        config,
+        CleanupAuthorityRuntimeConfigV1::from_env()?,
+        &private_key_path,
+    )
 }

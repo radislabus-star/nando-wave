@@ -16,12 +16,16 @@ ExecStart=/opt/nando-wave/bin/nando-operator-certification-authority
 Restart=on-failure
 RestartSec=1s
 NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadOnlyPaths=/etc/nando-wave/certification
+InaccessiblePaths=/etc/nando-wave/certification/cleanup-verifier-ed25519.key
 ReadWritePaths=/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1
 ReadWritePaths=/var/lib/nando-wave-certification-anchor
+ReadWritePaths=/var/lib/nando-wave/cleanup-verifier-staging
 ReadWritePaths=/run/nando-operator-certification
 
 [Install]

@@ -90,6 +90,10 @@ impl MultiSourceFrameArchive {
             .collect()
     }
 
+    pub(super) fn frames(&self) -> Vec<RelationFrame> {
+        self.by_frame.values().cloned().collect()
+    }
+
     pub(super) fn frame_by_root(&self, frame_root_sha256: &str) -> Option<RelationFrame> {
         self.by_frame
             .values()

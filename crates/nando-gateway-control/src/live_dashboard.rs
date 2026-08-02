@@ -713,6 +713,17 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">INDEPENDENT EXACT WAVE</div><div id="ms4-exact-wave" class="ms3-value watch">COLLECTING</div><div id="ms4-exact-wave-note" class="scope-note">POST-CENTER HOLDOUT</div></div>
       <div class="ms3-cell"><div class="ms3-label">CALIBRATION CONTROLS / ATOMS</div><div id="ms4-calibration-controls" class="ms3-value watch">0 / 0</div><div id="ms4-calibration-note" class="scope-note">IN-SAMPLE DIAGNOSTIC ONLY</div></div>
     </div>
+    <div class="certificate-head"><h3>OPERATOR-BLIND K1 DISCOVERY</h3><span id="k1-scheduler-state">RUNTIME PENDING</span></div>
+    <div class="ms3-grid">
+      <div class="ms3-cell"><div class="ms3-label">GENERATION / JOURNAL</div><div id="k1-scheduler-generation" class="ms3-value watch">— / —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">CATALOG / READY QUEUE</div><div id="k1-scheduler-queue" class="ms3-value watch">0 / 0</div><div id="k1-scheduler-exclusions" class="scope-note">EXCLUSIONS —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">FROZEN COHORT</div><div id="k1-scheduler-cohort" class="ms3-value muted">NOT FROZEN</div><div id="k1-scheduler-watermark" class="scope-note">WATERMARK —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">MONOTONIC VERSION SPACE</div><div id="k1-scheduler-version-space" class="ms3-value watch">NOT IDENTIFIED</div><div id="k1-scheduler-identification" class="scope-note">IDENTIFICATION —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">PROBE ROUNDS / BUDGET</div><div id="k1-scheduler-probes" class="ms3-value watch">0 / 0</div><div id="k1-scheduler-probe-state" class="scope-note">NO PENDING PROBE</div></div>
+      <div class="ms3-cell"><div class="ms3-label">POST-PRECOMMIT FUTURE</div><div id="k1-scheduler-future" class="ms3-value watch">0</div><div id="k1-scheduler-future-note" class="scope-note">OUTCOME ROOTS 0 / 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">SCHEDULER AUTHORITY</div><div id="k1-scheduler-authority" class="ms3-value locked">FALSE</div><div class="scope-note">PHASE MUTATION FALSE</div></div>
+      <div class="ms3-cell"><div class="ms3-label">BLOCKER / TERMINAL</div><div id="k1-scheduler-blocker" class="ms3-value watch">WAITING</div><div id="k1-scheduler-root" class="scope-note">ROOT —</div></div>
+    </div>
     <div class="certificate-head"><h3>PRODUCT REGISTRY / EPISTEMIC REGISTRY</h3><span id="k1-vocabulary-status">K1 VOCABULARY CLOSED</span></div>
     <div class="certificate-scroll"><div class="certificate-table">
       <div class="certificate-row header"><span>PACKAGE</span><span>CPU SAFE</span><span>LAW PROVED</span><span>WAVE CAUSAL</span><span>K1 ELIGIBLE</span></div>
@@ -944,6 +955,15 @@ const TEMPLATE: &str = r#"
 
     const ms3 = snapshot.ms3 || {};
     const ms4 = snapshot.ms4_closed_loop || {};
+    const k1Scheduler = snapshot.k1_natural_scheduler || {};
+    const k1Projection = k1Scheduler.projection || {};
+    const k1Transfer = k1Scheduler.transfer_lifecycle || {};
+    const k1Catalog = k1Scheduler.catalog || {};
+    const k1Queue = k1Scheduler.queue || {};
+    const k1Identification = k1Scheduler.identification || {};
+    const k1Candidate = k1Projection.active_candidate_freeze || {};
+    const k1Probe = k1Projection.latest_probe_round || {};
+    const k1Budget = k1Projection.remaining_probe_budget || {};
     const lifecycleStatus = snapshot.ms3_lifecycle || {};
     const lifecycle = lifecycleStatus.lifecycle || {};
     const acquisition = snapshot.ms3_acquisition || {};
@@ -1060,6 +1080,41 @@ const TEMPLATE: &str = r#"
     text("ms4-exact-wave-note", `POST-CENTER +${number.format(ms4.exact_wave_positive_holdout_rows || 0)} / -${number.format(ms4.exact_wave_phase_challenging_negative_rows || 0)} · SCORED ${number.format(ms4.exact_wave_scored_rows || 0)} · COUNTEREXAMPLE ${number.format(ms4.exact_wave_counterexample_rows || 0)} · CENSORED ${number.format(ms4.exact_wave_censored_rows || 0)} · UNSCORED SETTLED ${number.format(ms4.exact_wave_unscored_settled_rows || 0)} · PENDING ${number.format(ms4.exact_wave_settlement_pending_rows || 0)} · LINEAGES ${number.format(ms4.exact_wave_independent_lineages || 0)}`);
     text("ms4-calibration-controls", `${number.format(ms4.negative_controls || 0)} / ${number.format(ms4.anti_center_atoms || 0)}`);
     text("ms4-calibration-note", `TOPOLOGY NEGATIVES / ANTI-CENTER ATOMS · IN-SAMPLE ${ms4.in_sample_phase_ablation_root_sha256 ? "PASS" : "PENDING"}`);
+    const k1State = (k1Scheduler.state || "runtime_pending").toUpperCase().replaceAll("_", " ");
+    const k1TerminalPass = k1Scheduler.state === "terminal_pass";
+    const k1TerminalFail = ["terminal_abstain", "terminal_acquisition_fail", "terminal_probe_exhausted"].includes(k1Scheduler.state);
+    const k1ReadyRows = (k1Queue.rows || []).filter(row => row?.score?.readiness_rank === 1).length;
+    const k1Classes = k1Probe.state === "probe_pending"
+      ? k1Probe.previous_semantic_class_roots_sha256 || []
+      : k1Probe.next_semantic_class_roots_sha256?.length > 0
+        ? k1Probe.next_semantic_class_roots_sha256
+        : k1Projection.identification_freeze?.initial_semantic_class_roots_sha256 || [];
+    const k1CandidateRoot = k1Candidate.candidate_root_sha256 || k1Transfer.package_candidate_root_sha256 || "";
+    const k1LatestRoot = k1Transfer.settlement_root_sha256
+      || k1Transfer.law_certificate_root_sha256
+      || k1Transfer.cleanup_receipt_root_sha256
+      || k1Transfer.package_candidate_root_sha256
+      || k1Projection.latest_terminal_verdict?.verdict_root_sha256
+      || k1Probe.receipt_root_sha256
+      || k1Projection.identification_freeze?.freeze_root_sha256
+      || k1Candidate.freeze_root_sha256
+      || k1Scheduler.report_root_sha256
+      || "";
+    text("k1-scheduler-state", k1State);
+    text("k1-scheduler-generation", `G${number.format(k1Candidate.generation_sequence || k1Projection.next_generation_sequence || 0)} / R${number.format(k1Projection.ledger_revision || 0)}`);
+    text("k1-scheduler-queue", `${number.format((k1Catalog.candidates || []).length)} / ${number.format(k1ReadyRows)}`);
+    text("k1-scheduler-exclusions", `CONTROLLED ${number.format(k1Catalog.controlled_rows_excluded || 0)} · GENERATED ${number.format(k1Catalog.generated_fixture_rows_excluded || 0)} · SAFETY ${number.format(k1Catalog.safety_veto_rows_excluded || 0)}`);
+    text("k1-scheduler-cohort", k1CandidateRoot ? `${k1Candidate.consequence_type || k1Transfer.package_id || "cohort"} · ${k1CandidateRoot.slice(0, 12)}`.toUpperCase() : "NOT FROZEN");
+    text("k1-scheduler-watermark", k1CandidateRoot ? `SUPPORT ${number.format(k1Candidate.support_watermark || 0)} · CONTRACT ${number.format(k1Candidate.contract_watermark || 0)} · FUTURE ≥ ${number.format(k1Candidate.future_min_sequence || 0)}` : "WATERMARK —");
+    text("k1-scheduler-version-space", k1Classes.length > 0 ? `${number.format(k1Classes.length)} SEMANTIC CLASS${k1Classes.length === 1 ? "" : "ES"}` : "NOT IDENTIFIED");
+    text("k1-scheduler-identification", k1Identification.state ? `${k1Identification.state.replaceAll("_", " ").toUpperCase()} · SUPPORT ${number.format(k1Identification.support_rows || 0)} · LINEAGES ${number.format(k1Identification.support_lineages || 0)}` : "IDENTIFICATION —");
+    text("k1-scheduler-probes", `${number.format(k1Projection.completed_probe_rounds || 0)} / ${number.format(k1Budget.probe_rounds || 0)}`);
+    text("k1-scheduler-probe-state", k1Probe.state ? `${k1Probe.state.replaceAll("_", " ").toUpperCase()} · COST LEFT ${number.format(k1Budget.probe_cost_units || 0)} · OUTCOME ≥ ${number.format(k1Probe.outcome_min_capture_sequence || 0)}` : "NO PENDING PROBE");
+    text("k1-scheduler-future", number.format(k1Scheduler.future_eligible_rows || 0));
+    text("k1-scheduler-future-note", `CONSUMED ${number.format((k1Projection.consumed_outcome_roots_sha256 || []).length)} · APPLIED ${number.format((k1Projection.applied_outcome_roots_sha256 || []).length)} · TRANSFER ${(k1Transfer.stage || "NOT STARTED").replaceAll("_", " ").toUpperCase()}`);
+    text("k1-scheduler-authority", k1Scheduler.authority_ready === true ? "TRUE" : "FALSE");
+    text("k1-scheduler-blocker", (k1Transfer.blocker || k1Scheduler.blocker || (k1TerminalPass ? "PASS" : "NONE")).replaceAll("_", " ").toUpperCase());
+    text("k1-scheduler-root", `ROOT ${k1LatestRoot || "—"}`);
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
     stateClass("ms3-future-applicability", `ms3-value ${!lawFrozen ? "muted" : futureAcquisitionFailed ? "locked" : "watch"}`);
@@ -1076,6 +1131,15 @@ const TEMPLATE: &str = r#"
     stateClass("ms4-ordinary-proof", `ms3-value ${ms4Complete ? "good" : "locked"}`);
     stateClass("ms4-exact-wave", `ms3-value ${ms4ExactWave ? "good" : ms4.exact_wave_status === "fail" || ms4.exact_wave_status === "acquisition_fail" ? "locked" : "watch"}`);
     stateClass("ms4-calibration-controls", "ms3-value watch");
+    stateClass("k1-scheduler-state", k1TerminalPass ? "good" : k1TerminalFail ? "locked" : "watch");
+    stateClass("k1-scheduler-generation", `ms3-value ${k1CandidateRoot ? "good" : "watch"}`);
+    stateClass("k1-scheduler-queue", `ms3-value ${k1ReadyRows > 0 ? "good" : "watch"}`);
+    stateClass("k1-scheduler-cohort", `ms3-value ${k1CandidateRoot ? "good" : "muted"}`);
+    stateClass("k1-scheduler-version-space", `ms3-value ${k1Classes.length === 1 ? "good" : k1Classes.length > 1 ? "watch" : "muted"}`);
+    stateClass("k1-scheduler-probes", `ms3-value ${k1Probe.state === "probe_pending" ? "watch" : "good"}`);
+    stateClass("k1-scheduler-future", `ms3-value ${k1TerminalPass ? "good" : "watch"}`);
+    stateClass("k1-scheduler-authority", "ms3-value locked");
+    stateClass("k1-scheduler-blocker", `ms3-value ${k1TerminalFail ? "locked" : k1TerminalPass ? "good" : "watch"}`);
     renderOperatorCertificates(snapshot);
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `

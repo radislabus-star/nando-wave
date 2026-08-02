@@ -1,9 +1,9 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 #[cfg(unix)]
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -14,12 +14,21 @@ use nando_operator_admission::{
 };
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use nando_response_actor::{
-    ResponseOperation, ResponsePackage, ResponseRegistry, response_execution_payload_digest,
+    ResponseOperation, ResponsePackage, ResponsePackageState, ResponseRegistry,
+    response_execution_payload_digest,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::write_bytes_atomic;
+
+#[cfg(unix)]
+mod authority_server;
+#[cfg(unix)]
+mod transport;
+
+#[cfg(unix)]
+pub use authority_server::run_authority;
 
 const LEDGER_CACHE_FILE: &str = "operator-certification-ledger-v1.json";
 const JOURNAL_DIR: &str = "operator-certification-journal-v1";
@@ -183,71 +192,6 @@ pub fn restore_cleanup_receipt(
     Ok(Some(receipt))
 }
 
-#[cfg(unix)]
-pub fn run_authority(
-    config: CertificationAuthorityConfigV1,
-    signing_key_path: &Path,
-) -> Result<(), String> {
-    let signing_key = read_signing_key(signing_key_path)?;
-    let expected_public_key = read_verifying_key(&config.authority_public_key_path)?;
-    if signing_key.verifying_key() != expected_public_key {
-        return Err("operator_certification_authority_key_mismatch".to_owned());
-    }
-    if let Some(parent) = config.authority_socket_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("operator_certification_socket_parent:{error}"))?;
-    }
-    if config.authority_socket_path.exists() {
-        fs::remove_file(&config.authority_socket_path)
-            .map_err(|error| format!("operator_certification_socket_remove:{error}"))?;
-    }
-    let listener = UnixListener::bind(&config.authority_socket_path)
-        .map_err(|error| format!("operator_certification_socket_bind:{error}"))?;
-    fs::set_permissions(
-        &config.authority_socket_path,
-        fs::Permissions::from_mode(0o660),
-    )
-    .map_err(|error| format!("operator_certification_socket_permissions:{error}"))?;
-    recover_anchor(&config, &signing_key)?;
-    for connection in listener.incoming() {
-        let mut stream = connection
-            .map_err(|error| format!("operator_certification_authority_accept:{error}"))?;
-        let payload = match handle_authority_request(&config, &signing_key, &mut stream) {
-            Ok(projection) => AuthorityResponseV1 {
-                schema: AUTHORITY_RESPONSE_SCHEMA.to_owned(),
-                projection: Some(projection),
-                error: String::new(),
-            },
-            Err(error) => AuthorityResponseV1 {
-                schema: AUTHORITY_RESPONSE_SCHEMA.to_owned(),
-                projection: None,
-                error,
-            },
-        };
-        serde_json::to_writer(&mut stream, &payload)
-            .map_err(|error| format!("operator_certification_authority_response:{error}"))?;
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn handle_authority_request(
-    config: &CertificationAuthorityConfigV1,
-    signing_key: &SigningKey,
-    stream: &mut UnixStream,
-) -> Result<CertificationProjectionV1, String> {
-    let mut line = String::new();
-    BufReader::new(stream)
-        .read_line(&mut line)
-        .map_err(|error| format!("operator_certification_authority_read:{error}"))?;
-    let request: AuthorityRequestV1 = serde_json::from_str(&line)
-        .map_err(|error| format!("operator_certification_authority_request_decode:{error}"))?;
-    if request.schema != AUTHORITY_REQUEST_SCHEMA {
-        return Err("operator_certification_authority_request_schema_invalid".to_owned());
-    }
-    append_authoritative(config, signing_key, request.entry)
-}
-
 fn append_authoritative(
     config: &CertificationAuthorityConfigV1,
     signing_key: &SigningKey,
@@ -355,6 +299,23 @@ fn validate_external_evidence(
     entry: &OperatorCertificationEntryV1,
 ) -> Result<(), String> {
     entry.validate().map_err(str::to_owned)?;
+    let package = restore_registry_package(config, &entry.package_id)?;
+    let bundle = package
+        .crystallized_operator
+        .as_ref()
+        .ok_or_else(|| "operator_certification_bundle_missing".to_owned())?;
+    let bundle_id = crate::operator_cleanup::canonical_bundle_id(bundle)?;
+    let law_id = bundle
+        .canonical_law_id_sha256()
+        .map_err(|error| format!("operator_certification_law_id:{error:?}"))?
+        .ok_or_else(|| "operator_certification_law_id_missing".to_owned())?;
+    if package.state != ResponsePackageState::Active
+        || entry.bundle_id_sha256 != bundle_id
+        || entry.semantic_law_id_sha256 != law_id
+        || entry.role_topology_id_sha256 != canonical_role_topology_id(&package)?
+    {
+        return Err("operator_certification_active_package_binding_mismatch".to_owned());
+    }
     if entry.law.status == nando_operator_admission::LawCertificateStatusV1::Pass {
         validate_cleanup_root_only(config, entry)?;
     }
@@ -455,7 +416,7 @@ fn restore_registry_package(
         .ok_or_else(|| "operator_certification_registry_package_missing".to_owned())
 }
 
-fn canonical_role_topology_id(package: &ResponsePackage) -> Result<String, String> {
+pub(crate) fn canonical_role_topology_id(package: &ResponsePackage) -> Result<String, String> {
     let restored = package
         .crystallized_operator
         .as_ref()
@@ -493,7 +454,7 @@ fn legacy_role_topology_id(package: &ResponsePackage) -> Result<String, String> 
     .map_err(str::to_owned)
 }
 
-fn restore_anchored_ledger(
+pub(crate) fn restore_anchored_ledger(
     config: &CertificationAuthorityConfigV1,
 ) -> Result<OperatorCertificationLedgerV1, String> {
     let (ledger, last_event_root) = restore_signed_journal(config)?;

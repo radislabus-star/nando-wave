@@ -27,7 +27,7 @@ pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3: &str =
 pub const MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1: &str = "nando.multi-source-t1-proof-basis.v1";
 const MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS: usize = 64;
 const MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS: usize = 12;
-pub(super) const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
+pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
     "nando.multi-source-t1.source-neutral-role-version-space.v2";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -50,6 +50,8 @@ pub struct PassiveT1ProbeContractV1 {
     pub probe_root_sha256: String,
     pub observable_difference_root_sha256: String,
     pub competing_class_roots_sha256: Vec<String>,
+    pub precommitted_predictions_root_sha256: String,
+    pub class_partition_predictions: Vec<ProbeClassPredictionV1>,
     pub expected_partition_gain: usize,
     pub estimated_cost_units: u64,
 }
@@ -72,8 +74,10 @@ pub struct MultiSourceT1IdentificationV3 {
     pub selected_marginal_input_tokens: u64,
     pub candidate_programs: usize,
     pub semantic_classes_remaining: usize,
+    pub remaining_semantic_class_roots_sha256: Vec<String>,
     pub support_rows: usize,
     pub support_lineages: usize,
+    pub support_manifest_root_sha256: Option<String>,
     pub zero_gain_observations: usize,
     pub support_reuse_rows: usize,
     pub independent_future_rows: usize,
@@ -117,8 +121,10 @@ struct T1IdentificationDigest<'a> {
     selected_marginal_input_tokens: u64,
     candidate_programs: usize,
     semantic_classes_remaining: usize,
+    remaining_semantic_class_roots_sha256: &'a [String],
     support_rows: usize,
     support_lineages: usize,
+    support_manifest_root_sha256: Option<&'a str>,
     zero_gain_observations: usize,
     support_reuse_rows: usize,
     independent_future_rows: usize,
@@ -508,6 +514,9 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
     let Some(candidate_freeze) = freeze else {
         let metrics = machine.metrics();
         let passive_probe = passive_probe(&shape_root, &machine, &registered, &class_by_program);
+        let remaining_semantic_class_roots_sha256 = machine_semantic_class_roots(&machine);
+        let support_manifest_root_sha256 =
+            seal_t1_support_manifest_root_v1(&support_capture_frame_ids_sha256);
         return finalize_report(MultiSourceT1IdentificationV3 {
             schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3.to_owned(),
             report_root_sha256: String::new(),
@@ -517,8 +526,10 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
             selected_marginal_input_tokens,
             candidate_programs: registered.len(),
             semantic_classes_remaining: metrics.semantic_classes_remaining,
+            remaining_semantic_class_roots_sha256,
             support_rows: metrics.observations,
             support_lineages: support_lineages.len(),
+            support_manifest_root_sha256,
             zero_gain_observations: metrics.zero_gain_observations,
             support_reuse_rows: 0,
             independent_future_rows: 0,
@@ -538,6 +549,8 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
         });
     };
     let selected_program = canonical_program.expect("freeze owns canonical program");
+    let remaining_semantic_class_roots_sha256 =
+        vec![candidate_freeze.semantic_class_id().as_str().to_owned()];
     let mut future_candidates = eligible_rows
         .iter()
         .filter(|row| {
@@ -634,6 +647,8 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
         _ => Some("independent_post_freeze_future_missing".to_owned()),
     };
     let metrics = machine.metrics();
+    let support_manifest_root_sha256 =
+        seal_t1_support_manifest_root_v1(&support_capture_frame_ids_sha256);
     let Some(proof_basis) = seal_t1_proof_basis_v1(
         support_capture_frame_ids_sha256,
         future_capture_frame_ids_sha256,
@@ -655,8 +670,10 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
         selected_marginal_input_tokens,
         candidate_programs: registered.len(),
         semantic_classes_remaining: metrics.semantic_classes_remaining,
+        remaining_semantic_class_roots_sha256,
         support_rows: accounting.support_rows,
         support_lineages: accounting.support_lineages,
+        support_manifest_root_sha256,
         zero_gain_observations: metrics.zero_gain_observations,
         support_reuse_rows,
         independent_future_rows: accounting.future_rows,
@@ -1023,13 +1040,87 @@ pub(super) fn passive_probe(
         });
     }
     let probe = select_distinguishing_probe_v1(&report.competing_class_ids, &probes).ok()?;
-    Some(PassiveT1ProbeContractV1 {
+    let class_partition_predictions = probes
+        .iter()
+        .find(|candidate| candidate.probe_root_sha256 == probe.probe_root_sha256())?
+        .predictions
+        .clone();
+    let precommitted_predictions_root_sha256 = canonical_json_sha256(&(
+        "nando.multi-source-t1-precommitted-probe-predictions.v1",
+        probe.probe_root_sha256(),
+        probe.observable_difference_root_sha256(),
+        &class_partition_predictions,
+    ))
+    .ok()?;
+    let contract = PassiveT1ProbeContractV1 {
         probe_root_sha256: probe.probe_root_sha256().to_owned(),
         observable_difference_root_sha256: probe.observable_difference_root_sha256().to_owned(),
         competing_class_roots_sha256: probe.competing_class_roots_sha256().to_vec(),
+        precommitted_predictions_root_sha256,
+        class_partition_predictions,
         expected_partition_gain: probe.expected_partition_gain(),
         estimated_cost_units: probe.estimated_cost_units(),
-    })
+    };
+    contract.validate().then_some(contract)
+}
+
+fn machine_semantic_class_roots(machine: &OperatorIdentificationMachineV1) -> Vec<String> {
+    match machine.state() {
+        Ok(OperatorIdentificationStateV1::Identified { class }) => {
+            vec![class.semantic_class().class_id().as_str().to_owned()]
+        }
+        Ok(OperatorIdentificationStateV1::Ambiguous { report }) => report
+            .competing_class_ids
+            .into_iter()
+            .map(|class| class.as_str().to_owned())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+impl PassiveT1ProbeContractV1 {
+    fn expected_predictions_root(&self) -> Option<String> {
+        canonical_json_sha256(&(
+            "nando.multi-source-t1-precommitted-probe-predictions.v1",
+            self.probe_root_sha256.as_str(),
+            self.observable_difference_root_sha256.as_str(),
+            &self.class_partition_predictions,
+        ))
+        .ok()
+    }
+
+    #[must_use]
+    pub fn validate(&self) -> bool {
+        let predicted_classes = self
+            .class_partition_predictions
+            .iter()
+            .map(|prediction| prediction.class_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let competing_classes = self
+            .competing_class_roots_sha256
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        self.competing_class_roots_sha256.len() >= 2
+            && self.competing_class_roots_sha256.len() == competing_classes.len()
+            && self.class_partition_predictions.len() == predicted_classes.len()
+            && predicted_classes == competing_classes
+            && [
+                self.probe_root_sha256.as_str(),
+                self.observable_difference_root_sha256.as_str(),
+                self.precommitted_predictions_root_sha256.as_str(),
+            ]
+            .into_iter()
+            .all(valid_nonzero_sha256)
+            && self.class_partition_predictions.iter().all(|prediction| {
+                valid_nonzero_sha256(prediction.class_id.as_str())
+                    && valid_nonzero_sha256(&prediction.outcome_partition_root_sha256)
+            })
+            && self.expected_partition_gain > 0
+            && self.estimated_cost_units > 0
+            && self.expected_predictions_root().as_deref()
+                == Some(self.precommitted_predictions_root_sha256.as_str())
+    }
 }
 
 pub(super) fn t1_probe_dimension_signature(
@@ -1145,8 +1236,10 @@ fn terminal_report(
         selected_marginal_input_tokens: 0,
         candidate_programs: 0,
         semantic_classes_remaining: 0,
+        remaining_semantic_class_roots_sha256: Vec::new(),
         support_rows: 0,
         support_lineages: 0,
+        support_manifest_root_sha256: None,
         zero_gain_observations: 0,
         support_reuse_rows: 0,
         independent_future_rows: 0,
@@ -1182,6 +1275,22 @@ fn selected_terminal_report(
 fn finalize_report(mut report: MultiSourceT1IdentificationV3) -> MultiSourceT1IdentificationV3 {
     report.report_root_sha256 = report.expected_root();
     report
+}
+
+fn seal_t1_support_manifest_root_v1(frame_ids_sha256: &[String]) -> Option<String> {
+    let roots = frame_ids_sha256.iter().collect::<BTreeSet<_>>();
+    if roots.is_empty()
+        || roots.len() != frame_ids_sha256.len()
+        || frame_ids_sha256.len() > MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS
+        || roots.iter().any(|root| !valid_nonzero_sha256(root))
+    {
+        return None;
+    }
+    canonical_json_sha256(&(
+        "nando.multi-source-t1-support-manifest.v1",
+        frame_ids_sha256,
+    ))
+    .ok()
 }
 
 fn seal_t1_proof_basis_v1(
@@ -1256,8 +1365,10 @@ impl MultiSourceT1IdentificationV3 {
             selected_marginal_input_tokens: self.selected_marginal_input_tokens,
             candidate_programs: self.candidate_programs,
             semantic_classes_remaining: self.semantic_classes_remaining,
+            remaining_semantic_class_roots_sha256: &self.remaining_semantic_class_roots_sha256,
             support_rows: self.support_rows,
             support_lineages: self.support_lineages,
+            support_manifest_root_sha256: self.support_manifest_root_sha256.as_deref(),
             zero_gain_observations: self.zero_gain_observations,
             support_reuse_rows: self.support_reuse_rows,
             independent_future_rows: self.independent_future_rows,
@@ -1283,6 +1394,15 @@ impl MultiSourceT1IdentificationV3 {
         if self.schema != MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3
             || self.execution_authority
             || self.report_root_sha256 != self.expected_root()
+            || self.remaining_semantic_class_roots_sha256.len() != self.semantic_classes_remaining
+            || self
+                .remaining_semantic_class_roots_sha256
+                .iter()
+                .any(|root| !valid_nonzero_sha256(root))
+            || !self
+                .remaining_semantic_class_roots_sha256
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
             || self
                 .candidate_freeze
                 .as_ref()
@@ -1291,6 +1411,15 @@ impl MultiSourceT1IdentificationV3 {
                 .proof_basis
                 .as_ref()
                 .is_some_and(|basis| !basis.validate())
+            || self
+                .passive_probe
+                .as_ref()
+                .is_some_and(|probe| !probe.validate())
+            || self
+                .support_manifest_root_sha256
+                .as_deref()
+                .is_some_and(|root| !valid_nonzero_sha256(root))
+            || (self.support_rows > 0) != self.support_manifest_root_sha256.is_some()
         {
             return false;
         }

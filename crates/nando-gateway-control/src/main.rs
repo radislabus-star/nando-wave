@@ -39,6 +39,8 @@ const COLD_MS3_LINKED_FRAME_ACQUISITION_URL: &str =
 const COLD_MS3_CAPTURE_HEALTH_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/ms3-capture-health";
 const COLD_MS4_CLOSED_LOOP_URL: &str = "http://127.0.0.1:18790/v2/multi-source/ms4-closed-loop";
+const COLD_K1_NATURAL_SCHEDULER_URL: &str =
+    "http://127.0.0.1:18790/v2/multi-source/k1-natural-scheduler";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -1073,6 +1075,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         ms3_acquisition,
         ms3_capture_health,
         ms4_closed_loop,
+        k1_natural_scheduler,
     ) = tokio::join!(
         read_live_miner_report(),
         read_live_json(HOT_SERVING_HEALTH_URL),
@@ -1082,6 +1085,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         read_live_json(COLD_MS3_LINKED_FRAME_ACQUISITION_URL),
         read_live_json(COLD_MS3_CAPTURE_HEALTH_URL),
         read_live_json(COLD_MS4_CLOSED_LOOP_URL),
+        read_live_json(COLD_K1_NATURAL_SCHEDULER_URL),
     );
     let economics = live
         .get("economics")
@@ -1460,6 +1464,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "ms3_acquisition": ms3_acquisition,
             "ms3_capture_health": ms3_capture_health,
             "ms4_closed_loop": ms4_closed_loop,
+            "k1_natural_scheduler": k1_natural_scheduler,
             "operator_certificate_matrix": operator_certificate_matrix,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
