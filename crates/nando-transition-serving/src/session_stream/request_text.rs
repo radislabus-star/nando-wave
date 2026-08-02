@@ -61,7 +61,10 @@ fn bounded_parts<'a>(parts: impl IntoIterator<Item = &'a str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session_stream::{SessionState, begin_turn_identity, observe_row};
+    use crate::session_stream::{
+        SessionRowBoundary, SessionState, begin_new_context_turn, classify_session_row_boundary,
+        observe_row,
+    };
     use serde_json::json;
 
     #[test]
@@ -103,7 +106,11 @@ mod tests {
         let mut emitted = Vec::new();
 
         for row in rows {
-            begin_turn_identity(&row, &mut state);
+            let boundary =
+                classify_session_row_boundary(&row, &state.turn_intent_id, state.turn_index);
+            if boundary == SessionRowBoundary::NewContext {
+                begin_new_context_turn(&row, &mut state, &mut emitted);
+            }
             observe_row(&row, &mut state, &mut emitted);
         }
 
@@ -116,5 +123,59 @@ mod tests {
                 .and_then(Value::as_str),
             Some("continue the natural loop")
         );
+    }
+
+    #[test]
+    fn codex_context_refresh_preserves_request_provenance_until_a_new_turn() {
+        let rows = [
+            json!({
+                "type": "turn_context",
+                "payload": {"turn_id": "turn-v0146"}
+            }),
+            json!({
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "continue the natural loop"}]
+                }
+            }),
+            json!({
+                "type": "turn_context",
+                "payload": {"turn_id": "turn-v0146"}
+            }),
+            json!({"type": "compacted", "payload": {}}),
+            json!({
+                "type": "event_msg",
+                "payload": {"type": "context_compacted"}
+            }),
+        ];
+        let mut state = SessionState::default();
+        let mut emitted = Vec::new();
+
+        for row in rows {
+            let boundary =
+                classify_session_row_boundary(&row, &state.turn_intent_id, state.turn_index);
+            if boundary == SessionRowBoundary::NewContext {
+                begin_new_context_turn(&row, &mut state, &mut emitted);
+            }
+            observe_row(&row, &mut state, &mut emitted);
+        }
+
+        assert_eq!(state.turn_index, 1);
+        assert_eq!(state.runtime_request_text, "continue the natural loop");
+
+        let next = json!({
+            "type": "turn_context",
+            "payload": {"turn_id": "turn-next"}
+        });
+        assert_eq!(
+            classify_session_row_boundary(&next, &state.turn_intent_id, state.turn_index),
+            SessionRowBoundary::NewContext
+        );
+        begin_new_context_turn(&next, &mut state, &mut emitted);
+
+        assert_eq!(state.turn_index, 2);
+        assert!(state.runtime_request_text.is_empty());
     }
 }

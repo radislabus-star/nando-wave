@@ -34,6 +34,10 @@ use time::format_description::well_known::Rfc3339;
 
 mod request_text;
 use request_text::bounded_runtime_request_text;
+mod turn_boundary;
+use turn_boundary::{
+    SessionRowBoundary, classify_session_row_boundary, turn_intent_id_from_context,
+};
 #[cfg(test)]
 mod capture_bound_tests;
 
@@ -635,15 +639,18 @@ fn training_cases_from_session_range(
         let Ok(row) = serde_json::from_str::<Value>(line.trim_end()) else {
             continue;
         };
+        let boundary = classify_session_row_boundary(&row, &state.turn_intent_id, state.turn_index);
         if state.censor_until_turn_boundary {
-            if is_authoritative_turn_boundary(&row) {
+            if boundary.is_new_context() {
                 state.censor_until_turn_boundary = false;
                 discard_partial_turn(&mut state);
             } else {
                 continue;
             }
         }
-        begin_turn_identity(&row, &mut state);
+        if boundary.is_new_context() {
+            begin_new_context_turn(&row, &mut state, &mut emitted);
+        }
         observe_row(&row, &mut state, &mut emitted);
     }
     flush_pending(&mut state, 0, &mut emitted);
@@ -1354,15 +1361,18 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             state.session_id_sha256 = sha256_bytes(session_id.as_bytes());
             state.session_identity_pinned = true;
         }
+        let boundary = parsed.as_ref().map_or(SessionRowBoundary::None, |row| {
+            classify_session_row_boundary(row, &state.turn_intent_id, state.turn_index)
+        });
         if state.censor_until_turn_boundary {
-            if parsed.as_ref().is_some_and(is_authoritative_turn_boundary) {
+            if boundary.is_new_context() {
                 state.censor_until_turn_boundary = false;
                 discard_partial_turn(state);
             } else {
                 continue;
             }
         }
-        if parsed.as_ref().is_some_and(is_turn_start)
+        if boundary.starts_turn()
             && let Some(observation) = take_collection_observation(
                 state,
                 evidence,
@@ -1374,12 +1384,11 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         {
             submit_collection_observation(observation, miner, direct_collection_miner)?;
         }
-        if let Some(turn_boundary) = parsed
-            .as_ref()
-            .filter(|row| is_authoritative_turn_boundary(row))
+        if boundary.is_new_context()
+            && let Some(turn_boundary) = parsed.as_ref()
         {
             finalize_turn_evidence_graph(state, evidence_graphs, metrics)?;
-            begin_turn_identity(turn_boundary, state);
+            begin_new_context_turn(turn_boundary, state, &mut emitted);
         }
         let event_time_unix_nanos = parsed.as_ref().and_then(event_time_unix_nanos);
         let event_id = parsed
@@ -1410,7 +1419,7 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             sequence: record.sequence,
             record_sha256: record.record_sha256.clone(),
         });
-        if !parsed.as_ref().is_some_and(is_turn_start) {
+        if !boundary.starts_turn() {
             state.turn_capture_records.push(
                 state
                     .current_capture_record
@@ -1509,25 +1518,6 @@ fn is_token_count(row: &Value) -> bool {
             .and_then(|payload| payload.get("type"))
             .and_then(Value::as_str)
             == Some("token_count")
-}
-
-fn is_turn_start(row: &Value) -> bool {
-    if row.get("type").and_then(Value::as_str) == Some("turn_context") {
-        return true;
-    }
-    let row_type = row.get("type").and_then(Value::as_str).unwrap_or("");
-    let payload = row.get("payload").and_then(Value::as_object);
-    let payload_type = payload
-        .and_then(|payload| payload.get("type"))
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    (row_type == "event_msg" && payload_type == "user_message")
-        || (row_type == "response_item"
-            && payload_type == "message"
-            && payload
-                .and_then(|payload| payload.get("role"))
-                .and_then(Value::as_str)
-                == Some("user"))
 }
 
 fn submit_collection_observation(
@@ -1692,15 +1682,8 @@ fn bind_pending_runtime_parity_cases<L: SessionEvidenceLedger>(
     Ok(())
 }
 
-fn turn_intent_id_from_context(row: &Value) -> Option<&str> {
-    (row.get("type").and_then(Value::as_str) == Some("turn_context"))
-        .then(|| row.get("payload")?.get("turn_id")?.as_str())
-        .flatten()
-        .filter(|value| !value.is_empty() && value.len() <= 256)
-}
-
 fn begin_turn_identity(row: &Value, state: &mut SessionState) {
-    if !is_authoritative_turn_boundary(row) {
+    if row.get("type").and_then(Value::as_str) != Some("turn_context") {
         return;
     }
     state.turn_index = state.turn_index.saturating_add(1);
@@ -1710,6 +1693,13 @@ fn begin_turn_identity(row: &Value, state: &mut SessionState) {
     state.turn_client_intent_id_sha256 = sha256_bytes(state.turn_intent_id.as_bytes());
     state.turn_session_id_sha256 = state.session_id_sha256.clone();
     state.turn_event_time_unix_nanos = event_time_unix_nanos(row);
+}
+
+fn begin_new_context_turn(row: &Value, state: &mut SessionState, emitted: &mut Vec<RelationFrame>) {
+    flush_pending(state, 0, emitted);
+    reset_turn(state);
+    state.turn_capture_records.clear();
+    begin_turn_identity(row, state);
 }
 
 fn event_id_from_row(row: &Value) -> Option<String> {
@@ -1730,10 +1720,6 @@ fn event_time_unix_nanos(row: &Value) -> Option<u64> {
     let timestamp = row.get("timestamp")?.as_str()?;
     let parsed = OffsetDateTime::parse(timestamp, &Rfc3339).ok()?;
     u64::try_from(parsed.unix_timestamp_nanos()).ok()
-}
-
-fn is_authoritative_turn_boundary(row: &Value) -> bool {
-    row.get("type").and_then(Value::as_str) == Some("turn_context")
 }
 
 fn is_evidence_graph_event(row: &Value) -> bool {
@@ -1789,11 +1775,9 @@ fn observe_row(row: &Value, state: &mut SessionState, emitted: &mut Vec<Relation
         }
         return;
     }
-    if row_type == "turn_context"
-        || (row_type == "event_msg" && payload_type == "context_compacted")
+    if row_type == "turn_context" || row_type == "event_msg" && payload_type == "context_compacted"
     {
         flush_pending(state, 0, emitted);
-        reset_turn(state);
         return;
     }
     if let Some(text) = bounded_runtime_request_text(row) {
