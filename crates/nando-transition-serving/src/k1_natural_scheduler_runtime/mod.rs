@@ -30,7 +30,7 @@ use crate::k1_natural_scheduler::{
     K1FuturePredictionAuthorityRequestV1, K1SchedulerLaneV1, K1SchedulerProjectionV1,
     append_candidate_freeze_for, append_future_contract, append_future_outcome,
     append_future_prediction, append_scheduler_payload_for, candidate_exclusions_for,
-    current_deficit_snapshot, restore_projection_for,
+    current_deficit_snapshot, duplicate_candidate_exclusions_for, restore_projection_for,
 };
 use crate::k1_transfer_lifecycle::K1TransferLifecycleReportV1;
 use crate::operator_certification::CertificationAuthorityConfigV1;

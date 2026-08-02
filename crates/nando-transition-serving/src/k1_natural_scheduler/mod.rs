@@ -31,6 +31,7 @@ use crate::operator_certification::{
 use crate::write_bytes_atomic;
 
 mod authority;
+mod duplicate_cohorts;
 mod fork;
 mod future_authority;
 mod journal;
@@ -310,6 +311,22 @@ pub(crate) fn candidate_exclusions_for(
         K1SchedulerLaneV1::Mechanism => Ok(BTreeSet::new()),
         K1SchedulerLaneV1::Epistemic => fork::epistemic_exclusions(config),
     }
+}
+
+pub(crate) fn duplicate_candidate_exclusions_for(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+    catalog: &K1NaturalCohortCatalogV1,
+    epistemic_registry_root_sha256: &str,
+) -> Result<BTreeSet<String>, String> {
+    if lane == K1SchedulerLaneV1::Mechanism {
+        return Ok(BTreeSet::new());
+    }
+    duplicate_cohorts::duplicate_candidate_exclusions(
+        &restore_anchored_scheduler_for(config, lane)?,
+        catalog,
+        epistemic_registry_root_sha256,
+    )
 }
 
 pub(crate) fn current_deficit_snapshot(

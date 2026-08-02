@@ -133,6 +133,11 @@ fn append_candidate_freeze_authoritative(
         .collect::<BTreeSet<_>>();
     if request.lane == K1SchedulerLaneV1::Epistemic {
         completed_candidate_roots_sha256.extend(fork::epistemic_exclusions(config)?);
+        completed_candidate_roots_sha256.extend(duplicate_cohorts::duplicate_candidate_exclusions(
+            &scheduler,
+            &request.catalog,
+            &request.deficit_snapshot.epistemic_registry_root_sha256,
+        )?);
     }
     validate_queue_derivation(
         &request.catalog,

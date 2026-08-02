@@ -32,6 +32,12 @@ pub(super) fn advance(
         .cloned()
         .collect::<BTreeSet<_>>();
     completed.extend(candidate_exclusions_for(certification, lane)?);
+    completed.extend(duplicate_candidate_exclusions_for(
+        certification,
+        lane,
+        &catalog,
+        &deficit.epistemic_registry_root_sha256,
+    )?);
     let contract_watermark = bindings
         .iter()
         .map(|binding| binding.row.capture_sequence)
