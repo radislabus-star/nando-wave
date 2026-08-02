@@ -40,6 +40,8 @@ use turn_boundary::{
 };
 #[cfg(test)]
 mod capture_bound_tests;
+#[cfg(test)]
+mod compaction_replay_tests;
 
 use crate::miner_worker::MinerWorkerHandle;
 #[cfg(test)]
