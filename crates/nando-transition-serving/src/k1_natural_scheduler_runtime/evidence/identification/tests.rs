@@ -2,7 +2,7 @@ use nando_operator_learning::multi_source::{
     K1ConsequenceTypeV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
 };
 
-use super::{frozen_support_contains, frozen_support_manifest};
+use super::{frozen_support_contains, frozen_support_manifest, selected_shape_is_compatible};
 
 fn root(value: u64) -> String {
     format!("{value:064x}")
@@ -40,4 +40,12 @@ fn support_manifest_is_canonical_across_join_order() {
     let forward = frozen_support_manifest([&first, &second]).expect("forward manifest");
     let reversed = frozen_support_manifest([&second, &first]).expect("reversed manifest");
     assert_eq!(forward, reversed);
+}
+
+#[test]
+fn empty_identification_can_reach_a_terminal_verdict() {
+    let frozen = root(30);
+    assert!(selected_shape_is_compatible(None, &frozen));
+    assert!(selected_shape_is_compatible(Some(&frozen), &frozen));
+    assert!(!selected_shape_is_compatible(Some(&root(31)), &frozen));
 }

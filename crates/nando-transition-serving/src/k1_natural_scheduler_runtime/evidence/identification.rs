@@ -75,12 +75,18 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         epoch,
     );
     if !report.validate()
-        || report.selected_shape_root_sha256.as_deref()
-            != Some(freeze.candidate_structural_root_sha256.as_str())
+        || !selected_shape_is_compatible(
+            report.selected_shape_root_sha256.as_deref(),
+            &freeze.candidate_structural_root_sha256,
+        )
     {
         return Err("k1_runtime_identification_report_invalid".to_owned());
     }
     Ok(report)
+}
+
+fn selected_shape_is_compatible(selected: Option<&str>, frozen: &str) -> bool {
+    selected.is_none_or(|selected| selected == frozen)
 }
 
 fn frozen_support_contains(capture_sequence: u64, support_watermark: u64) -> bool {
