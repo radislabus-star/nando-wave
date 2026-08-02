@@ -197,19 +197,61 @@ pub(super) fn append_future_outcome_authoritative(
     {
         return Err("k1_future_outcome_prediction_rebound".to_owned());
     }
-    let program_consistent =
-        t1_program_is_consistent(&contract.canonical_program, joined, &request.frame);
-    let independent_verifier_pass = joined.accepted && request.frame.verifier_label == Some(true);
-    let outcome = K1FutureOutcomeReceiptV1::seal(
-        prediction.prediction_root_sha256.clone(),
-        joined.join_root_sha256.clone(),
-        joined.completed_frame_root_sha256.clone(),
-        joined.semantic_action_root_sha256.clone(),
-        joined.verifier_receipt_root_sha256.clone(),
-        request.frame.observed_at_unix_nanos,
-        program_consistent,
-        independent_verifier_pass,
-    )
+    let program_evidence_root = match &contract.canonical_program.operation {
+        ResponseOperation::ComposeCollection { .. } => {
+            let artifact = request
+                .program_evidence
+                .as_ref()
+                .ok_or_else(|| "k1_future_collection_program_evidence_missing".to_owned())?;
+            artifact.validate().map_err(str::to_owned)?;
+            let program_root = nando_operator_kernel::response_program_version_root_sha256(
+                &contract.canonical_program,
+            )
+            .map_err(str::to_owned)?;
+            if artifact.turn_intent_id_sha256 != joined.turn_intent_id_sha256
+                || artifact.session_id_sha256 != joined.session_id_sha256
+                || !artifact
+                    .verified_program_roots_sha256
+                    .contains(&program_root)
+            {
+                return Err("k1_future_collection_program_evidence_mismatch".to_owned());
+            }
+            Some(artifact.artifact_root_sha256.clone())
+        }
+        _ => {
+            if request.program_evidence.is_some() {
+                return Err("k1_future_unexpected_program_evidence".to_owned());
+            }
+            None
+        }
+    };
+    let program_consistent = program_evidence_root.is_some()
+        || t1_program_is_consistent(&contract.canonical_program, joined, &request.frame);
+    let independent_verifier_pass =
+        joined.accepted && request.frame.verifier_label == Some(true) && program_consistent;
+    let outcome = match program_evidence_root {
+        Some(evidence_root) => K1FutureOutcomeReceiptV1::seal_with_program_evidence(
+            prediction.prediction_root_sha256.clone(),
+            joined.join_root_sha256.clone(),
+            joined.completed_frame_root_sha256.clone(),
+            joined.semantic_action_root_sha256.clone(),
+            joined.verifier_receipt_root_sha256.clone(),
+            evidence_root,
+            request.frame.observed_at_unix_nanos,
+            program_consistent,
+            independent_verifier_pass,
+        ),
+        None => K1FutureOutcomeReceiptV1::seal(
+            prediction.prediction_root_sha256.clone(),
+            joined.join_root_sha256.clone(),
+            joined.completed_frame_root_sha256.clone(),
+            joined.semantic_action_root_sha256.clone(),
+            joined.verifier_receipt_root_sha256.clone(),
+            request.frame.observed_at_unix_nanos,
+            program_consistent,
+            independent_verifier_pass,
+        ),
+    }
     .map_err(str::to_owned)?;
     append_and_persist(
         config,

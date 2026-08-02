@@ -1,11 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
-    AtomSource, AtomValueType, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
-    MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
-    PreActionMultiSourceTopologyV1, RelationAtom, RelationFrame, ResponseArgument,
-    ResponseOperation, ResponseProgram, ResponseRenderSegment, ResponseValueSelector, SemanticRole,
-    canonical_json_sha256, response_program_version_root_sha256,
+    AtomSource, AtomValueType, CollectionProgramStep, MultiSourceContainerClassV1,
+    MultiSourceRelationKindV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
+    MultiSourceTemporalClassV1, MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1,
+    RelationAtom, RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram,
+    ResponseRenderSegment, ResponseValueSelector, SemanticRole, canonical_json_sha256,
+    response_program_version_root_sha256,
 };
 
 use super::BlindThenRevealJoinedTransitionV1;
@@ -337,6 +338,9 @@ fn replace_program_selector(
         }
         ResponseOperation::ProjectSelectedValue {
             selector, renderer, ..
+        }
+        | ResponseOperation::ProjectStatus {
+            selector, renderer, ..
         } => {
             if selector == observed {
                 *selector = structural.clone();
@@ -385,6 +389,9 @@ pub fn pre_action_t1_binding_root(
     program: &ResponseProgram,
     topology: &PreActionMultiSourceTopologyV1,
 ) -> Result<String, &'static str> {
+    if let ResponseOperation::ComposeCollection { steps, .. } = &program.operation {
+        return pre_action_collection_binding_root(steps, topology);
+    }
     let selectors = program_role_selectors(program).ok_or("primary_selector_missing")?;
     let bindings = selectors
         .into_iter()
@@ -402,6 +409,38 @@ pub fn pre_action_t1_binding_root(
         .collect::<Result<Vec<_>, &'static str>>()?;
     canonical_json_sha256(&("nando.ms3-pre-action-t1-binding.v1", bindings))
         .map_err(|_| "pre_action_binding_commitment_failed")
+}
+
+fn pre_action_collection_binding_root(
+    steps: &[CollectionProgramStep],
+    topology: &PreActionMultiSourceTopologyV1,
+) -> Result<String, &'static str> {
+    let requested_source_ordinal = steps.iter().find_map(|step| match step {
+        CollectionProgramStep::SelectTurnOutput { output_ordinal } => Some(*output_ordinal),
+        _ => None,
+    });
+    let roles = topology
+        .roles
+        .iter()
+        .filter(|role| role.container_class != MultiSourceContainerClassV1::Scalar)
+        .filter(|role| {
+            requested_source_ordinal.is_none_or(|ordinal| role.source_ordinal == ordinal)
+        })
+        .collect::<Vec<_>>();
+    let [role] = roles.as_slice() else {
+        return Err("collection_role_missing_or_ambiguous");
+    };
+    let witness = unique_matching_witness(topology, |witness| {
+        witness.local_role_id == role.local_role_id
+    })
+    .ok_or("collection_role_witness_missing_or_ambiguous")?;
+    canonical_json_sha256(&(
+        "nando.ms3-pre-action-t1-collection-binding.v1",
+        role.local_role_id,
+        role.source_ordinal,
+        witness.value_sha256.as_str(),
+    ))
+    .map_err(|_| "pre_action_binding_commitment_failed")
 }
 
 fn witness_for_selector<'a>(
@@ -459,6 +498,10 @@ fn program_role_selectors(program: &ResponseProgram) -> Option<Vec<&ResponseValu
     let primary = primary_t1_selector(program)?;
     let mut selectors = vec![primary];
     if let ResponseOperation::ProjectSelectedValue {
+        renderer: nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments },
+        ..
+    }
+    | ResponseOperation::ProjectStatus {
         renderer: nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments },
         ..
     } = &program.operation
@@ -590,7 +633,8 @@ fn primary_t1_selector(program: &ResponseProgram) -> Option<&ResponseValueSelect
     match &program.operation {
         ResponseOperation::FunctionCallFromRoles { selector, .. }
         | ResponseOperation::CustomToolCallFromRoles { selector, .. }
-        | ResponseOperation::ProjectSelectedValue { selector, .. } => Some(selector),
+        | ResponseOperation::ProjectSelectedValue { selector, .. }
+        | ResponseOperation::ProjectStatus { selector, .. } => Some(selector),
         _ => None,
     }
 }

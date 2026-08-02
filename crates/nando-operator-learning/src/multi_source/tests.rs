@@ -22,6 +22,8 @@ use nando_operator_kernel::{
 
 use super::*;
 
+mod natural_programs;
+
 fn root(label: &str) -> String {
     sha256_bytes(label.as_bytes())
 }

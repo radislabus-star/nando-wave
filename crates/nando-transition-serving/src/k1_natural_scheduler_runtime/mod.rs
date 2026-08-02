@@ -13,10 +13,10 @@ use nando_operator_learning::multi_source::{
     K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
     K1SchedulerEventPayloadV1, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
-    MultiSourceT1IdentificationV3, PassiveT1ProbeContractV1, PreActionShapeClassV1,
-    PreActionTopologyAuditRowV1, build_k1_natural_candidate_queue_with_exclusions_v1,
-    build_k1_natural_cohort_catalog_v1, factor_multi_source_row_v1,
-    identify_multi_source_t1_operator_with_active_protocols_v1,
+    MultiSourceT1IdentificationV3, NaturalT1ProgramArtifactV1, PassiveT1ProbeContractV1,
+    PreActionShapeClassV1, PreActionTopologyAuditRowV1,
+    build_k1_natural_candidate_queue_with_exclusions_v1, build_k1_natural_cohort_catalog_v1,
+    factor_multi_source_row_v1, identify_multi_source_t1_operator_with_candidate_artifacts_v1,
     pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
     source_neutral_topology_root_v1,
 };
@@ -46,7 +46,7 @@ pub(crate) use service::{advance_state, mechanism_report_handler, report_handler
 
 use advance::*;
 use evidence::*;
-use lifecycle::advance;
+use lifecycle::{AdvanceInput, advance};
 use report::*;
 
 const K1_RUNTIME_REPORT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-runtime-report.v1";

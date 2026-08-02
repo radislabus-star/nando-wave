@@ -26,6 +26,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_future_evidence(
     topologies: &[PreActionTopologyAuditRowV1],
     bindings: &[EvidenceBinding],
     frames: &[RelationFrame],
+    candidate_artifacts: &[NaturalT1ProgramArtifactV1],
 ) -> Result<FutureEvidenceAdvance, String> {
     if lane != K1SchedulerLaneV1::Epistemic {
         return Ok(FutureEvidenceAdvance::Ready(projection));
@@ -62,9 +63,14 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_future_evidence(
         });
     }
 
-    if let Some((prediction, topology, binding, frame)) =
-        next_settleable_outcome(&projection, topologies, bindings, frames)
-    {
+    if let Some((prediction, topology, binding, frame, program_evidence)) = next_settleable_outcome(
+        &projection,
+        topologies,
+        bindings,
+        frames,
+        candidate_artifacts,
+        base_identification.canonical_program.as_ref(),
+    ) {
         let projection = append_future_outcome(
             certification,
             K1FutureOutcomeAuthorityRequestV1 {
@@ -73,6 +79,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_future_evidence(
                 prediction_root_sha256: prediction.prediction_root_sha256.clone(),
                 topology: topology.clone(),
                 frame: frame.clone(),
+                program_evidence: program_evidence.cloned(),
             },
         )?;
         debug_assert_eq!(
@@ -147,12 +154,24 @@ fn next_settleable_outcome<'a>(
     topologies: &'a [PreActionTopologyAuditRowV1],
     bindings: &'a [EvidenceBinding],
     frames: &'a [RelationFrame],
+    candidate_artifacts: &'a [NaturalT1ProgramArtifactV1],
+    canonical_program: Option<&nando_operator_kernel::ResponseProgram>,
 ) -> Option<(
     &'a nando_operator_learning::multi_source::K1FuturePredictionReceiptV1,
     &'a PreActionTopologyAuditRowV1,
     &'a EvidenceBinding,
     &'a RelationFrame,
+    Option<&'a NaturalT1ProgramArtifactV1>,
 )> {
+    let canonical_program_root = canonical_program.and_then(|program| {
+        nando_operator_kernel::response_program_version_root_sha256(program).ok()
+    });
+    let requires_program_evidence = canonical_program.is_some_and(|program| {
+        matches!(
+            program.operation,
+            nando_operator_kernel::ResponseOperation::ComposeCollection { .. }
+        )
+    });
     projection.future_predictions.iter().find_map(|prediction| {
         if projection
             .future_outcomes
@@ -172,7 +191,19 @@ fn next_settleable_outcome<'a>(
             canonical_json_sha256(*frame)
                 .is_ok_and(|root| root == binding.joined.completed_frame_root_sha256)
         })?;
-        Some((prediction, topology, binding, frame))
+        let program_evidence = canonical_program_root.as_ref().and_then(|program_root| {
+            candidate_artifacts.iter().find(|artifact| {
+                artifact.turn_intent_id_sha256 == binding.joined.turn_intent_id_sha256
+                    && artifact.session_id_sha256 == binding.joined.session_id_sha256
+                    && artifact
+                        .verified_program_roots_sha256
+                        .contains(program_root)
+            })
+        });
+        if requires_program_evidence && program_evidence.is_none() {
+            return None;
+        }
+        Some((prediction, topology, binding, frame, program_evidence))
     })
 }
 

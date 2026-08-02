@@ -46,6 +46,7 @@ mod authority;
 mod identification;
 mod ingest;
 mod migration;
+mod natural_artifacts;
 mod status;
 mod subcenter;
 
@@ -326,6 +327,13 @@ impl OnlineCollectionReadSnapshot {
 
     pub fn admission_candidates(&self) -> Result<Vec<OnlineCollectionAdmissionCandidate>, String> {
         self.miner.admission_candidates()
+    }
+
+    pub fn natural_t1_program_artifacts(
+        &self,
+    ) -> Result<Vec<nando_operator_learning::multi_source::NaturalT1ProgramArtifactV1>, String>
+    {
+        natural_artifacts::natural_t1_program_artifacts(&self.miner.checkpoint)
     }
 
     #[must_use]

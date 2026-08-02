@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
-    MultiSourceExtractionStatusV1, OperatorGenerationComponentRootsV3, ProgramSemanticClassIdV1,
-    ProgramSemanticClassInputV1, RelationFrame, ResponseArgument, ResponseOperation,
-    ResponseProgram, ResponseValueSelector, SemanticRole, canonical_json_sha256,
+    CollectionProgramStep, MultiSourceExtractionStatusV1, OperatorGenerationComponentRootsV3,
+    ProgramSemanticClassIdV1, ProgramSemanticClassInputV1, RelationFrame, ResponseArgument,
+    ResponseOperation, ResponseProgram, ResponseValueSelector, SemanticRole, canonical_json_sha256,
     response_program_required_routing_atom_ids, response_program_version_root_sha256,
     seal_operator_generation_manifest_v3, seal_program_semantic_class_v1, valid_nonzero_sha256,
 };
@@ -19,7 +19,12 @@ use crate::{
 
 use super::{
     BlindThenRevealJoinedTransitionV1, CompletedEffectFormV1, FactorizedMultiSourceRowV1,
-    PreActionShapeClassV1, factor_multi_source_row_v1,
+    NaturalT1ProgramArtifactV1, PreActionShapeClassV1, factor_multi_source_row_v1,
+};
+
+mod natural_artifacts;
+use natural_artifacts::{
+    ExternalProgramEvidence, collection_candidate_programs, index_candidate_artifacts,
 };
 
 pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3: &str =
@@ -104,6 +109,7 @@ struct EligibleT1Row {
     factorized: FactorizedMultiSourceRowV1,
     protocol_mode_root_sha256: String,
     seed_programs: BTreeMap<String, ResponseProgram>,
+    external_program_evidence: Option<ExternalProgramEvidence>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -168,6 +174,25 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
     evidence_epoch_sha256: String,
 ) -> MultiSourceT1IdentificationV3 {
+    identify_multi_source_t1_operator_with_candidate_artifacts_v1(
+        joined_rows,
+        frames,
+        active_intents,
+        active_protocol_mode_roots_sha256,
+        &[],
+        evidence_epoch_sha256,
+    )
+}
+
+#[must_use]
+pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
+    joined_rows: &[BlindThenRevealJoinedTransitionV1],
+    frames: &[RelationFrame],
+    active_intents: &BTreeSet<String>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+    candidate_artifacts: &[NaturalT1ProgramArtifactV1],
+    evidence_epoch_sha256: String,
+) -> MultiSourceT1IdentificationV3 {
     let frame_by_root = frames
         .iter()
         .filter_map(|frame| {
@@ -176,6 +201,16 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
                 .map(|root| (root, frame.clone()))
         })
         .collect::<BTreeMap<_, _>>();
+    let artifact_by_identity = match index_candidate_artifacts(candidate_artifacts) {
+        Ok(index) => index,
+        Err(blocker) => {
+            return terminal_report(
+                evidence_epoch_sha256,
+                MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                blocker,
+            );
+        }
+    };
     let mut cohorts = BTreeMap::<T1CohortKey, Vec<EligibleT1Row>>::new();
     let mut eligible_rows = Vec::new();
     let mut active_duplicate_tokens = 0u64;
@@ -188,11 +223,15 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
                 | PreActionShapeClassV1::OneOutputManyScalarRoles
                 | PreActionShapeClassV1::ManyOutputsLatestRelevantRole
                 | PreActionShapeClassV1::CrossOutputDependency
+                | PreActionShapeClassV1::CollectionPlusScalarMetadata
+                | PreActionShapeClassV1::MultipleCollections
         );
         let supported_effect = matches!(
             factorized.completed_effect,
             CompletedEffectFormV1::SingleRoleProjection
                 | CompletedEffectFormV1::MultiRoleRendering
+                | CompletedEffectFormV1::StatusValueBranch
+                | CompletedEffectFormV1::CollectionTransform
                 | CompletedEffectFormV1::CrossOutputComposition
         );
         if !supported_shape
@@ -213,19 +252,39 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
                 "joined_frame_missing",
             );
         };
-        let seed_programs =
-            match super::source_neutral_t1::enumerate_source_neutral_t1_candidates(joined, frame) {
-                Ok(programs) => programs,
-                Err(blocker) => {
-                    let blocked_tokens = candidate_generation_blocks
-                        .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
-                        .or_default();
-                    if joined.accepted {
-                        *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+        let external_program_evidence =
+            if factorized.completed_effect == CompletedEffectFormV1::CollectionTransform {
+                match collection_candidate_programs(joined, &artifact_by_identity) {
+                    Ok(evidence) => Some(evidence),
+                    Err(blocker) => {
+                        let blocked_tokens = candidate_generation_blocks
+                            .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                            .or_default();
+                        if joined.accepted {
+                            *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                        }
+                        continue;
                     }
-                    continue;
                 }
+            } else {
+                None
             };
+        let seed_programs = match external_program_evidence.as_ref() {
+            Some(evidence) => Ok(evidence.programs.clone()),
+            None => super::source_neutral_t1::enumerate_source_neutral_t1_candidates(joined, frame),
+        };
+        let seed_programs = match seed_programs {
+            Ok(programs) => programs,
+            Err(blocker) => {
+                let blocked_tokens = candidate_generation_blocks
+                    .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                    .or_default();
+                if joined.accepted {
+                    *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                }
+                continue;
+            }
+        };
         let protocol_mode_root_sha256 = match t1_protocol_mode_root(&seed_programs) {
             Ok(root) => root,
             Err(blocker) => {
@@ -251,6 +310,7 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
             factorized,
             protocol_mode_root_sha256: protocol_mode_root_sha256.clone(),
             seed_programs,
+            external_program_evidence,
         };
         cohorts
             .entry(T1CohortKey {
@@ -580,11 +640,7 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
             support_reuse_rows = support_reuse_rows.saturating_add(1);
             continue;
         }
-        if let Some(blocker) = super::source_neutral_t1::t1_program_consistency_blocker(
-            &selected_program,
-            &row.joined,
-            &row.frame,
-        ) {
+        if let Some(blocker) = row_program_consistency_blocker(&row, &selected_program) {
             wrong_role_bindings = wrong_role_bindings.saturating_add(1);
             *future_rejection_reasons
                 .entry(blocker.to_owned())
@@ -621,11 +677,7 @@ pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
         .filter(|row| {
             !row.joined.accepted
                 && row.protocol_mode_root_sha256 == protocol_mode_root
-                && super::source_neutral_t1::t1_program_is_consistent(
-                    &selected_program,
-                    &row.joined,
-                    &row.frame,
-                )
+                && row_program_consistency_blocker(row, &selected_program).is_none()
         })
         .count();
     let exact_transfer_parity = accounting.future_rows > 0
@@ -725,7 +777,9 @@ pub fn active_t1_protocol_mode_root_v1(program: &ResponseProgram) -> Option<Stri
         }
         ResponseOperation::FunctionCallFromRoles { .. }
         | ResponseOperation::CustomToolCallFromRoles { .. }
-        | ResponseOperation::ProjectSelectedValue { .. } => {}
+        | ResponseOperation::ProjectSelectedValue { .. }
+        | ResponseOperation::ProjectStatus { .. }
+        | ResponseOperation::ComposeCollection { .. } => {}
         _ => return None,
     }
     canonical.validate().ok()?;
@@ -798,8 +852,39 @@ fn t1_protocol_signature(program: &ResponseProgram) -> Result<String, &'static s
             selector,
             renderer,
             ..
+        }
+        | nando_operator_kernel::ResponseOperation::ProjectStatus {
+            selector, renderer, ..
         } => {
             *selector = protocol_role_placeholder(selector)?;
+            if let nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments } =
+                renderer
+            {
+                for segment in segments {
+                    if let nando_operator_kernel::ResponseRenderSegment::Selected {
+                        selector, ..
+                    } = segment
+                    {
+                        *selector = protocol_role_placeholder(selector)?;
+                    }
+                }
+            }
+        }
+        nando_operator_kernel::ResponseOperation::ComposeCollection {
+            steps, renderer, ..
+        } => {
+            for step in steps {
+                match step {
+                    CollectionProgramStep::SelectTurnOutput { output_ordinal } => {
+                        *output_ordinal = 0;
+                    }
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                        selector,
+                        ..
+                    } => *selector = protocol_role_placeholder(selector)?,
+                    _ => {}
+                }
+            }
             if let nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments } =
                 renderer
             {
@@ -926,7 +1011,12 @@ fn observation_for_row(
     row: &EligibleT1Row,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<crate::OperatorObservationV1, String> {
-    observation_for_transition(&row.joined, &row.frame, programs)
+    observation_for_transition_with_external(
+        &row.joined,
+        &row.frame,
+        programs,
+        row.external_program_evidence.as_ref(),
+    )
 }
 
 pub(super) fn observation_for_transition(
@@ -934,11 +1024,22 @@ pub(super) fn observation_for_transition(
     frame: &RelationFrame,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<crate::OperatorObservationV1, String> {
+    observation_for_transition_with_external(joined, frame, programs, None)
+}
+
+fn observation_for_transition_with_external(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    frame: &RelationFrame,
+    programs: &BTreeMap<String, ResponseProgram>,
+    external: Option<&ExternalProgramEvidence>,
+) -> Result<crate::OperatorObservationV1, String> {
     let evaluations = programs
         .iter()
         .map(|(root, program)| {
-            let accepted =
-                super::source_neutral_t1::t1_program_is_consistent(program, joined, frame);
+            let accepted = external.map_or_else(
+                || super::source_neutral_t1::t1_program_is_consistent(program, joined, frame),
+                |evidence| evidence.verified_program_roots_sha256.contains(root),
+            );
             ExactProgramEvaluation {
                 program_digest_sha256: root.clone(),
                 accepted,
@@ -950,6 +1051,23 @@ pub(super) fn observation_for_transition(
             }
         })
         .collect();
+    let observed_delta_root_sha256 = match external {
+        Some(evidence) => canonical_json_sha256(&(
+            "nando.multi-source-t1-observed-delta.v2",
+            joined.completed_frame_root_sha256.as_str(),
+            &joined.effect_atoms,
+            joined.accepted,
+            &evidence.artifact_roots_sha256,
+            &evidence.verified_program_roots_sha256,
+        )),
+        None => canonical_json_sha256(&(
+            "nando.multi-source-t1-observed-delta.v1",
+            joined.completed_frame_root_sha256.as_str(),
+            &joined.effect_atoms,
+            joined.accepted,
+        )),
+    }
+    .map_err(|_| "observed_delta_commitment_failed".to_owned())?;
     seal_operator_observation_v1(OperatorObservationInputV1 {
         capture_sequence: joined.capture_sequence,
         lineage_root_sha256: joined.session_lineage_sha256.clone(),
@@ -957,18 +1075,26 @@ pub(super) fn observation_for_transition(
         request_root_sha256: joined.request_event_id_sha256.clone(),
         pre_action_relation_root_sha256: joined.topology_commitment_root_sha256.clone(),
         observed_action_root_sha256: joined.semantic_action_root_sha256.clone(),
-        observed_delta_root_sha256: canonical_json_sha256(&(
-            "nando.multi-source-t1-observed-delta.v1",
-            joined.completed_frame_root_sha256.as_str(),
-            &joined.effect_atoms,
-            joined.accepted,
-        ))
-        .map_err(|_| "observed_delta_commitment_failed".to_owned())?,
+        observed_delta_root_sha256,
         verifier_receipt_root_sha256: joined.verifier_receipt_root_sha256.clone(),
         outcome: GenerationLearningOutcomeV3::VerifiedPass,
         evaluations,
     })
     .map_err(|error| format!("operator_observation:{error}"))
+}
+
+fn row_program_consistency_blocker(
+    row: &EligibleT1Row,
+    program: &ResponseProgram,
+) -> Option<&'static str> {
+    if let Some(evidence) = &row.external_program_evidence {
+        let Ok(root) = response_program_version_root_sha256(program) else {
+            return Some("external_program_digest_failed");
+        };
+        return (!evidence.verified_program_roots_sha256.contains(&root))
+            .then_some("external_exact_transition_mismatch");
+    }
+    super::source_neutral_t1::t1_program_consistency_blocker(program, &row.joined, &row.frame)
 }
 
 pub(super) fn passive_probe(
@@ -1153,15 +1279,33 @@ pub(super) fn t1_probe_dimension_signature(
         }
         "renderer" => match &program.operation {
             ResponseOperation::ProjectSelectedValue {
-                format,
+                renderer,
+                completion_state,
+                ..
+            }
+            | ResponseOperation::ProjectStatus {
                 renderer,
                 completion_state,
                 ..
             } => canonical_json_sha256(&(
                 "nando.multi-source-t1-probe-renderer.v1",
+                renderer,
+                completion_state,
+            ))
+            .ok(),
+            ResponseOperation::ComposeCollection {
+                steps,
                 format,
                 renderer,
                 completion_state,
+                max_items,
+            } => canonical_json_sha256(&(
+                "nando.multi-source-t1-probe-collection.v1",
+                steps,
+                format,
+                renderer,
+                completion_state,
+                max_items,
             ))
             .ok(),
             ResponseOperation::FunctionCallFromRoles {
@@ -1203,10 +1347,15 @@ fn t1_program_selectors(program: &ResponseProgram) -> Option<Vec<ResponseValueSe
     let mut selectors = match &program.operation {
         ResponseOperation::FunctionCallFromRoles { selector, .. }
         | ResponseOperation::CustomToolCallFromRoles { selector, .. }
-        | ResponseOperation::ProjectSelectedValue { selector, .. } => vec![selector.clone()],
+        | ResponseOperation::ProjectSelectedValue { selector, .. }
+        | ResponseOperation::ProjectStatus { selector, .. } => vec![selector.clone()],
         _ => return None,
     };
     if let ResponseOperation::ProjectSelectedValue {
+        renderer: nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments },
+        ..
+    }
+    | ResponseOperation::ProjectStatus {
         renderer: nando_operator_kernel::CollectionOutputRenderer::RenderSequence { segments },
         ..
     } = &program.operation

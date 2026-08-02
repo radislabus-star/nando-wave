@@ -16,7 +16,8 @@ use nando_operator_learning::multi_source::{
     K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1,
     K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1ProbeBudgetRemainingV1,
     K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
-    K1SchedulerLedgerV1, K1TransferSettlementV1, PreActionTopologyAuditRowV1,
+    K1SchedulerLedgerV1, K1TransferSettlementV1, NaturalT1ProgramArtifactV1,
+    PreActionTopologyAuditRowV1,
 };
 use nando_response_actor::{
     CollectionOutputRenderer, ResponseOperation, ResponseProgram, ResponseRegistry,
@@ -31,7 +32,7 @@ use crate::operator_certification::{
 use crate::write_bytes_atomic;
 
 mod authority;
-mod duplicate_cohorts;
+pub(crate) mod duplicate_cohorts;
 mod fork;
 mod future_authority;
 mod journal;
@@ -86,6 +87,7 @@ pub(crate) struct K1CandidateFreezeAuthorityRequestV1 {
     pub queue: K1NaturalCandidateQueueV1,
     pub candidate: K1NaturalCohortCandidateV1,
     pub freeze: K1NaturalCandidateFreezeV1,
+    pub active_protocol_mode_set_root_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -135,6 +137,8 @@ pub(crate) struct K1FutureOutcomeAuthorityRequestV1 {
     pub prediction_root_sha256: String,
     pub topology: PreActionTopologyAuditRowV1,
     pub frame: nando_operator_kernel::RelationFrame,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_evidence: Option<NaturalT1ProgramArtifactV1>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -317,7 +321,7 @@ pub(crate) fn duplicate_candidate_exclusions_for(
     config: &CertificationAuthorityConfigV1,
     lane: K1SchedulerLaneV1,
     catalog: &K1NaturalCohortCatalogV1,
-    epistemic_registry_root_sha256: &str,
+    active_protocol_mode_set_root_sha256: &str,
 ) -> Result<BTreeSet<String>, String> {
     if lane == K1SchedulerLaneV1::Mechanism {
         return Ok(BTreeSet::new());
@@ -325,7 +329,7 @@ pub(crate) fn duplicate_candidate_exclusions_for(
     duplicate_cohorts::duplicate_candidate_exclusions(
         &restore_anchored_scheduler_for(config, lane)?,
         catalog,
-        epistemic_registry_root_sha256,
+        active_protocol_mode_set_root_sha256,
     )
 }
 

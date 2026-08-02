@@ -5,13 +5,16 @@ use nando_operator_learning::multi_source::{
 use super::*;
 use crate::k1_natural_scheduler::duplicate_cohorts::duplicate_candidate_exclusions;
 
-fn ledger_with_terminal(blocker: &str) -> (K1SchedulerLedgerV1, K1NaturalCandidateFreezeV1) {
+fn ledger_with_terminal(
+    blocker: &str,
+    evidence_roots_sha256: Vec<String>,
+) -> (K1SchedulerLedgerV1, K1NaturalCandidateFreezeV1) {
     let freeze = candidate_freeze();
     let terminal = K1GenerationTerminalVerdictV1::seal(
         freeze.freeze_root_sha256.clone(),
         None,
         Vec::new(),
-        vec![root(900)],
+        evidence_roots_sha256,
         K1GenerationVerdictClassV1::AcquisitionFail,
         blocker.to_owned(),
         1_700_000_001,
@@ -62,7 +65,11 @@ fn catalog_with_additional_evidence() -> K1NaturalCohortCatalogV1 {
 
 #[test]
 fn completed_duplicate_cohort_stays_excluded_when_evidence_manifest_grows() {
-    let (ledger, freeze) = ledger_with_terminal("all_supported_t1_protocol_modes_already_active");
+    let active_set_root = root(900);
+    let (ledger, freeze) = ledger_with_terminal(
+        "all_supported_t1_protocol_modes_already_active",
+        vec![active_set_root.clone()],
+    );
     let catalog = catalog_with_additional_evidence();
     let candidate = &catalog.candidates[0];
 
@@ -71,8 +78,7 @@ fn completed_duplicate_cohort_stays_excluded_when_evidence_manifest_grows() {
         freeze.candidate_root_sha256
     );
     let excluded =
-        duplicate_candidate_exclusions(&ledger, &catalog, &freeze.epistemic_registry_root_sha256)
-            .expect("exclusions");
+        duplicate_candidate_exclusions(&ledger, &catalog, &active_set_root).expect("exclusions");
     assert_eq!(
         excluded,
         BTreeSet::from([candidate.candidate_root_sha256.clone()])
@@ -80,23 +86,53 @@ fn completed_duplicate_cohort_stays_excluded_when_evidence_manifest_grows() {
 }
 
 #[test]
-fn registry_change_reopens_duplicate_cohort() {
-    let (ledger, freeze) = ledger_with_terminal("all_supported_t1_protocol_modes_already_active");
+fn active_protocol_mode_set_change_reopens_duplicate_cohort() {
+    let (ledger, _) = ledger_with_terminal(
+        "all_supported_t1_protocol_modes_already_active",
+        vec![root(900)],
+    );
     let catalog = catalog_with_additional_evidence();
 
     let excluded =
         duplicate_candidate_exclusions(&ledger, &catalog, &root(999)).expect("exclusions");
-    assert_ne!(root(999), freeze.epistemic_registry_root_sha256);
+    assert!(excluded.is_empty());
+}
+
+#[test]
+fn unrelated_epistemic_registry_change_does_not_reopen_duplicate_cohort() {
+    let active_set_root = root(900);
+    let (ledger, freeze) = ledger_with_terminal(
+        "all_supported_t1_protocol_modes_already_active",
+        vec![active_set_root.clone()],
+    );
+    assert_ne!(freeze.epistemic_registry_root_sha256, root(999));
+    let excluded = duplicate_candidate_exclusions(
+        &ledger,
+        &catalog_with_additional_evidence(),
+        &active_set_root,
+    )
+    .expect("exclusions");
+    assert_eq!(excluded.len(), 1);
+}
+
+#[test]
+fn legacy_duplicate_terminal_without_active_set_root_is_re_evaluated() {
+    let (ledger, _) = ledger_with_terminal(
+        "all_supported_t1_protocol_modes_already_active",
+        vec![root(901)],
+    );
+    let excluded =
+        duplicate_candidate_exclusions(&ledger, &catalog_with_additional_evidence(), &root(900))
+            .expect("exclusions");
     assert!(excluded.is_empty());
 }
 
 #[test]
 fn repairable_acquisition_failure_does_not_suppress_cohort() {
-    let (ledger, freeze) = ledger_with_terminal("source_neutral_self_replay_failed");
+    let (ledger, _) = ledger_with_terminal("source_neutral_self_replay_failed", vec![root(900)]);
     let catalog = catalog_with_additional_evidence();
 
     let excluded =
-        duplicate_candidate_exclusions(&ledger, &catalog, &freeze.epistemic_registry_root_sha256)
-            .expect("exclusions");
+        duplicate_candidate_exclusions(&ledger, &catalog, &root(900)).expect("exclusions");
     assert!(excluded.is_empty());
 }

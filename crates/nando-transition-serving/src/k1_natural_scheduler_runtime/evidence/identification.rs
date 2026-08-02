@@ -38,6 +38,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     bindings: &[EvidenceBinding],
     frames: &[RelationFrame],
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
+    candidate_artifacts: &[NaturalT1ProgramArtifactV1],
     freeze: &K1NaturalCandidateFreezeV1,
     applied_roots: &BTreeSet<String>,
     trial_roots: &BTreeSet<String>,
@@ -65,13 +66,24 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
             .iter()
             .map(|row| row.join_root_sha256.as_str())
             .collect::<Vec<_>>(),
+        candidate_artifacts
+            .iter()
+            .filter(|artifact| {
+                selected.iter().any(|row| {
+                    row.turn_intent_id_sha256 == artifact.turn_intent_id_sha256
+                        && row.session_id_sha256 == artifact.session_id_sha256
+                })
+            })
+            .map(|artifact| artifact.artifact_root_sha256.as_str())
+            .collect::<Vec<_>>(),
     ))
     .map_err(str::to_owned)?;
-    let report = identify_multi_source_t1_operator_with_active_protocols_v1(
+    let report = identify_multi_source_t1_operator_with_candidate_artifacts_v1(
         &selected,
         frames,
         &BTreeSet::new(),
         active_protocol_mode_roots_sha256,
+        candidate_artifacts,
         epoch,
     );
     if !report.validate()

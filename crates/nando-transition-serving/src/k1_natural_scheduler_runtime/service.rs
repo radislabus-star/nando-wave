@@ -4,8 +4,8 @@ use axum::response::Response;
 use serde_json::json;
 
 use super::{
-    K1NaturalSchedulerRuntimeReportV1, K1NaturalSchedulerRuntimeStateV1 as RuntimeState,
-    K1SchedulerLaneV1, advance,
+    AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
+    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, advance,
 };
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
@@ -67,14 +67,27 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         .frames();
     let active_protocols =
         multi_source_live::active_protocol_mode_roots(&state.config.response_registry_path)?;
+    let candidate_artifacts = crate::current_collection_miner(state)
+        .map(|miner| {
+            miner
+                .lock()
+                .map_err(|_| "k1_scheduler_collection_miner_lock_poisoned".to_owned())?
+                .read_snapshot()
+                .natural_t1_program_artifacts()
+        })
+        .transpose()?
+        .unwrap_or_default();
     let mechanism = advance(
         &state.operator_certification_config,
         K1SchedulerLaneV1::Mechanism,
         false,
-        &topologies,
-        &frames,
-        &active_protocols,
-        unix_now(),
+        AdvanceInput {
+            topologies: &topologies,
+            frames: &frames,
+            active_protocol_mode_roots_sha256: &active_protocols,
+            candidate_artifacts: &candidate_artifacts,
+            generated_at_unix: unix_now(),
+        },
     )?;
     store_mechanism_report(state, mechanism)?;
     for _ in 0..16 {
@@ -83,10 +96,13 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
             &state.operator_certification_config,
             K1SchedulerLaneV1::Epistemic,
             true,
-            &topologies,
-            &frames,
-            &active_protocols,
-            now,
+            AdvanceInput {
+                topologies: &topologies,
+                frames: &frames,
+                active_protocol_mode_roots_sha256: &active_protocols,
+                candidate_artifacts: &candidate_artifacts,
+                generated_at_unix: now,
+            },
         )?;
         if report.state == RuntimeState::TerminalPass {
             trigger_candidate_publication(state);

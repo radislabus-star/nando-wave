@@ -14,6 +14,7 @@ mod linked_frame_acquisition;
 mod live_snapshot;
 mod marginal;
 mod ms3_generation_registry_v1;
+mod natural_program_artifact;
 mod north_star_cellular_support_v1;
 mod north_star_proof_v1;
 mod representation_gap;
@@ -68,6 +69,7 @@ pub use identification::{
     MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1, PassiveT1ProbeContractV1,
     active_t1_protocol_mode_root_v1, identify_multi_source_t1_operator_v1,
     identify_multi_source_t1_operator_with_active_protocols_v1,
+    identify_multi_source_t1_operator_with_candidate_artifacts_v1,
 };
 pub use join::{
     BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1,
@@ -136,6 +138,10 @@ pub use ms3_generation_registry_v1::{
     Ms3GenerationAcquisitionFailureReceiptV1, Ms3GenerationEntryV1,
     Ms3GenerationLinkedAcquisitionFailureReceiptV1, Ms3GenerationRegistryErrorV1,
     Ms3GenerationRegistryV1, Ms3GenerationTerminalReceiptV1,
+};
+pub use natural_program_artifact::{
+    NATURAL_T1_PROGRAM_ARTIFACT_MAX_PROGRAMS_V1, NATURAL_T1_PROGRAM_ARTIFACT_SCHEMA_V1,
+    NaturalT1ProgramArtifactV1,
 };
 pub use north_star_cellular_support_v1::{
     NORTH_STAR_CELLULAR_SUPPORT_SCHEMA_V1, NorthStarCellularSupportErrorV1,

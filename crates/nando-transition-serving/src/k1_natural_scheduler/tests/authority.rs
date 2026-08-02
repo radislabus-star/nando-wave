@@ -6,8 +6,31 @@ use nando_operator_admission::{
 
 use super::*;
 use crate::k1_natural_scheduler::authority::{
-    certification_authorizes_settlement, validate_registry_cas,
+    certification_authorizes_settlement, validate_active_protocol_mode_cas, validate_registry_cas,
 };
+
+#[test]
+fn authority_rejects_stale_active_protocol_mode_set_root() {
+    let (root_dir, config, _) = test_context();
+    std::fs::write(
+        &config.response_registry_path,
+        serde_json::to_vec(&nando_response_actor::ResponseRegistry {
+            schema: "nando.response-registry.v6".to_owned(),
+            revision: 0,
+            packages: Vec::new(),
+        })
+        .expect("registry encode"),
+    )
+    .expect("registry write");
+    let current = super::super::duplicate_cohorts::active_protocol_mode_set_root(&BTreeSet::new())
+        .expect("active set root");
+    validate_active_protocol_mode_cas(&config, &current).expect("current root");
+    assert_eq!(
+        validate_active_protocol_mode_cas(&config, &root(999)),
+        Err("k1_candidate_freeze_active_protocol_mode_cas_failed".to_owned())
+    );
+    std::fs::remove_dir_all(root_dir).expect("cleanup");
+}
 use crate::k1_natural_scheduler::selection_authority::validate_queue_derivation;
 
 #[test]

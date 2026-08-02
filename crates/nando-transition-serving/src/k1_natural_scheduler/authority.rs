@@ -125,6 +125,7 @@ fn append_candidate_freeze_authoritative(
     request.queue.validate().map_err(str::to_owned)?;
     request.candidate.validate().map_err(str::to_owned)?;
     request.freeze.validate().map_err(str::to_owned)?;
+    validate_active_protocol_mode_cas(config, &request.active_protocol_mode_set_root_sha256)?;
 
     let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
     let mut completed_candidate_roots_sha256 = projection_for(&scheduler)?
@@ -136,7 +137,7 @@ fn append_candidate_freeze_authoritative(
         completed_candidate_roots_sha256.extend(duplicate_cohorts::duplicate_candidate_exclusions(
             &scheduler,
             &request.catalog,
-            &request.deficit_snapshot.epistemic_registry_root_sha256,
+            &request.active_protocol_mode_set_root_sha256,
         )?);
     }
     validate_queue_derivation(
@@ -178,6 +179,19 @@ fn append_candidate_freeze_authoritative(
         &mut scheduler,
         K1SchedulerEventPayloadV1::CandidateFreeze(request.freeze),
     )
+}
+
+pub(super) fn validate_active_protocol_mode_cas(
+    config: &CertificationAuthorityConfigV1,
+    claimed_root_sha256: &str,
+) -> Result<(), String> {
+    let current_active_modes =
+        crate::multi_source_live::active_protocol_mode_roots(&config.response_registry_path)?;
+    let current_root = duplicate_cohorts::active_protocol_mode_set_root(&current_active_modes)?;
+    if claimed_root_sha256 != current_root {
+        return Err("k1_candidate_freeze_active_protocol_mode_cas_failed".to_owned());
+    }
+    Ok(())
 }
 
 fn append_payload_authoritative(

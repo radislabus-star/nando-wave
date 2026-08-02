@@ -124,10 +124,14 @@ fn generator_eligible(
             | PreActionShapeClassV1::OneOutputManyScalarRoles
             | PreActionShapeClassV1::ManyOutputsLatestRelevantRole
             | PreActionShapeClassV1::CrossOutputDependency
+            | PreActionShapeClassV1::CollectionPlusScalarMetadata
+            | PreActionShapeClassV1::MultipleCollections
     ) && matches!(
         factorized.completed_effect,
         CompletedEffectFormV1::SingleRoleProjection
             | CompletedEffectFormV1::MultiRoleRendering
+            | CompletedEffectFormV1::StatusValueBranch
+            | CompletedEffectFormV1::CollectionTransform
             | CompletedEffectFormV1::CrossOutputComposition
     ) && factorized.reason != MultiSourceReasonV1::Censored
         && matches!(

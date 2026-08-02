@@ -6,11 +6,22 @@ use super::*;
 
 const DUPLICATE_PROTOCOL_BLOCKER: &str = "all_supported_t1_protocol_modes_already_active";
 const COHORT_IDENTITY_SCHEMA: &str = "nando.k1-natural-cohort-identity.v1";
+const ACTIVE_PROTOCOL_MODE_SET_SCHEMA: &str = "nando.k1-active-protocol-mode-set.v1";
+
+pub(crate) fn active_protocol_mode_set_root(
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+) -> Result<String, String> {
+    canonical_json_sha256(&(
+        ACTIVE_PROTOCOL_MODE_SET_SCHEMA,
+        active_protocol_mode_roots_sha256,
+    ))
+    .map_err(str::to_owned)
+}
 
 pub(super) fn duplicate_candidate_exclusions(
     ledger: &K1SchedulerLedgerV1,
     catalog: &K1NaturalCohortCatalogV1,
-    epistemic_registry_root_sha256: &str,
+    active_protocol_mode_set_root_sha256: &str,
 ) -> Result<BTreeSet<String>, String> {
     ledger.validate().map_err(str::to_owned)?;
     catalog.validate().map_err(str::to_owned)?;
@@ -27,7 +38,10 @@ pub(super) fn duplicate_candidate_exclusions(
                     .take()
                     .ok_or_else(|| "k1_duplicate_cohort_candidate_missing".to_owned())?;
                 if verdict.blocker == DUPLICATE_PROTOCOL_BLOCKER
-                    && freeze.epistemic_registry_root_sha256 == epistemic_registry_root_sha256
+                    && verdict
+                        .evidence_roots_sha256
+                        .iter()
+                        .any(|root| root == active_protocol_mode_set_root_sha256)
                 {
                     duplicate_identities.insert(freeze_identity_root(freeze)?);
                 }

@@ -1,14 +1,26 @@
 use super::*;
 
+pub(super) struct AdvanceInput<'a> {
+    pub topologies: &'a [PreActionTopologyAuditRowV1],
+    pub frames: &'a [RelationFrame],
+    pub active_protocol_mode_roots_sha256: &'a BTreeSet<String>,
+    pub candidate_artifacts: &'a [NaturalT1ProgramArtifactV1],
+    pub generated_at_unix: u64,
+}
+
 pub(super) fn advance(
     certification: &CertificationAuthorityConfigV1,
     lane: K1SchedulerLaneV1,
     allow_candidate_freeze: bool,
-    topologies: &[PreActionTopologyAuditRowV1],
-    frames: &[RelationFrame],
-    active_protocol_mode_roots_sha256: &BTreeSet<String>,
-    generated_at_unix: u64,
+    input: AdvanceInput<'_>,
 ) -> Result<K1NaturalSchedulerRuntimeReportV1, String> {
+    let AdvanceInput {
+        topologies,
+        frames,
+        active_protocol_mode_roots_sha256,
+        candidate_artifacts,
+        generated_at_unix,
+    } = input;
     let join_ledger = MultiSourceJoinLedgerV1::build(topologies, frames);
     let join_report = join_ledger.report();
     let bindings = build_evidence_bindings(&join_ledger.rows())?;
@@ -25,6 +37,10 @@ pub(super) fn advance(
     )
     .map_err(str::to_owned)?;
     let deficit = current_deficit_snapshot(certification)?;
+    let active_protocol_mode_set_root_sha256 =
+        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+            active_protocol_mode_roots_sha256,
+        )?;
     let mut projection = restore_projection_for(certification, lane)?;
     let mut completed = projection
         .completed_candidate_roots_sha256
@@ -36,7 +52,7 @@ pub(super) fn advance(
         certification,
         lane,
         &catalog,
-        &deficit.epistemic_registry_root_sha256,
+        &active_protocol_mode_set_root_sha256,
     )?);
     let contract_watermark = bindings
         .iter()
@@ -144,6 +160,7 @@ pub(super) fn advance(
                 queue: queue.clone(),
                 candidate,
                 freeze,
+                active_protocol_mode_set_root_sha256,
             },
         )?;
         return runtime_report(
@@ -222,6 +239,7 @@ pub(super) fn advance(
         &bindings,
         frames,
         active_protocol_mode_roots_sha256,
+        candidate_artifacts,
         &candidate_freeze,
         &applied_roots,
         &BTreeSet::new(),
@@ -233,14 +251,18 @@ pub(super) fn advance(
                 .blocker
                 .clone()
                 .unwrap_or_else(|| "identification_did_not_produce_version_space".to_owned());
+            let mut terminal_evidence = vec![
+                candidate_freeze.evidence_manifest_root_sha256.clone(),
+                base_identification.report_root_sha256.clone(),
+            ];
+            if blocker == "all_supported_t1_protocol_modes_already_active" {
+                terminal_evidence.push(active_protocol_mode_set_root_sha256.clone());
+            }
             let verdict = terminal_verdict(
                 &candidate_freeze,
                 None,
                 Vec::new(),
-                vec![
-                    candidate_freeze.evidence_manifest_root_sha256.clone(),
-                    base_identification.report_root_sha256.clone(),
-                ],
+                terminal_evidence,
                 K1GenerationVerdictClassV1::AcquisitionFail,
                 &blocker,
                 generated_at_unix,
@@ -394,6 +416,7 @@ pub(super) fn advance(
             &bindings,
             frames,
             active_protocol_mode_roots_sha256,
+            candidate_artifacts,
             applied_roots,
             frozen_evidence_rows,
             future_eligible_rows,
@@ -410,6 +433,7 @@ pub(super) fn advance(
         topologies,
         &bindings,
         frames,
+        candidate_artifacts,
     )? {
         FutureEvidenceAdvance::Pending {
             projection,
@@ -447,6 +471,7 @@ pub(super) fn advance(
         &bindings,
         frames,
         active_protocol_mode_roots_sha256,
+        candidate_artifacts,
         applied_roots,
         frozen_evidence_rows,
         future_eligible_rows,
