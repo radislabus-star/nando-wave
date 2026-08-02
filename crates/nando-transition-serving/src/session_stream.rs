@@ -32,6 +32,9 @@ use serde_json::Value;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+mod request_text;
+use request_text::bounded_runtime_request_text;
+
 use crate::miner_worker::MinerWorkerHandle;
 #[cfg(test)]
 use crate::request_learning::RequestLearningAtoms;
@@ -1786,33 +1789,16 @@ fn observe_row(row: &Value, state: &mut SessionState, emitted: &mut Vec<Relation
         reset_turn(state);
         return;
     }
-    if row_type == "event_msg" && payload_type == "user_message" {
+    if let Some(text) = bounded_runtime_request_text(row) {
         flush_pending(state, 0, emitted);
         reset_turn(state);
-        let text = payload.get("message").and_then(Value::as_str).unwrap_or("");
-        state.runtime_request_text = text.chars().take(16_384).collect();
-        state.request_phase_atom_ids = nando_response_actor::request_phase_atom_ids(text);
-        state.collection_request_item = collection_request_item(text);
-        state.collection_provider_payload = state
-            .collection_request_item
-            .clone()
-            .map(|request| serde_json::json!({"input":[request]}));
-        return;
-    }
-    if row_type == "response_item"
-        && payload_type == "message"
-        && payload.get("role").and_then(Value::as_str) == Some("user")
-    {
-        flush_pending(state, 0, emitted);
-        reset_turn(state);
-        let text = message_text(payload.get("content"));
-        state.runtime_request_text = text.chars().take(16_384).collect();
         state.request_phase_atom_ids = nando_response_actor::request_phase_atom_ids(&text);
         state.collection_request_item = collection_request_item(&text);
         state.collection_provider_payload = state
             .collection_request_item
             .clone()
             .map(|request| serde_json::json!({"input":[request]}));
+        state.runtime_request_text = text;
         return;
     }
     if row_type == "event_msg" && payload_type == "token_count" {
