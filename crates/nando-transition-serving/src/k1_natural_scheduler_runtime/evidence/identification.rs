@@ -12,14 +12,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
                 && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
         })
         .collect::<Vec<_>>();
-    let manifest = canonical_json_sha256(&(
-        "nando.k1-natural-evidence-manifest.v1",
-        support
-            .iter()
-            .map(|binding| binding.row.row_root_sha256.as_str())
-            .collect::<Vec<_>>(),
-    ))
-    .map_err(str::to_owned)?;
+    let manifest = frozen_support_manifest(support.iter().map(|binding| &binding.row))?;
     if support.is_empty()
         || support.len() > K1_MAX_SUPPORT_ROWS_V1
         || manifest != freeze.evidence_manifest_root_sha256
@@ -92,6 +85,24 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
 
 fn frozen_support_contains(capture_sequence: u64, support_watermark: u64) -> bool {
     capture_sequence <= support_watermark
+}
+
+fn frozen_support_manifest<'a>(
+    rows: impl IntoIterator<Item = &'a K1NaturalEvidenceRowV1>,
+) -> Result<String, String> {
+    let mut rows = rows.into_iter().collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        left.capture_sequence
+            .cmp(&right.capture_sequence)
+            .then_with(|| left.row_root_sha256.cmp(&right.row_root_sha256))
+    });
+    canonical_json_sha256(&(
+        "nando.k1-natural-evidence-manifest.v1",
+        rows.iter()
+            .map(|row| row.row_root_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+    .map_err(str::to_owned)
 }
 
 pub(in crate::k1_natural_scheduler_runtime) fn identification_can_freeze(
