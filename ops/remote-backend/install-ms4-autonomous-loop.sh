@@ -185,7 +185,7 @@ for unit in "${unit_names[@]}"; do
     cp "${source_path}" "${rendered_units}/${unit}"
   fi
 done
-systemd-analyze verify "${rendered_units}"/*
+sudo -n systemd-analyze verify "${rendered_units}"/*
 
 NANDO_TRANSITION_STATE_DIR="${STATE_DIR}" \
 NANDO_RESPONSE_REGISTRY="${work}/preflight-registry.json" \
