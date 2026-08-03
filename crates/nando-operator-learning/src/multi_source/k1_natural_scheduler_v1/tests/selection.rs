@@ -106,6 +106,31 @@ fn generated_and_controlled_rows_never_enter_natural_candidates() {
 }
 
 #[test]
+fn legacy_v1_evidence_is_diagnostic_even_when_its_frozen_hash_was_eligible() {
+    let legacy = K1NaturalEvidenceRowV1::seal_legacy_v1(
+        root(10_001),
+        root(100),
+        root(200),
+        root(50_100),
+        root(300),
+        K1ConsequenceTypeV1::Scalar,
+        K1NaturalEvidenceClassV1::NaturalLive,
+        1,
+        1_000,
+        1_001,
+        true,
+        true,
+        false,
+    )
+    .expect("legacy evidence row");
+    let catalog = catalog(&[legacy]);
+
+    assert_eq!(catalog.scanned_rows, 1);
+    assert_eq!(catalog.safety_veto_rows_excluded, 1);
+    assert!(catalog.candidates.is_empty());
+}
+
+#[test]
 fn oversized_catalog_keeps_a_complete_denominator_and_a_bounded_ready_queue() {
     let mut rows = (1..=256)
         .map(|index| {

@@ -32,7 +32,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn build_evidence_bindings(
         .into_iter()
         .map(|(joined, factorized, identity)| {
             let capture_v2 = capture_generation_v2(&joined);
-            let generator_eligible = capture_v2 && generator_eligible(&joined, &factorized);
+            let generator_eligible = generator_eligible(&joined, &factorized);
             let cohort_index = cohort_rows.entry(identity.clone()).or_default();
             let support_overflow = generator_eligible && *cohort_index >= K1_MAX_SUPPORT_ROWS_V1;
             if generator_eligible {

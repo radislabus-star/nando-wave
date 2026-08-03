@@ -8,7 +8,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
         .iter()
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
-                && frozen_row_is_eligible(&binding.row, freeze)
+                && !binding.row.safety_veto
                 && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
         })
         .collect::<Vec<_>>();
@@ -52,7 +52,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         .iter()
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
-                && frozen_row_is_eligible(&binding.row, freeze)
+                && !binding.row.safety_veto
                 && (frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
                     || applied_roots.contains(&binding.joined.join_root_sha256)
                     || trial_roots.contains(&binding.joined.join_root_sha256))
@@ -100,13 +100,6 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         return Err("k1_runtime_identification_report_invalid".to_owned());
     }
     Ok(report)
-}
-
-fn frozen_row_is_eligible(
-    row: &K1NaturalEvidenceRowV1,
-    freeze: &K1NaturalCandidateFreezeV1,
-) -> bool {
-    !row.safety_veto || freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1
 }
 
 fn capture_generation_matches(
