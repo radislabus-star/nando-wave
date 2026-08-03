@@ -57,15 +57,24 @@ mod tests {
         .expect("refresh immutable generation sidecars");
 
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&fs::read(&controller).unwrap()).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(
+                &fs::read(&controller).expect("read refreshed controller"),
+            )
+            .expect("decode refreshed controller"),
             json!({"runtime": "new", "kind": "controller"})
         );
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&fs::read(&candidate).unwrap()).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(
+                &fs::read(&candidate).expect("read refreshed candidate"),
+            )
+            .expect("decode refreshed candidate"),
             json!({"runtime": "new", "kind": "candidate"})
         );
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&fs::read(&marker).unwrap()).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(
+                &fs::read(&marker).expect("read refreshed marker"),
+            )
+            .expect("decode refreshed marker"),
             json!({"runtime": "new", "kind": "marker"})
         );
         fs::remove_dir_all(root).expect("remove temp root");

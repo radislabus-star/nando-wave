@@ -11,8 +11,8 @@ use nando_operator_learning::multi_source::{
     pre_action_t1_selector_witnesses_v1, source_neutral_topology_root_v1,
 };
 use nando_response_actor::{
-    ResponseExecutionStatus, execute_response, request_text_from_provider_payload,
-    response_runtime_contract_sha256, selected_value_with_request,
+    ResponseExecutionStatus, execute_response, response_runtime_contract_sha256,
+    selected_value_with_request,
 };
 
 use crate::k1_natural_scheduler::{
@@ -140,7 +140,7 @@ pub(crate) fn execute_collection_prediction(
     }
     let payload: serde_json::Value = serde_json::from_str(provider_payload_json)
         .map_err(|_| "k1_pre_action_provider_payload_invalid".to_owned())?;
-    let request_text = request_text_from_provider_payload(&payload).unwrap_or_default();
+    let request_text = crate::extract_request_text(&payload);
     let structural_binding_root =
         pre_action_t1_binding_root(canonical_program, &topology.structure.topology)
             .map_err(|reason| format!("k1_pre_action_role_binding:{reason}"))?;

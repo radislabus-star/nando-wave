@@ -7219,8 +7219,44 @@ fn canonical_chat_tool_output(content: &Value) -> Option<Value> {
         .map(Value::Array)
 }
 
-fn extract_request_text(payload: &Value) -> String {
-    nando_response_actor::request_text_from_provider_payload(payload).unwrap_or_default()
+pub(crate) fn extract_request_text(payload: &Value) -> String {
+    if let Some(input) = payload.get("input") {
+        if let Some(text) = input.as_str() {
+            return text.to_owned();
+        }
+        if let Some(messages) = input.as_array()
+            && let Some(text) = latest_user_text(messages)
+        {
+            return text;
+        }
+    }
+    if let Some(prompt) = payload.get("prompt").and_then(Value::as_str) {
+        return prompt.to_owned();
+    }
+    payload
+        .get("messages")
+        .and_then(Value::as_array)
+        .and_then(|messages| latest_user_text(messages))
+        .unwrap_or_default()
+}
+
+fn latest_user_text(messages: &[Value]) -> Option<String> {
+    let mut fallback = None;
+    let mut user = None;
+    for message in messages {
+        let Some(content) = message.get("content") else {
+            continue;
+        };
+        let text = message_content_text(content);
+        if text.is_empty() {
+            continue;
+        }
+        fallback = Some(text.clone());
+        if message.get("role").and_then(Value::as_str) == Some("user") {
+            user = Some(text);
+        }
+    }
+    user.or(fallback)
 }
 
 fn provider_request_shape(
@@ -7345,6 +7381,22 @@ fn optional_string_sha256(value: Option<&Value>) -> Value {
         .and_then(Value::as_str)
         .map(|text| Value::String(sha256_bytes(text.as_bytes())))
         .unwrap_or(Value::Null)
+}
+
+fn message_content_text(content: &Value) -> String {
+    if let Some(text) = content.as_str() {
+        return text.to_owned();
+    }
+    content
+        .as_array()
+        .map(|parts| {
+            parts
+                .iter()
+                .filter_map(|part| part.get("text").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default()
 }
 
 fn responses_projection(
