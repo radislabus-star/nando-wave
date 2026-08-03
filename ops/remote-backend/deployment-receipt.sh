@@ -10,6 +10,17 @@ CONFIG_PATHS="${NANDO_DEPLOY_RECEIPT_CONFIGS-/etc/nando-gateway/nginx.conf /etc/
 RUNTIME_ENDPOINTS="${NANDO_DEPLOY_RECEIPT_ENDPOINTS-hot_health=http://127.0.0.1:18789/health cold_health=http://127.0.0.1:18790/health control_health=http://127.0.0.1:18788/health edge_health=http://192.168.3.94:8787/health acquisition=http://127.0.0.1:18790/v2/multi-source/ms3-linked-frame-acquisition generation=http://127.0.0.1:18790/v2/multi-source/ms3-generation-registry ms4=http://127.0.0.1:18790/v2/multi-source/ms4-closed-loop}"
 HOT_UNIT="${NANDO_DEPLOY_HOT_UNIT-nando-transition-serving.service}"
 NGINX_UNIT="${NANDO_DEPLOY_NGINX_UNIT-nando-transport-gateway.service}"
+ALLOW_HOT_RESTART="${NANDO_DEPLOY_ALLOW_HOT_RESTART-0}"
+
+if [[ "${ALLOW_HOT_RESTART}" != "0" && "${ALLOW_HOT_RESTART}" != "1" ]]; then
+  printf 'NANDO_DEPLOY_ALLOW_HOT_RESTART must be 0 or 1\n' >&2
+  exit 2
+fi
+if [[ "${ALLOW_HOT_RESTART}" == "1" ]]; then
+  ALLOW_HOT_RESTART_JSON=true
+else
+  ALLOW_HOT_RESTART_JSON=false
+fi
 
 usage() {
   cat <<'EOF'
@@ -141,10 +152,12 @@ if [[ "${mode}" == "prepare" ]]; then
     --arg rollback_manifest_root_sha256 "${rollback_manifest_root}" \
     --argjson hot_pid_before "${hot_pid_before:-0}" \
     --argjson nginx_pid_before "${nginx_pid_before:-0}" \
+    --argjson hot_restart_allowed "${ALLOW_HOT_RESTART_JSON}" \
     '{schema:$schema,deployment_id:$deployment_id,source_commit:$source_commit,
       source_tree:$source_tree,rollback_commit:$rollback_commit,
       rollback_manifest_root_sha256:$rollback_manifest_root_sha256,
-      hot_pid_before:$hot_pid_before,nginx_pid_before:$nginx_pid_before}' \
+      hot_pid_before:$hot_pid_before,nginx_pid_before:$nginx_pid_before,
+      hot_restart_allowed:$hot_restart_allowed}' \
     > "${work}/prepared.json"
   as_root install -m 0600 "${work}/rollback-manifest.sha256" \
     "${deployment_dir}/rollback-manifest.sha256"
@@ -234,13 +247,15 @@ jq -sS '.' "${work}/runtime.jsonl" > "${work}/runtime.json"
 
 hot_pid_before="$(jq -r '.hot_pid_before' <<<"${prepared}")"
 nginx_pid_before="$(jq -r '.nginx_pid_before' <<<"${prepared}")"
+hot_restart_allowed="$(jq -r '.hot_restart_allowed // false' <<<"${prepared}")"
 hot_pid_after="$(unit_pid "${HOT_UNIT}")"
 nginx_pid_after="$(unit_pid "${NGINX_UNIT}")"
 hot_unchanged=true
 nginx_unchanged=true
 if [[ -n "${HOT_UNIT}" && "${hot_pid_before}" != "${hot_pid_after}" ]]; then hot_unchanged=false; fi
 if [[ -n "${NGINX_UNIT}" && "${nginx_pid_before}" != "${nginx_pid_after}" ]]; then nginx_unchanged=false; fi
-[[ "${hot_unchanged}" == true && "${nginx_unchanged}" == true ]]
+[[ "${nginx_unchanged}" == true ]]
+[[ "${hot_unchanged}" == true || "${hot_restart_allowed}" == true ]]
 
 generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 jq -nS \
@@ -253,6 +268,9 @@ jq -nS \
   --arg rollback_manifest_root_sha256 "${actual_rollback_root}" \
   --argjson hot_pid_before "${hot_pid_before}" --argjson hot_pid_after "${hot_pid_after:-0}" \
   --argjson nginx_pid_before "${nginx_pid_before}" --argjson nginx_pid_after "${nginx_pid_after:-0}" \
+  --argjson hot_pid_unchanged "${hot_unchanged}" \
+  --argjson hot_restart_allowed "${hot_restart_allowed}" \
+  --argjson nginx_pid_unchanged "${nginx_unchanged}" \
   --argjson artifacts "$(cat "${work}/artifacts.json")" \
   --argjson units "$(cat "${work}/units.json")" \
   --argjson state_roots "$(cat "${work}/state-roots.json")" \
@@ -261,8 +279,9 @@ jq -nS \
     source:{commit:$source_commit,tree:$source_tree},artifacts:$artifacts,units:$units,
     state_roots:$state_roots,runtime_snapshots:$runtime_snapshots,
     invariants:{hot_pid_before:$hot_pid_before,hot_pid_after:$hot_pid_after,
-      hot_pid_unchanged:true,nginx_pid_before:$nginx_pid_before,
-      nginx_pid_after:$nginx_pid_after,nginx_pid_unchanged:true},
+      hot_pid_unchanged:$hot_pid_unchanged,hot_restart_allowed:$hot_restart_allowed,
+      nginx_pid_before:$nginx_pid_before,nginx_pid_after:$nginx_pid_after,
+      nginx_pid_unchanged:$nginx_pid_unchanged},
     rollback:{source_commit:$rollback_commit,path:$rollback_path,
       manifest_root_sha256:$rollback_manifest_root_sha256}}' \
   > "${work}/receipt-payload.json"

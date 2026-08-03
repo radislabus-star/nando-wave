@@ -51,6 +51,7 @@ jq -e --arg commit "${commit}" --arg root "${receipt_root}" '
   and .source.commit == $commit
   and .receipt_root_sha256 == $root
   and .invariants.hot_pid_unchanged == true
+  and .invariants.hot_restart_allowed == false
   and .invariants.nginx_pid_unchanged == true
   and (.artifacts | length) == 1
   and (.state_roots | length) == 1
@@ -61,4 +62,65 @@ if (printf 'tamper\n' >> "${deployment_dir}/prepared.json") 2>/dev/null; then
   printf 'deployment receipt directory remained writable\n' >&2
   exit 1
 fi
+
+mkdir -p "${WORK}/fake-bin"
+# The expressions belong to the generated fixture.
+# shellcheck disable=SC2016
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'if [[ "$1" == "show" && "$2" == "-p" && "$3" == "MainPID" ]]; then' \
+  '  cat "${NANDO_TEST_PID_ROOT}/$5.pid"' \
+  'elif [[ "$1" == "show" && "$2" == "-p" && "$3" == "FragmentPath" ]]; then' \
+  '  printf "\\n"' \
+  'elif [[ "$1" == "is-active" ]]; then' \
+  '  printf "active\\n"' \
+  'elif [[ "$1" == "is-enabled" ]]; then' \
+  '  printf "enabled\\n"' \
+  'fi' > "${WORK}/fake-bin/systemctl"
+chmod +x "${WORK}/fake-bin/systemctl"
+printf '101\n' > "${WORK}/hot.service.pid"
+printf '202\n' > "${WORK}/nginx.service.pid"
+
+denied_env=(
+  "${common_env[@]}"
+  PATH="${WORK}/fake-bin:${PATH}"
+  NANDO_TEST_PID_ROOT="${WORK}"
+  NANDO_DEPLOY_RECEIPT_ROOT="${WORK}/denied-restart-receipts"
+  NANDO_DEPLOY_HOT_UNIT=hot.service
+  NANDO_DEPLOY_NGINX_UNIT=nginx.service
+)
+denied_dir="$(env "${denied_env[@]}" "${SCRIPT}" prepare \
+  --source-dir "${WORK}/source" --rollback-commit "${commit}")"
+printf '303\n' > "${WORK}/hot.service.pid"
+if env "${denied_env[@]}" "${SCRIPT}" finalize \
+  --source-dir "${WORK}/source" --deployment-dir "${denied_dir}"; then
+  printf 'unexpected hot restart was accepted\n' >&2
+  exit 1
+fi
+
+printf '101\n' > "${WORK}/hot.service.pid"
+restart_env=(
+  "${common_env[@]}"
+  PATH="${WORK}/fake-bin:${PATH}"
+  NANDO_TEST_PID_ROOT="${WORK}"
+  NANDO_DEPLOY_RECEIPT_ROOT="${WORK}/restart-receipts"
+  NANDO_DEPLOY_HOT_UNIT=hot.service
+  NANDO_DEPLOY_NGINX_UNIT=nginx.service
+  NANDO_DEPLOY_ALLOW_HOT_RESTART=1
+)
+restart_dir="$(env "${restart_env[@]}" "${SCRIPT}" prepare \
+  --source-dir "${WORK}/source" --rollback-commit "${commit}")"
+printf '303\n' > "${WORK}/hot.service.pid"
+restart_result="$(env "${restart_env[@]}" "${SCRIPT}" finalize \
+  --source-dir "${WORK}/source" --deployment-dir "${restart_dir}")"
+restart_receipt="${restart_result%% *}"
+jq -e '
+  .invariants.hot_pid_before == 101
+  and .invariants.hot_pid_after == 303
+  and .invariants.hot_pid_unchanged == false
+  and .invariants.hot_restart_allowed == true
+  and .invariants.nginx_pid_before == 202
+  and .invariants.nginx_pid_after == 202
+  and .invariants.nginx_pid_unchanged == true
+' "${restart_receipt}" >/dev/null
 printf 'deployment receipt transaction tests: PASS\n'
