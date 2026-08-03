@@ -389,7 +389,10 @@ pub use rollover::{
     FROZEN_PARTITION_VERSION, FrozenGeneration, RolloverPolicy, freeze_generation,
     generation_monotonically_improves, refresh_frozen_generation, successor_generation,
 };
-pub use runtime::{ResponseExecution, ResponseExecutionStatus, execute_response};
+pub use runtime::{
+    ResponseExecution, ResponseExecutionStatus, execute_response,
+    request_text_from_provider_payload, selected_value_with_request,
+};
 pub use semantic_alias::{
     SEMANTIC_ALIAS_GRAPH_SCHEMA_V1, SemanticAliasEdge, SemanticAliasGraph, SemanticAliasReport,
     SemanticAliasState, SemanticEffectEvidence,

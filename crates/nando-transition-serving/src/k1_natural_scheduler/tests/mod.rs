@@ -13,6 +13,7 @@ mod authority;
 mod duplicate_cohorts;
 mod fork;
 mod journal;
+mod pre_action_evidence;
 
 static TEST_ID: AtomicU64 = AtomicU64::new(0);
 

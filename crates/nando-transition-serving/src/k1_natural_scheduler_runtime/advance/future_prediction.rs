@@ -124,9 +124,11 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_future_evidence(
                 schema: K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
                 lane,
                 contract_root_sha256: contract.contract_root_sha256.clone(),
-                topology: topology.clone(),
-                provider_payload_json: None,
-                request_text: None,
+                topology_commitment_root_sha256: topology.commit.commitment_root_sha256.clone(),
+                provider_capture_request_root_sha256: topology
+                    .commit
+                    .provider_capture_request_root_sha256
+                    .clone(),
             },
         )?;
         return Ok(FutureEvidenceAdvance::Pending {

@@ -8,15 +8,18 @@ use nando_operator_kernel::{
 use nando_operator_learning::multi_source::{
     K1PreActionExecutionReceiptV1, PreActionTopologyAuditRowV1,
     pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
-    source_neutral_topology_root_v1,
+    pre_action_t1_selector_witnesses_v1, source_neutral_topology_root_v1,
 };
 use nando_response_actor::{
-    ResponseExecutionStatus, execute_response, response_runtime_contract_sha256,
+    ResponseExecutionStatus, execute_response, request_text_from_provider_payload,
+    response_runtime_contract_sha256, selected_value_with_request,
 };
 
 use crate::k1_natural_scheduler::{
-    K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1, K1FuturePredictionAuthorityRequestV1,
-    K1SchedulerLaneV1, K1SchedulerProjectionV1, append_future_prediction, restore_projection,
+    K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1,
+    K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1, K1FuturePredictionAuthorityRequestV1,
+    K1PreActionEvidenceAuthorityRequestV1, K1SchedulerLaneV1, K1SchedulerProjectionV1,
+    append_future_prediction, archive_pre_action_evidence, restore_projection,
 };
 use crate::operator_certification::CertificationAuthorityConfigV1;
 
@@ -53,7 +56,6 @@ pub(crate) fn precommit_candidate_match(
     config: &CertificationAuthorityConfigV1,
     topology: PreActionTopologyAuditRowV1,
     provider_payload_json: &str,
-    request_text: &str,
 ) -> Result<bool, String> {
     let projection = restore_projection(config)?;
     let Some(candidate) = projection.active_candidate_freeze.as_ref() else {
@@ -83,15 +85,43 @@ pub(crate) fn precommit_candidate_match(
     {
         return Ok(false);
     }
+    let archive_request = K1PreActionEvidenceAuthorityRequestV1 {
+        schema: K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+        lane: K1SchedulerLaneV1::Epistemic,
+        contract_root_sha256: contract.contract_root_sha256.clone(),
+        topology_commitment_root_sha256: topology.commit.commitment_root_sha256.clone(),
+        provider_capture_request_root_sha256: topology
+            .commit
+            .provider_capture_request_root_sha256
+            .clone(),
+        provider_payload_json: provider_payload_json.to_owned(),
+    };
+    let mut archived = false;
+    for _ in 0..100 {
+        match archive_pre_action_evidence(config, archive_request.clone()) {
+            Ok(_) => {
+                archived = true;
+                break;
+            }
+            Err(error) if error.contains("multi_source_topology_archive_row_missing") => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    if !archived {
+        return Err("k1_pre_action_topology_archive_ack_timeout".to_owned());
+    }
     append_future_prediction(
         config,
         K1FuturePredictionAuthorityRequestV1 {
             schema: K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
             lane: K1SchedulerLaneV1::Epistemic,
             contract_root_sha256: contract.contract_root_sha256.clone(),
-            topology,
-            provider_payload_json: Some(provider_payload_json.to_owned()),
-            request_text: Some(request_text.to_owned()),
+            topology_commitment_root_sha256: topology.commit.commitment_root_sha256,
+            provider_capture_request_root_sha256: topology
+                .commit
+                .provider_capture_request_root_sha256,
         },
     )?;
     Ok(true)
@@ -102,7 +132,6 @@ pub(crate) fn execute_collection_prediction(
     canonical_program: &ResponseProgram,
     topology: &PreActionTopologyAuditRowV1,
     provider_payload_json: &str,
-    request_text: &str,
 ) -> Result<K1PreActionExecutionReceiptV1, String> {
     let provider_capture_request_root_sha256 =
         topology.commit.provider_capture_request_root_sha256.clone();
@@ -111,10 +140,23 @@ pub(crate) fn execute_collection_prediction(
     }
     let payload: serde_json::Value = serde_json::from_str(provider_payload_json)
         .map_err(|_| "k1_pre_action_provider_payload_invalid".to_owned())?;
+    let request_text = request_text_from_provider_payload(&payload).unwrap_or_default();
     let structural_binding_root =
         pre_action_t1_binding_root(canonical_program, &topology.structure.topology)
             .map_err(|reason| format!("k1_pre_action_role_binding:{reason}"))?;
-    let execution = execute_response(canonical_program, request_text, &payload);
+    for (selector, frozen_witness_hash) in
+        pre_action_t1_selector_witnesses_v1(canonical_program, &topology.structure.topology)
+            .map_err(|reason| format!("k1_pre_action_selector_binding:{reason}"))?
+    {
+        let selected = selected_value_with_request(&request_text, &payload, &selector)
+            .map_err(|reason| format!("k1_pre_action_selector_runtime:{reason}"))?;
+        let runtime_value_hash = canonical_json_sha256(&selected.value)
+            .map_err(|error| format!("k1_pre_action_selector_hash:{error}"))?;
+        if runtime_value_hash != frozen_witness_hash {
+            return Err("k1_pre_action_selector_witness_mismatch".to_owned());
+        }
+    }
+    let execution = execute_response(canonical_program, &request_text, &payload);
     if execution.status != ResponseExecutionStatus::Executed {
         return Err(format!(
             "k1_pre_action_program_not_executed:{}",
@@ -132,7 +174,7 @@ pub(crate) fn execute_collection_prediction(
     )
     .map_err(str::to_owned)?;
     let complete_binding_root = canonical_json_sha256(&(
-        "nando.k1-complete-pre-action-input-binding.v2",
+        "nando.k1-complete-pre-action-input-binding.v3",
         program_root.as_str(),
         structural_binding_root.as_str(),
         provider_capture_request_root_sha256.as_str(),

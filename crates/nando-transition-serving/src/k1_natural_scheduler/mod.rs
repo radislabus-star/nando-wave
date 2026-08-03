@@ -36,6 +36,7 @@ pub(crate) mod duplicate_cohorts;
 mod fork;
 mod future_authority;
 mod journal;
+mod pre_action_evidence;
 mod projection;
 mod selection_authority;
 
@@ -54,6 +55,8 @@ pub(crate) const K1_FUTURE_CONTRACT_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-future-contract-authority-request.v1";
 pub(crate) const K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-future-prediction-authority-request.v1";
+pub(crate) const K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1: &str =
+    "nando.k1-pre-action-evidence-authority-request.v1";
 pub(crate) const K1_FUTURE_OUTCOME_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-future-outcome-authority-request.v1";
 const K1_SCHEDULER_AUTHORITY_RESPONSE_SCHEMA_V1: &str = "nando.k1-scheduler-authority-response.v1";
@@ -126,11 +129,19 @@ pub(crate) struct K1FuturePredictionAuthorityRequestV1 {
     pub schema: String,
     pub lane: K1SchedulerLaneV1,
     pub contract_root_sha256: String,
-    pub topology: PreActionTopologyAuditRowV1,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_payload_json: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub request_text: Option<String>,
+    pub topology_commitment_root_sha256: String,
+    pub provider_capture_request_root_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct K1PreActionEvidenceAuthorityRequestV1 {
+    pub schema: String,
+    pub lane: K1SchedulerLaneV1,
+    pub contract_root_sha256: String,
+    pub topology_commitment_root_sha256: String,
+    pub provider_capture_request_root_sha256: String,
+    pub provider_payload_json: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -287,6 +298,13 @@ pub(crate) fn append_future_contract(
 pub(crate) fn append_future_prediction(
     config: &CertificationAuthorityConfigV1,
     request: K1FuturePredictionAuthorityRequestV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    send_authority_request(config, &request)
+}
+
+pub(crate) fn archive_pre_action_evidence(
+    config: &CertificationAuthorityConfigV1,
+    request: K1PreActionEvidenceAuthorityRequestV1,
 ) -> Result<K1SchedulerProjectionV1, String> {
     send_authority_request(config, &request)
 }

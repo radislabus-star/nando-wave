@@ -40,6 +40,11 @@ pub(crate) fn handle_authority_line(
         >(value)
         .map_err(|error| format!("k1_future_prediction_request_decode:{error}"))
         .and_then(|request| append_future_prediction_authoritative(config, signing_key, request)),
+        K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1 => {
+            serde_json::from_value::<K1PreActionEvidenceAuthorityRequestV1>(value)
+                .map_err(|error| format!("k1_pre_action_evidence_request_decode:{error}"))
+                .and_then(|request| archive_pre_action_evidence_authoritative(config, request))
+        }
         K1_FUTURE_OUTCOME_AUTHORITY_REQUEST_SCHEMA_V1 => serde_json::from_value::<
             K1FutureOutcomeAuthorityRequestV1,
         >(value)

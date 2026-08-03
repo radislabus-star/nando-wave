@@ -1,9 +1,11 @@
 use nando_operator_kernel::{
-    CollectionProgramStep, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, LearningRequestStructureV2,
+    AtomValueType, CollectionProgramStep, CollectionScalarType,
+    LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, LearningRequestStructureV2,
     MultiSourceCardinalityClassV1, MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1,
-    MultiSourceExtractionStatusV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
-    MultiSourceTemporalClassV1, MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1,
-    PreActionTopologyCommitV1, ResponseProgram, ValueProjectionFormat,
+    MultiSourceExtractionStatusV1, MultiSourceRelationEdgeV1, MultiSourceRelationKindV1,
+    MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1,
+    MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1,
+    ResponseProgram, ResponseValueSelector, ValueProjectionFormat, canonical_json_sha256,
     response_program_version_root_sha256,
 };
 use nando_operator_learning::multi_source::PreActionTopologyAuditRowV1;
@@ -95,7 +97,6 @@ fn independent_authority_executes_and_seals_the_typed_consequence() {
         &program,
         &topology_row(sha256_bytes(payload.as_bytes())),
         payload,
-        "count items",
     )
     .expect("authority execution");
 
@@ -122,7 +123,6 @@ fn authority_rejects_payload_that_does_not_match_the_provider_capture() {
             &program,
             &topology_row(root("different-request")),
             payload,
-            "items",
         ),
         Err("k1_pre_action_request_digest_mismatch".to_owned())
     );
@@ -134,13 +134,89 @@ fn authority_wire_rejects_a_client_supplied_execution_receipt() {
         schema: K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
         lane: K1SchedulerLaneV1::Epistemic,
         contract_root_sha256: root("contract"),
-        topology: topology_row(root("request")),
-        provider_payload_json: Some("{}".to_owned()),
-        request_text: Some("request".to_owned()),
+        topology_commitment_root_sha256: root("topology"),
+        provider_capture_request_root_sha256: root("request"),
     };
     let mut value = serde_json::to_value(request).expect("request value");
     value["pre_action_execution_receipt"] = serde_json::json!({
         "receipt_root_sha256": root("forged-receipt")
     });
     assert!(serde_json::from_value::<K1FuturePredictionAuthorityRequestV1>(value).is_err());
+}
+
+#[test]
+fn authority_wire_rejects_forged_request_text_and_topology() {
+    let request = K1FuturePredictionAuthorityRequestV1 {
+        schema: K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+        lane: K1SchedulerLaneV1::Epistemic,
+        contract_root_sha256: root("contract"),
+        topology_commitment_root_sha256: root("topology"),
+        provider_capture_request_root_sha256: root("request"),
+    };
+    let mut value = serde_json::to_value(request).expect("request value");
+    value["request_text"] = serde_json::json!("forged selector input");
+    value["topology"] = serde_json::to_value(topology_row(root("request"))).expect("topology");
+    assert!(serde_json::from_value::<K1FuturePredictionAuthorityRequestV1>(value).is_err());
+}
+
+#[test]
+fn authority_rejects_runtime_selector_value_that_differs_from_frozen_witness() {
+    let payload = r#"{"input":[{"role":"user","content":"count status active"},{"type":"function_call_output","call_id":"call-1","output":"{\"items\":[{\"status\":\"active\"}]}"}]}"#;
+    let mut row = topology_row(sha256_bytes(payload.as_bytes()));
+    row.structure.topology.roles.push(MultiSourceRoleNodeV1 {
+        local_role_id: 2,
+        source_ordinal: 1,
+        value_ordinal: 0,
+        type_class: MultiSourceTypeClassV1::String,
+        container_class: MultiSourceContainerClassV1::Scalar,
+        cardinality_class: MultiSourceCardinalityClassV1::One,
+        temporal_class: MultiSourceTemporalClassV1::Latest,
+        depth_bucket: 2,
+        structural_flags: 1,
+    });
+    row.structure
+        .topology
+        .role_witnesses
+        .push(MultiSourceRoleWitnessV1 {
+            local_role_id: 2,
+            value_sha256: canonical_json_sha256(&serde_json::json!("forged"))
+                .expect("witness root"),
+            request_reference_ordinal: Some(0),
+            request_reference_ordinal_candidates: Vec::new(),
+        });
+    row.structure
+        .topology
+        .relations
+        .push(MultiSourceRelationEdgeV1 {
+            relation: MultiSourceRelationKindV1::RequestReferencesRole,
+            source_role_id: 2,
+            target_role_id: 2,
+        });
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("extractor-config"),
+        1,
+    )
+    .expect("commit");
+    let program = ResponseProgram::compose_collection(
+        vec![
+            CollectionProgramStep::SelectOnlyArrayField,
+            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                selector: ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                    ordinal: 0,
+                    value_type: AtomValueType::String,
+                },
+                value_type: CollectionScalarType::String,
+            },
+            CollectionProgramStep::Count,
+        ],
+        ValueProjectionFormat::PlainText,
+        "completed",
+    );
+    assert_eq!(
+        execute_collection_prediction(root("contract"), &program, &row, payload),
+        Err("k1_pre_action_selector_witness_mismatch".to_owned())
+    );
 }

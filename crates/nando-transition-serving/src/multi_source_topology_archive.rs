@@ -216,6 +216,24 @@ impl MultiSourceTopologyArchive {
     }
 }
 
+pub(crate) fn read_topology_row_by_root(
+    directory: &Path,
+    topology_root_sha256: &str,
+) -> Result<PreActionTopologyAuditRowV1, String> {
+    let rows = read_framed_cbor::<PreActionTopologyAuditRowV1>(directory, LEDGER_PREFIX)?;
+    let mut matched = None;
+    for row in rows {
+        validate_row(&row)?;
+        if row.commit.commitment_root_sha256 != topology_root_sha256 {
+            continue;
+        }
+        if matched.replace(row).is_some() {
+            return Err("multi_source_topology_archive_duplicate_root".to_owned());
+        }
+    }
+    matched.ok_or_else(|| "multi_source_topology_archive_row_missing".to_owned())
+}
+
 fn validate_row(row: &PreActionTopologyAuditRowV1) -> Result<(), String> {
     let roots_valid = [
         Some(row.bridge_epoch_sha256.as_str()),

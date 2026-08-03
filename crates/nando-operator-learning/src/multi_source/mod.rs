@@ -19,6 +19,7 @@ mod north_star_cellular_support_v1;
 mod north_star_proof_v1;
 mod representation_gap;
 mod source_neutral_t1;
+mod source_neutral_t1_binding;
 mod transport_binding;
 
 pub use audit::{
@@ -162,7 +163,9 @@ pub use representation_gap::{
     RepresentationGapAdjudicationReportV1, RepresentationGapAdjudicationV1,
     RepresentationGapClassV1, build_representation_gap_adjudication_report_v1,
 };
-pub use source_neutral_t1::{pre_action_t1_binding_root, t1_program_is_consistent};
+pub use source_neutral_t1::{
+    pre_action_t1_binding_root, pre_action_t1_selector_witnesses_v1, t1_program_is_consistent,
+};
 pub use transport_binding::{
     REQUEST_ACTION_BINDING_SCHEMA_V1, RequestActionBindingV1, TRANSPORT_BOUND_JOIN_MAX_ROWS_V1,
     TRANSPORT_TERMINAL_RECEIPT_SCHEMA_V1, TransportBindingFailureV1, TransportBindingLedgerV1,

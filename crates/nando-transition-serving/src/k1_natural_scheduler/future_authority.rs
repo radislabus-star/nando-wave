@@ -87,7 +87,12 @@ pub(super) fn append_future_prediction_authoritative(
     {
         return Err("k1_future_prediction_request_invalid".to_owned());
     }
-    validate_pre_action_topology_join_eligibility_v1(&request.topology)
+    let topology = pre_action_evidence::restore_topology(
+        config,
+        &request.topology_commitment_root_sha256,
+        &request.provider_capture_request_root_sha256,
+    )?;
+    validate_pre_action_topology_join_eligibility_v1(&topology)
         .map_err(|reason| format!("k1_future_prediction_topology:{reason:?}"))?;
     let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
     let projection = projection_for(&scheduler)?;
@@ -104,52 +109,46 @@ pub(super) fn append_future_prediction_authoritative(
         .as_ref()
         .ok_or_else(|| "k1_future_prediction_contract_missing".to_owned())?;
     if contract.contract_root_sha256 != request.contract_root_sha256
-        || request.topology.commit.capture_sequence < candidate.future_min_sequence
-        || request.topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
-        || pre_action_applicability_shape_root_v1(&request.topology.structure.topology)
+        || topology.commit.capture_sequence < candidate.future_min_sequence
+        || topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
+        || pre_action_applicability_shape_root_v1(&topology.structure.topology)
             .map_err(str::to_owned)?
             != candidate.candidate_structural_root_sha256
-        || source_neutral_topology_root_v1(&request.topology.structure.topology)
-            .map_err(str::to_owned)?
+        || source_neutral_topology_root_v1(&topology.structure.topology).map_err(str::to_owned)?
             != candidate.source_neutral_topology_root_sha256
     {
         return Err("k1_future_prediction_candidate_mismatch".to_owned());
     }
     if projection.future_predictions.iter().any(|prediction| {
-        prediction.topology_commitment_root_sha256 == request.topology.commit.commitment_root_sha256
+        prediction.topology_commitment_root_sha256 == topology.commit.commitment_root_sha256
     }) {
         return Ok(projection);
     }
-    let captured_at_unix_ms = request
-        .topology
+    let captured_at_unix_ms = topology
         .captured_at_unix_ms
         .ok_or_else(|| "k1_future_prediction_capture_time_missing".to_owned())?;
     let prediction = match &contract.canonical_program.operation {
         ResponseOperation::ComposeCollection { .. } => {
-            let provider_payload_json = request
-                .provider_payload_json
-                .as_deref()
-                .ok_or_else(|| "k1_future_collection_provider_payload_required".to_owned())?;
-            let request_text = request
-                .request_text
-                .as_deref()
-                .ok_or_else(|| "k1_future_collection_request_text_required".to_owned())?;
+            let evidence = pre_action_evidence::restore(
+                config,
+                &request.topology_commitment_root_sha256,
+                &request.provider_capture_request_root_sha256,
+            )?;
             let receipt = crate::k1_pre_action_prediction::execute_collection_prediction(
                 contract.contract_root_sha256.clone(),
                 &contract.canonical_program,
-                &request.topology,
-                provider_payload_json,
-                request_text,
+                &evidence.topology,
+                &evidence.provider_payload_json,
             )?;
             let predicted_at_unix_nanos = unix_now_nanos()?;
             if receipt.contract_root_sha256 != contract.contract_root_sha256
                 || receipt.canonical_program_root_sha256 != contract.canonical_program_root_sha256
-                || request.topology.capture_event_sha256.as_deref()
+                || topology.capture_event_sha256.as_deref()
                     != Some(receipt.provider_capture_event_root_sha256.as_str())
                 || receipt.provider_capture_request_root_sha256
-                    != request.topology.commit.provider_capture_request_root_sha256
-                || receipt.turn_intent_id_sha256 != request.topology.structure.turn_intent_id_sha256
-                || receipt.capture_sequence != request.topology.commit.capture_sequence
+                    != topology.commit.provider_capture_request_root_sha256
+                || receipt.turn_intent_id_sha256 != topology.structure.turn_intent_id_sha256
+                || receipt.capture_sequence != topology.commit.capture_sequence
                 || receipt.captured_at_unix_ms != captured_at_unix_ms
                 || receipt.executed_at_unix_nanos > predicted_at_unix_nanos
             {
@@ -160,28 +159,25 @@ pub(super) fn append_future_prediction_authoritative(
                 candidate.freeze_root_sha256.clone(),
                 identification.freeze_root_sha256.clone(),
                 contract.semantic_class_root_sha256.clone(),
-                request.topology.commit.commitment_root_sha256,
-                request.topology.commit.provider_capture_request_root_sha256,
-                request.topology.structure.turn_intent_id_sha256,
+                topology.commit.commitment_root_sha256,
+                topology.commit.provider_capture_request_root_sha256,
+                topology.structure.turn_intent_id_sha256,
                 receipt.complete_pre_action_binding_root_sha256,
                 &contract.canonical_program_root_sha256,
                 receipt.receipt_root_sha256,
                 receipt.predicted_typed_consequence_root_sha256,
                 receipt.execution_verifier_contract_root_sha256,
-                request.topology.commit.capture_sequence,
+                topology.commit.capture_sequence,
                 captured_at_unix_ms,
                 receipt.executed_at_unix_nanos,
                 predicted_at_unix_nanos,
             )
         }
         _ => {
-            if request.provider_payload_json.is_some() || request.request_text.is_some() {
-                return Err("k1_future_unexpected_typed_prediction".to_owned());
-            }
             let predicted_at_unix_nanos = unix_now_nanos()?;
             let binding_root = pre_action_t1_binding_root(
                 &contract.canonical_program,
-                &request.topology.structure.topology,
+                &topology.structure.topology,
             )
             .map_err(str::to_owned)?;
             K1FuturePredictionReceiptV1::seal(
@@ -189,12 +185,12 @@ pub(super) fn append_future_prediction_authoritative(
                 candidate.freeze_root_sha256.clone(),
                 identification.freeze_root_sha256.clone(),
                 contract.semantic_class_root_sha256.clone(),
-                request.topology.commit.commitment_root_sha256,
-                request.topology.commit.provider_capture_request_root_sha256,
-                request.topology.structure.turn_intent_id_sha256,
+                topology.commit.commitment_root_sha256,
+                topology.commit.provider_capture_request_root_sha256,
+                topology.structure.turn_intent_id_sha256,
                 binding_root,
                 &contract.canonical_program_root_sha256,
-                request.topology.commit.capture_sequence,
+                topology.commit.capture_sequence,
                 captured_at_unix_ms,
                 predicted_at_unix_nanos,
             )
@@ -208,6 +204,56 @@ pub(super) fn append_future_prediction_authoritative(
         &mut scheduler,
         K1SchedulerEventPayloadV1::FuturePrediction(prediction),
     )
+}
+
+pub(super) fn archive_pre_action_evidence_authoritative(
+    config: &CertificationAuthorityConfigV1,
+    request: K1PreActionEvidenceAuthorityRequestV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    if request.schema != K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1
+        || request.lane != K1SchedulerLaneV1::Epistemic
+    {
+        return Err("k1_pre_action_evidence_request_invalid".to_owned());
+    }
+    let scheduler = restore_anchored_scheduler_for(config, request.lane)?;
+    let projection = projection_for(&scheduler)?;
+    let candidate = projection
+        .active_candidate_freeze
+        .as_ref()
+        .ok_or_else(|| "k1_pre_action_evidence_candidate_missing".to_owned())?;
+    let contract = projection
+        .future_prediction_contract
+        .as_ref()
+        .filter(|contract| contract.contract_root_sha256 == request.contract_root_sha256)
+        .ok_or_else(|| "k1_pre_action_evidence_contract_mismatch".to_owned())?;
+    if !matches!(
+        contract.canonical_program.operation,
+        ResponseOperation::ComposeCollection { .. }
+    ) {
+        return Err("k1_pre_action_evidence_collection_contract_required".to_owned());
+    }
+    let topology = pre_action_evidence::restore_topology(
+        config,
+        &request.topology_commitment_root_sha256,
+        &request.provider_capture_request_root_sha256,
+    )?;
+    if topology.commit.capture_sequence < candidate.future_min_sequence
+        || topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
+        || pre_action_applicability_shape_root_v1(&topology.structure.topology)
+            .map_err(str::to_owned)?
+            != candidate.candidate_structural_root_sha256
+        || source_neutral_topology_root_v1(&topology.structure.topology).map_err(str::to_owned)?
+            != candidate.source_neutral_topology_root_sha256
+    {
+        return Err("k1_pre_action_evidence_candidate_mismatch".to_owned());
+    }
+    pre_action_evidence::archive(
+        config,
+        &request.topology_commitment_root_sha256,
+        &request.provider_capture_request_root_sha256,
+        request.provider_payload_json,
+    )?;
+    Ok(projection)
 }
 
 pub(super) fn append_future_outcome_authoritative(

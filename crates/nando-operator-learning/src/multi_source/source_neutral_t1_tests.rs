@@ -1,9 +1,10 @@
 use nando_operator_kernel::{
-    CollectionProgramStep, CollectionScalarType, MultiSourceCardinalityClassV1,
-    MultiSourceContainerClassV1, MultiSourceExtractionStatusV1, MultiSourceRoleNodeV1,
+    AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionScalarType,
+    MultiSourceCardinalityClassV1, MultiSourceContainerClassV1, MultiSourceExtractionStatusV1,
+    MultiSourceRelationEdgeV1, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
     MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
-    PreActionMultiSourceTopologyV1, ResponseProgram, ResponseValueSelector, ValueProjectionFormat,
-    sha256_bytes,
+    PreActionMultiSourceTopologyV1, ResponseOperation, ResponseProgram, ResponseRenderSegment,
+    ResponseValueSelector, ValueProjectionFormat, sha256_bytes,
 };
 
 use super::pre_action_t1_binding_root;
@@ -102,4 +103,73 @@ fn collection_binding_root_commits_the_scalar_witness() {
     let right =
         pre_action_t1_binding_root(&program(), &topology(&["selector-b"])).expect("right binding");
     assert_ne!(left, right);
+}
+
+#[test]
+fn collection_binding_requires_renderer_selected_role() {
+    let mut program = ResponseProgram::compose_collection(
+        vec![CollectionProgramStep::SelectOnlyArrayField],
+        ValueProjectionFormat::CanonicalJson,
+        "completed",
+    );
+    let ResponseOperation::ComposeCollection { renderer, .. } = &mut program.operation else {
+        panic!("collection program");
+    };
+    *renderer = CollectionOutputRenderer::RenderSequence {
+        segments: vec![
+            ResponseRenderSegment::Primary,
+            ResponseRenderSegment::Selected {
+                selector: ResponseValueSelector::UniqueScalar {
+                    value_type: nando_operator_kernel::AtomValueType::String,
+                },
+                format: ValueProjectionFormat::PlainText,
+            },
+        ],
+    };
+    assert_eq!(
+        pre_action_t1_binding_root(&program, &topology(&[])),
+        Err("collection_selector_role_missing_or_ambiguous")
+    );
+    assert!(pre_action_t1_binding_root(&program, &topology(&["renderer-selector"])).is_ok());
+}
+
+#[test]
+fn collection_binding_covers_the_natural_request_selector_vocabulary() {
+    let selectors = [
+        ResponseValueSelector::RequestReferencedJsonField {
+            value_type: AtomValueType::String,
+        },
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal: 0,
+            value_type: AtomValueType::String,
+        },
+        ResponseValueSelector::RequestLastToken,
+        ResponseValueSelector::RequestUniqueLiteral,
+    ];
+    for selector in selectors {
+        let mut program = ResponseProgram::compose_collection(
+            vec![CollectionProgramStep::SelectOnlyArrayField],
+            ValueProjectionFormat::CanonicalJson,
+            "completed",
+        );
+        let ResponseOperation::ComposeCollection { renderer, .. } = &mut program.operation else {
+            panic!("collection program");
+        };
+        *renderer = CollectionOutputRenderer::RenderSequence {
+            segments: vec![ResponseRenderSegment::Selected {
+                selector,
+                format: ValueProjectionFormat::PlainText,
+            }],
+        };
+        let mut topology = topology(&["selector"]);
+        topology.role_witnesses[1].request_reference_ordinal = Some(0);
+        topology.relations.push(MultiSourceRelationEdgeV1 {
+            relation: MultiSourceRelationKindV1::RequestReferencesRole,
+            source_role_id: 2,
+            target_role_id: 2,
+        });
+        topology.relations.sort();
+        topology.validate().expect("request-bound topology");
+        pre_action_t1_binding_root(&program, &topology).expect("selector binding");
+    }
 }

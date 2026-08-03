@@ -28,23 +28,61 @@ pub fn execute_response(
     )
 }
 
-pub(crate) fn request_text_from_provider_payload(payload: &Value) -> Option<String> {
-    let request = payload
-        .get("input")
+pub fn request_text_from_provider_payload(payload: &Value) -> Option<String> {
+    if let Some(input) = payload.get("input") {
+        if let Some(text) = input.as_str().filter(|text| !text.is_empty()) {
+            return Some(text.to_owned());
+        }
+        if let Some(messages) = input.as_array()
+            && let Some(text) = latest_request_text(messages)
+        {
+            return Some(text);
+        }
+    }
+    if let Some(prompt) = payload
+        .get("prompt")
+        .and_then(Value::as_str)
+        .filter(|text| !text.is_empty())
+    {
+        return Some(prompt.to_owned());
+    }
+    payload
+        .get("messages")
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|item| item.get("role").and_then(Value::as_str) == Some("user"))
-        .filter_map(|item| item.get("content"))
-        .flat_map(|content| match content {
-            Value::String(text) => vec![text.as_str()],
-            Value::Array(parts) => parts
+        .and_then(|messages| latest_request_text(messages))
+}
+
+fn latest_request_text(messages: &[Value]) -> Option<String> {
+    let mut fallback = None;
+    let mut user = None;
+    for message in messages {
+        let Some(content) = message.get("content") else {
+            continue;
+        };
+        let text = request_content_text(content);
+        if text.is_empty() {
+            continue;
+        }
+        fallback = Some(text.clone());
+        if message.get("role").and_then(Value::as_str) == Some("user") {
+            user = Some(text);
+        }
+    }
+    user.or(fallback)
+}
+
+fn request_content_text(content: &Value) -> String {
+    if let Some(text) = content.as_str() {
+        return text.to_owned();
+    }
+    content
+        .as_array()
+        .map(|parts| {
+            parts
                 .iter()
                 .filter_map(|part| part.get("text").and_then(Value::as_str))
-                .collect(),
-            _ => Vec::new(),
+                .collect::<Vec<_>>()
+                .join("\n")
         })
-        .collect::<Vec<_>>()
-        .join("\n");
-    (!request.is_empty()).then_some(request)
+        .unwrap_or_default()
 }
