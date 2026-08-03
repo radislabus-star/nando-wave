@@ -3,7 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ADMISSION_BINARY_SOURCE=""
+GATE_BINARY_SOURCE=""
 INSTALL_BINARY="${NANDO_MS4_ADMISSION_BINARY:-/opt/nando-wave/bin/nando-response-admission}"
+INSTALL_GATE_BINARY="${NANDO_MS4_GATE_INSTALL_BINARY:-/opt/nando-wave/ops/phase-center-test-server/bin/nando-live-transition-gate}"
 GATE_BINARY="${NANDO_MS4_GATE_BINARY:-/opt/nando-wave/bin/nando-live-transition-gate}"
 PROJECT_ROOT="${NANDO_MS4_PROJECT_ROOT:-/opt/nando-wave}"
 SYSTEMD_DIR="${NANDO_MS4_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -41,7 +43,8 @@ Install the autonomous MS3 -> MS4 admission loop on the private mini-PC.
 
 Usage:
   ops/remote-backend/install-ms4-autonomous-loop.sh \
-    --admission-binary /path/to/nando-response-admission
+    --admission-binary /path/to/nando-response-admission \
+    [--gate-binary /path/to/nando-live-transition-gate]
 
 The installer never restarts Nginx or hot serving. It validates the candidate,
 backs up all mutable authority files, installs path/timer workers, and rolls the
@@ -53,6 +56,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --admission-binary)
       ADMISSION_BINARY_SOURCE="${2:-}"
+      shift 2
+      ;;
+    --gate-binary)
+      GATE_BINARY_SOURCE="${2:-}"
+      GATE_BINARY="${2:-}"
       shift 2
       ;;
     --help)
@@ -75,6 +83,10 @@ ADMISSION_BINARY_SOURCE="$(realpath --canonicalize-existing -- "${ADMISSION_BINA
 if [[ ! -x "${GATE_BINARY}" ]]; then
   printf 'live transition gate is not executable: %s\n' "${GATE_BINARY}" >&2
   exit 2
+fi
+if [[ -n "${GATE_BINARY_SOURCE}" ]]; then
+  GATE_BINARY_SOURCE="$(realpath --canonicalize-existing -- "${GATE_BINARY_SOURCE}")"
+  GATE_BINARY="${GATE_BINARY_SOURCE}"
 fi
 if [[ ! -f "${PROJECT_ROOT}/ops/phase-center-test-server/gates/nando-live-transition-gate.profile.json" ]]; then
   printf 'live transition gate profile is missing under %s\n' "${PROJECT_ROOT}" >&2
@@ -99,9 +111,11 @@ rendered_units="${work}/units"
 backup_units="${work}/previous-units"
 backup_state="${work}/previous-state"
 backup_binary="${work}/previous-admission"
+backup_gate_binary="${work}/previous-gate"
 mkdir -p "${rendered_units}" "${backup_units}" "${backup_state}"
 
 binary_existed=0
+gate_binary_existed=0
 rollback_armed=0
 hot_pid_before="$(systemctl show -p MainPID --value nando-transition-serving.service)"
 gateway_pid_before="$(systemctl show -p MainPID --value nando-transport-gateway.service)"
@@ -137,6 +151,13 @@ rollback() {
       restore_path "${backup_binary}" "${INSTALL_BINARY}"
     else
       sudo -n rm -f "${INSTALL_BINARY}"
+    fi
+    if [[ -n "${GATE_BINARY_SOURCE}" ]]; then
+      if [[ "${gate_binary_existed}" == "1" ]]; then
+        restore_path "${backup_gate_binary}" "${INSTALL_GATE_BINARY}"
+      else
+        sudo -n rm -f "${INSTALL_GATE_BINARY}"
+      fi
     fi
     for name in "${state_files[@]}"; do
       restore_path "${backup_state}/${name}" "${STATE_DIR}/${name}"
@@ -227,6 +248,10 @@ if sudo -n test -e "${INSTALL_BINARY}"; then
   sudo -n cp -a "${INSTALL_BINARY}" "${backup_binary}"
   binary_existed=1
 fi
+if [[ -n "${GATE_BINARY_SOURCE}" ]] && sudo -n test -e "${INSTALL_GATE_BINARY}"; then
+  sudo -n cp -a "${INSTALL_GATE_BINARY}" "${backup_gate_binary}"
+  gate_binary_existed=1
+fi
 for name in "${state_files[@]}"; do
   if sudo -n test -e "${STATE_DIR}/${name}"; then
     sudo -n cp -a "${STATE_DIR}/${name}" "${backup_state}/${name}"
@@ -236,6 +261,10 @@ done
 rollback_armed=1
 sudo -n install -m 0755 "${ADMISSION_BINARY_SOURCE}" "${INSTALL_BINARY}.candidate.$$"
 sudo -n mv -f "${INSTALL_BINARY}.candidate.$$" "${INSTALL_BINARY}"
+if [[ -n "${GATE_BINARY_SOURCE}" ]]; then
+  sudo -n install -m 0755 "${GATE_BINARY_SOURCE}" "${INSTALL_GATE_BINARY}.candidate.$$"
+  sudo -n mv -f "${INSTALL_GATE_BINARY}.candidate.$$" "${INSTALL_GATE_BINARY}"
+fi
 for unit in "${unit_names[@]}"; do
   if [[ "${unit}" == *.service ]]; then
     sed "s#${ADMISSION_BINARY_SOURCE}#${INSTALL_BINARY}#g" \

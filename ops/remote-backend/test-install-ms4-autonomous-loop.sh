@@ -11,6 +11,7 @@ SYSTEMD_DIR="${WORK}/systemd"
 STATE_DIR="${WORK}/state"
 PROJECT_ROOT="${WORK}/project"
 INSTALL_BINARY="${WORK}/opt/nando-response-admission"
+INSTALL_GATE_BINARY="${WORK}/opt/nando-live-transition-gate"
 mkdir -p \
   "${BIN}" "${SYSTEMD_DIR}" "${STATE_DIR}" "$(dirname "${INSTALL_BINARY}")" \
   "${PROJECT_ROOT}/ops/phase-center-test-server/gates" \
@@ -147,6 +148,7 @@ export NANDO_TEST_SYSTEMCTL_STATE="${WORK}/systemctl-state"
 export NANDO_TEST_GATE="${WORK}/gate"
 export NANDO_MS4_ADMISSION_BINARY="${INSTALL_BINARY}"
 export NANDO_MS4_GATE_BINARY="${WORK}/gate"
+export NANDO_MS4_GATE_INSTALL_BINARY="${INSTALL_GATE_BINARY}"
 export NANDO_MS4_PROJECT_ROOT="${PROJECT_ROOT}"
 export NANDO_MS4_SYSTEMD_DIR="${SYSTEMD_DIR}"
 export NANDO_MS4_STATE_DIR="${STATE_DIR}"
@@ -155,9 +157,11 @@ export NANDO_MS4_READINESS_SLEEP_SECONDS=0
 
 (
   cd "${WORK}"
-  "${INSTALLER}" --admission-binary candidate-admission >/dev/null
+  "${INSTALLER}" --admission-binary candidate-admission \
+    --gate-binary "${WORK}/gate" >/dev/null
 )
 cmp -s "${WORK}/candidate-admission" "${INSTALL_BINARY}"
+cmp -s "${WORK}/gate" "${INSTALL_GATE_BINARY}"
 for unit in nando-response-admission.path nando-response-admission.timer nando-live-transition-gate.path nando-live-transition-gate.timer; do
   [[ -e "${NANDO_TEST_SYSTEMCTL_STATE}/enabled-${unit}" ]]
   [[ -e "${NANDO_TEST_SYSTEMCTL_STATE}/active-${unit}" ]]
@@ -168,16 +172,21 @@ grep -Fq 'OnUnitInactiveSec=10s' "${SYSTEMD_DIR}/nando-live-transition-gate.time
 
 printf 'rollback admission binary\n' >"${INSTALL_BINARY}"
 chmod +x "${INSTALL_BINARY}"
+printf 'rollback gate binary\n' >"${INSTALL_GATE_BINARY}"
+chmod +x "${INSTALL_GATE_BINARY}"
 printf 'rollback-registry\n' >"${STATE_DIR}/response-registry.json"
 cp "${INSTALL_BINARY}" "${WORK}/expected-binary"
+cp "${INSTALL_GATE_BINARY}" "${WORK}/expected-gate-binary"
 cp "${STATE_DIR}/response-registry.json" "${WORK}/expected-registry"
 
 if NANDO_TEST_FAIL_LIVE_GATE=1 "${INSTALLER}" \
-  --admission-binary "${WORK}/candidate-admission" >/dev/null 2>&1; then
+  --admission-binary "${WORK}/candidate-admission" \
+  --gate-binary "${WORK}/gate" >/dev/null 2>&1; then
   printf 'installer accepted a failed live gate reconciliation\n' >&2
   exit 1
 fi
 cmp -s "${WORK}/expected-binary" "${INSTALL_BINARY}"
+cmp -s "${WORK}/expected-gate-binary" "${INSTALL_GATE_BINARY}"
 cmp -s "${WORK}/expected-registry" "${STATE_DIR}/response-registry.json"
 
 printf '%s\n' 'install-ms4-autonomous-loop transaction tests: PASS'
