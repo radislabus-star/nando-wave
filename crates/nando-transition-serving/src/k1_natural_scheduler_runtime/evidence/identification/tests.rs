@@ -2,7 +2,14 @@ use nando_operator_learning::multi_source::{
     K1ConsequenceTypeV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
 };
 
-use super::{frozen_support_contains, frozen_support_manifest, selected_shape_is_compatible};
+use super::{
+    capture_generation_matches, frozen_support_contains, frozen_support_manifest,
+    selected_shape_is_compatible,
+};
+use nando_operator_learning::multi_source::{
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+};
 
 fn root(value: u64) -> String {
     format!("{value:064x}")
@@ -49,4 +56,33 @@ fn empty_identification_can_reach_a_terminal_verdict() {
     assert!(selected_shape_is_compatible(None, &frozen));
     assert!(selected_shape_is_compatible(Some(&frozen), &frozen));
     assert!(!selected_shape_is_compatible(Some(&root(31)), &frozen));
+}
+
+#[test]
+fn capture_generation_compatibility_is_exact_and_versioned() {
+    let generation = root(40);
+    assert!(capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1,
+        "",
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
+        "",
+    ));
+    assert!(!capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+        &generation,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
+        "",
+    ));
+    assert!(capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+        &generation,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
+        &generation,
+    ));
+    assert!(!capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+        &root(41),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
+        &generation,
+    ));
 }

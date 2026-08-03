@@ -8,7 +8,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
         .iter()
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
-                && !binding.row.safety_veto
+                && frozen_row_is_eligible(&binding.row, freeze)
                 && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
         })
         .collect::<Vec<_>>();
@@ -26,7 +26,12 @@ pub(in crate::k1_natural_scheduler_runtime) fn binding_matches_freeze(
     binding: &EvidenceBinding,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> bool {
-    binding.row.candidate_structural_root_sha256 == freeze.candidate_structural_root_sha256
+    capture_generation_matches(
+        &binding.row.schema,
+        &binding.row.capture_generation_root_sha256,
+        &freeze.schema,
+        &freeze.capture_generation_root_sha256,
+    ) && binding.row.candidate_structural_root_sha256 == freeze.candidate_structural_root_sha256
         && binding.row.source_neutral_topology_root_sha256
             == freeze.source_neutral_topology_root_sha256
         && binding.row.semantic_novelty_signature_root_sha256
@@ -47,7 +52,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         .iter()
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
-                && !binding.row.safety_veto
+                && frozen_row_is_eligible(&binding.row, freeze)
                 && (frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
                     || applied_roots.contains(&binding.joined.join_root_sha256)
                     || trial_roots.contains(&binding.joined.join_root_sha256))
@@ -95,6 +100,34 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         return Err("k1_runtime_identification_report_invalid".to_owned());
     }
     Ok(report)
+}
+
+fn frozen_row_is_eligible(
+    row: &K1NaturalEvidenceRowV1,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> bool {
+    !row.safety_veto || freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1
+}
+
+fn capture_generation_matches(
+    row_schema: &str,
+    row_generation: &str,
+    freeze_schema: &str,
+    freeze_generation: &str,
+) -> bool {
+    match freeze_schema {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1 => {
+            row_schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1
+                && row_generation.is_empty()
+                && freeze_generation.is_empty()
+        }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2 => {
+            row_schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2
+                && !row_generation.is_empty()
+                && row_generation == freeze_generation
+        }
+        _ => false,
+    }
 }
 
 fn selected_shape_is_compatible(selected: Option<&str>, frozen: &str) -> bool {

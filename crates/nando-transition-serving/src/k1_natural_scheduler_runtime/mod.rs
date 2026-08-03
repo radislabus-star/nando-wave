@@ -6,7 +6,9 @@ use nando_operator_kernel::{
 };
 use nando_operator_learning::multi_source::{
     BlindThenRevealJoinedTransitionV1, CompletedEffectFormV1, FactorizedMultiSourceRowV1,
-    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1ConsequenceTypeV1, K1GenerationBudgetV1,
+    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2, K1ConsequenceTypeV1, K1GenerationBudgetV1,
     K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
     K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1, K1NaturalCohortCatalogV1,
     K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1,
