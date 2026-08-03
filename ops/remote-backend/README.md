@@ -283,7 +283,8 @@ records the source commit/tree, installed artifact hashes, service PIDs, unit
 roots, state manifests, runtime snapshots, and rollback pointer:
 
 ```bash
-deployment_dir="$(ops/remote-backend/deployment-receipt.sh prepare \
+deployment_dir="$(NANDO_DEPLOY_ALLOW_HOT_RESTART=1 \
+  ops/remote-backend/deployment-receipt.sh prepare \
   --source-dir /home/e/build/nando-wave-release \
   --rollback-commit <previous-commit>)"
 
@@ -294,6 +295,9 @@ ops/remote-backend/deployment-receipt.sh finalize \
   --deployment-dir "${deployment_dir}"
 ```
 
-Finalization fails if the hot-serving or Nginx PID changed. The completed
-receipt directory is made read-only and remains under
+By default, finalization fails if the hot-serving or Nginx PID changed. Set
+`NANDO_DEPLOY_ALLOW_HOT_RESTART=1` during `prepare` only when the deployment
+requires an intentional hot-serving restart. The receipt records the actual
+before/after PIDs and the preregistered exception; Nginx must always remain
+unchanged. The completed receipt directory is made read-only and remains under
 `/var/lib/nando-wave/deployments`.
