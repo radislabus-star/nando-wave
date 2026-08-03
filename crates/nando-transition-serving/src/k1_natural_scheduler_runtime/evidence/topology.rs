@@ -99,12 +99,10 @@ fn support_reservoir_overflow(
 
     let lineage_already_selected = reservoir.selected_lineages.contains(lineage_root_sha256);
     let selected_lineages = u64::try_from(reservoir.selected_lineages.len()).unwrap_or(u64::MAX);
-    let reserved_lineage_slots = usize::try_from(
-        K1_CANDIDATE_READINESS_MIN_LINEAGES_V1.saturating_sub(selected_lineages),
-    )
-    .unwrap_or(K1_MAX_SUPPORT_ROWS_V1);
-    let existing_lineage_limit =
-        K1_MAX_SUPPORT_ROWS_V1.saturating_sub(reserved_lineage_slots);
+    let reserved_lineage_slots =
+        usize::try_from(K1_CANDIDATE_READINESS_MIN_LINEAGES_V1.saturating_sub(selected_lineages))
+            .unwrap_or(K1_MAX_SUPPORT_ROWS_V1);
+    let existing_lineage_limit = K1_MAX_SUPPORT_ROWS_V1.saturating_sub(reserved_lineage_slots);
     if lineage_already_selected
         && reserved_lineage_slots > 0
         && reservoir.selected_rows >= existing_lineage_limit
