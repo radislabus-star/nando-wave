@@ -52,7 +52,7 @@ use lifecycle::{AdvanceInput, advance};
 use report::*;
 
 const K1_RUNTIME_REPORT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-runtime-report.v1";
-const K1_SCHEDULER_SCHEMA_V1: &str = "nando.k1-operator-blind-scheduler.v1";
+const K1_SCHEDULER_SCHEMA_V2: &str = "nando.k1-operator-blind-scheduler.v2";
 const K1_FIXTURE_EXCLUSION_SCHEMA_V1: &str = "nando.k1-natural-fixture-exclusion.v1";
 const K1_SEMANTIC_NOVELTY_SCHEMA_V1: &str = "nando.k1-coarse-semantic-novelty.v1";
 const K1_SEMANTIC_QUOTIENT_SCHEMA_V1: &str = "nando.k1-semantic-quotient.v1";

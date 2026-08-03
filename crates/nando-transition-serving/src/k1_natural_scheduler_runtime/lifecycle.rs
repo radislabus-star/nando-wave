@@ -142,7 +142,7 @@ pub(super) fn advance(
             &queue,
             &candidate,
             queue_row.score.clone(),
-            K1_SCHEDULER_SCHEMA_V1.to_owned(),
+            K1_SCHEDULER_SCHEMA_V2.to_owned(),
             generation_budget(),
             candidate.last_capture_sequence,
             contract_watermark,

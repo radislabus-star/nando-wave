@@ -323,15 +323,15 @@ fn rank_candidates(
         .cmp(&left.score.total_k1_gain)
         .then_with(|| right.score.readiness_rank.cmp(&left.score.readiness_rank))
         .then_with(|| {
-            left.score
-                .bounded_discovery_cost_units
-                .cmp(&right.score.bounded_discovery_cost_units)
-        })
-        .then_with(|| {
             right
                 .score
                 .expected_verified_input_tokens
                 .cmp(&left.score.expected_verified_input_tokens)
+        })
+        .then_with(|| {
+            left.score
+                .bounded_discovery_cost_units
+                .cmp(&right.score.bounded_discovery_cost_units)
         })
         .then_with(|| {
             left.score

@@ -53,6 +53,54 @@ fn queue_can_rank_immature_novel_cohort_first_but_freezes_first_ready_cohort() {
 }
 
 #[test]
+fn equally_novel_ready_cohorts_rank_verified_tokens_before_discovery_cost() {
+    let mut rows = [1, 11, 12, 13, 14, 15, 16, 17]
+        .into_iter()
+        .enumerate()
+        .map(|(offset, index)| {
+            evidence_row(
+                index,
+                100,
+                200,
+                K1ConsequenceTypeV1::Collection,
+                K1NaturalEvidenceClassV1::NaturalLive,
+                if offset < 4 { 300 } else { 301 },
+                true,
+                offset < 2,
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.extend((2..=10).enumerate().map(|(offset, index)| {
+        evidence_row(
+            index,
+            101,
+            201,
+            K1ConsequenceTypeV1::Collection,
+            K1NaturalEvidenceClassV1::NaturalLive,
+            if offset < 4 { 302 } else { 303 },
+            true,
+            offset < 2,
+        )
+    }));
+    let catalog = catalog(&rows);
+    let deficit = deficit(vec![K1ConsequenceTypeV1::Scalar]);
+    let queue =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, catalog_watermark(&catalog))
+            .expect("queue");
+
+    assert_eq!(queue.rows[0].score.readiness_rank, 1);
+    assert_eq!(queue.rows[1].score.readiness_rank, 1);
+    assert!(
+        queue.rows[0].score.expected_verified_input_tokens
+            > queue.rows[1].score.expected_verified_input_tokens
+    );
+    assert!(
+        queue.rows[0].score.bounded_discovery_cost_units
+            > queue.rows[1].score.bounded_discovery_cost_units
+    );
+}
+
+#[test]
 fn generated_and_controlled_rows_never_enter_natural_candidates() {
     let rows = vec![
         evidence_row(

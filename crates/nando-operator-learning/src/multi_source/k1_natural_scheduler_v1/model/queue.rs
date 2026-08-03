@@ -297,15 +297,15 @@ impl K1NaturalCandidateQueueRowV1 {
             .cmp(&self.score.total_k1_gain)
             .then_with(|| other.score.readiness_rank.cmp(&self.score.readiness_rank))
             .then_with(|| {
-                self.score
-                    .bounded_discovery_cost_units
-                    .cmp(&other.score.bounded_discovery_cost_units)
-            })
-            .then_with(|| {
                 other
                     .score
                     .expected_verified_input_tokens
                     .cmp(&self.score.expected_verified_input_tokens)
+            })
+            .then_with(|| {
+                self.score
+                    .bounded_discovery_cost_units
+                    .cmp(&other.score.bounded_discovery_cost_units)
             })
             .then_with(|| {
                 self.score
