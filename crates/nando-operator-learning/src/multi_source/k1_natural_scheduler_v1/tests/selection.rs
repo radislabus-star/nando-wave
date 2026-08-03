@@ -54,7 +54,7 @@ fn queue_can_rank_immature_novel_cohort_first_but_freezes_first_ready_cohort() {
 
 #[test]
 fn equally_novel_ready_cohorts_rank_verified_tokens_before_discovery_cost() {
-    let mut rows = [1, 11, 12, 13, 14, 15, 16, 17]
+    let mut rows = [1, 11, 12, 13, 14, 15, 16, 17, 18, 19]
         .into_iter()
         .enumerate()
         .map(|(offset, index)| {
