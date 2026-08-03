@@ -17,10 +17,33 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
         || support.len() > K1_MAX_SUPPORT_ROWS_V1
         || manifest != freeze.evidence_manifest_root_sha256
     {
+        let legacy_rows = bindings
+            .iter()
+            .filter(|binding| binding.row.schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1)
+            .count();
+        let generation_rows = bindings
+            .iter()
+            .filter(|binding| {
+                capture_generation_matches(
+                    &binding.row.schema,
+                    &binding.row.capture_generation_root_sha256,
+                    &freeze.schema,
+                    &freeze.capture_generation_root_sha256,
+                )
+            })
+            .count();
+        let identity_rows = bindings
+            .iter()
+            .filter(|binding| binding_identity_matches(binding, freeze))
+            .count();
         return Err(format!(
-            "k1_runtime_frozen_support_manifest_mismatch:generation={}:rows={}:actual={}:expected={}",
+            "k1_runtime_frozen_support_manifest_mismatch:generation={}:rows={}:bindings={}:legacy={}:generation_match={}:identity_match={}:actual={}:expected={}",
             freeze.generation_sequence,
             support.len(),
+            bindings.len(),
+            legacy_rows,
+            generation_rows,
+            identity_rows,
             manifest,
             freeze.evidence_manifest_root_sha256,
         ));
@@ -37,7 +60,14 @@ pub(in crate::k1_natural_scheduler_runtime) fn binding_matches_freeze(
         &binding.row.capture_generation_root_sha256,
         &freeze.schema,
         &freeze.capture_generation_root_sha256,
-    ) && binding.row.candidate_structural_root_sha256 == freeze.candidate_structural_root_sha256
+    ) && binding_identity_matches(binding, freeze)
+}
+
+fn binding_identity_matches(
+    binding: &EvidenceBinding,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> bool {
+    binding.row.candidate_structural_root_sha256 == freeze.candidate_structural_root_sha256
         && binding.row.source_neutral_topology_root_sha256
             == freeze.source_neutral_topology_root_sha256
         && binding.row.semantic_novelty_signature_root_sha256
