@@ -17,7 +17,13 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
         || support.len() > K1_MAX_SUPPORT_ROWS_V1
         || manifest != freeze.evidence_manifest_root_sha256
     {
-        return Err("k1_runtime_frozen_support_manifest_mismatch".to_owned());
+        return Err(format!(
+            "k1_runtime_frozen_support_manifest_mismatch:generation={}:rows={}:actual={}:expected={}",
+            freeze.generation_sequence,
+            support.len(),
+            manifest,
+            freeze.evidence_manifest_root_sha256,
+        ));
     }
     Ok(support)
 }
