@@ -560,9 +560,11 @@ fn run(started: Instant) -> Result<(), String> {
     ) {
         let active_packages = snapshot.registry.packages.len();
         authority_sidecars::persist(
+            &registry_path,
             &controller_admission_path,
             &authority_candidate_path,
             &marker_path,
+            &snapshot.registry,
             &snapshot.admission,
             &authority_candidate,
             &marker,
@@ -598,11 +600,12 @@ fn run(started: Instant) -> Result<(), String> {
         );
     }
     let active_packages = snapshot.registry.packages.len();
-    write_json_atomic(&registry_path, &snapshot.registry, "response-registry")?;
     authority_sidecars::persist(
+        &registry_path,
         &controller_admission_path,
         &authority_candidate_path,
         &marker_path,
+        &snapshot.registry,
         &snapshot.admission,
         &authority_candidate,
         &marker,

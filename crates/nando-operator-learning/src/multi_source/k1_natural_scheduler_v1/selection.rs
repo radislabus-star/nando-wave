@@ -5,7 +5,7 @@ use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
 use super::model::{
     K1_NATURAL_CANDIDATE_MAX_ROWS_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1,
-    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
     K1CandidateReadinessV1, K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
     K1NaturalCandidateQueueRowV1, K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1,
     K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
@@ -13,6 +13,7 @@ use super::model::{
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct CohortKey {
+    capture_generation_root_sha256: String,
     candidate_structural_root_sha256: String,
     source_neutral_topology_root_sha256: String,
     semantic_novelty_signature_root_sha256: String,
@@ -66,6 +67,7 @@ pub fn build_k1_natural_cohort_catalog_v1(
         }
         cohorts
             .entry(CohortKey {
+                capture_generation_root_sha256: row.capture_generation_root_sha256.clone(),
                 candidate_structural_root_sha256: row.candidate_structural_root_sha256.clone(),
                 source_neutral_topology_root_sha256: row
                     .source_neutral_topology_root_sha256
@@ -284,8 +286,9 @@ fn build_candidate(
         .map(|row| row.capture_sequence)
         .ok_or("k1_natural_candidate_empty")?;
     let mut candidate = K1NaturalCohortCandidateV1 {
-        schema: K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1.to_owned(),
+        schema: K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2.to_owned(),
         candidate_root_sha256: String::new(),
+        capture_generation_root_sha256: key.capture_generation_root_sha256,
         candidate_structural_root_sha256: key.candidate_structural_root_sha256,
         source_neutral_topology_root_sha256: key.source_neutral_topology_root_sha256,
         semantic_novelty_signature_root_sha256: key.semantic_novelty_signature_root_sha256,

@@ -9,6 +9,7 @@ grep -Fq '/opt/nando-wave/bin/nando-operator-certification-authority' "${SCRIPT}
 grep -Fq '/opt/nando-wave/bin/nando-operator-cleanup-verifier' "${SCRIPT}"
 grep -Fq 'nando-operator-certification-authority.service' "${SCRIPT}"
 grep -Fq 'nando-operator-cleanup-verifier@.service' "${SCRIPT}"
+grep -Fq '/usr/local/bin/nando-live-transition-gate' "${SCRIPT}"
 if grep -Fq 'nando-live-transition-gate.timer' "${SCRIPT}"; then
   printf 'obsolete live transition gate timer remains in receipt contract\n' >&2
   exit 1

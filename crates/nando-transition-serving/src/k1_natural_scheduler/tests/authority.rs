@@ -131,6 +131,7 @@ fn authority_rebuilds_queue_and_rejects_a_valid_omission() {
         .map(|index| {
             K1NaturalEvidenceRowV1::seal(
                 root(700 + index),
+                root(799),
                 root(800),
                 root(801),
                 root(802),

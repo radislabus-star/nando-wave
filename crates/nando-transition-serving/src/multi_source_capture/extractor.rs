@@ -1,17 +1,14 @@
 use nando_operator_kernel::{
-    MULTI_SOURCE_MAX_RELATION_EDGES_V1, MULTI_SOURCE_MAX_ROLE_NODES_V1,
-    MultiSourceCardinalityClassV1, MultiSourceContainerClassV1, MultiSourceExtractionStatusV1,
-    MultiSourceRelationEdgeV1, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
-    MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
-    PreActionMultiSourceTopologyV1,
+    MULTI_SOURCE_MAX_ROLE_NODES_V1, MultiSourceCardinalityClassV1, MultiSourceContainerClassV1,
+    MultiSourceExtractionStatusV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
+    MultiSourceTemporalClassV1, MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1,
 };
 use nando_operator_runtime::{
-    ObservedJsonScalarRole, ObservedScalarRoleClass, observed_continuation_handle_role,
-    observed_json_scalar_roles,
+    ObservedJsonScalarRole, ObservedScalarRoleClass, canonical_collection_from_provider_output,
+    observed_continuation_handle_role, observed_json_scalar_roles,
 };
 use serde_json::Value;
 
-const FLAG_REQUEST_REFERENCED: u16 = 1;
 const MAX_RELEVANT_OUTPUTS_V1: usize = 8;
 
 struct CollectedRole {
@@ -30,7 +27,7 @@ struct SelectedOutput {
     scalar_roles: Vec<ObservedJsonScalarRole>,
 }
 
-pub(crate) fn extract_pre_action_multi_source_topology_v1(
+pub(crate) fn extract_pre_action_multi_source_topology_v2(
     payload: &Value,
     request_text: &str,
 ) -> PreActionMultiSourceTopologyV1 {
@@ -42,9 +39,12 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
     let mut collected = Vec::new();
     for (output_index, output) in outputs.iter().enumerate() {
         let latest = output_index + 1 == outputs.len();
-        let container = match super::container_role::from_output(&output.value) {
-            Ok(container) => container,
-            Err(reason) => return censored(reason),
+        let container = match canonical_collection_from_provider_output(&output.value) {
+            Ok(canonical) => match super::container_role::from_output(&canonical) {
+                Ok(container) => container,
+                Err(reason) => return censored(reason),
+            },
+            Err(_) => None,
         };
         if let Some(container) = container {
             collected.push(CollectedRole {
@@ -125,44 +125,15 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
             request_reference_ordinal_candidates: role.request_reference_ordinal_candidates.clone(),
         })
         .collect::<Vec<_>>();
-    let mut relations = Vec::new();
-    for pair in roles.windows(2) {
-        relations.push(MultiSourceRelationEdgeV1 {
-            relation: MultiSourceRelationKindV1::Precedes,
-            source_role_id: pair[0].local_role_id,
-            target_role_id: pair[1].local_role_id,
-        });
-    }
-    for role in &roles {
-        if role.structural_flags & FLAG_REQUEST_REFERENCED != 0 {
-            relations.push(MultiSourceRelationEdgeV1 {
-                relation: MultiSourceRelationKindV1::RequestReferencesRole,
-                source_role_id: role.local_role_id,
-                target_role_id: role.local_role_id,
-            });
-        }
-        if role.temporal_class == MultiSourceTemporalClassV1::Latest {
-            relations.push(MultiSourceRelationEdgeV1 {
-                relation: MultiSourceRelationKindV1::LatestOutput,
-                source_role_id: role.local_role_id,
-                target_role_id: role.local_role_id,
-            });
-        }
-    }
-    for role in &collected {
-        if role.continuation_handle {
-            relations.push(MultiSourceRelationEdgeV1 {
-                relation: MultiSourceRelationKindV1::ContinuationHandle,
-                source_role_id: role.node.local_role_id,
-                target_role_id: role.node.local_role_id,
-            });
-        }
-    }
-    relations.sort();
-    relations.dedup();
-    if relations.len() > MULTI_SOURCE_MAX_RELATION_EDGES_V1 {
-        return censored("relation_budget_exceeded");
-    }
+    let continuation_role_ids = collected
+        .iter()
+        .filter(|role| role.continuation_handle)
+        .map(|role| role.node.local_role_id)
+        .collect::<Vec<_>>();
+    let relations = match super::relations::build(&roles, &continuation_role_ids) {
+        Ok(relations) => relations,
+        Err(reason) => return censored(reason),
+    };
     PreActionMultiSourceTopologyV1 {
         extraction_status: MultiSourceExtractionStatusV1::Complete,
         grounded_output_count: u16::try_from(outputs.len()).unwrap_or(u16::MAX),
@@ -376,7 +347,7 @@ fn role_node(
         },
         depth_bucket: role.depth_bucket,
         structural_flags: u16::from(!role.request_position_candidates.is_empty())
-            * FLAG_REQUEST_REFERENCED,
+            * super::REQUEST_REFERENCED_FLAG_V2,
     }
 }
 
@@ -397,6 +368,7 @@ fn censored(reason: &str) -> PreActionMultiSourceTopologyV1 {
 mod tests {
     use std::time::Instant;
 
+    use nando_operator_kernel::MultiSourceRelationKindV1;
     use serde_json::json;
 
     use super::*;
@@ -411,8 +383,8 @@ mod tests {
             {"type":"function_call_output","output":{"renamed_b":"ok","renamed_a":7}},
             {"type":"function_call_output","output":{"renamed_c":9}}
         ]});
-        let left_topology = extract_pre_action_multi_source_topology_v1(&left, "combine");
-        let right_topology = extract_pre_action_multi_source_topology_v1(&right, "combine");
+        let left_topology = extract_pre_action_multi_source_topology_v2(&left, "combine");
+        let right_topology = extract_pre_action_multi_source_topology_v2(&right, "combine");
         assert_eq!(left_topology.roles, right_topology.roles);
         assert_eq!(left_topology.relations, right_topology.relations);
         let bytes = serde_json::to_vec(&left_topology).expect("serialize");
@@ -428,7 +400,7 @@ mod tests {
             "type":"function_call_output",
             "output":"Script running with cell ID abc-123"
         }]});
-        let topology = extract_pre_action_multi_source_topology_v1(&payload, "continue");
+        let topology = extract_pre_action_multi_source_topology_v2(&payload, "continue");
 
         topology.validate().expect("valid topology");
         let continuation = topology
@@ -461,7 +433,7 @@ mod tests {
         };
 
         let output = json!({"items": [{"status": "active"}, {"status": "idle"}]});
-        let topology = extract_pre_action_multi_source_topology_v1(
+        let topology = extract_pre_action_multi_source_topology_v2(
             &json!({"input":[{"type":"function_call_output","output": output}]}),
             "count items",
         );
@@ -480,6 +452,14 @@ mod tests {
             witness.value_sha256,
             nando_operator_kernel::canonical_json_sha256(&output).expect("output root")
         );
+        assert!(topology.relations.iter().any(|edge| {
+            edge.relation == MultiSourceRelationKindV1::Contains
+                && edge.source_role_id == container.local_role_id
+        }));
+        assert!(topology.relations.iter().any(|edge| {
+            edge.relation == MultiSourceRelationKindV1::SameOutput
+                && edge.source_role_id == container.local_role_id
+        }));
         let program = ResponseProgram::compose_collection(
             vec![
                 CollectionProgramStep::SelectTurnOutput { output_ordinal: 1 },
@@ -501,6 +481,13 @@ mod tests {
             session_lineage_sha256: nando_operator_kernel::sha256_bytes(b"lineage"),
             session_id_sha256: nando_operator_kernel::sha256_bytes(b"session"),
             topology_commitment_root_sha256: nando_operator_kernel::sha256_bytes(b"topology"),
+            extractor_root_sha256: nando_operator_kernel::sha256_bytes(b"extractor-v2"),
+            extractor_config_root_sha256: nando_operator_kernel::sha256_bytes(
+                b"extractor-config-v2",
+            ),
+            capture_generation_root_sha256: nando_operator_kernel::sha256_bytes(
+                b"capture-generation-v2",
+            ),
             pre_action_record_root_sha256: nando_operator_kernel::sha256_bytes(b"pre-action"),
             completed_frame_root_sha256: nando_operator_kernel::sha256_bytes(b"frame"),
             physical_action_root_sha256: nando_operator_kernel::sha256_bytes(b"physical"),
@@ -525,8 +512,57 @@ mod tests {
     }
 
     #[test]
+    fn capture_and_runtime_share_collection_canonicalization() {
+        let rows = json!([{"status": "active"}, {"status": "idle"}]);
+        let forms = [
+            json!({"rows": rows.clone()}),
+            rows.clone(),
+            Value::String(rows.to_string()),
+            json!([{"type":"output_text","text":rows.to_string()}]),
+        ];
+        for form in forms {
+            let canonical = canonical_collection_from_provider_output(&form).expect("canonical");
+            let topology = extract_pre_action_multi_source_topology_v2(
+                &json!({"input":[{"type":"function_call_output","output":form}]}),
+                "count rows",
+            );
+            let container = topology
+                .roles
+                .iter()
+                .find(|role| role.container_class != MultiSourceContainerClassV1::Scalar)
+                .expect("container");
+            let witness = topology
+                .role_witnesses
+                .iter()
+                .find(|witness| witness.local_role_id == container.local_role_id)
+                .expect("witness");
+            assert_eq!(
+                witness.value_sha256,
+                nando_operator_kernel::canonical_json_sha256(&canonical).expect("canonical root")
+            );
+        }
+    }
+
+    #[test]
+    fn runtime_rejected_object_never_becomes_a_collection_role() {
+        let topology = extract_pre_action_multi_source_topology_v2(
+            &json!({"input":[{"type":"function_call_output","output":{
+                "first":[{"value":1}],
+                "second":[{"value":2}]
+            }}]}),
+            "inspect",
+        );
+        assert!(
+            topology
+                .roles
+                .iter()
+                .all(|role| role.container_class == MultiSourceContainerClassV1::Scalar)
+        );
+    }
+
+    #[test]
     fn source_ordinals_match_the_runtime_active_turn() {
-        let topology = extract_pre_action_multi_source_topology_v1(
+        let topology = extract_pre_action_multi_source_topology_v2(
             &json!({"input":[
                 {"type":"function_call_output","output":{"old": 9}},
                 {"type":"message","role":"user","content":"use current outputs"},
@@ -545,7 +581,7 @@ mod tests {
     #[test]
     fn output_over_budget_is_censored_without_partial_graph() {
         let values = (0..=MULTI_SOURCE_MAX_ROLE_NODES_V1).collect::<Vec<_>>();
-        let topology = extract_pre_action_multi_source_topology_v1(
+        let topology = extract_pre_action_multi_source_topology_v2(
             &json!({"input":[{"type":"function_call_output","output":values}]}),
             "",
         );
@@ -579,7 +615,7 @@ mod tests {
             "type": "function_call_output",
             "output": {"answer": "current-answer"}
         }));
-        let topology = extract_pre_action_multi_source_topology_v1(
+        let topology = extract_pre_action_multi_source_topology_v2(
             &serde_json::json!({"input": input}),
             "use history_target and answer",
         );
@@ -593,7 +629,10 @@ mod tests {
             topology
                 .roles
                 .iter()
-                .filter(|role| role.structural_flags & FLAG_REQUEST_REFERENCED != 0)
+                .filter(|role| {
+                    role.structural_flags & crate::multi_source_capture::REQUEST_REFERENCED_FLAG_V2
+                        != 0
+                })
                 .count()
                 >= 2
         );
@@ -601,7 +640,7 @@ mod tests {
 
     #[test]
     fn repeated_request_mention_is_preserved_as_typed_ambiguity() {
-        let topology = extract_pre_action_multi_source_topology_v1(
+        let topology = extract_pre_action_multi_source_topology_v2(
             &json!({"input":[{
                 "type":"function_call_output",
                 "output":{"session_id":93139}
@@ -641,7 +680,7 @@ mod tests {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" ");
-        let topology = extract_pre_action_multi_source_topology_v1(
+        let topology = extract_pre_action_multi_source_topology_v2(
             &serde_json::json!({
                 "input": [{"type": "function_call_output", "output": values}]
             }),
@@ -666,7 +705,7 @@ mod tests {
             let started = Instant::now();
             for _ in 0..BATCH_SIZE {
                 let topology =
-                    extract_pre_action_multi_source_topology_v1(&payload, "combine 7 and ready");
+                    extract_pre_action_multi_source_topology_v2(&payload, "combine 7 and ready");
                 assert!(matches!(
                     topology.extraction_status,
                     MultiSourceExtractionStatusV1::Complete
@@ -693,7 +732,7 @@ mod tests {
         for _ in 0..4_096 {
             let started = Instant::now();
             let topology =
-                extract_pre_action_multi_source_topology_v1(&payload, "combine 7 and ready");
+                extract_pre_action_multi_source_topology_v2(&payload, "combine 7 and ready");
             assert!(matches!(
                 topology.extraction_status,
                 MultiSourceExtractionStatusV1::Complete

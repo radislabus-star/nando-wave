@@ -11,6 +11,7 @@ fn root(value: u64) -> String {
 fn evidence_row(evidence: u64, lineage: u64) -> K1NaturalEvidenceRowV1 {
     K1NaturalEvidenceRowV1::seal(
         root(evidence),
+        root(9),
         root(10),
         root(11),
         root(12),

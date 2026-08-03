@@ -74,7 +74,9 @@ pub use identification::{
     identify_multi_source_t1_operator_with_candidate_artifacts_v1,
 };
 pub use join::{
-    BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1,
+    BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BLIND_THEN_REVEAL_JOIN_SCHEMA_V2,
+    BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1,
+    MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V1, MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
     MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, ObservedTeacherActionRefV1, VerifiedOutcomeReceiptRefV1,
     validate_pre_action_topology_join_eligibility_v1,

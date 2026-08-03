@@ -218,12 +218,6 @@ fn append_payload_authoritative(
     }
     request.payload.validate().map_err(str::to_owned)?;
     let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
-    if scheduler
-        .latest_event()
-        .is_some_and(|event| payload_root(&event.payload) == payload_root(&request.payload))
-    {
-        return projection_for(&scheduler);
-    }
     let terminal_root = match &request.payload {
         K1SchedulerEventPayloadV1::TerminalVerdict(verdict)
             if request.lane == K1SchedulerLaneV1::Epistemic =>
@@ -232,6 +226,18 @@ fn append_payload_authoritative(
         }
         _ => None,
     };
+    if scheduler
+        .latest_event()
+        .is_some_and(|event| payload_root(&event.payload) == payload_root(&request.payload))
+    {
+        if let Some(terminal_root) = terminal_root {
+            super::pre_action_evidence_retention::prune_after_terminal_verdict(
+                config,
+                &terminal_root,
+            )?;
+        }
+        return projection_for(&scheduler);
+    }
     let projection = append_and_persist(
         config,
         request.lane,

@@ -4804,7 +4804,7 @@ fn handle_openai(
     let request_phase_atoms = request_phase_atom_ids(&request_text);
     let pre_action_context_atoms = response_pre_action_context_atom_ids(&payload);
     let multi_source_topology = natural_evidence_eligible.then(|| {
-        multi_source_capture::extract_pre_action_multi_source_topology_v1(&payload, &request_text)
+        multi_source_capture::extract_pre_action_multi_source_topology_v2(&payload, &request_text)
     });
     let request_streaming = payload
         .get("stream")
@@ -4855,8 +4855,8 @@ fn handle_openai(
                     let commit = nando_operator_kernel::PreActionTopologyCommitV1::seal(
                         &structure_v2,
                         nando_operator_kernel::MultiSourceEvidenceOriginV1::FreshLive,
-                        sha256_bytes(b"nando.multi-source-extractor.v1"),
-                        sha256_bytes(b"nando.multi-source-extractor-config.v1"),
+                        sha256_bytes(b"nando.multi-source-extractor.v2"),
+                        sha256_bytes(b"nando.multi-source-extractor-config.v2"),
                         capture_receipt.capture_sequence(),
                     );
                     match commit {

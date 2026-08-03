@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use nando_operator_kernel::{
     AtomValueType, MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1,
     PreActionMultiSourceTopologyV1, RelationAtom, RelationFrame, canonical_json_sha256,
-    valid_nonzero_sha256,
+    sha256_bytes, valid_nonzero_sha256,
 };
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,12 @@ use crate::{teacher_action_ast, teacher_outcome_from_completed, teacher_semantic
 use super::PreActionTopologyAuditRowV1;
 
 pub const BLIND_THEN_REVEAL_JOIN_SCHEMA_V1: &str = "nando.multi-source-blind-then-reveal-join.v1";
+pub const BLIND_THEN_REVEAL_JOIN_SCHEMA_V2: &str = "nando.multi-source-blind-then-reveal-join.v2";
 pub const MULTI_SOURCE_JOIN_MAX_ROWS_V1: usize = 16_384;
+pub const MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V1: &str =
+    "nando.multi-source-capture-generation.v1";
+pub const MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2: &str =
+    "nando.multi-source-capture-generation.v2";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -87,6 +92,12 @@ pub struct BlindThenRevealJoinedTransitionV1 {
     pub session_lineage_sha256: String,
     pub session_id_sha256: String,
     pub topology_commitment_root_sha256: String,
+    #[serde(default)]
+    pub extractor_root_sha256: String,
+    #[serde(default)]
+    pub extractor_config_root_sha256: String,
+    #[serde(default)]
+    pub capture_generation_root_sha256: String,
     pub pre_action_record_root_sha256: String,
     pub completed_frame_root_sha256: String,
     pub physical_action_root_sha256: String,
@@ -120,7 +131,7 @@ pub struct MultiSourceJoinLedgerV1 {
 }
 
 #[derive(Serialize)]
-struct JoinedDigest<'a> {
+struct JoinedDigestV1<'a> {
     schema: &'a str,
     capture_sequence: u64,
     turn_intent_id_sha256: &'a str,
@@ -129,6 +140,32 @@ struct JoinedDigest<'a> {
     session_lineage_sha256: &'a str,
     session_id_sha256: &'a str,
     topology_commitment_root_sha256: &'a str,
+    pre_action_record_root_sha256: &'a str,
+    completed_frame_root_sha256: &'a str,
+    physical_action_root_sha256: &'a str,
+    semantic_action_root_sha256: &'a str,
+    effect_atoms: &'a [CompletedEffectAtomV1],
+    verifier_receipt_root_sha256: &'a str,
+    input_tokens: u64,
+    captured_at_unix_ms: u64,
+    completed_at_unix_nanos: u64,
+    accepted: bool,
+    topology: &'a PreActionMultiSourceTopologyV1,
+}
+
+#[derive(Serialize)]
+struct JoinedDigestV2<'a> {
+    schema: &'a str,
+    capture_sequence: u64,
+    turn_intent_id_sha256: &'a str,
+    request_event_id_sha256: &'a str,
+    action_event_id_sha256: &'a str,
+    session_lineage_sha256: &'a str,
+    session_id_sha256: &'a str,
+    topology_commitment_root_sha256: &'a str,
+    extractor_root_sha256: &'a str,
+    extractor_config_root_sha256: &'a str,
+    capture_generation_root_sha256: &'a str,
     pre_action_record_root_sha256: &'a str,
     completed_frame_root_sha256: &'a str,
     physical_action_root_sha256: &'a str,
@@ -255,7 +292,12 @@ impl MultiSourceJoinLedgerV1 {
 
 impl BlindThenRevealJoinedTransitionV1 {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.schema != BLIND_THEN_REVEAL_JOIN_SCHEMA_V1
+        let capture_roots_valid = match self.schema.as_str() {
+            BLIND_THEN_REVEAL_JOIN_SCHEMA_V1 => true,
+            BLIND_THEN_REVEAL_JOIN_SCHEMA_V2 => self.capture_v2_roots_valid()?,
+            _ => false,
+        };
+        if !capture_roots_valid
             || self.capture_sequence == 0
             || self.input_tokens == 0
             || self.captured_at_unix_ms == 0
@@ -285,8 +327,31 @@ impl BlindThenRevealJoinedTransitionV1 {
     }
 
     fn expected_root(&self) -> Result<String, &'static str> {
-        canonical_json_sha256(&JoinedDigest {
-            schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1,
+        if self.schema == BLIND_THEN_REVEAL_JOIN_SCHEMA_V1 {
+            return canonical_json_sha256(&JoinedDigestV1 {
+                schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1,
+                capture_sequence: self.capture_sequence,
+                turn_intent_id_sha256: &self.turn_intent_id_sha256,
+                request_event_id_sha256: &self.request_event_id_sha256,
+                action_event_id_sha256: &self.action_event_id_sha256,
+                session_lineage_sha256: &self.session_lineage_sha256,
+                session_id_sha256: &self.session_id_sha256,
+                topology_commitment_root_sha256: &self.topology_commitment_root_sha256,
+                pre_action_record_root_sha256: &self.pre_action_record_root_sha256,
+                completed_frame_root_sha256: &self.completed_frame_root_sha256,
+                physical_action_root_sha256: &self.physical_action_root_sha256,
+                semantic_action_root_sha256: &self.semantic_action_root_sha256,
+                effect_atoms: &self.effect_atoms,
+                verifier_receipt_root_sha256: &self.verifier_receipt_root_sha256,
+                input_tokens: self.input_tokens,
+                captured_at_unix_ms: self.captured_at_unix_ms,
+                completed_at_unix_nanos: self.completed_at_unix_nanos,
+                accepted: self.accepted,
+                topology: &self.topology,
+            });
+        }
+        canonical_json_sha256(&JoinedDigestV2 {
+            schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V2,
             capture_sequence: self.capture_sequence,
             turn_intent_id_sha256: &self.turn_intent_id_sha256,
             request_event_id_sha256: &self.request_event_id_sha256,
@@ -294,6 +359,9 @@ impl BlindThenRevealJoinedTransitionV1 {
             session_lineage_sha256: &self.session_lineage_sha256,
             session_id_sha256: &self.session_id_sha256,
             topology_commitment_root_sha256: &self.topology_commitment_root_sha256,
+            extractor_root_sha256: &self.extractor_root_sha256,
+            extractor_config_root_sha256: &self.extractor_config_root_sha256,
+            capture_generation_root_sha256: &self.capture_generation_root_sha256,
             pre_action_record_root_sha256: &self.pre_action_record_root_sha256,
             completed_frame_root_sha256: &self.completed_frame_root_sha256,
             physical_action_root_sha256: &self.physical_action_root_sha256,
@@ -306,6 +374,19 @@ impl BlindThenRevealJoinedTransitionV1 {
             accepted: self.accepted,
             topology: &self.topology,
         })
+    }
+
+    fn capture_v2_roots_valid(&self) -> Result<bool, &'static str> {
+        let extractor = sha256_bytes(b"nando.multi-source-extractor.v2");
+        let config = sha256_bytes(b"nando.multi-source-extractor-config.v2");
+        Ok(self.extractor_root_sha256 == extractor
+            && self.extractor_config_root_sha256 == config
+            && self.capture_generation_root_sha256
+                == canonical_json_sha256(&(
+                    MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
+                    extractor.as_str(),
+                    config.as_str(),
+                ))?)
     }
 }
 
@@ -472,8 +553,29 @@ fn joined_row(
     } else {
         topology.structure.estimated_input_tokens
     };
+    let extractor_v2 = sha256_bytes(b"nando.multi-source-extractor.v2");
+    let config_v2 = sha256_bytes(b"nando.multi-source-extractor-config.v2");
+    let capture_schema = match (
+        topology.commit.extractor_root_sha256.as_str(),
+        topology.commit.config_root_sha256.as_str(),
+    ) {
+        (extractor, config) if extractor == extractor_v2 && config == config_v2 => (
+            BLIND_THEN_REVEAL_JOIN_SCHEMA_V2,
+            MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
+        ),
+        _ => (
+            BLIND_THEN_REVEAL_JOIN_SCHEMA_V1,
+            MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V1,
+        ),
+    };
+    let capture_generation_root_sha256 = canonical_json_sha256(&(
+        capture_schema.1,
+        topology.commit.extractor_root_sha256.as_str(),
+        topology.commit.config_root_sha256.as_str(),
+    ))
+    .map_err(|_| MultiSourceJoinCensoredReasonV1::IdentityMismatch)?;
     let mut joined = BlindThenRevealJoinedTransitionV1 {
-        schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1.to_owned(),
+        schema: capture_schema.0.to_owned(),
         join_root_sha256: String::new(),
         capture_sequence: topology
             .bridge_sequence
@@ -487,6 +589,9 @@ fn joined_row(
             .ok_or(MultiSourceJoinCensoredReasonV1::IdentityMismatch)?,
         session_id_sha256: action.session_id_sha256.clone(),
         topology_commitment_root_sha256: topology.commit.commitment_root_sha256.clone(),
+        extractor_root_sha256: topology.commit.extractor_root_sha256.clone(),
+        extractor_config_root_sha256: topology.commit.config_root_sha256.clone(),
+        capture_generation_root_sha256,
         pre_action_record_root_sha256: topology
             .record_sha256
             .clone()
@@ -621,4 +726,84 @@ fn completed_effect_atoms(
     result.sort_unstable();
     result.dedup();
     result
+}
+
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
+    use nando_operator_kernel::{
+        MultiSourceCardinalityClassV1, MultiSourceContainerClassV1, MultiSourceRoleNodeV1,
+        MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
+    };
+
+    fn root(value: u64) -> String {
+        format!("{value:064x}")
+    }
+
+    #[test]
+    fn historical_v1_join_root_excludes_capture_generation_provenance() {
+        let topology = PreActionMultiSourceTopologyV1 {
+            extraction_status: MultiSourceExtractionStatusV1::Complete,
+            grounded_output_count: 1,
+            output_part_count: 1,
+            roles: vec![MultiSourceRoleNodeV1 {
+                local_role_id: 0,
+                source_ordinal: 0,
+                value_ordinal: 0,
+                type_class: MultiSourceTypeClassV1::Number,
+                container_class: MultiSourceContainerClassV1::Scalar,
+                cardinality_class: MultiSourceCardinalityClassV1::One,
+                temporal_class: MultiSourceTemporalClassV1::Latest,
+                depth_bucket: 1,
+                structural_flags: 1,
+            }],
+            role_witnesses: vec![MultiSourceRoleWitnessV1 {
+                local_role_id: 0,
+                value_sha256: root(20),
+                request_reference_ordinal: None,
+                request_reference_ordinal_candidates: Vec::new(),
+            }],
+            relations: Vec::new(),
+        };
+        let mut row = BlindThenRevealJoinedTransitionV1 {
+            schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1.to_owned(),
+            join_root_sha256: String::new(),
+            capture_sequence: 7,
+            turn_intent_id_sha256: root(1),
+            request_event_id_sha256: root(2),
+            action_event_id_sha256: root(3),
+            session_lineage_sha256: root(4),
+            session_id_sha256: root(5),
+            topology_commitment_root_sha256: root(6),
+            extractor_root_sha256: String::new(),
+            extractor_config_root_sha256: String::new(),
+            capture_generation_root_sha256: String::new(),
+            pre_action_record_root_sha256: root(8),
+            completed_frame_root_sha256: root(9),
+            physical_action_root_sha256: root(10),
+            semantic_action_root_sha256: root(11),
+            effect_atoms: vec![CompletedEffectAtomV1::ValueProjection],
+            verifier_receipt_root_sha256: root(12),
+            input_tokens: 13,
+            captured_at_unix_ms: 14,
+            completed_at_unix_nanos: 15_000_000,
+            accepted: true,
+            topology,
+        };
+        row.join_root_sha256 = row.expected_root().expect("legacy root");
+        assert_eq!(
+            row.join_root_sha256,
+            "f5ede1227f3e5961ca23d2feed684952b2f868e0052fce3ce26f2585884ff2de"
+        );
+
+        let mut encoded = serde_json::to_value(&row).expect("encode legacy join");
+        let object = encoded.as_object_mut().expect("join object");
+        object.remove("extractor_root_sha256");
+        object.remove("extractor_config_root_sha256");
+        object.remove("capture_generation_root_sha256");
+        let decoded: BlindThenRevealJoinedTransitionV1 =
+            serde_json::from_value(encoded).expect("decode historical join");
+        decoded.validate().expect("validate historical join");
+        assert_eq!(decoded.join_root_sha256, row.join_root_sha256);
+    }
 }

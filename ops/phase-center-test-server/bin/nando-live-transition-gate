@@ -65,6 +65,19 @@ raise SystemExit(0 if valid else 1)
 PY
 }
 
+canonical_json_file_sha256() {
+  python3 - "$1" <<'PY'
+import hashlib
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    value = json.load(source)
+payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+print(hashlib.sha256(payload.encode("utf-8")).hexdigest())
+PY
+}
+
 extract_response_authority_candidate() {
   python3 - "$1" "$2" <<'PY'
 import json
@@ -467,7 +480,8 @@ run_expression_shadow() {
 }
 
 run_response_runtime() {
-  local registry miner_status online_report economics health_url health m3_evaluation authority_candidate embedded_candidate
+  local registry miner_status online_report economics health_url health m3_evaluation authority_candidate
+  local sidecar_pointer generation_root generation_dir generation_manifest generated_registry generated_candidate
   registry="$(jq -r '.response_runtime.registry' "${PROFILE}")"
   miner_status="$(jq -r '.response_runtime.miner_status' "${PROFILE}")"
   online_report="$(jq -r '.response_runtime.online_miner_report' "${PROFILE}")"
@@ -475,15 +489,58 @@ run_response_runtime() {
   health_url="$(jq -r '.deployment.health_url' "${PROFILE}")"
   health="${TMP_DIR}/response-health.json"
   authority_candidate="${TMP_DIR}/response-runtime-authority-candidate.json"
-  embedded_candidate="$(dirname "${registry}")/response-authority-candidate.json"
-  if [[ -f "${embedded_candidate}" ]] && jq -e '
-    .schema == "nando.response-authority-candidate.v1"
-    and .execution_authority == false
-  ' "${embedded_candidate}" >/dev/null 2>&1; then
-    cp "${embedded_candidate}" "${authority_candidate}"
-  else
-    extract_response_authority_candidate "${miner_status}" "${authority_candidate}"
+  sidecar_pointer="$(dirname "${registry}")/response-authority-sidecar-current-v2.json"
+  if [[ ! -f "${sidecar_pointer}" ]] || ! jq -e '
+    .schema == "nando.response-authority-sidecar-generation.v2"
+    and (.generation_root_sha256 | test("^[0-9a-f]{64}$"))
+    and (.registry_root_sha256 | test("^[0-9a-f]{64}$"))
+    and (.controller_root_sha256 | test("^[0-9a-f]{64}$"))
+    and (.candidate_root_sha256 | test("^[0-9a-f]{64}$"))
+    and (.marker_root_sha256 | test("^[0-9a-f]{64}$"))
+  ' "${sidecar_pointer}" >/dev/null 2>&1; then
+    jq -n '{section:"response_runtime",verdict:"VETO",m3_verdict:"WATCH",safety_pass:false,reason:"response_authority_generation_pointer_invalid"}' \
+      >"${TMP_DIR}/response_runtime.json"
+    return
   fi
+  generation_root="$(jq -r '.generation_root_sha256' "${sidecar_pointer}")"
+  generation_dir="$(dirname "${registry}")/response-authority-sidecar-generations-v2/${generation_root}"
+  generation_manifest="${generation_dir}/manifest.json"
+  generated_registry="${generation_dir}/registry.json"
+  generated_candidate="${generation_dir}/candidate.json"
+  local generated_controller generated_marker registry_root controller_root candidate_root marker_root generation_payload expected_generation_root
+  generated_controller="${generation_dir}/controller.json"
+  generated_marker="${generation_dir}/marker.json"
+  if [[ ! -f "${generation_manifest}" || ! -f "${generated_registry}" \
+    || ! -f "${generated_controller}" || ! -f "${generated_candidate}" \
+    || ! -f "${generated_marker}" ]]; then
+    jq -n '{section:"response_runtime",verdict:"VETO",m3_verdict:"WATCH",safety_pass:false,reason:"response_authority_generation_incomplete"}' \
+      >"${TMP_DIR}/response_runtime.json"
+    return
+  fi
+  registry_root="$(canonical_json_file_sha256 "${generated_registry}")"
+  controller_root="$(canonical_json_file_sha256 "${generated_controller}")"
+  candidate_root="$(canonical_json_file_sha256 "${generated_candidate}")"
+  marker_root="$(canonical_json_file_sha256 "${generated_marker}")"
+  generation_payload="$(jq -cn \
+    --arg schema 'nando.response-authority-sidecar-generation.v2' \
+    --arg registry "${registry_root}" --arg controller "${controller_root}" \
+    --arg candidate "${candidate_root}" --arg marker "${marker_root}" \
+    '[$schema,$registry,$controller,$candidate,$marker]')"
+  expected_generation_root="$(printf '%s' "${generation_payload}" | sha256sum | awk '{print $1}')"
+  if ! cmp -s <(jq -cS . "${sidecar_pointer}") <(jq -cS . "${generation_manifest}") \
+    || [[ "${registry_root}" != "$(jq -r '.registry_root_sha256' "${sidecar_pointer}")" ]] \
+    || [[ "${controller_root}" != "$(jq -r '.controller_root_sha256' "${sidecar_pointer}")" ]] \
+    || [[ "${candidate_root}" != "$(jq -r '.candidate_root_sha256' "${sidecar_pointer}")" ]] \
+    || [[ "${marker_root}" != "$(jq -r '.marker_root_sha256' "${sidecar_pointer}")" ]] \
+    || [[ "${generation_root}" != "${expected_generation_root}" ]] \
+    || ! jq -e '.schema == "nando.response-authority-candidate.v1" and .execution_authority == false' \
+      "${generated_candidate}" >/dev/null 2>&1; then
+    jq -n '{section:"response_runtime",verdict:"VETO",m3_verdict:"WATCH",safety_pass:false,reason:"response_authority_generation_root_invalid"}' \
+      >"${TMP_DIR}/response_runtime.json"
+    return
+  fi
+  registry="${generated_registry}"
+  cp "${generated_candidate}" "${authority_candidate}"
   # Safety predicates must compare the registry with the refreshed candidate.
   # Refresh may remove revoked bindings, but the Rust tool cannot create a new
   # binding without proof material already sealed in the candidate.

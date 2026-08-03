@@ -5,8 +5,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::{
-    RUNTIME_OUTPUT_SCALAR_BUDGET, collection_json_from_value, immediate_function_output,
-    request_text,
+    RUNTIME_OUTPUT_SCALAR_BUDGET, canonical_collection_from_provider_output,
+    immediate_function_output, request_text,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1555,7 +1555,7 @@ fn extracted_scalar(
 fn immediate_unique_collection(provider_payload: &Value) -> Result<ExtractedScalar, &'static str> {
     let output =
         immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
-    let value = collection_json_from_value(output)?;
+    let value = canonical_collection_from_provider_output(output)?;
     extracted_scalar(value, AtomValueType::Collection)
 }
 

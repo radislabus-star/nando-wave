@@ -34,6 +34,13 @@ def digest(label: str) -> str:
     return hashlib.sha256(label.encode("utf-8")).hexdigest()
 
 
+def canonical_root(value: Any) -> str:
+    payload = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def post_verifier_receipt(
     *, package_id: str, request_sha256: str, output_sha256: str
 ) -> dict[str, str]:
@@ -330,11 +337,53 @@ class StableM3WindowGateTest(unittest.TestCase):
         economics: dict[str, Any],
         *,
         registry_schema: str = "nando.response-registry.v6",
+        tamper_generation_candidate: bool = False,
     ) -> dict[str, Any]:
         registry = copy.deepcopy(self.registry)
         registry["schema"] = registry_schema
         self.registry_path.write_text(json.dumps(registry), encoding="utf-8")
         self.miner_path.write_text(json.dumps(self.miner), encoding="utf-8")
+        candidate = copy.deepcopy(self.miner["response_authority_candidate"])
+        controller = {"schema": "test-controller.v1", "registry_revision": registry["revision"]}
+        marker = {"schema": "test-marker.v1", "registry_revision": registry["revision"]}
+        roots = [
+            canonical_root(registry),
+            canonical_root(controller),
+            canonical_root(candidate),
+            canonical_root(marker),
+        ]
+        generation_root = canonical_root(
+            ["nando.response-authority-sidecar-generation.v2", *roots]
+        )
+        generation = {
+            "schema": "nando.response-authority-sidecar-generation.v2",
+            "generation_root_sha256": generation_root,
+            "registry_root_sha256": roots[0],
+            "controller_root_sha256": roots[1],
+            "candidate_root_sha256": roots[2],
+            "marker_root_sha256": roots[3],
+        }
+        generation_dir = (
+            self.temp
+            / "response-authority-sidecar-generations-v2"
+            / generation_root
+        )
+        generation_dir.mkdir(parents=True, exist_ok=True)
+        for name, value in [
+            ("registry.json", registry),
+            ("controller.json", controller),
+            ("candidate.json", candidate),
+            ("marker.json", marker),
+            ("manifest.json", generation),
+        ]:
+            (generation_dir / name).write_text(json.dumps(value), encoding="utf-8")
+        (self.temp / "response-authority-sidecar-current-v2.json").write_text(
+            json.dumps(generation), encoding="utf-8"
+        )
+        if tamper_generation_candidate:
+            (generation_dir / "candidate.json").write_text(
+                json.dumps({**candidate, "registry_revision": 2}), encoding="utf-8"
+            )
         self.online_path.write_text(json.dumps(self.online), encoding="utf-8")
         self.economics_path.write_text(json.dumps(economics), encoding="utf-8")
         completed = subprocess.run(
@@ -352,6 +401,14 @@ class StableM3WindowGateTest(unittest.TestCase):
             self.fail(
                 f"gate returned invalid JSON: {error}\n{completed.stdout}\n{completed.stderr}"
             )
+
+    def test_tampered_authority_generation_is_fail_closed(self) -> None:
+        report = self.run_gate(
+            self.base_economics, tamper_generation_candidate=True
+        )
+        response = report["sections"]["response_runtime"]
+        self.assertEqual(response["verdict"], "VETO")
+        self.assertEqual(response["reason"], "response_authority_generation_root_invalid")
 
     def assert_response(
         self, report: dict[str, Any], *, verdict: str, m3_verdict: str

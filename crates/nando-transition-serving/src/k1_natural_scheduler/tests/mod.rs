@@ -62,6 +62,7 @@ fn candidate_freeze() -> K1NaturalCandidateFreezeV1 {
         .map(|index| {
             K1NaturalEvidenceRowV1::seal(
                 root(100 + index),
+                root(199),
                 root(200),
                 root(201),
                 root(202),

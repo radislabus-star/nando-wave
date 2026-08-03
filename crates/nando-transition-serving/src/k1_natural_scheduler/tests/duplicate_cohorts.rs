@@ -38,6 +38,7 @@ fn catalog_with_additional_evidence() -> K1NaturalCohortCatalogV1 {
         .map(|index| {
             K1NaturalEvidenceRowV1::seal(
                 root(1_000 + index),
+                root(199),
                 root(200),
                 root(201),
                 root(202),

@@ -1,7 +1,9 @@
 use super::*;
+use nando_operator_kernel::sha256_bytes;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct CandidateIdentity {
+    capture_generation_root_sha256: String,
     candidate_structural_root_sha256: String,
     source_neutral_topology_root_sha256: String,
     semantic_novelty_signature_root_sha256: String,
@@ -29,28 +31,48 @@ pub(in crate::k1_natural_scheduler_runtime) fn build_evidence_bindings(
     prepared
         .into_iter()
         .map(|(joined, factorized, identity)| {
-            let generator_eligible = generator_eligible(&joined, &factorized);
+            let capture_v2 = capture_generation_v2(&joined);
+            let generator_eligible = capture_v2 && generator_eligible(&joined, &factorized);
             let cohort_index = cohort_rows.entry(identity.clone()).or_default();
             let support_overflow = generator_eligible && *cohort_index >= K1_MAX_SUPPORT_ROWS_V1;
             if generator_eligible {
                 *cohort_index = cohort_index.saturating_add(1);
             }
             let safety_veto = !generator_eligible || support_overflow;
-            let row = K1NaturalEvidenceRowV1::seal(
-                joined.join_root_sha256.clone(),
-                identity.candidate_structural_root_sha256,
-                identity.source_neutral_topology_root_sha256,
-                identity.semantic_novelty_signature_root_sha256,
-                joined.session_lineage_sha256.clone(),
-                identity.consequence_type,
-                K1NaturalEvidenceClassV1::NaturalLive,
-                joined.capture_sequence,
-                joined.capture_sequence,
-                joined.input_tokens,
-                true,
-                joined.accepted,
-                safety_veto,
-            )
+            let row = if capture_v2 {
+                K1NaturalEvidenceRowV1::seal(
+                    joined.join_root_sha256.clone(),
+                    identity.capture_generation_root_sha256,
+                    identity.candidate_structural_root_sha256,
+                    identity.source_neutral_topology_root_sha256,
+                    identity.semantic_novelty_signature_root_sha256,
+                    joined.session_lineage_sha256.clone(),
+                    identity.consequence_type,
+                    K1NaturalEvidenceClassV1::NaturalLive,
+                    joined.capture_sequence,
+                    joined.capture_sequence,
+                    joined.input_tokens,
+                    true,
+                    joined.accepted,
+                    safety_veto,
+                )
+            } else {
+                K1NaturalEvidenceRowV1::seal_legacy_v1(
+                    joined.join_root_sha256.clone(),
+                    identity.candidate_structural_root_sha256,
+                    identity.source_neutral_topology_root_sha256,
+                    identity.semantic_novelty_signature_root_sha256,
+                    joined.session_lineage_sha256.clone(),
+                    identity.consequence_type,
+                    K1NaturalEvidenceClassV1::NaturalLive,
+                    joined.capture_sequence,
+                    joined.capture_sequence,
+                    joined.input_tokens,
+                    true,
+                    joined.accepted,
+                    true,
+                )
+            }
             .map_err(str::to_owned)?;
             Ok(EvidenceBinding { row, joined })
         })
@@ -63,6 +85,7 @@ fn candidate_identity(
 ) -> Result<CandidateIdentity, String> {
     let consequence_type = consequence_type(joined, factorized.completed_effect);
     Ok(CandidateIdentity {
+        capture_generation_root_sha256: joined.capture_generation_root_sha256.clone(),
         candidate_structural_root_sha256: factorized.applicability_shape_root_sha256.clone(),
         source_neutral_topology_root_sha256: source_neutral_topology_root_v1(&joined.topology)
             .map_err(str::to_owned)?,
@@ -73,6 +96,27 @@ fn candidate_identity(
         .map_err(str::to_owned)?,
         consequence_type,
     })
+}
+
+fn capture_generation_v2(joined: &BlindThenRevealJoinedTransitionV1) -> bool {
+    joined.schema == nando_operator_learning::multi_source::BLIND_THEN_REVEAL_JOIN_SCHEMA_V2
+        && capture_generation_v2_roots(
+            &joined.extractor_root_sha256,
+            &joined.extractor_config_root_sha256,
+            &joined.capture_generation_root_sha256,
+        )
+}
+
+fn capture_generation_v2_roots(extractor: &str, config: &str, generation: &str) -> bool {
+    extractor == sha256_bytes(b"nando.multi-source-extractor.v2")
+        && config == sha256_bytes(b"nando.multi-source-extractor-config.v2")
+        && generation
+            == canonical_json_sha256(&(
+                nando_operator_learning::multi_source::MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
+                extractor,
+                config,
+            ))
+            .unwrap_or_default()
 }
 
 fn consequence_type(
@@ -171,5 +215,33 @@ pub(in crate::k1_natural_scheduler_runtime) fn generation_budget() -> K1Generati
         maximum_probe_rounds: K1_MAX_PROBE_ROUNDS_V1,
         maximum_probe_cost_units: K1_MAX_PROBE_COST_UNITS_V1,
         maximum_generation_seconds: K1_MAX_GENERATION_SECONDS_V1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::capture_generation_v2_roots;
+    use nando_operator_kernel::{canonical_json_sha256, sha256_bytes};
+
+    #[test]
+    fn legacy_capture_roots_are_diagnostic_only() {
+        let extractor_v2 = sha256_bytes(b"nando.multi-source-extractor.v2");
+        let config_v2 = sha256_bytes(b"nando.multi-source-extractor-config.v2");
+        let generation_v2 = canonical_json_sha256(&(
+            nando_operator_learning::multi_source::MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
+            extractor_v2.as_str(),
+            config_v2.as_str(),
+        ))
+        .expect("generation root");
+        assert!(capture_generation_v2_roots(
+            &extractor_v2,
+            &config_v2,
+            &generation_v2
+        ));
+        assert!(!capture_generation_v2_roots(
+            &sha256_bytes(b"nando.multi-source-extractor.v1"),
+            &sha256_bytes(b"nando.multi-source-extractor-config.v1"),
+            &generation_v2
+        ));
     }
 }

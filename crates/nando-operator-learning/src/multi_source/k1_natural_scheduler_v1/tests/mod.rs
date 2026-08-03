@@ -50,6 +50,7 @@ fn evidence_row(
 ) -> K1NaturalEvidenceRowV1 {
     K1NaturalEvidenceRowV1::seal(
         root(10_000 + index),
+        root(9_999),
         root(structural),
         root(topology),
         root(50_000 + structural),
@@ -150,6 +151,19 @@ fn candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV1 {
         1_700_000_000,
     )
     .expect("candidate freeze")
+}
+
+#[test]
+fn legacy_v1_candidate_freeze_remains_decodable_and_root_stable() {
+    let mut freeze = candidate_freeze(1);
+    freeze.schema = K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1.to_owned();
+    freeze.capture_generation_root_sha256.clear();
+    freeze.freeze_root_sha256 = freeze.expected_root().expect("legacy freeze root");
+    let bytes = serde_json::to_vec(&freeze).expect("encode legacy freeze");
+    let restored: K1NaturalCandidateFreezeV1 =
+        serde_json::from_slice(&bytes).expect("decode legacy freeze");
+    restored.validate().expect("validate legacy freeze");
+    assert_eq!(restored.freeze_root_sha256, freeze.freeze_root_sha256);
 }
 
 fn frozen_generation() -> (

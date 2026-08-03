@@ -11,8 +11,11 @@ use nando_operator_kernel::{
     ResponseValueSelector, SemanticRole, ValueProjectionFormat,
 };
 
+mod collection_input;
 mod selection;
 mod structural_json_roles;
+
+pub use collection_input::canonical_collection_from_provider_output;
 
 #[cfg(test)]
 use selection::latest_turn_output_scalar_from_end;
@@ -1001,7 +1004,7 @@ fn execute_compose_collection_audited(
             steps,
         ),
     };
-    let mut value = collection_json_from_value(output)?;
+    let mut value = canonical_collection_from_provider_output(output)?;
     let mut filter_field = None::<String>;
     for step in transform_steps {
         value = match step {
@@ -1286,7 +1289,10 @@ pub fn collection_source_value_for_program(
         CollectionProgramStep::SelectTurnOutput { output_ordinal } => Some(*output_ordinal),
         _ => None,
     });
-    collection_json_from_value(active_turn_output_value(provider_payload, output_ordinal)?)
+    canonical_collection_from_provider_output(active_turn_output_value(
+        provider_payload,
+        output_ordinal,
+    )?)
 }
 
 #[doc(hidden)]
@@ -1512,186 +1518,6 @@ fn unique_request_template(request: &str, marker: &str) -> Result<String, &'stat
         .into_keys()
         .next()
         .ok_or("request_template_missing")
-}
-
-fn collection_json_from_value(output: &Value) -> Result<Value, &'static str> {
-    let mut texts = Vec::new();
-    let mut total_bytes = 0_usize;
-    match output {
-        Value::String(text) => texts.push(text.as_str()),
-        Value::Array(parts) if !parts.is_empty() && parts.len() <= 64 => {
-            for part in parts {
-                if !matches!(
-                    part.get("type").and_then(Value::as_str),
-                    Some("text" | "input_text" | "output_text")
-                ) {
-                    return Err("collection_output_part_type");
-                }
-                texts.push(
-                    part.get("text")
-                        .and_then(Value::as_str)
-                        .ok_or("collection_output_part_text")?,
-                );
-            }
-        }
-        _ => return Err("collection_output_not_text"),
-    }
-    let mut candidates = BTreeMap::<Vec<u8>, Value>::new();
-    for text in texts {
-        total_bytes = total_bytes
-            .checked_add(text.len())
-            .ok_or("collection_input_budget")?;
-        if text.is_empty() || total_bytes > 65_536 {
-            return Err("collection_input_budget");
-        }
-        collect_runtime_collection_candidates(text, &mut candidates)?;
-    }
-    if candidates.len() != 1 {
-        return Err(if candidates.is_empty() {
-            "collection_input_not_json"
-        } else {
-            "collection_input_ambiguous"
-        });
-    }
-    Ok(candidates.into_values().next().expect("one candidate"))
-}
-
-fn collect_runtime_collection_candidates(
-    output: &str,
-    candidates: &mut BTreeMap<Vec<u8>, Value>,
-) -> Result<(), &'static str> {
-    let mut sources = vec![output.to_owned()];
-    let mut fenced = None::<String>;
-    for line in output.lines() {
-        let trimmed = line.trim();
-        if fenced.is_some() && trimmed == "```" {
-            sources.push(fenced.take().unwrap_or_default());
-        } else if fenced.is_some() {
-            let buffer = fenced.as_mut().expect("checked above");
-            if !buffer.is_empty() {
-                buffer.push('\n');
-            }
-            buffer.push_str(line);
-        } else if trimmed == "```" || trimmed.eq_ignore_ascii_case("```json") {
-            fenced = Some(String::new());
-        } else if trimmed.starts_with(['{', '[']) {
-            sources.push(trimmed.to_owned());
-        }
-    }
-    for source in sources {
-        if source.is_empty() || source.len() > 16_384 {
-            continue;
-        }
-        for object in runtime_embedded_json_objects(&source) {
-            let value = Value::Object(object);
-            if bounded_collection_root(&value) {
-                let key = serde_json::to_vec(&value).map_err(|_| "collection_serialization")?;
-                candidates.insert(key, value);
-            }
-        }
-        if let Ok(value @ Value::Array(_)) = serde_json::from_str::<Value>(&source)
-            && !is_text_part_array(&value)
-        {
-            let value = serde_json::json!({"items": value});
-            if bounded_collection_root(&value) {
-                let key = serde_json::to_vec(&value).map_err(|_| "collection_serialization")?;
-                candidates.insert(key, value);
-            }
-        }
-    }
-    Ok(())
-}
-
-fn is_text_part_array(value: &Value) -> bool {
-    value.as_array().is_some_and(|parts| {
-        !parts.is_empty()
-            && parts.iter().all(|part| {
-                matches!(
-                    part.get("type").and_then(Value::as_str),
-                    Some("text" | "input_text" | "output_text")
-                ) && part.get("text").is_some_and(Value::is_string)
-            })
-    })
-}
-
-fn bounded_collection_root(value: &Value) -> bool {
-    let Some(object) = value.as_object().filter(|object| object.len() <= 16) else {
-        return false;
-    };
-    let mut arrays = object.values().filter_map(Value::as_array);
-    let Some(rows) = arrays.next() else {
-        return false;
-    };
-    if arrays.next().is_some() || rows.is_empty() || rows.len() > 1_024 {
-        return false;
-    }
-    rows.iter().all(|row| {
-        row.as_object().is_some_and(|fields| {
-            !fields.is_empty()
-                && fields.len() <= 16
-                && fields.iter().all(|(name, value)| {
-                    safe_collection_identifier(name) && safe_collection_scalar(value)
-                })
-        })
-    })
-}
-
-fn safe_collection_identifier(value: &str) -> bool {
-    let mut bytes = value.bytes();
-    let Some(first) = bytes.next() else {
-        return false;
-    };
-    if value.len() > 64 || !(first.is_ascii_alphabetic() || first == b'_') {
-        return false;
-    }
-    let lower = value.to_ascii_lowercase();
-    bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
-        && ![
-            "auth",
-            "cookie",
-            "credential",
-            "passwd",
-            "password",
-            "secret",
-            "token",
-            "api_key",
-            "apikey",
-            "private_key",
-            "privatekey",
-        ]
-        .iter()
-        .any(|private| lower.contains(private))
-}
-
-fn safe_collection_scalar(value: &Value) -> bool {
-    match value {
-        Value::Null | Value::Bool(_) => true,
-        Value::Number(number) => {
-            number
-                .as_i64()
-                .is_some_and(|value| (-(1_i64 << 53)..=(1_i64 << 53)).contains(&value))
-                || number.as_u64().is_some_and(|value| value <= (1_u64 << 53))
-        }
-        Value::String(text) => {
-            text.len() <= 128
-                && ![
-                    "auth",
-                    "cookie",
-                    "credential",
-                    "passwd",
-                    "password",
-                    "secret",
-                    "token",
-                    "api_key",
-                    "apikey",
-                    "private_key",
-                    "privatekey",
-                ]
-                .iter()
-                .any(|private| text.to_ascii_lowercase().contains(private))
-        }
-        Value::Array(_) | Value::Object(_) => false,
-    }
 }
 
 fn collection_scalar_type(value: &Value) -> Option<CollectionScalarType> {

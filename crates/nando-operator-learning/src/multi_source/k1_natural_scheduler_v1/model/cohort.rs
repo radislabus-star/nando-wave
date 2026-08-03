@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::evidence::K1ConsequenceTypeV1;
 use super::{
-    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
     K1CandidateReadinessV1, strict_roots,
 };
 
@@ -12,6 +12,7 @@ use super::{
 pub struct K1NaturalCohortCandidateV1 {
     pub schema: String,
     pub candidate_root_sha256: String,
+    pub capture_generation_root_sha256: String,
     pub candidate_structural_root_sha256: String,
     pub source_neutral_topology_root_sha256: String,
     pub semantic_novelty_signature_root_sha256: String,
@@ -52,6 +53,7 @@ pub struct K1NaturalCohortCatalogV1 {
 struct CandidateDigestV1<'a> {
     schema: &'static str,
     candidate_structural_root_sha256: &'a str,
+    capture_generation_root_sha256: &'a str,
     source_neutral_topology_root_sha256: &'a str,
     semantic_novelty_signature_root_sha256: &'a str,
     consequence_type: K1ConsequenceTypeV1,
@@ -75,12 +77,13 @@ impl K1NaturalCohortCandidateV1 {
         self.readiness.validate()?;
         let roots = [
             self.candidate_root_sha256.as_str(),
+            self.capture_generation_root_sha256.as_str(),
             self.candidate_structural_root_sha256.as_str(),
             self.source_neutral_topology_root_sha256.as_str(),
             self.semantic_novelty_signature_root_sha256.as_str(),
             self.evidence_manifest_root_sha256.as_str(),
         ];
-        if self.schema != K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1
+        if self.schema != K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2
             || !roots.into_iter().all(valid_nonzero_sha256)
             || self.generator_schema.is_empty()
             || self.evidence_rows == 0
@@ -99,7 +102,8 @@ impl K1NaturalCohortCandidateV1 {
 
     pub(in super::super) fn expected_root(&self) -> Result<String, &'static str> {
         canonical_json_sha256(&CandidateDigestV1 {
-            schema: K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1,
+            schema: K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2,
+            capture_generation_root_sha256: &self.capture_generation_root_sha256,
             candidate_structural_root_sha256: &self.candidate_structural_root_sha256,
             source_neutral_topology_root_sha256: &self.source_neutral_topology_root_sha256,
             semantic_novelty_signature_root_sha256: &self.semantic_novelty_signature_root_sha256,
