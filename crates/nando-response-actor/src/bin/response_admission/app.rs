@@ -20,6 +20,8 @@ use nando_response_actor::{
 };
 use serde::Serialize;
 
+mod authority_sidecars;
+
 #[derive(Serialize)]
 struct AdmissionControllerReport {
     schema: &'static str,
@@ -516,6 +518,39 @@ fn run(started: Instant) -> Result<(), String> {
     };
     let generation_delta_packages =
         generation_delta_package_count(&registry_path, &snapshot.registry);
+    ResponseExecutor::from_registry_with_admission(
+        snapshot.registry.clone(),
+        snapshot.admission.clone(),
+        &bundle.project_id,
+        &gate_sha256,
+        &runtime_sha256,
+        now_unix,
+        max_age_seconds,
+    )
+    .map_err(|error| format!("admission_self_check:{error}"))?;
+    let response_authority = &snapshot.admission.response_authority;
+    let authority_candidate = serde_json::json!({
+        "schema": "nando.response-authority-candidate.v1",
+        "authority_schema": response_authority.schema,
+        "registry_schema": response_authority.registry_schema,
+        "registry_revision": response_authority.registry_revision,
+        "registry_sha256": response_authority.registry_sha256,
+        "execution_authority": false,
+        "packages": response_authority.packages,
+        "required_gate_fields": [
+            "gate_build_sha256",
+            "runtime_build_sha256",
+            "generated_at_unix",
+            "expires_at_unix"
+        ]
+    });
+    let marker = serde_json::json!({
+        "schema": "nando.response-admission-controller-marker.v1",
+        "candidate_revision": bundle.revision,
+        "registry_revision": snapshot.registry.revision,
+        "runtime_build_sha256": runtime_sha256,
+        "written_at_unix": now_unix,
+    });
     if active_generation_is_immutable(
         &registry_path,
         &controller_admission_path,
@@ -524,6 +559,14 @@ fn run(started: Instant) -> Result<(), String> {
         &snapshot.registry,
     ) {
         let active_packages = snapshot.registry.packages.len();
+        authority_sidecars::persist(
+            &controller_admission_path,
+            &authority_candidate_path,
+            &marker_path,
+            &snapshot.admission,
+            &authority_candidate,
+            &marker,
+        )?;
         return write_report(
             &report_path,
             AdmissionControllerReport {
@@ -555,53 +598,14 @@ fn run(started: Instant) -> Result<(), String> {
         );
     }
     let active_packages = snapshot.registry.packages.len();
-    ResponseExecutor::from_registry_with_admission(
-        snapshot.registry.clone(),
-        snapshot.admission.clone(),
-        &bundle.project_id,
-        &gate_sha256,
-        &runtime_sha256,
-        now_unix,
-        max_age_seconds,
-    )
-    .map_err(|error| format!("admission_self_check:{error}"))?;
-    let response_authority = &snapshot.admission.response_authority;
-    let authority_candidate = serde_json::json!({
-        "schema": "nando.response-authority-candidate.v1",
-        "authority_schema": response_authority.schema,
-        "registry_schema": response_authority.registry_schema,
-        "registry_revision": response_authority.registry_revision,
-        "registry_sha256": response_authority.registry_sha256,
-        "execution_authority": false,
-        "packages": response_authority.packages,
-        "required_gate_fields": [
-            "gate_build_sha256",
-            "runtime_build_sha256",
-            "generated_at_unix",
-            "expires_at_unix"
-        ]
-    });
     write_json_atomic(&registry_path, &snapshot.registry, "response-registry")?;
-    write_json_atomic(
+    authority_sidecars::persist(
         &controller_admission_path,
-        &snapshot.admission,
-        "response-controller-admission",
-    )?;
-    write_json_atomic(
-        &marker_path,
-        &serde_json::json!({
-            "schema": "nando.response-admission-controller-marker.v1",
-            "candidate_revision": bundle.revision,
-            "registry_revision": snapshot.registry.revision,
-            "runtime_build_sha256": runtime_sha256,
-            "written_at_unix": now_unix,
-        }),
-        "response-admission-marker",
-    )?;
-    write_json_atomic(
         &authority_candidate_path,
+        &marker_path,
+        &snapshot.admission,
         &authority_candidate,
-        "response-authority-candidate",
+        &marker,
     )?;
     write_report(
         &report_path,
@@ -685,7 +689,11 @@ fn write_report(path: &Path, report: AdmissionControllerReport) -> Result<(), St
     write_json_atomic(path, &report, "response-admission-report")
 }
 
-fn write_json_atomic(path: &Path, value: &impl Serialize, stem: &str) -> Result<(), String> {
+pub(super) fn write_json_atomic(
+    path: &Path,
+    value: &impl Serialize,
+    stem: &str,
+) -> Result<(), String> {
     let bytes =
         serde_json::to_vec_pretty(value).map_err(|error| format!("{stem}_encode:{error}"))?;
     write_atomic(path, &bytes, stem)
