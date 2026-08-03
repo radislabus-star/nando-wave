@@ -189,6 +189,7 @@ pub struct ServingConfig {
     pub opportunity_bridge_producer_enabled: bool,
     pub opportunity_bridge_consumer_enabled: bool,
     pub opportunity_bridge_poll_ms: u64,
+    pub multi_source_research_enabled: bool,
     pub multi_source_snapshot_path: PathBuf,
     pub multi_source_snapshot_poll_ms: u64,
     pub terminal_receipt_archive_path: PathBuf,
@@ -397,6 +398,10 @@ impl ServingConfig {
                 "NANDO_OPPORTUNITY_BRIDGE_CONSUMER_ENABLED",
             ),
             opportunity_bridge_poll_ms: env_u64("NANDO_OPPORTUNITY_BRIDGE_POLL_MS", 100),
+            multi_source_research_enabled: env::var("NANDO_MULTI_SOURCE_RESEARCH_ENABLED")
+                .map_or(true, |value| {
+                    !matches!(value.as_str(), "0" | "false" | "no")
+                }),
             multi_source_snapshot_path: env_path_join(
                 "NANDO_MULTI_SOURCE_SNAPSHOT_PATH",
                 &state_dir,
@@ -953,26 +958,30 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         None
     };
     let (ms3_generation_lifecycle, ms3_linked_frame_acquisition, ms3_frozen_version_space) =
-        match multi_source_topology_archive.as_ref() {
-            Some(archive) => {
-                let archive = archive
-                    .lock()
-                    .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
-                let (lifecycle, runtimes) =
-                    ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime::open(
-                        &config.ms3_linked_frame_acquisition_path,
-                        &archive,
-                        unix_now(),
-                        config.ms3_linked_frame_acquisition_max_topologies,
-                        config.ms3_linked_frame_acquisition_max_seconds,
-                    )?;
-                (
-                    Some(Arc::new(Mutex::new(lifecycle))),
-                    Some(Arc::new(Mutex::new(runtimes.acquisition))),
-                    Some(Arc::new(Mutex::new(runtimes.frozen))),
-                )
+        if config.multi_source_research_enabled {
+            match multi_source_topology_archive.as_ref() {
+                Some(archive) => {
+                    let archive = archive
+                        .lock()
+                        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?;
+                    let (lifecycle, runtimes) =
+                        ms3_generation_lifecycle::Ms3GenerationLifecycleRuntime::open(
+                            &config.ms3_linked_frame_acquisition_path,
+                            &archive,
+                            unix_now(),
+                            config.ms3_linked_frame_acquisition_max_topologies,
+                            config.ms3_linked_frame_acquisition_max_seconds,
+                        )?;
+                    (
+                        Some(Arc::new(Mutex::new(lifecycle))),
+                        Some(Arc::new(Mutex::new(runtimes.acquisition))),
+                        Some(Arc::new(Mutex::new(runtimes.frozen))),
+                    )
+                }
+                None => (None, None, None),
             }
-            None => (None, None, None),
+        } else {
+            (None, None, None)
         };
     if let (Some(runtime), Some(archive)) = (
         ms3_frozen_version_space.as_ref(),
@@ -1054,9 +1063,11 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         k1_mechanism_watch_report: Arc::new(RwLock::new(None)),
         k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
     };
-    validate_ms3_scientific_denominator_link(&state)?;
-    if state.ms3_generation_lifecycle.is_some() {
-        rollover_ms3_generation_if_terminal(&state)?;
+    if state.config.multi_source_research_enabled {
+        validate_ms3_scientific_denominator_link(&state)?;
+        if state.ms3_generation_lifecycle.is_some() {
+            rollover_ms3_generation_if_terminal(&state)?;
+        }
     }
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -1156,7 +1167,9 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         state.config.learning_structure_bridge_consumer_enabled,
     )?;
     spawn_miner_warmup(state.clone())?;
-    spawn_multi_source_snapshot_runtime(state.clone())?;
+    if state.config.multi_source_research_enabled {
+        spawn_multi_source_snapshot_runtime(state.clone())?;
+    }
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
@@ -1608,6 +1621,10 @@ async fn health(State(state): State<AppState>) -> Response {
     let response_cpu_by_package_valid =
         response_cpu_by_package_lock_valid && response_cpu_by_package_overflow == 0;
     if let Some(object) = health.as_object_mut() {
+        object.insert(
+            "multi_source_research_enabled".to_owned(),
+            Value::Bool(state.config.multi_source_research_enabled),
+        );
         object.insert(
             "remote_evidence".to_owned(),
             serde_json::to_value(&remote_evidence).unwrap_or_else(|_| json!({})),
@@ -8299,6 +8316,7 @@ mod tests {
             opportunity_bridge_producer_enabled: false,
             opportunity_bridge_consumer_enabled: false,
             opportunity_bridge_poll_ms: 100,
+            multi_source_research_enabled: false,
             multi_source_snapshot_path: root.join("multi-source-live-v2/snapshot.cbor"),
             multi_source_snapshot_poll_ms: 1_000,
             terminal_receipt_archive_path: root
@@ -8700,6 +8718,7 @@ mod tests {
             .expect("health body");
         let health: Value = serde_json::from_slice(&bytes).expect("health json");
         assert_eq!(health["ok"], true);
+        assert_eq!(health["multi_source_research_enabled"], false);
         assert_eq!(health["online_collection_miner"]["ready"], false);
 
         for _ in 0..100 {
