@@ -10,6 +10,12 @@ struct CandidateIdentity {
     consequence_type: K1ConsequenceTypeV1,
 }
 
+#[derive(Default)]
+struct CohortSupportReservoir {
+    selected_rows: usize,
+    selected_lineages: BTreeSet<String>,
+}
+
 pub(in crate::k1_natural_scheduler_runtime) fn build_evidence_bindings(
     joined_rows: &[BlindThenRevealJoinedTransitionV1],
 ) -> Result<Vec<EvidenceBinding>, String> {
@@ -27,17 +33,17 @@ pub(in crate::k1_natural_scheduler_runtime) fn build_evidence_bindings(
             .cmp(&right.0.capture_sequence)
             .then_with(|| left.0.join_root_sha256.cmp(&right.0.join_root_sha256))
     });
-    let mut cohort_rows = BTreeMap::<CandidateIdentity, usize>::new();
+    let mut cohort_reservoirs = BTreeMap::<CandidateIdentity, CohortSupportReservoir>::new();
     prepared
         .into_iter()
         .map(|(joined, factorized, identity)| {
             let capture_v2 = capture_generation_v2(&joined);
             let generator_eligible = generator_eligible(&joined, &factorized);
-            let cohort_index = cohort_rows.entry(identity.clone()).or_default();
-            let support_overflow = generator_eligible && *cohort_index >= K1_MAX_SUPPORT_ROWS_V1;
-            if generator_eligible {
-                *cohort_index = cohort_index.saturating_add(1);
-            }
+            let support_overflow = support_reservoir_overflow(
+                cohort_reservoirs.entry(identity.clone()).or_default(),
+                &joined.session_lineage_sha256,
+                generator_eligible,
+            );
             let safety_veto = !generator_eligible || support_overflow;
             let row = if capture_v2 {
                 K1NaturalEvidenceRowV1::seal(
@@ -77,6 +83,40 @@ pub(in crate::k1_natural_scheduler_runtime) fn build_evidence_bindings(
             Ok(EvidenceBinding { row, joined })
         })
         .collect()
+}
+
+fn support_reservoir_overflow(
+    reservoir: &mut CohortSupportReservoir,
+    lineage_root_sha256: &str,
+    generator_eligible: bool,
+) -> bool {
+    if !generator_eligible {
+        return false;
+    }
+    if reservoir.selected_rows >= K1_MAX_SUPPORT_ROWS_V1 {
+        return true;
+    }
+
+    let lineage_already_selected = reservoir.selected_lineages.contains(lineage_root_sha256);
+    let selected_lineages = u64::try_from(reservoir.selected_lineages.len()).unwrap_or(u64::MAX);
+    let reserved_lineage_slots = usize::try_from(
+        K1_CANDIDATE_READINESS_MIN_LINEAGES_V1.saturating_sub(selected_lineages),
+    )
+    .unwrap_or(K1_MAX_SUPPORT_ROWS_V1);
+    let existing_lineage_limit =
+        K1_MAX_SUPPORT_ROWS_V1.saturating_sub(reserved_lineage_slots);
+    if lineage_already_selected
+        && reserved_lineage_slots > 0
+        && reservoir.selected_rows >= existing_lineage_limit
+    {
+        return true;
+    }
+
+    reservoir.selected_rows = reservoir.selected_rows.saturating_add(1);
+    reservoir
+        .selected_lineages
+        .insert(lineage_root_sha256.to_owned());
+    false
 }
 
 fn candidate_identity(
@@ -220,8 +260,39 @@ pub(in crate::k1_natural_scheduler_runtime) fn generation_budget() -> K1Generati
 
 #[cfg(test)]
 mod tests {
-    use super::capture_generation_v2_roots;
+    use super::{CohortSupportReservoir, capture_generation_v2_roots, support_reservoir_overflow};
+    use crate::k1_natural_scheduler_runtime::K1_MAX_SUPPORT_ROWS_V1;
     use nando_operator_kernel::{canonical_json_sha256, sha256_bytes};
+
+    #[test]
+    fn support_reservoir_preserves_a_slot_for_an_independent_lineage() {
+        let mut reservoir = CohortSupportReservoir::default();
+        for _ in 0..K1_MAX_SUPPORT_ROWS_V1 - 1 {
+            assert!(!support_reservoir_overflow(
+                &mut reservoir,
+                "lineage-a",
+                true
+            ));
+        }
+
+        assert!(support_reservoir_overflow(
+            &mut reservoir,
+            "lineage-a",
+            true
+        ));
+        assert!(!support_reservoir_overflow(
+            &mut reservoir,
+            "lineage-b",
+            true
+        ));
+        assert_eq!(reservoir.selected_rows, K1_MAX_SUPPORT_ROWS_V1);
+        assert_eq!(reservoir.selected_lineages.len(), 2);
+        assert!(support_reservoir_overflow(
+            &mut reservoir,
+            "lineage-c",
+            true
+        ));
+    }
 
     #[test]
     fn legacy_capture_roots_are_diagnostic_only() {
