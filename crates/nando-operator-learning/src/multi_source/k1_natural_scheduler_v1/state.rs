@@ -6,10 +6,11 @@ use sha2::{Digest, Sha256};
 
 use super::model::K1_SCHEDULER_SCHEMA_V1;
 use super::{
-    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1FutureOutcomeReceiptV1, K1FuturePredictionContractV1,
-    K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
-    K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1ProbeBudgetRemainingV1,
-    K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1TransferSettlementV1,
+    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1FutureOutcomeReceiptV1,
+    K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
+    K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
+    K1NaturalCandidateFreezeV1, K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1,
+    K1ProbeRoundStateV1, K1TransferSettlementV1,
 };
 
 const K1_SCHEDULER_EVENT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-event.v1";
@@ -21,6 +22,7 @@ pub enum K1SchedulerEventPayloadV1 {
     IdentificationFreeze(K1IdentificationFreezeV1),
     FuturePredictionContract(K1FuturePredictionContractV1),
     FuturePrediction(K1FuturePredictionReceiptV1),
+    FuturePredictionCensored(K1FuturePredictionCensorReceiptV1),
     FutureOutcome(K1FutureOutcomeReceiptV1),
     ProbeRound(K1ProbeRoundReceiptV1),
     TerminalVerdict(Box<K1GenerationTerminalVerdictV1>),
@@ -54,6 +56,7 @@ struct ReplayState {
     identification: Option<K1IdentificationFreezeV1>,
     future_contract: Option<K1FuturePredictionContractV1>,
     future_predictions: BTreeMap<String, K1FuturePredictionReceiptV1>,
+    future_prediction_censors: BTreeMap<String, K1FuturePredictionCensorReceiptV1>,
     future_outcomes: BTreeMap<String, K1FutureOutcomeReceiptV1>,
     pending: Option<K1ProbeRoundReceiptV1>,
     latest_outcome: Option<K1ProbeRoundReceiptV1>,
@@ -67,6 +70,7 @@ impl K1SchedulerEventPayloadV1 {
             Self::IdentificationFreeze(receipt) => receipt.validate(),
             Self::FuturePredictionContract(receipt) => receipt.validate(),
             Self::FuturePrediction(receipt) => receipt.validate(),
+            Self::FuturePredictionCensored(receipt) => receipt.validate(),
             Self::FutureOutcome(receipt) => receipt.validate(),
             Self::ProbeRound(receipt) => receipt.validate(),
             Self::TerminalVerdict(receipt) => receipt.validate(),
@@ -80,6 +84,7 @@ impl K1SchedulerEventPayloadV1 {
             Self::IdentificationFreeze(receipt) => &receipt.freeze_root_sha256,
             Self::FuturePredictionContract(receipt) => &receipt.contract_root_sha256,
             Self::FuturePrediction(receipt) => &receipt.prediction_root_sha256,
+            Self::FuturePredictionCensored(receipt) => &receipt.censor_root_sha256,
             Self::FutureOutcome(receipt) => &receipt.outcome_root_sha256,
             Self::ProbeRound(receipt) => &receipt.receipt_root_sha256,
             Self::TerminalVerdict(receipt) => &receipt.verdict_root_sha256,
@@ -243,6 +248,7 @@ impl ReplayState {
                 self.identification = None;
                 self.future_contract = None;
                 self.future_predictions.clear();
+                self.future_prediction_censors.clear();
                 self.future_outcomes.clear();
                 self.pending = None;
                 self.latest_outcome = None;
@@ -265,6 +271,9 @@ impl ReplayState {
             }
             K1SchedulerEventPayloadV1::FuturePrediction(prediction) => {
                 self.apply_future_prediction(prediction)?;
+            }
+            K1SchedulerEventPayloadV1::FuturePredictionCensored(receipt) => {
+                self.apply_future_prediction_censor(receipt)?;
             }
             K1SchedulerEventPayloadV1::FutureOutcome(outcome) => {
                 self.apply_future_outcome(outcome)?;
@@ -345,11 +354,39 @@ impl ReplayState {
             .ok_or("k1_scheduler_future_prediction_missing")?;
         if outcome.observed_at_unix_nanos <= prediction.predicted_at_unix_nanos
             || self
+                .future_prediction_censors
+                .contains_key(&outcome.prediction_root_sha256)
+            || self
                 .future_outcomes
                 .insert(outcome.prediction_root_sha256.clone(), outcome.clone())
                 .is_some()
         {
             return Err("k1_scheduler_future_outcome_invalid");
+        }
+        Ok(())
+    }
+
+    fn apply_future_prediction_censor(
+        &mut self,
+        receipt: &K1FuturePredictionCensorReceiptV1,
+    ) -> Result<(), &'static str> {
+        let prediction = self
+            .future_predictions
+            .values()
+            .find(|prediction| prediction.prediction_root_sha256 == receipt.prediction_root_sha256)
+            .ok_or("k1_scheduler_future_prediction_missing")?;
+        if receipt.topology_commitment_root_sha256 != prediction.topology_commitment_root_sha256
+            || receipt.prediction_capture_sequence != prediction.capture_sequence
+            || receipt.terminal_completed_at_unix_nanos <= prediction.predicted_at_unix_nanos
+            || self
+                .future_outcomes
+                .contains_key(&receipt.prediction_root_sha256)
+            || self
+                .future_prediction_censors
+                .insert(receipt.prediction_root_sha256.clone(), receipt.clone())
+                .is_some()
+        {
+            return Err("k1_scheduler_future_prediction_censor_invalid");
         }
         Ok(())
     }
@@ -508,6 +545,7 @@ impl ReplayState {
         self.identification = None;
         self.future_contract = None;
         self.future_predictions.clear();
+        self.future_prediction_censors.clear();
         self.future_outcomes.clear();
         self.pending = None;
         self.latest_outcome = None;

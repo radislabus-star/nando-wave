@@ -12,6 +12,7 @@ use super::*;
 mod authority;
 mod duplicate_cohorts;
 mod fork;
+mod future_censor;
 mod journal;
 mod pre_action_evidence;
 

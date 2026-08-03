@@ -7,6 +7,7 @@ mod probe;
 pub(super) use future::advance_independent_future;
 pub(super) use future_prediction::{
     FutureEvidenceAdvance, advance_future_evidence, durable_future_prediction_contract,
+    settle_precommitted_future_evidence,
 };
 pub(super) use probe::advance_probe;
 

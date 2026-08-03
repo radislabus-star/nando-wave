@@ -12,12 +12,12 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::multi_source::{
     K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1FutureOutcomeReceiptV1,
-    K1FuturePredictionContractV1, K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1,
-    K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1,
-    K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1ProbeBudgetRemainingV1,
-    K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
-    K1SchedulerLedgerV1, K1TransferSettlementV1, NaturalT1ProgramArtifactV1,
-    PreActionTopologyAuditRowV1,
+    K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
+    K1GenerationTerminalVerdictV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1,
+    K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
+    K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
+    K1SchedulerEventPayloadV1, K1SchedulerEventV1, K1SchedulerLedgerV1, K1TransferSettlementV1,
+    NaturalT1ProgramArtifactV1, PreActionTopologyAuditRowV1,
 };
 use nando_response_actor::{
     CollectionOutputRenderer, ResponseOperation, ResponseProgram, ResponseRegistry,
@@ -56,6 +56,8 @@ pub(crate) const K1_FUTURE_CONTRACT_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-future-contract-authority-request.v1";
 pub(crate) const K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-future-prediction-authority-request.v1";
+pub(crate) const K1_FUTURE_PREDICTION_CENSOR_AUTHORITY_REQUEST_SCHEMA_V1: &str =
+    "nando.k1-future-prediction-censor-authority-request.v1";
 pub(crate) const K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-pre-action-evidence-authority-request.v1";
 pub(crate) const K1_FUTURE_OUTCOME_AUTHORITY_REQUEST_SCHEMA_V1: &str =
@@ -136,6 +138,16 @@ pub(crate) struct K1FuturePredictionAuthorityRequestV1 {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct K1FuturePredictionCensorAuthorityRequestV1 {
+    pub schema: String,
+    pub lane: K1SchedulerLaneV1,
+    pub prediction_root_sha256: String,
+    pub fence_topology_commitment_root_sha256: String,
+    pub fence_provider_capture_request_root_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct K1PreActionEvidenceAuthorityRequestV1 {
     pub schema: String,
     pub lane: K1SchedulerLaneV1,
@@ -203,6 +215,7 @@ pub(crate) struct K1SchedulerProjectionV1 {
     pub identification_freeze: Option<K1IdentificationFreezeV1>,
     pub future_prediction_contract: Option<K1FuturePredictionContractV1>,
     pub future_predictions: Vec<K1FuturePredictionReceiptV1>,
+    pub future_prediction_censors: Vec<K1FuturePredictionCensorReceiptV1>,
     pub future_outcomes: Vec<K1FutureOutcomeReceiptV1>,
     pub latest_probe_round: Option<K1ProbeRoundReceiptV1>,
     pub completed_probe_rounds: u64,
@@ -230,6 +243,7 @@ struct K1SchedulerProjectionDigestV1<'a> {
     identification_freeze_root_sha256: Option<&'a str>,
     future_prediction_contract_root_sha256: Option<&'a str>,
     future_prediction_roots_sha256: Vec<&'a str>,
+    future_prediction_censor_roots_sha256: Vec<&'a str>,
     future_outcome_roots_sha256: Vec<&'a str>,
     latest_probe_round_root_sha256: Option<&'a str>,
     completed_probe_rounds: u64,
@@ -299,6 +313,13 @@ pub(crate) fn append_future_contract(
 pub(crate) fn append_future_prediction(
     config: &CertificationAuthorityConfigV1,
     request: K1FuturePredictionAuthorityRequestV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    send_authority_request(config, &request)
+}
+
+pub(crate) fn append_future_prediction_censor(
+    config: &CertificationAuthorityConfigV1,
+    request: K1FuturePredictionCensorAuthorityRequestV1,
 ) -> Result<K1SchedulerProjectionV1, String> {
     send_authority_request(config, &request)
 }

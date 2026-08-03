@@ -106,6 +106,20 @@ impl MultiSourceFrameArchive {
     }
 }
 
+pub(crate) fn completed_frame_exists_for_intent(
+    directory: &Path,
+    turn_intent_id_sha256: &str,
+) -> Result<bool, String> {
+    let frames = read_framed_cbor::<RelationFrame>(directory, LEDGER_PREFIX)?;
+    for frame in frames {
+        validate_frame(&frame)?;
+        if frame.client_intent_id_sha256 == turn_intent_id_sha256 {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn validate_frame(frame: &RelationFrame) -> Result<(), String> {
     if !is_source_neutral_relation_frame(frame)
         || frame.verifier_label != Some(true)

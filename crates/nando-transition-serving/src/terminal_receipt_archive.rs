@@ -193,6 +193,21 @@ impl TerminalReceiptArchive {
     }
 }
 
+pub(crate) fn read_terminal_receipt_for_request(
+    directory: &Path,
+    request_event_id_sha256: &str,
+) -> Result<Option<TransportTerminalReceiptV1>, String> {
+    let checkpoint_path = directory.join(CHECKPOINT_FILE);
+    let checkpoint: ArchiveCheckpoint = serde_cbor::from_slice(
+        &std::fs::read(&checkpoint_path)
+            .map_err(|error| format!("terminal_archive_checkpoint_read:{error}"))?,
+    )
+    .map_err(|error| format!("terminal_archive_checkpoint_decode:{error}"))?;
+    let mut file = File::open(directory.join(DATA_FILE))
+        .map_err(|error| format!("terminal_archive_open:{error}"))?;
+    Ok(validate_chain(&mut file, &checkpoint)?.remove(request_event_id_sha256))
+}
+
 fn validate_chain(
     file: &mut File,
     checkpoint: &ArchiveCheckpoint,

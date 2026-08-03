@@ -3,6 +3,7 @@ use super::*;
 pub(super) struct AdvanceInput<'a> {
     pub topologies: &'a [PreActionTopologyAuditRowV1],
     pub frames: &'a [RelationFrame],
+    pub terminal_receipts: &'a [TransportTerminalReceiptV1],
     pub active_protocol_mode_roots_sha256: &'a BTreeSet<String>,
     pub candidate_artifacts: &'a [NaturalT1ProgramArtifactV1],
     pub generated_at_unix: u64,
@@ -17,6 +18,7 @@ pub(super) fn advance(
     let AdvanceInput {
         topologies,
         frames,
+        terminal_receipts,
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
         generated_at_unix,
@@ -352,13 +354,44 @@ pub(super) fn advance(
         );
     }
 
+    if classes.len() == 1
+        && let Some((projection, state, blocker)) = settle_precommitted_future_evidence(
+            certification,
+            lane,
+            &projection,
+            &base_identification,
+            topologies,
+            &bindings,
+            frames,
+            terminal_receipts,
+            candidate_artifacts,
+        )?
+    {
+        return runtime_report(
+            generated_at_unix,
+            lane,
+            state,
+            blocker.to_owned(),
+            projection,
+            join_report,
+            catalog,
+            queue,
+            Some(base_identification),
+            frozen_evidence_rows,
+            future_eligible_rows,
+        );
+    }
+
     if generation_expired(&candidate_freeze, generated_at_unix) {
         let deadline = deadline::classify_deadline(
             &classes,
             future_eligible_rows,
             durable_future_prediction_contract(&identification_freeze)
                 && projection.future_prediction_contract.is_some(),
-            projection.future_predictions.len(),
+            projection
+                .future_predictions
+                .len()
+                .saturating_sub(projection.future_prediction_censors.len()),
             projection
                 .future_outcomes
                 .iter()
@@ -433,6 +466,7 @@ pub(super) fn advance(
         topologies,
         &bindings,
         frames,
+        terminal_receipts,
         candidate_artifacts,
     )? {
         FutureEvidenceAdvance::Pending {

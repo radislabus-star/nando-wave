@@ -370,6 +370,7 @@ pub(super) fn payload_root(payload: &K1SchedulerEventPayloadV1) -> &str {
         K1SchedulerEventPayloadV1::IdentificationFreeze(value) => &value.freeze_root_sha256,
         K1SchedulerEventPayloadV1::FuturePredictionContract(value) => &value.contract_root_sha256,
         K1SchedulerEventPayloadV1::FuturePrediction(value) => &value.prediction_root_sha256,
+        K1SchedulerEventPayloadV1::FuturePredictionCensored(value) => &value.censor_root_sha256,
         K1SchedulerEventPayloadV1::FutureOutcome(value) => &value.outcome_root_sha256,
         K1SchedulerEventPayloadV1::ProbeRound(value) => &value.receipt_root_sha256,
         K1SchedulerEventPayloadV1::TerminalVerdict(value) => &value.verdict_root_sha256,

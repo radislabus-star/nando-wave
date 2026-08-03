@@ -9,6 +9,7 @@ pub(super) fn projection_for(
     let mut identification_freeze = None;
     let mut future_prediction_contract = None;
     let mut future_predictions = Vec::new();
+    let mut future_prediction_censors = Vec::new();
     let mut future_outcomes = Vec::new();
     let mut latest_probe_round = None;
     let mut completed_probe_rounds = 0u64;
@@ -28,6 +29,7 @@ pub(super) fn projection_for(
                 identification_freeze = None;
                 future_prediction_contract = None;
                 future_predictions.clear();
+                future_prediction_censors.clear();
                 future_outcomes.clear();
                 latest_probe_round = None;
                 completed_probe_rounds = 0;
@@ -48,6 +50,9 @@ pub(super) fn projection_for(
             }
             K1SchedulerEventPayloadV1::FuturePrediction(prediction) => {
                 future_predictions.push(prediction.clone());
+            }
+            K1SchedulerEventPayloadV1::FuturePredictionCensored(receipt) => {
+                future_prediction_censors.push(receipt.clone());
             }
             K1SchedulerEventPayloadV1::FutureOutcome(outcome) => {
                 future_outcomes.push(outcome.clone());
@@ -90,6 +95,7 @@ pub(super) fn projection_for(
                 identification_freeze = None;
                 future_prediction_contract = None;
                 future_predictions.clear();
+                future_prediction_censors.clear();
                 future_outcomes.clear();
                 latest_probe_round = None;
                 completed_probe_rounds = 0;
@@ -127,6 +133,8 @@ pub(super) fn projection_for(
         left.prediction_root_sha256
             .cmp(&right.prediction_root_sha256)
     });
+    future_prediction_censors
+        .sort_by(|left, right| left.censor_root_sha256.cmp(&right.censor_root_sha256));
     future_outcomes.sort_by(|left, right| left.outcome_root_sha256.cmp(&right.outcome_root_sha256));
     let mut projection = K1SchedulerProjectionV1 {
         schema: K1_SCHEDULER_PROJECTION_SCHEMA_V1.to_owned(),
@@ -145,6 +153,7 @@ pub(super) fn projection_for(
         identification_freeze,
         future_prediction_contract,
         future_predictions,
+        future_prediction_censors,
         future_outcomes,
         latest_probe_round,
         completed_probe_rounds,
@@ -189,6 +198,10 @@ impl K1SchedulerProjectionV1 {
                 .iter()
                 .any(|value| value.validate().is_err())
             || self
+                .future_prediction_censors
+                .iter()
+                .any(|value| value.validate().is_err())
+            || self
                 .future_outcomes
                 .iter()
                 .any(|value| value.validate().is_err())
@@ -224,6 +237,7 @@ impl K1SchedulerProjectionV1 {
                     || self.latest_probe_round.is_some()
                     || self.future_prediction_contract.is_some()
                     || !self.future_predictions.is_empty()
+                    || !self.future_prediction_censors.is_empty()
                     || !self.future_outcomes.is_empty()
                     || self.latest_applied_outcome.is_some()
                     || self.completed_probe_rounds != 0
@@ -252,6 +266,30 @@ impl K1SchedulerProjectionV1 {
                     .map(|value| value.prediction_root_sha256.clone())
                     .collect::<Vec<_>>(),
             )
+            || !strict_unique_roots(
+                &self
+                    .future_prediction_censors
+                    .iter()
+                    .map(|value| value.censor_root_sha256.clone())
+                    .collect::<Vec<_>>(),
+            )
+            || !unique_roots(
+                &self
+                    .future_prediction_censors
+                    .iter()
+                    .map(|value| value.prediction_root_sha256.clone())
+                    .collect::<Vec<_>>(),
+            )
+            || self.future_prediction_censors.iter().any(|censor| {
+                !self.future_predictions.iter().any(|prediction| {
+                    prediction.prediction_root_sha256 == censor.prediction_root_sha256
+                        && prediction.topology_commitment_root_sha256
+                            == censor.topology_commitment_root_sha256
+                        && prediction.capture_sequence == censor.prediction_capture_sequence
+                }) || self.future_outcomes.iter().any(|outcome| {
+                    outcome.prediction_root_sha256 == censor.prediction_root_sha256
+                })
+            })
             || !strict_unique_roots(
                 &self
                     .future_outcomes
@@ -294,6 +332,11 @@ impl K1SchedulerProjectionV1 {
                 .iter()
                 .map(|value| value.prediction_root_sha256.as_str())
                 .collect(),
+            future_prediction_censor_roots_sha256: self
+                .future_prediction_censors
+                .iter()
+                .map(|value| value.censor_root_sha256.as_str())
+                .collect(),
             future_outcome_roots_sha256: self
                 .future_outcomes
                 .iter()
@@ -333,4 +376,8 @@ impl K1SchedulerProjectionV1 {
 fn strict_unique_roots(roots: &[String]) -> bool {
     roots.iter().all(|root| valid_nonzero_sha256(root))
         && roots.windows(2).all(|pair| pair[0] < pair[1])
+}
+
+fn unique_roots(roots: &[String]) -> bool {
+    roots.iter().collect::<BTreeSet<_>>().len() == roots.len()
 }

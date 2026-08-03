@@ -53,6 +53,26 @@ fn prediction(
     .expect("prediction")
 }
 
+fn missing_frame_censor(
+    prediction: &K1FuturePredictionReceiptV1,
+) -> K1FuturePredictionCensorReceiptV1 {
+    K1FuturePredictionCensorReceiptV1::seal_missing_completed_frame(
+        prediction.prediction_root_sha256.clone(),
+        prediction.topology_commitment_root_sha256.clone(),
+        prediction.capture_sequence,
+        root(1_121),
+        root(1_122),
+        prediction.predicted_at_unix_nanos + 1,
+        root(1_123),
+        root(1_124),
+        root(1_125),
+        prediction.capture_sequence + 1,
+        prediction.predicted_at_unix_nanos + 2,
+        prediction.predicted_at_unix_nanos + 3,
+    )
+    .expect("censor")
+}
+
 fn ledger_before_prediction(
     candidate: &K1NaturalCandidateFreezeV1,
     identification: &K1IdentificationFreezeV1,
@@ -163,4 +183,56 @@ fn independently_verified_counterevidence_is_preserved() {
         .append(K1SchedulerEventPayloadV1::FutureOutcome(counterevidence))
         .expect("counterevidence");
     ledger.validate().expect("counterevidence replay");
+}
+
+#[test]
+fn missing_frame_censor_closes_prediction_without_creating_an_outcome() {
+    let (candidate, identification, contract) = durable_generation();
+    let prediction = prediction(&candidate, &identification, &contract);
+    let censor = missing_frame_censor(&prediction);
+    let mut ledger = ledger_before_prediction(&candidate, &identification, &contract);
+    ledger
+        .append(K1SchedulerEventPayloadV1::FuturePrediction(
+            prediction.clone(),
+        ))
+        .expect("prediction");
+    ledger
+        .append(K1SchedulerEventPayloadV1::FuturePredictionCensored(
+            censor.clone(),
+        ))
+        .expect("censor");
+    ledger.validate().expect("censored ledger");
+
+    assert!(matches!(
+        ledger.events.last().map(|event| &event.payload),
+        Some(K1SchedulerEventPayloadV1::FuturePredictionCensored(receipt))
+            if receipt == &censor
+    ));
+    assert!(
+        !ledger
+            .events
+            .iter()
+            .any(|event| matches!(&event.payload, K1SchedulerEventPayloadV1::FutureOutcome(_)))
+    );
+
+    let late_outcome = K1FutureOutcomeReceiptV1::seal(
+        prediction.prediction_root_sha256,
+        root(1_126),
+        root(1_127),
+        root(1_128),
+        root(1_129),
+        prediction.predicted_at_unix_nanos + 4,
+        true,
+        true,
+    )
+    .expect("late outcome");
+    assert_eq!(
+        ledger.append(K1SchedulerEventPayloadV1::FutureOutcome(late_outcome)),
+        Err("k1_scheduler_future_outcome_invalid")
+    );
+
+    let bytes = serde_json::to_vec(&ledger).expect("serialize ledger");
+    let restored: K1SchedulerLedgerV1 = serde_json::from_slice(&bytes).expect("restore ledger");
+    restored.validate().expect("restart parity");
+    assert_eq!(restored.ledger_root_sha256, ledger.ledger_root_sha256);
 }

@@ -206,6 +206,125 @@ pub(super) fn append_future_prediction_authoritative(
     )
 }
 
+pub(super) fn append_future_prediction_censor_authoritative(
+    config: &CertificationAuthorityConfigV1,
+    signing_key: &SigningKey,
+    request: K1FuturePredictionCensorAuthorityRequestV1,
+) -> Result<K1SchedulerProjectionV1, String> {
+    if request.schema != K1_FUTURE_PREDICTION_CENSOR_AUTHORITY_REQUEST_SCHEMA_V1
+        || request.lane != K1SchedulerLaneV1::Epistemic
+    {
+        return Err("k1_future_prediction_censor_request_invalid".to_owned());
+    }
+    let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
+    let projection = projection_for(&scheduler)?;
+    if let Some(existing) = projection
+        .future_prediction_censors
+        .iter()
+        .find(|receipt| receipt.prediction_root_sha256 == request.prediction_root_sha256)
+    {
+        return if existing.fence_topology_commitment_root_sha256
+            == request.fence_topology_commitment_root_sha256
+        {
+            Ok(projection)
+        } else {
+            Err("k1_future_prediction_censor_rebound".to_owned())
+        };
+    }
+    if projection
+        .future_outcomes
+        .iter()
+        .any(|outcome| outcome.prediction_root_sha256 == request.prediction_root_sha256)
+    {
+        return Err("k1_future_prediction_already_settled".to_owned());
+    }
+    let prediction = projection
+        .future_predictions
+        .iter()
+        .find(|prediction| prediction.prediction_root_sha256 == request.prediction_root_sha256)
+        .ok_or_else(|| "k1_future_prediction_censor_prediction_missing".to_owned())?;
+    let predicted_topology = pre_action_evidence::restore_topology(
+        config,
+        &prediction.topology_commitment_root_sha256,
+        &prediction.provider_capture_request_root_sha256,
+    )?;
+    let fence_topology = pre_action_evidence::restore_topology(
+        config,
+        &request.fence_topology_commitment_root_sha256,
+        &request.fence_provider_capture_request_root_sha256,
+    )?;
+    let predicted_lineage = predicted_topology
+        .session_lineage_sha256
+        .as_deref()
+        .ok_or_else(|| "k1_future_prediction_censor_lineage_missing".to_owned())?;
+    let fence_lineage = fence_topology
+        .session_lineage_sha256
+        .as_deref()
+        .ok_or_else(|| "k1_future_prediction_censor_fence_lineage_missing".to_owned())?;
+    let terminal_archive = config
+        .root
+        .parent()
+        .ok_or_else(|| "k1_future_prediction_censor_root_parent_missing".to_owned())?
+        .join("terminal-receipt-archive-v1");
+    let terminal = crate::terminal_receipt_archive::read_terminal_receipt_for_request(
+        &terminal_archive,
+        &predicted_topology.structure.request_event_id_sha256,
+    )?
+    .ok_or_else(|| "k1_future_prediction_censor_terminal_missing".to_owned())?;
+    let frame_archive = config
+        .root
+        .parent()
+        .ok_or_else(|| "k1_future_prediction_censor_root_parent_missing".to_owned())?
+        .join("relation-frame-archive-v1");
+    if crate::multi_source_frame_archive::completed_frame_exists_for_intent(
+        &frame_archive,
+        &prediction.turn_intent_id_sha256,
+    )? {
+        return Err("k1_future_prediction_censor_completed_frame_exists".to_owned());
+    }
+    let fence_captured_at_unix_nanos = fence_topology
+        .captured_at_unix_ms
+        .ok_or_else(|| "k1_future_prediction_censor_fence_time_missing".to_owned())?
+        .saturating_mul(1_000_000);
+    if predicted_topology.commit.commitment_root_sha256
+        != prediction.topology_commitment_root_sha256
+        || predicted_topology.commit.capture_sequence != prediction.capture_sequence
+        || predicted_topology.structure.turn_intent_id_sha256 != prediction.turn_intent_id_sha256
+        || predicted_topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
+        || fence_topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
+        || predicted_lineage != fence_lineage
+        || fence_topology.commit.capture_sequence <= prediction.capture_sequence
+        || fence_captured_at_unix_nanos <= terminal.completed_at_unix_nanos
+        || terminal.completed_at_unix_nanos <= prediction.predicted_at_unix_nanos
+        || fence_topology.structure.request_event_id_sha256
+            == predicted_topology.structure.request_event_id_sha256
+    {
+        return Err("k1_future_prediction_censor_fence_invalid".to_owned());
+    }
+    let receipt = K1FuturePredictionCensorReceiptV1::seal_missing_completed_frame(
+        prediction.prediction_root_sha256.clone(),
+        prediction.topology_commitment_root_sha256.clone(),
+        prediction.capture_sequence,
+        predicted_topology.structure.request_event_id_sha256,
+        terminal.receipt_root_sha256,
+        terminal.completed_at_unix_nanos,
+        fence_topology.commit.commitment_root_sha256,
+        fence_topology.structure.request_event_id_sha256,
+        predicted_lineage.to_owned(),
+        fence_topology.commit.capture_sequence,
+        fence_captured_at_unix_nanos,
+        unix_now_nanos()?,
+    )
+    .map_err(str::to_owned)?;
+    append_and_persist(
+        config,
+        request.lane,
+        signing_key,
+        &mut scheduler,
+        K1SchedulerEventPayloadV1::FuturePredictionCensored(receipt),
+    )
+}
+
 pub(super) fn archive_pre_action_evidence_authoritative(
     config: &CertificationAuthorityConfigV1,
     request: K1PreActionEvidenceAuthorityRequestV1,

@@ -6,6 +6,7 @@ use serde_json::json;
 use super::{
     AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
     K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, advance,
+    restore_projection_for,
 };
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
@@ -84,12 +85,46 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         AdvanceInput {
             topologies: &topologies,
             frames: &frames,
+            terminal_receipts: &[],
             active_protocol_mode_roots_sha256: &active_protocols,
             candidate_artifacts: &candidate_artifacts,
             generated_at_unix: unix_now(),
         },
     )?;
     store_mechanism_report(state, mechanism)?;
+    let epistemic_projection = restore_projection_for(
+        &state.operator_certification_config,
+        K1SchedulerLaneV1::Epistemic,
+    )?;
+    let pending_request_ids = epistemic_projection
+        .future_predictions
+        .iter()
+        .filter(|prediction| {
+            !epistemic_projection
+                .future_outcomes
+                .iter()
+                .any(|outcome| outcome.prediction_root_sha256 == prediction.prediction_root_sha256)
+                && !epistemic_projection
+                    .future_prediction_censors
+                    .iter()
+                    .any(|receipt| {
+                        receipt.prediction_root_sha256 == prediction.prediction_root_sha256
+                    })
+        })
+        .filter_map(|prediction| {
+            topologies.iter().find(|topology| {
+                topology.commit.commitment_root_sha256 == prediction.topology_commitment_root_sha256
+            })
+        })
+        .map(|topology| topology.structure.request_event_id_sha256.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let terminal_receipts = state
+        .terminal_receipt_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_terminal_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_terminal_archive_lock_poisoned".to_owned())?
+        .receipts_for_requests(&pending_request_ids);
     for _ in 0..16 {
         let now = unix_now();
         let mut report = advance(
@@ -99,6 +134,7 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
             AdvanceInput {
                 topologies: &topologies,
                 frames: &frames,
+                terminal_receipts: &terminal_receipts,
                 active_protocol_mode_roots_sha256: &active_protocols,
                 candidate_artifacts: &candidate_artifacts,
                 generated_at_unix: now,

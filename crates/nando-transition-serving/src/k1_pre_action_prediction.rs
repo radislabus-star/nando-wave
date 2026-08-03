@@ -52,6 +52,9 @@ pub(crate) fn candidate_match_requires_fence(
                 .future_outcomes
                 .iter()
                 .any(|outcome| outcome.prediction_root_sha256 == prediction.prediction_root_sha256)
+                && !projection.future_prediction_censors.iter().any(|receipt| {
+                    receipt.prediction_root_sha256 == prediction.prediction_root_sha256
+                })
         }))
 }
 
@@ -84,6 +87,9 @@ pub(crate) fn precommit_candidate_match(
                 .future_outcomes
                 .iter()
                 .any(|outcome| outcome.prediction_root_sha256 == prediction.prediction_root_sha256)
+                && !projection.future_prediction_censors.iter().any(|receipt| {
+                    receipt.prediction_root_sha256 == prediction.prediction_root_sha256
+                })
         })
     {
         return Ok(false);

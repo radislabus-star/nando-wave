@@ -40,6 +40,13 @@ pub(crate) fn handle_authority_line(
         >(value)
         .map_err(|error| format!("k1_future_prediction_request_decode:{error}"))
         .and_then(|request| append_future_prediction_authoritative(config, signing_key, request)),
+        K1_FUTURE_PREDICTION_CENSOR_AUTHORITY_REQUEST_SCHEMA_V1 => {
+            serde_json::from_value::<K1FuturePredictionCensorAuthorityRequestV1>(value)
+                .map_err(|error| format!("k1_future_prediction_censor_request_decode:{error}"))
+                .and_then(|request| {
+                    append_future_prediction_censor_authoritative(config, signing_key, request)
+                })
+        }
         K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1 => {
             serde_json::from_value::<K1PreActionEvidenceAuthorityRequestV1>(value)
                 .map_err(|error| format!("k1_pre_action_evidence_request_decode:{error}"))
@@ -211,6 +218,7 @@ fn append_payload_authoritative(
                 | K1SchedulerEventPayloadV1::TransferSettlement(_)
                 | K1SchedulerEventPayloadV1::FuturePredictionContract(_)
                 | K1SchedulerEventPayloadV1::FuturePrediction(_)
+                | K1SchedulerEventPayloadV1::FuturePredictionCensored(_)
                 | K1SchedulerEventPayloadV1::FutureOutcome(_)
         )
     {
