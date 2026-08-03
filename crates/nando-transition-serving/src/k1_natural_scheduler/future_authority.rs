@@ -120,29 +120,74 @@ pub(super) fn append_future_prediction_authoritative(
     }) {
         return Ok(projection);
     }
-    let binding_root = pre_action_t1_binding_root(
-        &contract.canonical_program,
-        &request.topology.structure.topology,
-    )
-    .map_err(str::to_owned)?;
     let captured_at_unix_ms = request
         .topology
         .captured_at_unix_ms
         .ok_or_else(|| "k1_future_prediction_capture_time_missing".to_owned())?;
-    let prediction = K1FuturePredictionReceiptV1::seal(
-        contract.contract_root_sha256.clone(),
-        candidate.freeze_root_sha256.clone(),
-        identification.freeze_root_sha256.clone(),
-        contract.semantic_class_root_sha256.clone(),
-        request.topology.commit.commitment_root_sha256,
-        request.topology.commit.provider_capture_request_root_sha256,
-        request.topology.structure.turn_intent_id_sha256,
-        binding_root,
-        &contract.canonical_program_root_sha256,
-        request.topology.commit.capture_sequence,
-        captured_at_unix_ms,
-        unix_now_nanos()?,
-    )
+    let predicted_at_unix_nanos = unix_now_nanos()?;
+    let prediction = match &contract.canonical_program.operation {
+        ResponseOperation::ComposeCollection { .. } => {
+            let receipt = request
+                .pre_action_execution_receipt
+                .ok_or_else(|| "k1_future_collection_typed_prediction_required".to_owned())?;
+            receipt.validate().map_err(str::to_owned)?;
+            if receipt.contract_root_sha256 != contract.contract_root_sha256
+                || receipt.canonical_program_root_sha256 != contract.canonical_program_root_sha256
+                || request.topology.capture_event_sha256.as_deref()
+                    != Some(receipt.provider_capture_event_root_sha256.as_str())
+                || receipt.provider_capture_request_root_sha256
+                    != request.topology.commit.provider_capture_request_root_sha256
+                || receipt.turn_intent_id_sha256 != request.topology.structure.turn_intent_id_sha256
+                || receipt.capture_sequence != request.topology.commit.capture_sequence
+                || receipt.captured_at_unix_ms != captured_at_unix_ms
+                || receipt.executed_at_unix_nanos > predicted_at_unix_nanos
+            {
+                return Err("k1_future_collection_typed_prediction_rebound".to_owned());
+            }
+            K1FuturePredictionReceiptV1::seal_typed(
+                contract.contract_root_sha256.clone(),
+                candidate.freeze_root_sha256.clone(),
+                identification.freeze_root_sha256.clone(),
+                contract.semantic_class_root_sha256.clone(),
+                request.topology.commit.commitment_root_sha256,
+                request.topology.commit.provider_capture_request_root_sha256,
+                request.topology.structure.turn_intent_id_sha256,
+                receipt.complete_pre_action_binding_root_sha256,
+                &contract.canonical_program_root_sha256,
+                receipt.receipt_root_sha256,
+                receipt.predicted_typed_consequence_root_sha256,
+                receipt.execution_verifier_contract_root_sha256,
+                request.topology.commit.capture_sequence,
+                captured_at_unix_ms,
+                receipt.executed_at_unix_nanos,
+                predicted_at_unix_nanos,
+            )
+        }
+        _ => {
+            if request.pre_action_execution_receipt.is_some() {
+                return Err("k1_future_unexpected_typed_prediction".to_owned());
+            }
+            let binding_root = pre_action_t1_binding_root(
+                &contract.canonical_program,
+                &request.topology.structure.topology,
+            )
+            .map_err(str::to_owned)?;
+            K1FuturePredictionReceiptV1::seal(
+                contract.contract_root_sha256.clone(),
+                candidate.freeze_root_sha256.clone(),
+                identification.freeze_root_sha256.clone(),
+                contract.semantic_class_root_sha256.clone(),
+                request.topology.commit.commitment_root_sha256,
+                request.topology.commit.provider_capture_request_root_sha256,
+                request.topology.structure.turn_intent_id_sha256,
+                binding_root,
+                &contract.canonical_program_root_sha256,
+                request.topology.commit.capture_sequence,
+                captured_at_unix_ms,
+                predicted_at_unix_nanos,
+            )
+        }
+    }
     .map_err(str::to_owned)?;
     append_and_persist(
         config,
@@ -197,40 +242,55 @@ pub(super) fn append_future_outcome_authoritative(
     {
         return Err("k1_future_outcome_prediction_rebound".to_owned());
     }
-    let program_evidence_root = match &contract.canonical_program.operation {
-        ResponseOperation::ComposeCollection { .. } => {
-            let artifact = request
-                .program_evidence
-                .as_ref()
-                .ok_or_else(|| "k1_future_collection_program_evidence_missing".to_owned())?;
-            artifact.validate().map_err(str::to_owned)?;
-            let program_root = nando_operator_kernel::response_program_version_root_sha256(
-                &contract.canonical_program,
-            )
-            .map_err(str::to_owned)?;
-            if artifact.turn_intent_id_sha256 != joined.turn_intent_id_sha256
-                || artifact.session_id_sha256 != joined.session_id_sha256
-                || !artifact
-                    .verified_program_roots_sha256
-                    .contains(&program_root)
-            {
-                return Err("k1_future_collection_program_evidence_mismatch".to_owned());
+    let (program_evidence_root, typed_consequences, program_consistent) =
+        match &contract.canonical_program.operation {
+            ResponseOperation::ComposeCollection { .. } => {
+                if request.program_evidence.is_some() {
+                    return Err("k1_future_collection_hypothesis_has_no_authority".to_owned());
+                }
+                let predicted = prediction
+                    .predicted_typed_consequence_root_sha256
+                    .as_deref()
+                    .ok_or_else(|| "k1_future_collection_typed_prediction_missing".to_owned())?;
+                let observed =
+                    nando_operator_learning::multi_source::observed_typed_consequence_root_v1(
+                        &request.frame,
+                    )
+                    .map_err(str::to_owned)?;
+                (
+                    None,
+                    Some((predicted.to_owned(), observed.clone())),
+                    predicted == observed,
+                )
             }
-            Some(artifact.artifact_root_sha256.clone())
-        }
-        _ => {
-            if request.program_evidence.is_some() {
-                return Err("k1_future_unexpected_program_evidence".to_owned());
+            _ => {
+                if request.program_evidence.is_some() {
+                    return Err("k1_future_unexpected_program_evidence".to_owned());
+                }
+                (
+                    None,
+                    None,
+                    t1_program_is_consistent(&contract.canonical_program, joined, &request.frame),
+                )
             }
-            None
-        }
-    };
-    let program_consistent = program_evidence_root.is_some()
-        || t1_program_is_consistent(&contract.canonical_program, joined, &request.frame);
+        };
     let independent_verifier_pass =
         joined.accepted && request.frame.verifier_label == Some(true) && program_consistent;
-    let outcome = match program_evidence_root {
-        Some(evidence_root) => K1FutureOutcomeReceiptV1::seal_with_program_evidence(
+    let outcome = match (typed_consequences, program_evidence_root) {
+        (Some((predicted, observed)), None) => {
+            K1FutureOutcomeReceiptV1::seal_with_typed_consequence(
+                prediction.prediction_root_sha256.clone(),
+                joined.join_root_sha256.clone(),
+                joined.completed_frame_root_sha256.clone(),
+                joined.semantic_action_root_sha256.clone(),
+                joined.verifier_receipt_root_sha256.clone(),
+                predicted,
+                observed,
+                request.frame.observed_at_unix_nanos,
+                joined.accepted && request.frame.verifier_label == Some(true),
+            )
+        }
+        (None, Some(evidence_root)) => K1FutureOutcomeReceiptV1::seal_with_program_evidence(
             prediction.prediction_root_sha256.clone(),
             joined.join_root_sha256.clone(),
             joined.completed_frame_root_sha256.clone(),
@@ -241,7 +301,7 @@ pub(super) fn append_future_outcome_authoritative(
             program_consistent,
             independent_verifier_pass,
         ),
-        None => K1FutureOutcomeReceiptV1::seal(
+        (None, None) => K1FutureOutcomeReceiptV1::seal(
             prediction.prediction_root_sha256.clone(),
             joined.join_root_sha256.clone(),
             joined.completed_frame_root_sha256.clone(),
@@ -251,6 +311,7 @@ pub(super) fn append_future_outcome_authoritative(
             program_consistent,
             independent_verifier_pass,
         ),
+        (Some(_), Some(_)) => Err("k1_future_outcome_evidence_owner_overlap"),
     }
     .map_err(str::to_owned)?;
     append_and_persist(

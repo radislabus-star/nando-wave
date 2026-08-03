@@ -1,4 +1,5 @@
 use super::*;
+use nando_operator_kernel::AtomValueType;
 
 const MAX_NATURAL_T1_ARTIFACTS: usize = 512;
 
@@ -15,38 +16,37 @@ pub(super) fn natural_t1_program_artifacts(
                 continue;
             };
             binding.verify_digest().map_err(str::to_owned)?;
-            let verified = receipt
-                .matched_program_sha256
-                .iter()
-                .chain(&receipt.verified_semantic_program_sha256)
-                .filter(|root| bucket.programs.contains_key(*root))
-                .cloned()
-                .collect::<BTreeSet<_>>();
-            if verified.is_empty() {
-                continue;
-            }
+            // Export bounded hypotheses. The online learner does not decide
+            // which program is scientifically consistent.
             let programs = bucket
                 .programs
                 .iter()
-                .filter(|(root, program)| {
-                    verified.contains(*root) && artifact_program(root, program)
-                })
+                .filter(|(root, program)| artifact_program(root, program))
                 .map(|(root, program)| (root.clone(), program.clone()))
                 .collect::<BTreeMap<_, _>>();
-            let verified = verified
-                .into_iter()
-                .filter(|root| programs.contains_key(root))
-                .collect::<BTreeSet<_>>();
-            if verified.is_empty() {
+            if programs.is_empty() {
                 continue;
             }
+            let hypothesis_roots = programs.keys().cloned().collect();
+            let predicted_typed_consequence_roots_sha256 = checkpoint
+                .buckets
+                .iter()
+                .find_map(|candidate| {
+                    candidate
+                        .runtime_examples
+                        .get(&receipt.evidence_graph_sha256)
+                })
+                .map(|example| predicted_consequences(&programs, example))
+                .transpose()?
+                .unwrap_or_default();
             artifacts.push(
-                nando_operator_learning::multi_source::NaturalT1ProgramArtifactV1::seal(
+                nando_operator_learning::multi_source::NaturalT1ProgramArtifactV1::seal_with_predictions(
                     receipt.client_intent_id_sha256.clone(),
                     receipt.session_id_sha256.clone(),
                     binding.clone(),
                     programs,
-                    verified.into_iter().collect(),
+                    hypothesis_roots,
+                    predicted_typed_consequence_roots_sha256,
                 )
                 .map_err(str::to_owned)?,
             );
@@ -58,6 +58,37 @@ pub(super) fn natural_t1_program_artifacts(
     artifacts.sort_by(|left, right| left.artifact_root_sha256.cmp(&right.artifact_root_sha256));
     artifacts.dedup_by(|left, right| left.artifact_root_sha256 == right.artifact_root_sha256);
     Ok(artifacts)
+}
+
+fn predicted_consequences(
+    programs: &BTreeMap<String, ResponseProgram>,
+    example: &nando_operator_learning::CollectionSynthesisExample,
+) -> Result<BTreeMap<String, String>, String> {
+    programs
+        .iter()
+        .filter_map(|(root, program)| {
+            let execution = execute_response(program, "", &example.provider_payload);
+            let response = execution.response?;
+            Some((root, response))
+        })
+        .map(|(root, response)| {
+            let value_type = match serde_json::from_str::<serde_json::Value>(&response) {
+                Ok(serde_json::Value::Bool(_)) => AtomValueType::Boolean,
+                Ok(serde_json::Value::Number(_)) => AtomValueType::Integer,
+                Ok(serde_json::Value::Array(_) | serde_json::Value::Object(_)) => {
+                    AtomValueType::Collection
+                }
+                _ => AtomValueType::String,
+            };
+            let value_root = nando_operator_kernel::sha256_bytes(response.as_bytes());
+            let consequence = nando_operator_learning::multi_source::typed_consequence_root_v1(
+                value_type,
+                &value_root,
+            )
+            .map_err(str::to_owned)?;
+            Ok((root.clone(), consequence))
+        })
+        .collect()
 }
 
 fn artifact_program(root: &str, program: &ResponseProgram) -> bool {

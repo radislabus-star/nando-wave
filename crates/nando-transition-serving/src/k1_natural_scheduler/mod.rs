@@ -127,6 +127,9 @@ pub(crate) struct K1FuturePredictionAuthorityRequestV1 {
     pub lane: K1SchedulerLaneV1,
     pub contract_root_sha256: String,
     pub topology: PreActionTopologyAuditRowV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pre_action_execution_receipt:
+        Option<nando_operator_learning::multi_source::K1PreActionExecutionReceiptV1>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

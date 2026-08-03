@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use nando_operator_kernel::{ResponseOperation, ResponseProgram};
 
@@ -8,7 +8,7 @@ use crate::multi_source::{BlindThenRevealJoinedTransitionV1, NaturalT1ProgramArt
 pub(super) struct ExternalProgramEvidence {
     pub(super) artifact_roots_sha256: Vec<String>,
     pub(super) programs: BTreeMap<String, ResponseProgram>,
-    pub(super) verified_program_roots_sha256: BTreeSet<String>,
+    pub(super) predicted_typed_consequence_roots_sha256: BTreeMap<String, String>,
 }
 
 type CandidateArtifactIndex = BTreeMap<(String, String), Vec<NaturalT1ProgramArtifactV1>>;
@@ -46,10 +46,10 @@ pub(super) fn collection_candidate_programs(
         .ok_or("natural_collection_candidate_artifact_missing")?;
     let mut artifact_roots_sha256 = Vec::new();
     let mut programs = BTreeMap::new();
-    let mut verified_program_roots_sha256 = BTreeSet::new();
+    let mut predicted_typed_consequence_roots_sha256 = BTreeMap::new();
     for artifact in candidates {
         let mut contributed = false;
-        for root in &artifact.verified_program_roots_sha256 {
+        for root in &artifact.hypothesis_program_roots_sha256 {
             let Some(program) = artifact.programs.get(root) else {
                 return Err("natural_collection_candidate_program_missing");
             };
@@ -60,7 +60,18 @@ pub(super) fn collection_candidate_programs(
                 continue;
             }
             programs.insert(root.clone(), program.clone());
-            verified_program_roots_sha256.insert(root.clone());
+            if let Some(consequence_root) =
+                artifact.predicted_typed_consequence_roots_sha256.get(root)
+            {
+                match predicted_typed_consequence_roots_sha256
+                    .insert(root.clone(), consequence_root.clone())
+                {
+                    Some(existing) if existing != *consequence_root => {
+                        return Err("natural_collection_candidate_prediction_conflict");
+                    }
+                    _ => {}
+                }
+            }
             contributed = true;
         }
         if contributed {
@@ -73,6 +84,6 @@ pub(super) fn collection_candidate_programs(
     Ok(ExternalProgramEvidence {
         artifact_roots_sha256,
         programs,
-        verified_program_roots_sha256,
+        predicted_typed_consequence_roots_sha256,
     })
 }

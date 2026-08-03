@@ -161,16 +161,50 @@ fn natural_collection_artifact_reaches_existing_identifier_without_scheduler_hin
                 &receipt,
             )
             .expect("capture binding");
-            NaturalT1ProgramArtifactV1::seal(
+            let predicted = observed_typed_consequence_root_v1(
+                frames
+                    .iter()
+                    .find(|frame| frame.session_id_sha256 == row.session_id_sha256)
+                    .expect("joined frame"),
+            )
+            .expect("observed consequence");
+            NaturalT1ProgramArtifactV1::seal_with_predictions(
                 row.turn_intent_id_sha256.clone(),
                 row.session_id_sha256.clone(),
                 binding,
                 BTreeMap::from([(program_root.clone(), program.clone())]),
                 vec![program_root.clone()],
+                BTreeMap::from([(program_root.clone(), predicted)]),
             )
             .expect("artifact")
         })
         .collect::<Vec<_>>();
+    let hypothesis_only = artifacts
+        .iter()
+        .map(|artifact| {
+            NaturalT1ProgramArtifactV1::seal(
+                artifact.turn_intent_id_sha256.clone(),
+                artifact.session_id_sha256.clone(),
+                artifact.capture_binding.clone(),
+                artifact.programs.clone(),
+                artifact.hypothesis_program_roots_sha256.clone(),
+            )
+            .expect("hypothesis artifact")
+        })
+        .collect::<Vec<_>>();
+    let hypothesis_report = identify_multi_source_t1_operator_with_candidate_artifacts_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+        &hypothesis_only,
+        root("hypothesis-only epoch"),
+    );
+    assert_ne!(
+        hypothesis_report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady,
+        "artifact membership must not vote"
+    );
     let report = identify_multi_source_t1_operator_with_candidate_artifacts_v1(
         &ledger.rows(),
         &frames,

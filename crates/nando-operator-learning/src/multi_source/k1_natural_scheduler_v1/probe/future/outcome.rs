@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 const K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V1: &str = "nando.k1-future-outcome-receipt.v1";
 const K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V2: &str = "nando.k1-future-outcome-receipt.v2";
+const K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V3: &str = "nando.k1-future-outcome-receipt.v3";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -16,6 +17,10 @@ pub struct K1FutureOutcomeReceiptV1 {
     pub verifier_receipt_root_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub program_evidence_root_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predicted_typed_consequence_root_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_typed_consequence_root_sha256: Option<String>,
     pub observed_at_unix_nanos: u64,
     pub program_consistent: bool,
     pub independent_verifier_pass: bool,
@@ -44,12 +49,48 @@ impl K1FutureOutcomeReceiptV1 {
             observed_semantic_action_root_sha256,
             verifier_receipt_root_sha256,
             program_evidence_root_sha256: None,
+            predicted_typed_consequence_root_sha256: None,
+            observed_typed_consequence_root_sha256: None,
             observed_at_unix_nanos,
             program_consistent,
             independent_verifier_pass,
             authority_ready: false,
             phase_mutation_allowed: false,
         };
+        receipt.outcome_root_sha256 = receipt.expected_root()?;
+        receipt.validate()?;
+        Ok(receipt)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal_with_typed_consequence(
+        prediction_root_sha256: String,
+        join_root_sha256: String,
+        completed_frame_root_sha256: String,
+        observed_semantic_action_root_sha256: String,
+        verifier_receipt_root_sha256: String,
+        predicted_typed_consequence_root_sha256: String,
+        observed_typed_consequence_root_sha256: String,
+        observed_at_unix_nanos: u64,
+        independent_verifier_pass: bool,
+    ) -> Result<Self, &'static str> {
+        let program_consistent =
+            predicted_typed_consequence_root_sha256 == observed_typed_consequence_root_sha256;
+        let mut receipt = Self::seal(
+            prediction_root_sha256,
+            join_root_sha256,
+            completed_frame_root_sha256,
+            observed_semantic_action_root_sha256,
+            verifier_receipt_root_sha256,
+            observed_at_unix_nanos,
+            program_consistent,
+            independent_verifier_pass && program_consistent,
+        )?;
+        receipt.schema = K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V3.to_owned();
+        receipt.predicted_typed_consequence_root_sha256 =
+            Some(predicted_typed_consequence_root_sha256);
+        receipt.observed_typed_consequence_root_sha256 =
+            Some(observed_typed_consequence_root_sha256);
         receipt.outcome_root_sha256 = receipt.expected_root()?;
         receipt.validate()?;
         Ok(receipt)
@@ -87,7 +128,9 @@ impl K1FutureOutcomeReceiptV1 {
     pub fn validate(&self) -> Result<(), &'static str> {
         if !matches!(
             self.schema.as_str(),
-            K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V1 | K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V2
+            K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V1
+                | K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V2
+                | K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V3
         ) || ![
             self.outcome_root_sha256.as_str(),
             self.prediction_root_sha256.as_str(),
@@ -99,11 +142,33 @@ impl K1FutureOutcomeReceiptV1 {
         .into_iter()
         .all(valid_nonzero_sha256)
             || match self.schema.as_str() {
-                K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V1 => self.program_evidence_root_sha256.is_some(),
-                K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V2 => self
-                    .program_evidence_root_sha256
-                    .as_deref()
-                    .is_none_or(|root| !valid_nonzero_sha256(root)),
+                K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V1 => {
+                    self.program_evidence_root_sha256.is_some()
+                        || self.predicted_typed_consequence_root_sha256.is_some()
+                        || self.observed_typed_consequence_root_sha256.is_some()
+                }
+                K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V2 => {
+                    self.program_evidence_root_sha256
+                        .as_deref()
+                        .is_none_or(|root| !valid_nonzero_sha256(root))
+                        || self.predicted_typed_consequence_root_sha256.is_some()
+                        || self.observed_typed_consequence_root_sha256.is_some()
+                }
+                K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V3 => {
+                    self.program_evidence_root_sha256.is_some()
+                        || self
+                            .predicted_typed_consequence_root_sha256
+                            .as_deref()
+                            .is_none_or(|root| !valid_nonzero_sha256(root))
+                        || self
+                            .observed_typed_consequence_root_sha256
+                            .as_deref()
+                            .is_none_or(|root| !valid_nonzero_sha256(root))
+                        || self.program_consistent
+                            != (self.predicted_typed_consequence_root_sha256
+                                == self.observed_typed_consequence_root_sha256)
+                        || self.independent_verifier_pass && !self.program_consistent
+                }
                 _ => true,
             }
             || self.observed_at_unix_nanos == 0
@@ -145,36 +210,25 @@ impl K1FutureOutcomeReceiptV1 {
                 false,
                 false,
             )),
+            K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V3 => canonical_json_sha256(&(
+                K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V3,
+                self.prediction_root_sha256.as_str(),
+                self.join_root_sha256.as_str(),
+                self.completed_frame_root_sha256.as_str(),
+                self.observed_semantic_action_root_sha256.as_str(),
+                self.verifier_receipt_root_sha256.as_str(),
+                self.predicted_typed_consequence_root_sha256.as_deref(),
+                self.observed_typed_consequence_root_sha256.as_deref(),
+                self.observed_at_unix_nanos,
+                self.program_consistent,
+                self.independent_verifier_pass,
+                false,
+                false,
+            )),
             _ => Err("k1_future_outcome_receipt_schema_invalid"),
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn root(value: char) -> String {
-        value.to_string().repeat(64)
-    }
-
-    #[test]
-    fn collection_program_evidence_is_part_of_the_outcome_identity() {
-        let receipt = K1FutureOutcomeReceiptV1::seal_with_program_evidence(
-            root('1'),
-            root('2'),
-            root('3'),
-            root('4'),
-            root('5'),
-            root('6'),
-            7,
-            true,
-            true,
-        )
-        .expect("receipt");
-        assert_eq!(receipt.schema, K1_FUTURE_OUTCOME_RECEIPT_SCHEMA_V2);
-        let mut changed = receipt.clone();
-        changed.program_evidence_root_sha256 = Some(root('7'));
-        assert_eq!(changed.validate(), Err("k1_future_outcome_receipt_invalid"));
-    }
-}
+mod tests;

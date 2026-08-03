@@ -11,6 +11,7 @@ mod economics_worker;
 pub mod generation_shadow;
 mod k1_natural_scheduler;
 mod k1_natural_scheduler_runtime;
+mod k1_pre_action_prediction;
 mod k1_transfer_lifecycle;
 mod learning_evidence_bridge;
 mod learning_structure_bridge;
@@ -1152,6 +1153,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         Arc::clone(&state.operator_generation_shadow),
         Arc::clone(&state.request_learning),
         state.config.learning_structure_bridge_consumer_enabled,
+        Arc::clone(&state.operator_certification_config),
     )?;
     spawn_miner_warmup(state.clone())?;
     spawn_multi_source_snapshot_runtime(state.clone())?;

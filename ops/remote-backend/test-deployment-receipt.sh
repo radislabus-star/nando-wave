@@ -7,6 +7,8 @@ WORK="$(mktemp -d)"
 
 grep -Fq '/opt/nando-wave/bin/nando-operator-certification-authority' "${SCRIPT}"
 grep -Fq '/opt/nando-wave/bin/nando-operator-cleanup-verifier' "${SCRIPT}"
+grep -Fq 'nando-operator-certification-authority.service' "${SCRIPT}"
+grep -Fq 'nando-operator-cleanup-verifier@.service' "${SCRIPT}"
 
 cleanup() {
   chmod -R u+w "${WORK}" 2>/dev/null || true

@@ -21,6 +21,7 @@ use nando_operator_proof::independent_verifier_v3::{
 use crate::generation_shadow::{
     GenerationShadowRequestV3, GenerationShadowRuntimeV3, GenerationShadowSubmitVerdictV3,
 };
+use crate::operator_certification::CertificationAuthorityConfigV1;
 use crate::request_learning::RequestLearningIndex;
 
 use super::{LearningEvidenceBridgeInnerV1, LearningEvidenceIngressV1, record_failure};
@@ -190,6 +191,7 @@ pub(super) fn start_consumer(
     generation_shadow: Arc<GenerationShadowRuntimeV3>,
     request_learning: Arc<RequestLearningIndex>,
     structure_owned_by_v2: bool,
+    certification: Arc<CertificationAuthorityConfigV1>,
 ) -> Result<(), String> {
     if inner
         .consumer_started
@@ -207,6 +209,7 @@ pub(super) fn start_consumer(
                 generation_shadow,
                 request_learning,
                 structure_owned_by_v2,
+                certification,
                 listener,
             )
         })
@@ -219,6 +222,7 @@ fn run_consumer(
     generation_shadow: Arc<GenerationShadowRuntimeV3>,
     request_learning: Arc<RequestLearningIndex>,
     structure_owned_by_v2: bool,
+    certification: Arc<CertificationAuthorityConfigV1>,
     listener: UnixListener,
 ) {
     for connection in listener.incoming() {
@@ -235,6 +239,18 @@ fn run_consumer(
         inner.consumer.received.fetch_add(1, Ordering::Relaxed);
         let ack = match read_frame(&mut stream).and_then(|frame| decode_learning_evidence(&frame)) {
             Ok(decoded) => {
+                if let Some(request) = decoded.generation_request.as_ref()
+                    && let Err(error) = crate::k1_pre_action_prediction::precommit_if_applicable(
+                        &certification,
+                        request,
+                        decoded.structure.client_intent_id_sha256(),
+                    )
+                {
+                    record_failure(
+                        &inner.consumer,
+                        &format!("k1_pre_action_prediction:{error}"),
+                    );
+                }
                 if !structure_owned_by_v2
                     && let Err(error) = request_learning.observe_structure(&decoded.structure)
                 {

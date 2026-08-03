@@ -1038,7 +1038,13 @@ fn observation_for_transition_with_external(
         .map(|(root, program)| {
             let accepted = external.map_or_else(
                 || super::source_neutral_t1::t1_program_is_consistent(program, joined, frame),
-                |evidence| evidence.verified_program_roots_sha256.contains(root),
+                |evidence| {
+                    let observed = super::observed_typed_consequence_root_v1(frame).ok();
+                    evidence
+                        .predicted_typed_consequence_roots_sha256
+                        .get(root)
+                        .is_some_and(|predicted| Some(predicted) == observed.as_ref())
+                },
             );
             ExactProgramEvaluation {
                 program_digest_sha256: root.clone(),
@@ -1058,7 +1064,6 @@ fn observation_for_transition_with_external(
             &joined.effect_atoms,
             joined.accepted,
             &evidence.artifact_roots_sha256,
-            &evidence.verified_program_roots_sha256,
         )),
         None => canonical_json_sha256(&(
             "nando.multi-source-t1-observed-delta.v1",
@@ -1091,8 +1096,11 @@ fn row_program_consistency_blocker(
         let Ok(root) = response_program_version_root_sha256(program) else {
             return Some("external_program_digest_failed");
         };
-        return (!evidence.verified_program_roots_sha256.contains(&root))
-            .then_some("external_exact_transition_mismatch");
+        let Ok(observed) = super::observed_typed_consequence_root_v1(&row.frame) else {
+            return Some("external_observed_typed_consequence_ambiguous");
+        };
+        return (evidence.predicted_typed_consequence_roots_sha256.get(&root) != Some(&observed))
+            .then_some("external_exact_typed_consequence_mismatch");
     }
     super::source_neutral_t1::t1_program_consistency_blocker(program, &row.joined, &row.frame)
 }

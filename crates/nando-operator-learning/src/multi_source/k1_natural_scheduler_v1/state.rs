@@ -480,6 +480,18 @@ impl ReplayState {
                                 && verdict
                                     .evidence_roots_sha256
                                     .contains(&prediction.prediction_root_sha256)
+                                && self.future_contract.as_ref().is_none_or(|contract| {
+                                    !matches!(
+                                        contract.canonical_program.operation,
+                                        nando_operator_kernel::ResponseOperation::ComposeCollection {
+                                            ..
+                                        }
+                                    ) || prediction.has_typed_consequence_precommit()
+                                        && outcome.predicted_typed_consequence_root_sha256
+                                            == prediction.predicted_typed_consequence_root_sha256
+                                        && outcome.predicted_typed_consequence_root_sha256
+                                            == outcome.observed_typed_consequence_root_sha256
+                                })
                         })
                 })
             {

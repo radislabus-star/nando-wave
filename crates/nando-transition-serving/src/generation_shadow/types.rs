@@ -212,7 +212,7 @@ impl GenerationShadowRequestV3 {
         &self.request_sha256
     }
 
-    pub(super) const fn capture_receipt(&self) -> Option<&ProviderRequestCaptureReceiptV3> {
+    pub(crate) const fn capture_receipt(&self) -> Option<&ProviderRequestCaptureReceiptV3> {
         self.capture_receipt.as_ref()
     }
 
@@ -228,7 +228,7 @@ impl GenerationShadowRequestV3 {
         &self.request_text
     }
 
-    pub(super) fn provider_payload_bytes(&self) -> &[u8] {
+    pub(crate) fn provider_payload_bytes(&self) -> &[u8] {
         &self.provider_payload_bytes
     }
 }
