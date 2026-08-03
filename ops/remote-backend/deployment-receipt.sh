@@ -11,9 +11,15 @@ RUNTIME_ENDPOINTS="${NANDO_DEPLOY_RECEIPT_ENDPOINTS-hot_health=http://127.0.0.1:
 HOT_UNIT="${NANDO_DEPLOY_HOT_UNIT-nando-transition-serving.service}"
 NGINX_UNIT="${NANDO_DEPLOY_NGINX_UNIT-nando-transport-gateway.service}"
 ALLOW_HOT_RESTART="${NANDO_DEPLOY_ALLOW_HOT_RESTART-0}"
+RUNTIME_SNAPSHOT_ATTEMPTS="${NANDO_DEPLOY_RUNTIME_SNAPSHOT_ATTEMPTS-120}"
+RUNTIME_SNAPSHOT_SLEEP_SECONDS="${NANDO_DEPLOY_RUNTIME_SNAPSHOT_SLEEP_SECONDS-0.25}"
 
 if [[ "${ALLOW_HOT_RESTART}" != "0" && "${ALLOW_HOT_RESTART}" != "1" ]]; then
   printf 'NANDO_DEPLOY_ALLOW_HOT_RESTART must be 0 or 1\n' >&2
+  exit 2
+fi
+if [[ ! "${RUNTIME_SNAPSHOT_ATTEMPTS}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'NANDO_DEPLOY_RUNTIME_SNAPSHOT_ATTEMPTS must be a positive integer\n' >&2
   exit 2
 fi
 if [[ "${ALLOW_HOT_RESTART}" == "1" ]]; then
@@ -53,6 +59,27 @@ unit_pid() {
   local unit="$1"
   [[ -n "${unit}" ]] || { printf '0\n'; return; }
   systemctl show -p MainPID --value "${unit}" 2>/dev/null || printf '0\n'
+}
+
+capture_runtime_snapshot() {
+  local url="$1"
+  local snapshot="$2"
+  local raw="${snapshot}.raw"
+  local candidate="${snapshot}.candidate"
+  local attempt
+  for attempt in $(seq 1 "${RUNTIME_SNAPSHOT_ATTEMPTS}"); do
+    if curl -fsS --max-time 10 "${url}" > "${raw}" \
+      && jq -S '.' "${raw}" > "${candidate}"; then
+      mv -f "${candidate}" "${snapshot}"
+      rm -f "${raw}"
+      return 0
+    fi
+    rm -f "${raw}" "${candidate}"
+    sleep "${RUNTIME_SNAPSHOT_SLEEP_SECONDS}"
+  done
+  printf 'runtime snapshot remained unavailable after %s attempts: %s\n' \
+    "${RUNTIME_SNAPSHOT_ATTEMPTS}" "${url}" >&2
+  return 1
 }
 
 copy_for_rollback() {
@@ -236,7 +263,7 @@ for endpoint in ${RUNTIME_ENDPOINTS}; do
   label="${endpoint%%=*}"
   url="${endpoint#*=}"
   snapshot="${work}/${label}.json"
-  curl -fsS --max-time 10 "${url}" | jq -S '.' > "${snapshot}"
+  capture_runtime_snapshot "${url}" "${snapshot}"
   snapshot_sha="$(sha256sum "${snapshot}" | awk '{print $1}')"
   as_root install -m 0600 "${snapshot}" "${deployment_dir}/evidence/${label}.json"
   jq -nS --arg snapshot_label "${label}" --arg url "${url}" --arg sha "${snapshot_sha}" \

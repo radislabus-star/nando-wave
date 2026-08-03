@@ -127,4 +127,30 @@ jq -e '
   and .invariants.nginx_pid_after == 202
   and .invariants.nginx_pid_unchanged == true
 ' "${restart_receipt}" >/dev/null
+
+# The expressions belong to the generated fixture.
+# shellcheck disable=SC2016
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'count=0' \
+  '[[ ! -f "${NANDO_TEST_CURL_COUNT}" ]] || count="$(cat "${NANDO_TEST_CURL_COUNT}")"' \
+  'count=$((count + 1))' \
+  'printf "%s\n" "${count}" > "${NANDO_TEST_CURL_COUNT}"' \
+  'if (( count == 1 )); then exit 22; fi' \
+  'printf "{\"ready\":true}\n"' > "${WORK}/fake-bin/curl"
+chmod +x "${WORK}/fake-bin/curl"
+retry_env=(
+  "${common_env[@]}"
+  PATH="${WORK}/fake-bin:${PATH}"
+  NANDO_TEST_CURL_COUNT="${WORK}/curl.count"
+  NANDO_DEPLOY_RECEIPT_ROOT="${WORK}/retry-receipts"
+  NANDO_DEPLOY_RECEIPT_ENDPOINTS="probe=http://127.0.0.1/retry"
+  NANDO_DEPLOY_RUNTIME_SNAPSHOT_ATTEMPTS=2
+  NANDO_DEPLOY_RUNTIME_SNAPSHOT_SLEEP_SECONDS=0
+)
+retry_dir="$(env "${retry_env[@]}" "${SCRIPT}" prepare \
+  --source-dir "${WORK}/source" --rollback-commit "${commit}")"
+env "${retry_env[@]}" "${SCRIPT}" finalize \
+  --source-dir "${WORK}/source" --deployment-dir "${retry_dir}" >/dev/null
+[[ "$(cat "${WORK}/curl.count")" == 2 ]]
 printf 'deployment receipt transaction tests: PASS\n'
