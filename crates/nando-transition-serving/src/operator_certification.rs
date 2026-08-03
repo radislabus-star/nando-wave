@@ -204,7 +204,7 @@ fn append_authoritative(
         Ok(changed) => (changed, entry),
         Err("operator_certification_transition_invalid") => {
             if let Some(reconciled) =
-                crate::operator_certification_reconciliation::preserve_terminal_mechanism(
+                crate::operator_certification_reconciliation::preserve_monotonic_certificates(
                     &mut ledger,
                     entry.clone(),
                 )?
