@@ -49,6 +49,59 @@ fn signed_crash_tail_advances_only_after_prefix_anchor_matches() {
 }
 
 #[test]
+fn stale_crash_temp_is_replaced_before_atomic_journal_publish() {
+    let (root, config, signing_key) = test_context();
+    let mut ledger = K1SchedulerLedgerV1::empty().expect("ledger");
+    let event = ledger
+        .append(K1SchedulerEventPayloadV1::CandidateFreeze(
+            candidate_freeze(),
+        ))
+        .expect("candidate event")
+        .clone();
+    let signed =
+        SignedSchedulerEventV1::seal(event, ledger.ledger_root_sha256.clone(), &signing_key)
+            .expect("signed event");
+    let directory = scheduler_journal_path(&config);
+    fs::create_dir_all(&directory).expect("journal directory");
+    let temporary = directory.join(format!(
+        ".{:020}-{}.tmp",
+        signed.event.sequence, signed.event.event_root_sha256
+    ));
+    fs::write(&temporary, b"truncated-crash-tail").expect("orphan temp");
+
+    persist_scheduler_event(&config, &signed).expect("atomic retry");
+
+    assert!(!temporary.exists());
+    let final_path = directory.join("00000000000000000001.json");
+    let restored: SignedSchedulerEventV1 =
+        serde_json::from_slice(&fs::read(final_path).expect("published event"))
+            .expect("complete signed event");
+    assert_eq!(restored, signed);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn existing_final_journal_event_is_never_replaced() {
+    let (root, config, signing_key) = test_context();
+    let mut ledger = K1SchedulerLedgerV1::empty().expect("ledger");
+    let event = ledger
+        .append(K1SchedulerEventPayloadV1::CandidateFreeze(
+            candidate_freeze(),
+        ))
+        .expect("candidate event")
+        .clone();
+    let signed =
+        SignedSchedulerEventV1::seal(event, ledger.ledger_root_sha256.clone(), &signing_key)
+            .expect("signed event");
+    persist_scheduler_event(&config, &signed).expect("first publish");
+    assert_eq!(
+        persist_scheduler_event(&config, &signed),
+        Err("k1_scheduler_journal_replacement_forbidden".to_owned())
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
 fn journal_tamper_is_rejected_even_when_anchor_still_exists() {
     let (root, config, signing_key) = test_context();
     let mut ledger = K1SchedulerLedgerV1::empty().expect("ledger");

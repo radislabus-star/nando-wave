@@ -68,19 +68,6 @@ fn shadow(root: &std::path::Path, enabled: bool) -> Arc<GenerationShadowRuntimeV
     )
 }
 
-fn certification(root: &std::path::Path) -> Arc<CertificationAuthorityConfigV1> {
-    Arc::new(CertificationAuthorityConfigV1 {
-        root: root.join("certification"),
-        cleanup_receipts_path: root.join("cleanup"),
-        anchor_path: root.join("anchor.json"),
-        authority_socket_path: root.join("authority.sock"),
-        authority_public_key_path: root.join("authority.pub"),
-        cleanup_public_key_path: root.join("cleanup.pub"),
-        response_registry_path: root.join("registry.json"),
-        runtime_revocations_path: root.join("revocations.json"),
-    })
-}
-
 #[test]
 fn producer_uses_bounded_queue_and_receives_cold_ack() {
     let root = root();
@@ -107,7 +94,6 @@ fn producer_uses_bounded_queue_and_receives_cold_ack() {
             shadow(&root, false),
             Arc::new(RequestLearningIndex::default()),
             false,
-            certification(&root),
         )
         .expect("start");
     runtime
@@ -190,12 +176,7 @@ fn process_bridge_delivers_every_structure_and_only_bounded_raw_evidence() {
     let consumer = LearningEvidenceBridgeRuntimeV1::new(socket.clone(), false, true, 2)
         .expect("consumer runtime");
     consumer
-        .start(
-            shadow(&root, true),
-            Arc::clone(&request_learning),
-            false,
-            certification(&root),
-        )
+        .start(shadow(&root, true), Arc::clone(&request_learning), false)
         .expect("consumer start");
     let producer =
         LearningEvidenceBridgeRuntimeV1::new(socket, true, false, 2).expect("producer runtime");
@@ -204,7 +185,6 @@ fn process_bridge_delivers_every_structure_and_only_bounded_raw_evidence() {
             shadow(&root, false),
             Arc::new(RequestLearningIndex::default()),
             false,
-            certification(&root),
         )
         .expect("producer start");
 
@@ -259,7 +239,6 @@ fn consumer_refuses_to_replace_a_non_socket_path() {
                 shadow(&root, true),
                 Arc::new(RequestLearningIndex::default()),
                 false,
-                certification(&root),
             )
             .expect_err("regular file must block"),
         "learning_evidence_bridge_path_not_socket"

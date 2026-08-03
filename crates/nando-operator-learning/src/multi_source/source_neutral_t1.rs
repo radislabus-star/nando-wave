@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
-    AtomSource, AtomValueType, CollectionProgramStep, MultiSourceContainerClassV1,
-    MultiSourceRelationKindV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
-    MultiSourceTemporalClassV1, MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1,
-    RelationAtom, RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram,
-    ResponseRenderSegment, ResponseValueSelector, SemanticRole, canonical_json_sha256,
-    response_program_version_root_sha256,
+    AtomSource, AtomValueType, CollectionProgramStep, CollectionScalarType,
+    MultiSourceContainerClassV1, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
+    MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
+    PreActionMultiSourceTopologyV1, RelationAtom, RelationFrame, ResponseArgument,
+    ResponseOperation, ResponseProgram, ResponseRenderSegment, ResponseValueSelector, SemanticRole,
+    canonical_json_sha256, response_program_version_root_sha256,
 };
 
 use super::BlindThenRevealJoinedTransitionV1;
@@ -434,13 +434,63 @@ fn pre_action_collection_binding_root(
         witness.local_role_id == role.local_role_id
     })
     .ok_or("collection_role_witness_missing_or_ambiguous")?;
+    let mut scalar_bindings = Vec::new();
+    for step in steps {
+        let (binding_kind, selector, value_type) = match step {
+            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                selector,
+                value_type,
+            } => (
+                "selected_value",
+                Some(selector),
+                collection_scalar_atom_type(*value_type),
+            ),
+            CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { value_type } => (
+                "request_value",
+                None,
+                collection_scalar_atom_type(*value_type),
+            ),
+            _ => continue,
+        };
+        let scalar_witness = match selector {
+            Some(selector) => witness_for_selector(selector, topology),
+            None => unique_matching_witness(topology, |candidate| {
+                role_for_witness(topology, candidate).is_some_and(|candidate_role| {
+                    candidate_role.container_class == MultiSourceContainerClassV1::Scalar
+                        && role_type_matches(candidate_role.type_class, value_type)
+                })
+            }),
+        }
+        .ok_or("collection_selector_role_missing_or_ambiguous")?;
+        let scalar_role = role_for_witness(topology, scalar_witness)
+            .filter(|candidate| candidate.container_class == MultiSourceContainerClassV1::Scalar)
+            .ok_or("collection_selector_role_not_scalar")?;
+        scalar_bindings.push((
+            binding_kind,
+            selector,
+            value_type,
+            scalar_role.local_role_id,
+            scalar_role.source_ordinal,
+            scalar_witness.value_sha256.as_str(),
+        ));
+    }
+    scalar_bindings.sort();
     canonical_json_sha256(&(
-        "nando.ms3-pre-action-t1-collection-binding.v1",
+        "nando.ms3-pre-action-t1-collection-binding.v2",
         role.local_role_id,
         role.source_ordinal,
         witness.value_sha256.as_str(),
+        scalar_bindings,
     ))
     .map_err(|_| "pre_action_binding_commitment_failed")
+}
+
+const fn collection_scalar_atom_type(value_type: CollectionScalarType) -> AtomValueType {
+    match value_type {
+        CollectionScalarType::String => AtomValueType::String,
+        CollectionScalarType::Integer => AtomValueType::Integer,
+        CollectionScalarType::Boolean => AtomValueType::Boolean,
+    }
 }
 
 fn witness_for_selector<'a>(
@@ -650,3 +700,7 @@ const fn role_type_matches(role: MultiSourceTypeClassV1, value: AtomValueType) -
             | (MultiSourceTypeClassV1::Array, AtomValueType::Collection)
     )
 }
+
+#[cfg(test)]
+#[path = "source_neutral_t1_tests.rs"]
+mod tests;

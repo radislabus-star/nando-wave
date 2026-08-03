@@ -129,11 +129,22 @@ pub(super) fn persist_scheduler_event_for(
     fs::create_dir_all(&directory)
         .map_err(|error| format!("k1_scheduler_journal_parent:{error}"))?;
     let path = directory.join(format!("{:020}.json", event.event.sequence));
+    if path.exists() {
+        return Err("k1_scheduler_journal_replacement_forbidden".to_owned());
+    }
+    let temporary = directory.join(format!(
+        ".{:020}-{}.tmp",
+        event.event.sequence, event.event.event_root_sha256
+    ));
+    if temporary.exists() {
+        fs::remove_file(&temporary)
+            .map_err(|error| format!("k1_scheduler_journal_stale_temp:{error}"))?;
+    }
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .mode(0o640)
-        .open(path)
+        .open(&temporary)
         .map_err(|error| format!("k1_scheduler_journal_create:{error}"))?;
     file.write_all(
         &serde_json::to_vec(event)
@@ -142,6 +153,14 @@ pub(super) fn persist_scheduler_event_for(
     .map_err(|error| format!("k1_scheduler_journal_write:{error}"))?;
     file.sync_all()
         .map_err(|error| format!("k1_scheduler_journal_sync:{error}"))?;
+    drop(file);
+    if path.exists() {
+        fs::remove_file(&temporary)
+            .map_err(|error| format!("k1_scheduler_journal_temp_cleanup:{error}"))?;
+        return Err("k1_scheduler_journal_replacement_forbidden".to_owned());
+    }
+    fs::rename(&temporary, &path)
+        .map_err(|error| format!("k1_scheduler_journal_publish:{error}"))?;
     File::open(&directory)
         .and_then(|directory| directory.sync_all())
         .map_err(|error| format!("k1_scheduler_journal_dir_sync:{error}"))

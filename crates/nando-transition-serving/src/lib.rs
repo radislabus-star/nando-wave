@@ -1153,7 +1153,6 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         Arc::clone(&state.operator_generation_shadow),
         Arc::clone(&state.request_learning),
         state.config.learning_structure_bridge_consumer_enabled,
-        Arc::clone(&state.operator_certification_config),
     )?;
     spawn_miner_warmup(state.clone())?;
     spawn_multi_source_snapshot_runtime(state.clone())?;
@@ -5042,12 +5041,51 @@ fn submit_operator_generation_shadow(
 ) {
     if state.learning_structure_bridge.producer_enabled() {
         let result = match topology_shadow {
-            Some((structure_v2, topology_commit)) => state.learning_structure_bridge.submit_v3(
-                capture_receipt.clone(),
-                structure.clone(),
-                structure_v2,
-                topology_commit,
-            ),
+            Some((structure_v2, topology_commit)) => {
+                let requires_fence = state
+                    .k1_natural_scheduler_report
+                    .read()
+                    .map_err(|_| "k1_pre_action_report_lock_poisoned".to_owned())
+                    .and_then(|report| match report.as_ref() {
+                        Some(report) => {
+                            crate::k1_pre_action_prediction::candidate_match_requires_fence(
+                                &report.projection,
+                                &structure_v2,
+                                &topology_commit,
+                            )
+                        }
+                        None => Ok(false),
+                    });
+                match requires_fence {
+                    Ok(true) => state
+                        .learning_structure_bridge
+                        .submit_v3_durable(
+                            capture_receipt.clone(),
+                            structure.clone(),
+                            structure_v2,
+                            topology_commit,
+                        )
+                        .and_then(|topology| {
+                            let provider_payload_json = std::str::from_utf8(body)
+                                .map_err(|_| "k1_pre_action_provider_payload_utf8".to_owned())?;
+                            crate::k1_pre_action_prediction::precommit_candidate_match(
+                                &state.operator_certification_config,
+                                topology,
+                                provider_payload_json,
+                                request_text,
+                            )?
+                            .then_some(())
+                            .ok_or_else(|| "k1_pre_action_candidate_cas_changed".to_owned())
+                        }),
+                    Ok(false) => state.learning_structure_bridge.submit_v3(
+                        capture_receipt.clone(),
+                        structure.clone(),
+                        structure_v2,
+                        topology_commit,
+                    ),
+                    Err(error) => Err(format!("k1_pre_action_fence_match:{error}")),
+                }
+            }
             None => state
                 .learning_structure_bridge
                 .submit(capture_receipt.clone(), structure.clone()),

@@ -14,6 +14,7 @@ use nando_operator_kernel::{sha256_bytes, valid_nonzero_sha256};
 use nando_operator_learning::{
     LEARNING_STRUCTURE_RECORD_MAX_BYTES_V3, LearningRequestStructureV1, LearningStructureRecordV2,
     LearningStructureRecordV3, ProviderRequestCaptureReceiptV3,
+    multi_source::PreActionTopologyAuditRowV1,
 };
 use serde::{Deserialize, Serialize};
 
@@ -269,7 +270,51 @@ impl LearningStructureBridgeRuntimeV2 {
                 .canonical_cbor()
                 .map_err(|error| format!("learning_structure_bridge_encode_v3:{error:?}"))?,
             started,
+            false,
         )
+    }
+
+    pub(crate) fn submit_v3_durable(
+        &self,
+        capture_receipt: ProviderRequestCaptureReceiptV3,
+        structure_v1: LearningRequestStructureV1,
+        structure_v2: LearningRequestStructureV2,
+        topology_commit: PreActionTopologyCommitV1,
+    ) -> Result<PreActionTopologyAuditRowV1, String> {
+        if !self.inner.producer_enabled {
+            return Err("learning_structure_bridge_producer_disabled".to_owned());
+        }
+        let started = Instant::now();
+        let _guard = self
+            .inner
+            .producer_lock
+            .lock()
+            .map_err(|_| "learning_structure_bridge_producer_lock_poisoned".to_owned())?;
+        let (_, pending_bytes) = pending_stats(&self.inner.pending_dir);
+        if pending_bytes >= MAX_PENDING_BYTES_V2 {
+            return self.producer_failure("learning_structure_bridge_spool_budget");
+        }
+        let sequence = self.inner.next_sequence.load(Ordering::Acquire);
+        let record = LearningStructureRecordV3::new(
+            self.inner.epoch_sha256.clone(),
+            sequence,
+            capture_receipt,
+            structure_v1,
+            structure_v2,
+            topology_commit,
+        )
+        .map_err(|error| format!("learning_structure_bridge_record_v3:{error:?}"))?;
+        let audit_row = pre_action_topology_audit_row_v1(&record).map_err(str::to_owned)?;
+        self.publish_record(
+            sequence,
+            record.record_sha256(),
+            &record
+                .canonical_cbor()
+                .map_err(|error| format!("learning_structure_bridge_encode_v3:{error:?}"))?,
+            started,
+            true,
+        )?;
+        Ok(audit_row)
     }
 
     fn publish_record(
@@ -278,13 +323,29 @@ impl LearningStructureBridgeRuntimeV2 {
         digest: &str,
         bytes: &[u8],
         started: Instant,
+        durable: bool,
     ) -> Result<(), String> {
         let name = record_file_name(sequence, digest);
         let final_path = self.inner.pending_dir.join(&name);
         let temporary_path = self.inner.staging_dir.join(format!("{name}.tmp"));
-        write_private_file_buffered(&temporary_path, bytes)?;
+        if durable {
+            write_private_file(&temporary_path, bytes)?;
+        } else {
+            write_private_file_buffered(&temporary_path, bytes)?;
+        }
         fs::rename(&temporary_path, &final_path)
             .map_err(|error| format!("learning_structure_bridge_publish:{error}"))?;
+        if durable {
+            sync_directory(&self.inner.pending_dir)?;
+            self.inner
+                .producer
+                .durable_sequence
+                .store(sequence, Ordering::Release);
+            self.inner
+                .producer
+                .durability_syncs
+                .fetch_add(1, Ordering::Relaxed);
+        }
         self.inner
             .next_sequence
             .store(sequence.saturating_add(1), Ordering::Release);
@@ -874,6 +935,10 @@ fn unix_now_nanos() -> u128 {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_nanos())
 }
+
+#[cfg(test)]
+#[path = "learning_structure_bridge_durable_tests.rs"]
+mod durable_tests;
 
 #[cfg(test)]
 mod tests {

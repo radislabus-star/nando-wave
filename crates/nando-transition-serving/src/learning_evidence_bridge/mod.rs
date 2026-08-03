@@ -11,7 +11,6 @@ use nando_operator_learning::{LearningRequestStructureV1, ProviderRequestCapture
 use serde::Serialize;
 
 use crate::generation_shadow::GenerationShadowRuntimeV3;
-use crate::operator_certification::CertificationAuthorityConfigV1;
 use crate::request_learning::RequestLearningIndex;
 
 const LEARNING_EVIDENCE_BRIDGE_SCHEMA_V1: &str = "nando.learning-evidence-bridge-status.v1";
@@ -134,7 +133,6 @@ impl LearningEvidenceBridgeRuntimeV1 {
         generation_shadow: Arc<GenerationShadowRuntimeV3>,
         request_learning: Arc<RequestLearningIndex>,
         structure_owned_by_v2: bool,
-        certification: Arc<CertificationAuthorityConfigV1>,
     ) -> Result<(), String> {
         if self.inner.producer_enabled {
             self.start_producer()?;
@@ -145,7 +143,6 @@ impl LearningEvidenceBridgeRuntimeV1 {
                 generation_shadow,
                 request_learning,
                 structure_owned_by_v2,
-                certification,
             )?;
         }
         Ok(())

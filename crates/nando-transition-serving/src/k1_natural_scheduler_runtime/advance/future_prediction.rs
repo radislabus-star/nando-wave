@@ -111,8 +111,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_future_evidence(
         .future_prediction_contract
         .as_ref()
         .ok_or_else(|| "k1_future_contract_missing_after_append".to_owned())?;
-    if let Some((topology, pre_action_execution_receipt)) = next_pre_action_topology(
-        certification,
+    if let Some(topology) = next_pre_action_topology(
         topologies,
         bindings,
         frames,
@@ -126,7 +125,8 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_future_evidence(
                 lane,
                 contract_root_sha256: contract.contract_root_sha256.clone(),
                 topology: topology.clone(),
-                pre_action_execution_receipt,
+                provider_payload_json: None,
+                request_text: None,
             },
         )?;
         return Ok(FutureEvidenceAdvance::Pending {
@@ -190,19 +190,18 @@ fn next_settleable_outcome<'a>(
 }
 
 fn next_pre_action_topology<'a>(
-    certification: &CertificationAuthorityConfigV1,
     topologies: &'a [PreActionTopologyAuditRowV1],
     bindings: &[EvidenceBinding],
     frames: &[RelationFrame],
     candidate: &K1NaturalCandidateFreezeV1,
     program: &nando_operator_kernel::ResponseProgram,
-) -> Result<
-    Option<(
-        &'a PreActionTopologyAuditRowV1,
-        Option<nando_operator_learning::multi_source::K1PreActionExecutionReceiptV1>,
-    )>,
-    String,
-> {
+) -> Result<Option<&'a PreActionTopologyAuditRowV1>, String> {
+    if matches!(
+        program.operation,
+        nando_operator_kernel::ResponseOperation::ComposeCollection { .. }
+    ) {
+        return Ok(None);
+    }
     let joined_topologies = bindings
         .iter()
         .map(|binding| binding.joined.topology_commitment_root_sha256.as_str())
@@ -238,23 +237,7 @@ fn next_pre_action_topology<'a>(
                     .cmp(&right.commit.commitment_root_sha256)
             })
     });
-    let requires_typed_prediction = matches!(
-        program.operation,
-        nando_operator_kernel::ResponseOperation::ComposeCollection { .. }
-    );
-    let program_root = nando_operator_kernel::response_program_version_root_sha256(program)
-        .map_err(str::to_owned)?;
-    for topology in eligible {
-        let receipt = crate::k1_pre_action_prediction::restore_for_request(
-            certification,
-            &topology.commit.provider_capture_request_root_sha256,
-            &program_root,
-        )?;
-        if !requires_typed_prediction || receipt.is_some() {
-            return Ok(Some((topology, receipt)));
-        }
-    }
-    Ok(None)
+    Ok(eligible.into_iter().next())
 }
 
 #[cfg(test)]

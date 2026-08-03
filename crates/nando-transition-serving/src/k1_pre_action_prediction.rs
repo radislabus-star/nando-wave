@@ -1,154 +1,172 @@
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use nando_operator_kernel::{
-    AtomValueType, ResponseOperation, canonical_json_sha256, response_program_version_root_sha256,
-    sha256_bytes,
+    AtomValueType, LearningRequestStructureV2, MultiSourceEvidenceOriginV1,
+    PreActionTopologyCommitV1, ResponseOperation, ResponseProgram, canonical_json_sha256,
+    response_program_version_root_sha256, sha256_bytes,
 };
-use nando_operator_learning::multi_source::K1PreActionExecutionReceiptV1;
+use nando_operator_learning::multi_source::{
+    K1PreActionExecutionReceiptV1, PreActionTopologyAuditRowV1,
+    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
+    source_neutral_topology_root_v1,
+};
 use nando_response_actor::{
     ResponseExecutionStatus, execute_response, response_runtime_contract_sha256,
 };
 
-use crate::generation_shadow::GenerationShadowRequestV3;
-use crate::k1_natural_scheduler::restore_projection;
+use crate::k1_natural_scheduler::{
+    K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1, K1FuturePredictionAuthorityRequestV1,
+    K1SchedulerLaneV1, K1SchedulerProjectionV1, append_future_prediction, restore_projection,
+};
 use crate::operator_certification::CertificationAuthorityConfigV1;
 
-const STORE_DIR: &str = "k1-pre-action-execution-receipts-v1";
+pub(crate) fn candidate_match_requires_fence(
+    projection: &K1SchedulerProjectionV1,
+    structure: &LearningRequestStructureV2,
+    commit: &PreActionTopologyCommitV1,
+) -> Result<bool, String> {
+    let Some(candidate) = projection.active_candidate_freeze.as_ref() else {
+        return Ok(false);
+    };
+    let Some(contract) = projection.future_prediction_contract.as_ref() else {
+        return Ok(false);
+    };
+    Ok(matches!(
+        contract.canonical_program.operation,
+        ResponseOperation::ComposeCollection { .. }
+    ) && commit.capture_sequence >= candidate.future_min_sequence
+        && commit.evidence_origin == MultiSourceEvidenceOriginV1::FreshLive
+        && pre_action_applicability_shape_root_v1(&structure.topology).map_err(str::to_owned)?
+            == candidate.candidate_structural_root_sha256
+        && source_neutral_topology_root_v1(&structure.topology).map_err(str::to_owned)?
+            == candidate.source_neutral_topology_root_sha256
+        && pre_action_t1_binding_root(&contract.canonical_program, &structure.topology).is_ok()
+        && !projection.future_predictions.iter().any(|prediction| {
+            !projection
+                .future_outcomes
+                .iter()
+                .any(|outcome| outcome.prediction_root_sha256 == prediction.prediction_root_sha256)
+        }))
+}
 
-pub(crate) fn precommit_if_applicable(
+pub(crate) fn precommit_candidate_match(
     config: &CertificationAuthorityConfigV1,
-    request: &GenerationShadowRequestV3,
-    turn_intent_id_sha256: &str,
-) -> Result<Option<K1PreActionExecutionReceiptV1>, String> {
+    topology: PreActionTopologyAuditRowV1,
+    provider_payload_json: &str,
+    request_text: &str,
+) -> Result<bool, String> {
     let projection = restore_projection(config)?;
-    let Some(contract) = projection.future_prediction_contract else {
-        return Ok(None);
+    let Some(candidate) = projection.active_candidate_freeze.as_ref() else {
+        return Ok(false);
+    };
+    let Some(contract) = projection.future_prediction_contract.as_ref() else {
+        return Ok(false);
     };
     if !matches!(
         contract.canonical_program.operation,
         ResponseOperation::ComposeCollection { .. }
-    ) {
-        return Ok(None);
+    ) || topology.commit.capture_sequence < candidate.future_min_sequence
+        || topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
+        || pre_action_applicability_shape_root_v1(&topology.structure.topology)
+            .map_err(str::to_owned)?
+            != candidate.candidate_structural_root_sha256
+        || source_neutral_topology_root_v1(&topology.structure.topology).map_err(str::to_owned)?
+            != candidate.source_neutral_topology_root_sha256
+        || pre_action_t1_binding_root(&contract.canonical_program, &topology.structure.topology)
+            .is_err()
+        || projection.future_predictions.iter().any(|prediction| {
+            !projection
+                .future_outcomes
+                .iter()
+                .any(|outcome| outcome.prediction_root_sha256 == prediction.prediction_root_sha256)
+        })
+    {
+        return Ok(false);
     }
-    let capture = request
-        .capture_receipt()
-        .ok_or_else(|| "k1_pre_action_capture_receipt_missing".to_owned())?;
-    if sha256_bytes(request.provider_payload_bytes()) != capture.request_root_sha256().to_hex() {
+    append_future_prediction(
+        config,
+        K1FuturePredictionAuthorityRequestV1 {
+            schema: K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane: K1SchedulerLaneV1::Epistemic,
+            contract_root_sha256: contract.contract_root_sha256.clone(),
+            topology,
+            provider_payload_json: Some(provider_payload_json.to_owned()),
+            request_text: Some(request_text.to_owned()),
+        },
+    )?;
+    Ok(true)
+}
+
+pub(crate) fn execute_collection_prediction(
+    contract_root_sha256: String,
+    canonical_program: &ResponseProgram,
+    topology: &PreActionTopologyAuditRowV1,
+    provider_payload_json: &str,
+    request_text: &str,
+) -> Result<K1PreActionExecutionReceiptV1, String> {
+    let provider_capture_request_root_sha256 =
+        topology.commit.provider_capture_request_root_sha256.clone();
+    if sha256_bytes(provider_payload_json.as_bytes()) != provider_capture_request_root_sha256 {
         return Err("k1_pre_action_request_digest_mismatch".to_owned());
     }
-    let payload: serde_json::Value = serde_json::from_slice(request.provider_payload_bytes())
+    let payload: serde_json::Value = serde_json::from_str(provider_payload_json)
         .map_err(|_| "k1_pre_action_provider_payload_invalid".to_owned())?;
-    let execution = execute_response(
-        &contract.canonical_program,
-        request.request_text(),
-        &payload,
-    );
+    let structural_binding_root =
+        pre_action_t1_binding_root(canonical_program, &topology.structure.topology)
+            .map_err(|reason| format!("k1_pre_action_role_binding:{reason}"))?;
+    let execution = execute_response(canonical_program, request_text, &payload);
     if execution.status != ResponseExecutionStatus::Executed {
-        return Ok(None);
+        return Err(format!(
+            "k1_pre_action_program_not_executed:{}",
+            execution.reason
+        ));
     }
     let response = execution
         .response
         .ok_or_else(|| "k1_pre_action_response_missing".to_owned())?;
     let program_root =
-        response_program_version_root_sha256(&contract.canonical_program).map_err(str::to_owned)?;
-    let response_value_type = typed_response_value(&response);
-    let response_value_root = sha256_bytes(response.as_bytes());
+        response_program_version_root_sha256(canonical_program).map_err(str::to_owned)?;
     let consequence_root = nando_operator_learning::multi_source::typed_consequence_root_v1(
-        response_value_type,
-        &response_value_root,
+        typed_response_value(&response),
+        &sha256_bytes(response.as_bytes()),
     )
     .map_err(str::to_owned)?;
     let complete_binding_root = canonical_json_sha256(&(
-        "nando.k1-complete-pre-action-input-binding.v1",
+        "nando.k1-complete-pre-action-input-binding.v2",
         program_root.as_str(),
-        capture.request_root_sha256().to_hex(),
-        sha256_bytes(request.request_text().as_bytes()),
-        sha256_bytes(request.provider_payload_bytes()),
+        structural_binding_root.as_str(),
+        provider_capture_request_root_sha256.as_str(),
+        sha256_bytes(request_text.as_bytes()),
+        sha256_bytes(provider_payload_json.as_bytes()),
     ))
     .map_err(str::to_owned)?;
     let verifier_contract_root = canonical_json_sha256(&(
-        "nando.k1-pre-action-execution-verifier-contract.v1",
+        "nando.k1-pre-action-execution-verifier-contract.v2",
         response_runtime_contract_sha256(),
+        structural_binding_root,
         "exact_typed_consequence_root",
+        "authority_owned_execution",
     ))
     .map_err(str::to_owned)?;
-    let receipt = K1PreActionExecutionReceiptV1::seal(
-        contract.contract_root_sha256,
+    K1PreActionExecutionReceiptV1::seal(
+        contract_root_sha256,
         program_root,
-        capture.event_root_sha256().to_hex(),
-        capture.request_root_sha256().to_hex(),
-        turn_intent_id_sha256.to_owned(),
+        topology
+            .capture_event_sha256
+            .clone()
+            .ok_or_else(|| "k1_pre_action_capture_event_missing".to_owned())?,
+        provider_capture_request_root_sha256,
+        topology.structure.turn_intent_id_sha256.clone(),
         complete_binding_root,
         consequence_root,
         verifier_contract_root,
-        capture.capture_sequence(),
-        capture.observed_at_unix_ms(),
+        topology.commit.capture_sequence,
+        topology
+            .captured_at_unix_ms
+            .ok_or_else(|| "k1_pre_action_capture_time_missing".to_owned())?,
         unix_now_nanos()?,
     )
-    .map_err(str::to_owned)?;
-    persist_receipt(&config.root.join(STORE_DIR), &receipt)?;
-    Ok(Some(receipt))
-}
-
-pub(crate) fn restore_for_request(
-    config: &CertificationAuthorityConfigV1,
-    request_root: &str,
-    program_root: &str,
-) -> Result<Option<K1PreActionExecutionReceiptV1>, String> {
-    let path = receipt_path(&config.root.join(STORE_DIR), request_root, program_root);
-    let bytes = match fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("k1_pre_action_receipt_read:{error}")),
-    };
-    let receipt: K1PreActionExecutionReceiptV1 = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("k1_pre_action_receipt_decode:{error}"))?;
-    receipt.validate().map_err(str::to_owned)?;
-    if receipt.provider_capture_request_root_sha256 != request_root
-        || receipt.canonical_program_root_sha256 != program_root
-    {
-        return Err("k1_pre_action_receipt_rebound".to_owned());
-    }
-    Ok(Some(receipt))
-}
-
-fn persist_receipt(
-    directory: &Path,
-    receipt: &K1PreActionExecutionReceiptV1,
-) -> Result<(), String> {
-    fs::create_dir_all(directory).map_err(|error| format!("k1_pre_action_mkdir:{error}"))?;
-    let path = receipt_path(
-        directory,
-        &receipt.provider_capture_request_root_sha256,
-        &receipt.canonical_program_root_sha256,
-    );
-    let bytes =
-        serde_json::to_vec(receipt).map_err(|error| format!("k1_pre_action_encode:{error}"))?;
-    match OpenOptions::new().write(true).create_new(true).open(&path) {
-        Ok(mut file) => {
-            file.write_all(&bytes)
-                .and_then(|()| file.sync_all())
-                .map_err(|error| format!("k1_pre_action_write:{error}"))?;
-            fs::File::open(directory)
-                .and_then(|dir| dir.sync_all())
-                .map_err(|error| format!("k1_pre_action_dir_sync:{error}"))?;
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            if fs::read(&path).map_err(|error| format!("k1_pre_action_existing:{error}"))? != bytes
-            {
-                return Err("k1_pre_action_receipt_replacement_forbidden".to_owned());
-            }
-        }
-        Err(error) => return Err(format!("k1_pre_action_create:{error}")),
-    }
-    Ok(())
-}
-
-fn receipt_path(directory: &Path, request_root: &str, program_root: &str) -> PathBuf {
-    directory.join(format!("{request_root}-{program_root}.json"))
+    .map_err(str::to_owned)
 }
 
 fn typed_response_value(response: &str) -> AtomValueType {
@@ -169,3 +187,7 @@ fn unix_now_nanos() -> Result<u64, String> {
     )
     .map_err(|_| "k1_pre_action_clock_overflow".to_owned())
 }
+
+#[cfg(test)]
+#[path = "k1_pre_action_prediction_tests.rs"]
+mod tests;

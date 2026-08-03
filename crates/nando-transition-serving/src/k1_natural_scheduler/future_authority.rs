@@ -124,13 +124,24 @@ pub(super) fn append_future_prediction_authoritative(
         .topology
         .captured_at_unix_ms
         .ok_or_else(|| "k1_future_prediction_capture_time_missing".to_owned())?;
-    let predicted_at_unix_nanos = unix_now_nanos()?;
     let prediction = match &contract.canonical_program.operation {
         ResponseOperation::ComposeCollection { .. } => {
-            let receipt = request
-                .pre_action_execution_receipt
-                .ok_or_else(|| "k1_future_collection_typed_prediction_required".to_owned())?;
-            receipt.validate().map_err(str::to_owned)?;
+            let provider_payload_json = request
+                .provider_payload_json
+                .as_deref()
+                .ok_or_else(|| "k1_future_collection_provider_payload_required".to_owned())?;
+            let request_text = request
+                .request_text
+                .as_deref()
+                .ok_or_else(|| "k1_future_collection_request_text_required".to_owned())?;
+            let receipt = crate::k1_pre_action_prediction::execute_collection_prediction(
+                contract.contract_root_sha256.clone(),
+                &contract.canonical_program,
+                &request.topology,
+                provider_payload_json,
+                request_text,
+            )?;
+            let predicted_at_unix_nanos = unix_now_nanos()?;
             if receipt.contract_root_sha256 != contract.contract_root_sha256
                 || receipt.canonical_program_root_sha256 != contract.canonical_program_root_sha256
                 || request.topology.capture_event_sha256.as_deref()
@@ -164,9 +175,10 @@ pub(super) fn append_future_prediction_authoritative(
             )
         }
         _ => {
-            if request.pre_action_execution_receipt.is_some() {
+            if request.provider_payload_json.is_some() || request.request_text.is_some() {
                 return Err("k1_future_unexpected_typed_prediction".to_owned());
             }
+            let predicted_at_unix_nanos = unix_now_nanos()?;
             let binding_root = pre_action_t1_binding_root(
                 &contract.canonical_program,
                 &request.topology.structure.topology,
