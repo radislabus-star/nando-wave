@@ -192,6 +192,7 @@ NANDO_RESPONSE_REGISTRY="${work}/preflight-registry.json" \
 NANDO_RESPONSE_CONTROLLER_ADMISSION_JSON="${work}/preflight-controller.json" \
 NANDO_RESPONSE_AUTHORITY_CANDIDATE="${work}/preflight-authority-candidate.json" \
 NANDO_RESPONSE_ADMISSION_REPORT="${work}/preflight-controller-report.json" \
+NANDO_RESPONSE_ADMISSION_MARKER="${work}/preflight-marker.json" \
 NANDO_LIVE_TRANSITION_GATE_BUILD="${GATE_BINARY}" \
   "${ADMISSION_BINARY_SOURCE}"
 jq -e '.verdict == "PASS" and .active_packages > 0' \

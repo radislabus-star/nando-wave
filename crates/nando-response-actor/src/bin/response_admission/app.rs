@@ -282,7 +282,11 @@ fn run(started: Instant) -> Result<(), String> {
         "runtime-package-revocations.json",
     );
     let runtime_revocations = load_runtime_package_revocations(&runtime_revocation_path)?;
-    let marker_path = state_dir.join("response-admission-controller.marker.json");
+    let marker_path = env_path_join(
+        "NANDO_RESPONSE_ADMISSION_MARKER",
+        &state_dir,
+        "response-admission-controller.marker.json",
+    );
     let gate_path = env_path(
         "NANDO_LIVE_TRANSITION_GATE_BUILD",
         "/opt/nando-wave/bin/nando-live-transition-gate",

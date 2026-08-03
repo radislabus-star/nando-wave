@@ -26,11 +26,13 @@ if [[ "${1:-}" == "--print-runtime-contract-sha256" ]]; then
   printf '%s\n' "${NANDO_TEST_CONTRACT}"
   exit 0
 fi
+[[ "${NANDO_RESPONSE_ADMISSION_MARKER}" == */preflight-marker.json ]]
 cat >"${NANDO_RESPONSE_REGISTRY}" <<JSON
 {"schema":"nando.response-registry.v6","revision":1,"packages":[{}]}
 JSON
 printf '{}\n' >"${NANDO_RESPONSE_CONTROLLER_ADMISSION_JSON}"
 printf '{}\n' >"${NANDO_RESPONSE_AUTHORITY_CANDIDATE}"
+printf '{}\n' >"${NANDO_RESPONSE_ADMISSION_MARKER}"
 cat >"${NANDO_RESPONSE_ADMISSION_REPORT}" <<JSON
 {"verdict":"PASS","active_packages":1}
 JSON
