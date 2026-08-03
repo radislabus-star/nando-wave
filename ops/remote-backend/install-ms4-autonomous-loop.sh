@@ -197,7 +197,12 @@ NANDO_LIVE_TRANSITION_GATE_BUILD="${GATE_BINARY}" \
 jq -e '.verdict == "PASS" and .active_packages > 0' \
   "${work}/preflight-controller-report.json" >/dev/null
 
+profile_source="${PROJECT_ROOT}/ops/phase-center-test-server/gates/nando-live-transition-gate.profile.json"
+jq --arg registry "${work}/preflight-registry.json" \
+  '.response_runtime.registry = $registry' \
+  "${profile_source}" >"${work}/preflight-gate.profile.json"
 NANDO_RESPONSE_ADMISSION_BUILD="${ADMISSION_BINARY_SOURCE}" \
+NANDO_LIVE_GATE_PROFILE="${work}/preflight-gate.profile.json" \
 NANDO_TRANSITION_ADMISSION_JSON="${work}/preflight-gate.json" \
   "${GATE_BINARY}" --status-mode --project-root "${PROJECT_ROOT}" >/dev/null
 jq -e '.verdict == "PASS" and .eligible_for_local_accept == true' \

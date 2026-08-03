@@ -40,6 +40,10 @@ chmod +x "${WORK}/candidate-admission"
 cat >"${WORK}/gate" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "${NANDO_LIVE_GATE_PROFILE:-}" ]]; then
+  jq -e '.response_runtime.registry | endswith("/preflight-registry.json")' \
+    "${NANDO_LIVE_GATE_PROFILE}" >/dev/null
+fi
 output="${NANDO_TRANSITION_ADMISSION_JSON:-${NANDO_TEST_STATE_DIR}/admission.json}"
 cat >"${output}" <<JSON
 {"verdict":"PASS","eligible_for_local_accept":true,"response_authority":{"runtime_build_sha256":"${NANDO_TEST_CONTRACT}"}}
