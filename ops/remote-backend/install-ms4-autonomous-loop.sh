@@ -211,7 +211,7 @@ sudo -n systemd-analyze verify "${rendered_units}"/*
 NANDO_TRANSITION_STATE_DIR="${STATE_DIR}" \
 NANDO_RESPONSE_REGISTRY="${work}/preflight-registry.json" \
 NANDO_RESPONSE_CONTROLLER_ADMISSION_JSON="${work}/preflight-controller.json" \
-NANDO_RESPONSE_AUTHORITY_CANDIDATE="${work}/preflight-authority-candidate.json" \
+NANDO_RESPONSE_AUTHORITY_CANDIDATE="${work}/response-authority-candidate.json" \
 NANDO_RESPONSE_ADMISSION_REPORT="${work}/preflight-controller-report.json" \
 NANDO_RESPONSE_ADMISSION_MARKER="${work}/preflight-marker.json" \
 NANDO_LIVE_TRANSITION_GATE_BUILD="${GATE_BINARY}" \
@@ -224,7 +224,8 @@ structural_receipt_source="${PROJECT_ROOT}/ops/phase-center-test-server/gates/re
 mkdir -p "${work}/receipts"
 cp "${structural_receipt_source}" "${work}/receipts/STRUCTURAL_GATE_V2.json"
 jq --arg registry "${work}/preflight-registry.json" \
-  '.response_runtime.registry = $registry' \
+  --arg gate_build "${GATE_BINARY}" \
+  '.response_runtime.registry = $registry | .deployment.gate_build = $gate_build' \
   "${profile_source}" >"${work}/preflight-gate.profile.json"
 NANDO_RESPONSE_ADMISSION_BUILD="${ADMISSION_BINARY_SOURCE}" \
 NANDO_LIVE_GATE_PROFILE="${work}/preflight-gate.profile.json" \

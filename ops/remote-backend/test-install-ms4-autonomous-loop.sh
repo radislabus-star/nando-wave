@@ -47,7 +47,10 @@ cat >"${WORK}/gate" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ -n "${NANDO_LIVE_GATE_PROFILE:-}" ]]; then
-  jq -e '.response_runtime.registry | endswith("/preflight-registry.json")' \
+  jq -e --arg gate_build "${NANDO_TEST_GATE}" '
+    (.response_runtime.registry | endswith("/preflight-registry.json"))
+    and .deployment.gate_build == $gate_build
+  ' \
     "${NANDO_LIVE_GATE_PROFILE}" >/dev/null
   [[ -f "$(dirname "${NANDO_LIVE_GATE_PROFILE}")/receipts/STRUCTURAL_GATE_V2.json" ]]
 fi
