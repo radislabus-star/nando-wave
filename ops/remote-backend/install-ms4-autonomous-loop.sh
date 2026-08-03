@@ -199,6 +199,9 @@ jq -e '.verdict == "PASS" and .active_packages > 0' \
   "${work}/preflight-controller-report.json" >/dev/null
 
 profile_source="${PROJECT_ROOT}/ops/phase-center-test-server/gates/nando-live-transition-gate.profile.json"
+structural_receipt_source="${PROJECT_ROOT}/ops/phase-center-test-server/gates/receipts/STRUCTURAL_GATE_V2.json"
+mkdir -p "${work}/receipts"
+cp "${structural_receipt_source}" "${work}/receipts/STRUCTURAL_GATE_V2.json"
 jq --arg registry "${work}/preflight-registry.json" \
   '.response_runtime.registry = $registry' \
   "${profile_source}" >"${work}/preflight-gate.profile.json"

@@ -574,6 +574,53 @@ class StableM3WindowGateTest(unittest.TestCase):
         )
         self.assertFalse(response["m3_window_evaluation"]["safety_veto"])
 
+    def test_v4_upstream_only_epoch_is_safe_watch(self) -> None:
+        economics = {
+            "schema": "nando.economics-snapshot.v4",
+            "source": "rust_streaming_economics_v3",
+            "dedupe_conflicts": 0,
+            "unresolved_local_outcomes": 0,
+            "source_reconciliation": {"complete": True, "blockers": []},
+            "false_accepts": 0,
+            "runtime_parity_mismatches": 0,
+            "missing_evidence_receipts": 0,
+            "verification_coverage_milli": 0,
+            "actual_local_accepts": 0,
+            "verified_local_accepts": 0,
+            "completed_m3_windows": [],
+            "avoided_input_tokens": 0,
+            "global_input_tokens": 100,
+            "input_token_saving_share_milli": 0,
+        }
+        response = self.assert_response(
+            self.run_gate(economics), verdict="PASS", m3_verdict="WATCH"
+        )
+        self.assertTrue(response["m3_window_evaluation"]["evidence_authority_valid"])
+        self.assertFalse(response["m3_window_evaluation"]["safety_veto"])
+
+    def test_v4_unverified_local_accept_remains_vetoed(self) -> None:
+        economics = {
+            "schema": "nando.economics-snapshot.v4",
+            "source": "rust_streaming_economics_v3",
+            "dedupe_conflicts": 0,
+            "unresolved_local_outcomes": 0,
+            "source_reconciliation": {"complete": True, "blockers": []},
+            "false_accepts": 0,
+            "runtime_parity_mismatches": 0,
+            "missing_evidence_receipts": 0,
+            "verification_coverage_milli": 0,
+            "actual_local_accepts": 1,
+            "verified_local_accepts": 0,
+            "completed_m3_windows": [],
+            "avoided_input_tokens": 0,
+            "global_input_tokens": 100,
+            "input_token_saving_share_milli": 0,
+        }
+        response = self.assert_response(
+            self.run_gate(economics), verdict="VETO", m3_verdict="WATCH"
+        )
+        self.assertFalse(response["m3_window_evaluation"]["evidence_authority_valid"])
+
     def test_all_zero_forged_or_missing_evidence_hash_vetoes(self) -> None:
         for name, value in (
             ("zero", "0" * 64),

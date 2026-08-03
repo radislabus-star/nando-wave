@@ -610,7 +610,14 @@ run_response_runtime() {
       | ((($e.false_accepts // 0) == 0)
           and (($e.runtime_parity_mismatches // 0) == 0)) as $false_accept_ok
       | ((($e.missing_evidence_receipts // 0) == 0)
-          and (($e.verification_coverage_milli // 0) == 1000)) as $evidence_ok
+          and (
+            ((($e.actual_local_accepts // 0) == 0)
+              and (($e.verified_local_accepts // 0) == 0))
+            or ((($e.actual_local_accepts // 0) > 0)
+              and (($e.verification_coverage_milli // 0) == 1000)
+              and (($e.verified_local_accepts // 0)
+                == ($e.actual_local_accepts // 0)))
+          )) as $evidence_ok
       | ((($e.false_accepts // 0) > 0)
           or (($e.runtime_parity_mismatches // 0) > 0)
           or (($e.dedupe_conflicts // 0) > 0)) as $safety_veto

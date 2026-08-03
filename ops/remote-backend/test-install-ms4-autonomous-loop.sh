@@ -14,8 +14,11 @@ INSTALL_BINARY="${WORK}/opt/nando-response-admission"
 mkdir -p \
   "${BIN}" "${SYSTEMD_DIR}" "${STATE_DIR}" "$(dirname "${INSTALL_BINARY}")" \
   "${PROJECT_ROOT}/ops/phase-center-test-server/gates" \
+  "${PROJECT_ROOT}/ops/phase-center-test-server/gates/receipts" \
   "${WORK}/systemctl-state"
 printf '{}\n' >"${PROJECT_ROOT}/ops/phase-center-test-server/gates/nando-live-transition-gate.profile.json"
+printf '{"verdict":"PASS"}\n' \
+  >"${PROJECT_ROOT}/ops/phase-center-test-server/gates/receipts/STRUCTURAL_GATE_V2.json"
 printf 'candidate\n' >"${STATE_DIR}/response-admission-candidates.cbor"
 
 contract="$(printf 'a%.0s' {1..64})"
@@ -45,6 +48,7 @@ set -euo pipefail
 if [[ -n "${NANDO_LIVE_GATE_PROFILE:-}" ]]; then
   jq -e '.response_runtime.registry | endswith("/preflight-registry.json")' \
     "${NANDO_LIVE_GATE_PROFILE}" >/dev/null
+  [[ -f "$(dirname "${NANDO_LIVE_GATE_PROFILE}")/receipts/STRUCTURAL_GATE_V2.json" ]]
 fi
 output="${NANDO_TRANSITION_ADMISSION_JSON:-${NANDO_TEST_STATE_DIR}/admission.json}"
 cat >"${output}" <<JSON
