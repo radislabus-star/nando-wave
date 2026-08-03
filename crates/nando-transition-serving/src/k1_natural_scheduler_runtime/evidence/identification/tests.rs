@@ -4,7 +4,7 @@ use nando_operator_learning::multi_source::{
 
 use super::{
     capture_generation_matches, frozen_support_contains, frozen_support_manifest,
-    selected_shape_is_compatible,
+    historical_v1_evidence_row, selected_shape_is_compatible,
 };
 use nando_operator_learning::multi_source::{
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
@@ -85,4 +85,31 @@ fn capture_generation_compatibility_is_exact_and_versioned() {
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
         &generation,
     ));
+}
+
+#[test]
+fn historical_v1_manifest_replay_removes_only_the_migration_veto() {
+    let seal = |safety_veto| {
+        K1NaturalEvidenceRowV1::seal_legacy_v1(
+            root(1),
+            root(10),
+            root(11),
+            root(12),
+            root(20),
+            K1ConsequenceTypeV1::Scalar,
+            K1NaturalEvidenceClassV1::NaturalLive,
+            29_931,
+            29_931,
+            1,
+            true,
+            true,
+            safety_veto,
+        )
+        .expect("legacy row")
+    };
+    let eligible = seal(false);
+    let diagnostic = seal(true);
+
+    let replayed = historical_v1_evidence_row(&diagnostic).expect("historical replay");
+    assert_eq!(replayed, eligible);
 }

@@ -8,11 +8,19 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
         .iter()
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
-                && !binding.row.safety_veto
+                && frozen_row_is_eligible(&binding.row, freeze)
                 && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
         })
         .collect::<Vec<_>>();
-    let manifest = frozen_support_manifest(support.iter().map(|binding| &binding.row))?;
+    let manifest = if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1 {
+        let historical_rows = support
+            .iter()
+            .map(|binding| historical_v1_evidence_row(&binding.row))
+            .collect::<Result<Vec<_>, _>>()?;
+        frozen_support_manifest(historical_rows.iter())?
+    } else {
+        frozen_support_manifest(support.iter().map(|binding| &binding.row))?
+    };
     if support.is_empty()
         || support.len() > K1_MAX_SUPPORT_ROWS_V1
         || manifest != freeze.evidence_manifest_root_sha256
@@ -75,6 +83,34 @@ fn binding_identity_matches(
         && binding.row.consequence_type == freeze.consequence_type
 }
 
+fn frozen_row_is_eligible(
+    row: &K1NaturalEvidenceRowV1,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> bool {
+    !row.safety_veto || freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1
+}
+
+fn historical_v1_evidence_row(
+    row: &K1NaturalEvidenceRowV1,
+) -> Result<K1NaturalEvidenceRowV1, String> {
+    K1NaturalEvidenceRowV1::seal_legacy_v1(
+        row.evidence_root_sha256.clone(),
+        row.candidate_structural_root_sha256.clone(),
+        row.source_neutral_topology_root_sha256.clone(),
+        row.semantic_novelty_signature_root_sha256.clone(),
+        row.lineage_root_sha256.clone(),
+        row.consequence_type,
+        row.evidence_class,
+        row.capture_sequence,
+        row.contract_sequence,
+        row.input_tokens,
+        row.settled,
+        row.verified,
+        false,
+    )
+    .map_err(str::to_owned)
+}
+
 pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     bindings: &[EvidenceBinding],
     frames: &[RelationFrame],
@@ -88,7 +124,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         .iter()
         .filter(|binding| {
             binding_matches_freeze(binding, freeze)
-                && !binding.row.safety_veto
+                && frozen_row_is_eligible(&binding.row, freeze)
                 && (frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
                     || applied_roots.contains(&binding.joined.join_root_sha256)
                     || trial_roots.contains(&binding.joined.join_root_sha256))
