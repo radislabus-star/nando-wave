@@ -203,13 +203,22 @@ fn append_authoritative(
     let (changed, persisted_entry) = match ledger.append(entry.clone()) {
         Ok(changed) => (changed, entry),
         Err("operator_certification_transition_invalid") => {
-            let package = restore_registry_package(config, &entry.package_id)?;
-            reconcile_topology_transition(
-                &mut ledger,
-                entry,
-                &legacy_role_topology_id(&package)?,
-                &canonical_role_topology_id(&package)?,
-            )?
+            if let Some(reconciled) =
+                crate::operator_certification_reconciliation::preserve_terminal_mechanism(
+                    &mut ledger,
+                    entry.clone(),
+                )?
+            {
+                reconciled
+            } else {
+                let package = restore_registry_package(config, &entry.package_id)?;
+                reconcile_topology_transition(
+                    &mut ledger,
+                    entry,
+                    &legacy_role_topology_id(&package)?,
+                    &canonical_role_topology_id(&package)?,
+                )?
+            }
         }
         Err(error) => return Err(error.to_owned()),
     };

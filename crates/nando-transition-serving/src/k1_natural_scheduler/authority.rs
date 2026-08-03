@@ -224,13 +224,25 @@ fn append_payload_authoritative(
     {
         return projection_for(&scheduler);
     }
-    append_and_persist(
+    let terminal_root = match &request.payload {
+        K1SchedulerEventPayloadV1::TerminalVerdict(verdict)
+            if request.lane == K1SchedulerLaneV1::Epistemic =>
+        {
+            Some(verdict.verdict_root_sha256.clone())
+        }
+        _ => None,
+    };
+    let projection = append_and_persist(
         config,
         request.lane,
         signing_key,
         &mut scheduler,
         request.payload,
-    )
+    )?;
+    if let Some(terminal_root) = terminal_root {
+        super::pre_action_evidence_retention::prune_after_terminal_verdict(config, &terminal_root)?;
+    }
+    Ok(projection)
 }
 
 fn append_transfer_settlement_authoritative(

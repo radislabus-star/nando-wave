@@ -6,9 +6,12 @@ use nando_operator_kernel::{
     response_program_version_root_sha256, sha256_bytes,
 };
 use nando_operator_learning::multi_source::{
-    K1PreActionExecutionReceiptV1, PreActionTopologyAuditRowV1,
+    K1PreActionExecutionReceiptV1, PreActionT1ConsumedInputV1, PreActionTopologyAuditRowV1,
     pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
-    pre_action_t1_selector_witnesses_v1, source_neutral_topology_root_v1,
+    pre_action_t1_input_binding_manifest_v1, source_neutral_topology_root_v1,
+};
+use nando_operator_runtime::{
+    collection_implicit_request_values_for_program, collection_source_value_for_program,
 };
 use nando_response_actor::{
     ResponseExecutionStatus, execute_response, response_runtime_contract_sha256,
@@ -141,19 +144,71 @@ pub(crate) fn execute_collection_prediction(
     let payload: serde_json::Value = serde_json::from_str(provider_payload_json)
         .map_err(|_| "k1_pre_action_provider_payload_invalid".to_owned())?;
     let request_text = crate::extract_request_text(&payload);
-    let structural_binding_root =
-        pre_action_t1_binding_root(canonical_program, &topology.structure.topology)
+    let binding_manifest =
+        pre_action_t1_input_binding_manifest_v1(canonical_program, &topology.structure.topology)
             .map_err(|reason| format!("k1_pre_action_role_binding:{reason}"))?;
-    for (selector, frozen_witness_hash) in
-        pre_action_t1_selector_witnesses_v1(canonical_program, &topology.structure.topology)
-            .map_err(|reason| format!("k1_pre_action_selector_binding:{reason}"))?
-    {
-        let selected = selected_value_with_request(&request_text, &payload, &selector)
-            .map_err(|reason| format!("k1_pre_action_selector_runtime:{reason}"))?;
-        let runtime_value_hash = canonical_json_sha256(&selected.value)
-            .map_err(|error| format!("k1_pre_action_selector_hash:{error}"))?;
-        if runtime_value_hash != frozen_witness_hash {
-            return Err("k1_pre_action_selector_witness_mismatch".to_owned());
+    let structural_binding_root = binding_manifest.root_sha256().map_err(str::to_owned)?;
+    let implicit_values = binding_manifest
+        .inputs
+        .iter()
+        .any(|input| {
+            matches!(
+                input,
+                PreActionT1ConsumedInputV1::ImplicitRequestValue { .. }
+            )
+        })
+        .then(|| collection_implicit_request_values_for_program(canonical_program, &payload))
+        .transpose()
+        .map_err(|reason| format!("k1_pre_action_implicit_runtime:{reason}"))?
+        .unwrap_or_default();
+    for input in &binding_manifest.inputs {
+        let (runtime_value_hash, frozen_witness_hash) = match input {
+            PreActionT1ConsumedInputV1::CollectionSource {
+                frozen_witness_sha256,
+                ..
+            } => {
+                let source = collection_source_value_for_program(canonical_program, &payload)
+                    .map_err(|reason| format!("k1_pre_action_collection_source:{reason}"))?;
+                (
+                    canonical_json_sha256(&source)
+                        .map_err(|error| format!("k1_pre_action_collection_source_hash:{error}"))?,
+                    frozen_witness_sha256,
+                )
+            }
+            PreActionT1ConsumedInputV1::SelectedValue {
+                selector,
+                frozen_witness_sha256,
+                ..
+            } => {
+                let selected = selected_value_with_request(&request_text, &payload, selector)
+                    .map_err(|reason| format!("k1_pre_action_selector_runtime:{reason}"))?;
+                (
+                    canonical_json_sha256(&selected.value)
+                        .map_err(|error| format!("k1_pre_action_selector_hash:{error}"))?,
+                    frozen_witness_sha256,
+                )
+            }
+            PreActionT1ConsumedInputV1::ImplicitRequestValue {
+                value_type,
+                frozen_witness_sha256,
+                ..
+            } => {
+                let matches = implicit_values
+                    .iter()
+                    .filter(|(runtime_type, _)| runtime_type == value_type)
+                    .collect::<Vec<_>>();
+                let [(_, value)] = matches.as_slice() else {
+                    return Err("k1_pre_action_implicit_runtime_ambiguous".to_owned());
+                };
+                (
+                    canonical_json_sha256(value)
+                        .map_err(|error| format!("k1_pre_action_implicit_hash:{error}"))?,
+                    frozen_witness_sha256,
+                )
+            }
+        };
+        if runtime_value_hash != *frozen_witness_hash {
+            return Err("k1_pre_action_input_witness_mismatch".to_owned());
         }
     }
     let execution = execute_response(canonical_program, &request_text, &payload);

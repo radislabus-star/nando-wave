@@ -1,10 +1,11 @@
 use nando_operator_kernel::{
-    AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionScalarType,
-    MultiSourceContainerClassV1, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
+    AtomValueType, CollectionOutputRenderer, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
     MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
     PreActionMultiSourceTopologyV1, ResponseOperation, ResponseProgram, ResponseRenderSegment,
     ResponseValueSelector, canonical_json_sha256,
 };
+
+use super::source_neutral_t1_manifest::pre_action_t1_input_binding_manifest_v1;
 
 pub fn pre_action_t1_binding_root(
     program: &ResponseProgram,
@@ -14,7 +15,7 @@ pub fn pre_action_t1_binding_root(
         program.operation,
         ResponseOperation::ComposeCollection { .. }
     ) {
-        return pre_action_collection_binding_root(program, topology);
+        return pre_action_t1_input_binding_manifest_v1(program, topology)?.root_sha256();
     }
     let selectors = program_role_selectors(program).ok_or("primary_selector_missing")?;
     let bindings = selectors
@@ -33,147 +34,6 @@ pub fn pre_action_t1_binding_root(
         .collect::<Result<Vec<_>, &'static str>>()?;
     canonical_json_sha256(&("nando.ms3-pre-action-t1-binding.v1", bindings))
         .map_err(|_| "pre_action_binding_commitment_failed")
-}
-
-fn pre_action_collection_binding_root(
-    program: &ResponseProgram,
-    topology: &PreActionMultiSourceTopologyV1,
-) -> Result<String, &'static str> {
-    let ResponseOperation::ComposeCollection {
-        steps, renderer, ..
-    } = &program.operation
-    else {
-        return Err("collection_program_required");
-    };
-    let requested_source_ordinal = steps.iter().find_map(|step| match step {
-        CollectionProgramStep::SelectTurnOutput { output_ordinal } => Some(*output_ordinal),
-        _ => None,
-    });
-    let roles = topology
-        .roles
-        .iter()
-        .filter(|role| role.container_class != MultiSourceContainerClassV1::Scalar)
-        .filter(|role| {
-            requested_source_ordinal.is_none_or(|ordinal| role.source_ordinal == ordinal)
-        })
-        .collect::<Vec<_>>();
-    let [role] = roles.as_slice() else {
-        return Err("collection_role_missing_or_ambiguous");
-    };
-    let witness = unique_matching_witness(topology, |witness| {
-        witness.local_role_id == role.local_role_id
-    })
-    .ok_or("collection_role_witness_missing_or_ambiguous")?;
-    let mut implicit_bindings = Vec::new();
-    for step in steps {
-        let value_type = match step {
-            CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { value_type } => {
-                collection_scalar_atom_type(*value_type)
-            }
-            _ => continue,
-        };
-        let scalar_witness = unique_matching_witness(topology, |candidate| {
-            role_for_witness(topology, candidate).is_some_and(|candidate_role| {
-                candidate_role.container_class == MultiSourceContainerClassV1::Scalar
-                    && role_type_matches(candidate_role.type_class, value_type)
-            })
-        })
-        .ok_or("collection_selector_role_missing_or_ambiguous")?;
-        let scalar_role = role_for_witness(topology, scalar_witness)
-            .filter(|candidate| candidate.container_class == MultiSourceContainerClassV1::Scalar)
-            .ok_or("collection_selector_role_not_scalar")?;
-        implicit_bindings.push((
-            "request_value",
-            value_type,
-            scalar_role.local_role_id,
-            scalar_role.source_ordinal,
-            scalar_witness.value_sha256.as_str(),
-        ));
-    }
-    implicit_bindings.sort();
-    let selector_bindings = collection_selector_witnesses(steps, renderer, topology)?
-        .into_iter()
-        .map(|(selector, selector_witness)| {
-            let selector_role = role_for_witness(topology, selector_witness)
-                .filter(|candidate| {
-                    candidate.container_class == MultiSourceContainerClassV1::Scalar
-                })
-                .ok_or("collection_selector_role_not_scalar")?;
-            Ok((
-                selector.clone(),
-                selector_role.local_role_id,
-                selector_role.source_ordinal,
-                selector_witness.value_sha256.as_str(),
-            ))
-        })
-        .collect::<Result<Vec<_>, &'static str>>()?;
-    canonical_json_sha256(&(
-        "nando.ms3-pre-action-t1-collection-binding.v3",
-        role.local_role_id,
-        role.source_ordinal,
-        witness.value_sha256.as_str(),
-        implicit_bindings,
-        selector_bindings,
-    ))
-    .map_err(|_| "pre_action_binding_commitment_failed")
-}
-
-pub fn pre_action_t1_selector_witnesses_v1(
-    program: &ResponseProgram,
-    topology: &PreActionMultiSourceTopologyV1,
-) -> Result<Vec<(ResponseValueSelector, String)>, &'static str> {
-    let ResponseOperation::ComposeCollection {
-        steps, renderer, ..
-    } = &program.operation
-    else {
-        return Err("collection_program_required");
-    };
-    collection_selector_witnesses(steps, renderer, topology).map(|bindings| {
-        bindings
-            .into_iter()
-            .map(|(selector, witness)| (selector.clone(), witness.value_sha256.clone()))
-            .collect()
-    })
-}
-
-fn collection_selector_witnesses<'a>(
-    steps: &'a [CollectionProgramStep],
-    renderer: &'a CollectionOutputRenderer,
-    topology: &'a PreActionMultiSourceTopologyV1,
-) -> Result<Vec<(&'a ResponseValueSelector, &'a MultiSourceRoleWitnessV1)>, &'static str> {
-    let mut selectors = steps
-        .iter()
-        .filter_map(|step| match step {
-            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { selector, .. } => {
-                Some(selector)
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
-        selectors.extend(segments.iter().filter_map(|segment| match segment {
-            ResponseRenderSegment::Selected { selector, .. } => Some(selector),
-            _ => None,
-        }));
-    }
-    selectors.sort();
-    selectors.dedup();
-    selectors
-        .into_iter()
-        .map(|selector| {
-            let witness = witness_for_selector(selector, topology)
-                .ok_or("collection_selector_role_missing_or_ambiguous")?;
-            Ok((selector, witness))
-        })
-        .collect()
-}
-
-const fn collection_scalar_atom_type(value_type: CollectionScalarType) -> AtomValueType {
-    match value_type {
-        CollectionScalarType::String => AtomValueType::String,
-        CollectionScalarType::Integer => AtomValueType::Integer,
-        CollectionScalarType::Boolean => AtomValueType::Boolean,
-    }
 }
 
 pub(super) fn witness_for_selector<'a>(

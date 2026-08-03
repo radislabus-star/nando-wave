@@ -34,7 +34,10 @@ fn collection_topology() -> PreActionMultiSourceTopologyV1 {
         }],
         role_witnesses: vec![MultiSourceRoleWitnessV1 {
             local_role_id: 1,
-            value_sha256: root("collection"),
+            value_sha256: canonical_json_sha256(&serde_json::json!({
+                "items": [{"id": 1}, {"id": 2}, {"id": 3}]
+            }))
+            .expect("collection witness"),
             request_reference_ordinal: None,
             request_reference_ordinal_candidates: Vec::new(),
         }],
@@ -163,6 +166,9 @@ fn authority_wire_rejects_forged_request_text_and_topology() {
 fn authority_rejects_runtime_selector_value_that_differs_from_frozen_witness() {
     let payload = r#"{"input":[{"role":"user","content":"count status active"},{"type":"function_call_output","call_id":"call-1","output":"{\"items\":[{\"status\":\"active\"}]}"}]}"#;
     let mut row = topology_row(sha256_bytes(payload.as_bytes()));
+    row.structure.topology.role_witnesses[0].value_sha256 =
+        canonical_json_sha256(&serde_json::json!({"items": [{"status": "active"}]}))
+            .expect("collection witness");
     row.structure.topology.roles.push(MultiSourceRoleNodeV1 {
         local_role_id: 2,
         source_ordinal: 1,
@@ -217,6 +223,69 @@ fn authority_rejects_runtime_selector_value_that_differs_from_frozen_witness() {
     );
     assert_eq!(
         execute_collection_prediction(root("contract"), &program, &row, payload),
-        Err("k1_pre_action_selector_witness_mismatch".to_owned())
+        Err("k1_pre_action_input_witness_mismatch".to_owned())
+    );
+}
+
+#[test]
+fn authority_rejects_implicit_request_value_that_differs_from_frozen_witness() {
+    let payload = r#"{"input":[{"role":"user","content":"count status active"},{"type":"function_call_output","call_id":"call-1","output":"{\"items\":[{\"status\":\"active\"},{\"status\":\"idle\"}]}"}]}"#;
+    let mut row = topology_row(sha256_bytes(payload.as_bytes()));
+    row.structure.topology.role_witnesses[0].value_sha256 = canonical_json_sha256(
+        &serde_json::json!({"items": [{"status": "active"}, {"status": "idle"}]}),
+    )
+    .expect("collection witness");
+    row.structure.topology.roles.push(MultiSourceRoleNodeV1 {
+        local_role_id: 2,
+        source_ordinal: 0,
+        value_ordinal: 1,
+        type_class: MultiSourceTypeClassV1::String,
+        container_class: MultiSourceContainerClassV1::Scalar,
+        cardinality_class: MultiSourceCardinalityClassV1::One,
+        temporal_class: MultiSourceTemporalClassV1::Latest,
+        depth_bucket: 2,
+        structural_flags: 1,
+    });
+    row.structure
+        .topology
+        .role_witnesses
+        .push(MultiSourceRoleWitnessV1 {
+            local_role_id: 2,
+            value_sha256: canonical_json_sha256(&serde_json::json!("forged"))
+                .expect("forged witness"),
+            request_reference_ordinal: Some(0),
+            request_reference_ordinal_candidates: Vec::new(),
+        });
+    row.structure
+        .topology
+        .relations
+        .push(MultiSourceRelationEdgeV1 {
+            relation: MultiSourceRelationKindV1::RequestReferencesRole,
+            source_role_id: 2,
+            target_role_id: 2,
+        });
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("extractor-config"),
+        1,
+    )
+    .expect("commit");
+    let program = ResponseProgram::compose_collection(
+        vec![
+            CollectionProgramStep::SelectOnlyArrayField,
+            CollectionProgramStep::FilterUniqueFieldEqualsRequestValue {
+                value_type: CollectionScalarType::String,
+            },
+            CollectionProgramStep::Count,
+        ],
+        ValueProjectionFormat::PlainText,
+        "completed",
+    );
+
+    assert_eq!(
+        execute_collection_prediction(root("contract"), &program, &row, payload),
+        Err("k1_pre_action_input_witness_mismatch".to_owned())
     );
 }

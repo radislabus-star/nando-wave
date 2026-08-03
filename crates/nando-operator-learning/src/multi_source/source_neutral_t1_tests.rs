@@ -12,7 +12,7 @@ use super::pre_action_t1_binding_root;
 fn program() -> ResponseProgram {
     ResponseProgram::compose_collection(
         vec![
-            CollectionProgramStep::SelectTurnOutput { output_ordinal: 0 },
+            CollectionProgramStep::SelectTurnOutput { output_ordinal: 1 },
             CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
                 selector: ResponseValueSelector::UniqueScalar {
                     value_type: nando_operator_kernel::AtomValueType::String,
@@ -103,6 +103,33 @@ fn collection_binding_root_commits_the_scalar_witness() {
     let right =
         pre_action_t1_binding_root(&program(), &topology(&["selector-b"])).expect("right binding");
     assert_ne!(left, right);
+}
+
+#[test]
+fn collection_output_ordinal_is_one_based_at_the_program_boundary() {
+    let first = program();
+    first.validate().expect("output ordinal one is valid");
+    assert!(pre_action_t1_binding_root(&first, &topology(&["selector"])).is_ok());
+
+    let mut second = program();
+    if let ResponseOperation::ComposeCollection { steps, .. } = &mut second.operation {
+        steps[0] = CollectionProgramStep::SelectTurnOutput { output_ordinal: 2 };
+    } else {
+        panic!("collection program");
+    }
+    second.validate().expect("output ordinal two is valid");
+    let mut second_topology = topology(&["selector"]);
+    second_topology.roles[0].source_ordinal = 1;
+    assert!(pre_action_t1_binding_root(&second, &second_topology).is_ok());
+
+    if let ResponseOperation::ComposeCollection { steps, .. } = &mut second.operation {
+        steps[0] = CollectionProgramStep::SelectTurnOutput { output_ordinal: 0 };
+    }
+    assert!(second.validate().is_err());
+    assert_eq!(
+        pre_action_t1_binding_root(&second, &second_topology),
+        Err("collection_output_ordinal_invalid")
+    );
 }
 
 #[test]

@@ -8,9 +8,7 @@ use nando_operator_kernel::{
 };
 
 use super::BlindThenRevealJoinedTransitionV1;
-pub use super::source_neutral_t1_binding::{
-    pre_action_t1_binding_root, pre_action_t1_selector_witnesses_v1,
-};
+pub use super::source_neutral_t1_binding::pre_action_t1_binding_root;
 use super::source_neutral_t1_binding::{
     program_role_selectors, role_for_witness, role_has_relation, role_type_matches,
     witness_for_selector,

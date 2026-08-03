@@ -980,6 +980,17 @@ fn execute_compose_collection(
     renderer: &CollectionOutputRenderer,
     max_items: usize,
 ) -> Result<String, &'static str> {
+    execute_compose_collection_audited(provider_payload, steps, format, renderer, max_items, None)
+}
+
+fn execute_compose_collection_audited(
+    provider_payload: &Value,
+    steps: &[CollectionProgramStep],
+    format: ValueProjectionFormat,
+    renderer: &CollectionOutputRenderer,
+    max_items: usize,
+    mut implicit_request_values: Option<&mut Vec<(CollectionScalarType, Value)>>,
+) -> Result<String, &'static str> {
     let (output, transform_steps) = match steps.first() {
         Some(CollectionProgramStep::SelectTurnOutput { output_ordinal }) => (
             active_turn_output_value(provider_payload, Some(*output_ordinal))?,
@@ -1067,6 +1078,9 @@ fn execute_compose_collection(
                 }
                 let (field, expected) =
                     request_grounded_collection_value(provider_payload, rows, *value_type)?;
+                if let Some(values) = implicit_request_values.as_deref_mut() {
+                    values.push((*value_type, expected.clone()));
+                }
                 filter_field = Some(field.clone());
                 Value::Array(
                     rows.iter()
@@ -1258,6 +1272,48 @@ fn execute_compose_collection(
         },
     }?;
     apply_value_renderer(provider_payload, computed, renderer)
+}
+
+#[doc(hidden)]
+pub fn collection_source_value_for_program(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+) -> Result<Value, &'static str> {
+    let ResponseOperation::ComposeCollection { steps, .. } = &program.operation else {
+        return Err("collection_program_required");
+    };
+    let output_ordinal = steps.first().and_then(|step| match step {
+        CollectionProgramStep::SelectTurnOutput { output_ordinal } => Some(*output_ordinal),
+        _ => None,
+    });
+    collection_json_from_value(active_turn_output_value(provider_payload, output_ordinal)?)
+}
+
+#[doc(hidden)]
+pub fn collection_implicit_request_values_for_program(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+) -> Result<Vec<(CollectionScalarType, Value)>, &'static str> {
+    let ResponseOperation::ComposeCollection {
+        steps,
+        format,
+        renderer,
+        max_items,
+        ..
+    } = &program.operation
+    else {
+        return Err("collection_program_required");
+    };
+    let mut values = Vec::new();
+    execute_compose_collection_audited(
+        provider_payload,
+        steps,
+        *format,
+        renderer,
+        *max_items,
+        Some(&mut values),
+    )?;
+    Ok(values)
 }
 
 fn request_grounded_collection_value(

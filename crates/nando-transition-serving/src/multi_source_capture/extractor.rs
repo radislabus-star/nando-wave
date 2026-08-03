@@ -24,6 +24,12 @@ struct CollectedRole {
     continuation_handle: bool,
 }
 
+struct SelectedOutput {
+    source_ordinal: u16,
+    value: Value,
+    scalar_roles: Vec<ObservedJsonScalarRole>,
+}
+
 pub(crate) fn extract_pre_action_multi_source_topology_v1(
     payload: &Value,
     request_text: &str,
@@ -34,14 +40,44 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
         Err(reason) => return censored(reason),
     };
     let mut collected = Vec::new();
-    for (source_ordinal, (_, output_roles)) in outputs.iter().enumerate() {
-        for (value_ordinal, role) in output_roles.iter().enumerate() {
+    for (output_index, output) in outputs.iter().enumerate() {
+        let latest = output_index + 1 == outputs.len();
+        let container = match super::container_role::from_output(&output.value) {
+            Ok(container) => container,
+            Err(reason) => return censored(reason),
+        };
+        if let Some(container) = container {
+            collected.push(CollectedRole {
+                node: MultiSourceRoleNodeV1 {
+                    local_role_id: 0,
+                    source_ordinal: output.source_ordinal,
+                    value_ordinal: 0,
+                    type_class: container.type_class,
+                    container_class: container.container_class,
+                    cardinality_class: container.cardinality_class,
+                    temporal_class: if latest {
+                        MultiSourceTemporalClassV1::Latest
+                    } else {
+                        MultiSourceTemporalClassV1::Historical
+                    },
+                    depth_bucket: 0,
+                    structural_flags: 0,
+                },
+                value_sha256: container.value_sha256,
+                request_positions: Vec::new(),
+                request_reference_ordinal: None,
+                request_reference_ordinal_candidates: Vec::new(),
+                json_path_sha256: [0; 32],
+                continuation_handle: false,
+            });
+        }
+        for (value_ordinal, role) in output.scalar_roles.iter().enumerate() {
             collected.push(CollectedRole {
                 node: role_node(
                     role,
-                    u16::try_from(source_ordinal).unwrap_or(u16::MAX),
-                    u16::try_from(value_ordinal).unwrap_or(u16::MAX),
-                    source_ordinal + 1 == outputs.len(),
+                    output.source_ordinal,
+                    u16::try_from(value_ordinal.saturating_add(1)).unwrap_or(u16::MAX),
+                    latest,
                 ),
                 value_sha256: role.value_sha256.clone(),
                 request_positions: role.request_position_candidates.clone(),
@@ -181,15 +217,22 @@ fn assign_request_reference_ordinals(collected: &mut [CollectedRole]) -> Result<
 }
 
 fn provider_outputs(payload: &Value) -> Vec<Value> {
-    payload
-        .get("input")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
+    let Some(items) = payload.get("input").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let turn_start = items
+        .iter()
+        .rposition(|item| {
+            item.get("type").and_then(Value::as_str) == Some("message")
+                && item.get("role").and_then(Value::as_str) == Some("user")
+        })
+        .map_or(0, |index| index.saturating_add(1));
+    items[turn_start..]
+        .iter()
         .filter(|item| {
             matches!(
                 item.get("type").and_then(Value::as_str),
-                Some("function_call_output" | "custom_tool_call_output" | "tool_result")
+                Some("function_call_output" | "custom_tool_call_output")
             )
         })
         .filter_map(|item| item.get("output").or_else(|| item.get("content")))
@@ -205,7 +248,7 @@ fn provider_outputs(payload: &Value) -> Vec<Value> {
 fn select_relevant_outputs(
     outputs: Vec<Value>,
     request_text: &str,
-) -> Result<Vec<(Value, Vec<ObservedJsonScalarRole>)>, &'static str> {
+) -> Result<Vec<SelectedOutput>, &'static str> {
     let mut metadata = outputs
         .into_iter()
         .enumerate()
@@ -295,10 +338,16 @@ fn select_relevant_outputs(
     }
     metadata.retain(|row| selected.contains(&row.0));
     metadata.sort_by_key(|row| row.0);
-    Ok(metadata
+    metadata
         .into_iter()
-        .map(|(_, output, roles, _)| (output, roles))
-        .collect())
+        .map(|(ordinal, value, scalar_roles, _)| {
+            Ok(SelectedOutput {
+                source_ordinal: u16::try_from(ordinal).map_err(|_| "source_ordinal_budget")?,
+                value,
+                scalar_roles,
+            })
+        })
+        .collect()
 }
 
 fn role_node(
@@ -362,14 +411,11 @@ mod tests {
             {"type":"function_call_output","output":{"renamed_b":"ok","renamed_a":7}},
             {"type":"function_call_output","output":{"renamed_c":9}}
         ]});
-        assert_eq!(
-            extract_pre_action_multi_source_topology_v1(&left, "combine"),
-            extract_pre_action_multi_source_topology_v1(&right, "combine")
-        );
-        let bytes = serde_json::to_vec(&extract_pre_action_multi_source_topology_v1(
-            &left, "combine",
-        ))
-        .expect("serialize");
+        let left_topology = extract_pre_action_multi_source_topology_v1(&left, "combine");
+        let right_topology = extract_pre_action_multi_source_topology_v1(&right, "combine");
+        assert_eq!(left_topology.roles, right_topology.roles);
+        assert_eq!(left_topology.relations, right_topology.relations);
+        let bytes = serde_json::to_vec(&left_topology).expect("serialize");
         let persisted = String::from_utf8(bytes).expect("utf8");
         for forbidden in ["alpha", "beta", "gamma", "\"ok\"", "\"7\"", "\"9\""] {
             assert!(!persisted.contains(forbidden));
@@ -402,6 +448,98 @@ mod tests {
         let encoded = serde_json::to_string(&topology).expect("encode");
         assert!(!encoded.contains("abc-123"));
         assert!(!encoded.contains("Script running"));
+    }
+
+    #[test]
+    fn production_capture_feeds_collection_binding_and_factorizer() {
+        use nando_operator_kernel::{
+            CollectionProgramStep, ResponseProgram, ValueProjectionFormat,
+        };
+        use nando_operator_learning::multi_source::{
+            BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1, CompletedEffectFormV1,
+            PreActionShapeClassV1, factor_multi_source_row_v1, pre_action_t1_binding_root,
+        };
+
+        let output = json!({"items": [{"status": "active"}, {"status": "idle"}]});
+        let topology = extract_pre_action_multi_source_topology_v1(
+            &json!({"input":[{"type":"function_call_output","output": output}]}),
+            "count items",
+        );
+        topology.validate().expect("production topology");
+        let container = topology
+            .roles
+            .iter()
+            .find(|role| role.container_class != MultiSourceContainerClassV1::Scalar)
+            .expect("container role");
+        let witness = topology
+            .role_witnesses
+            .iter()
+            .find(|witness| witness.local_role_id == container.local_role_id)
+            .expect("container witness");
+        assert_eq!(
+            witness.value_sha256,
+            nando_operator_kernel::canonical_json_sha256(&output).expect("output root")
+        );
+        let program = ResponseProgram::compose_collection(
+            vec![
+                CollectionProgramStep::SelectTurnOutput { output_ordinal: 1 },
+                CollectionProgramStep::SelectOnlyArrayField,
+                CollectionProgramStep::Count,
+            ],
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        pre_action_t1_binding_root(&program, &topology).expect("production binding");
+
+        let joined = BlindThenRevealJoinedTransitionV1 {
+            schema: "test".to_owned(),
+            join_root_sha256: nando_operator_kernel::sha256_bytes(b"join"),
+            capture_sequence: 1,
+            turn_intent_id_sha256: nando_operator_kernel::sha256_bytes(b"turn"),
+            request_event_id_sha256: nando_operator_kernel::sha256_bytes(b"request"),
+            action_event_id_sha256: nando_operator_kernel::sha256_bytes(b"action"),
+            session_lineage_sha256: nando_operator_kernel::sha256_bytes(b"lineage"),
+            session_id_sha256: nando_operator_kernel::sha256_bytes(b"session"),
+            topology_commitment_root_sha256: nando_operator_kernel::sha256_bytes(b"topology"),
+            pre_action_record_root_sha256: nando_operator_kernel::sha256_bytes(b"pre-action"),
+            completed_frame_root_sha256: nando_operator_kernel::sha256_bytes(b"frame"),
+            physical_action_root_sha256: nando_operator_kernel::sha256_bytes(b"physical"),
+            semantic_action_root_sha256: nando_operator_kernel::sha256_bytes(b"semantic"),
+            effect_atoms: vec![CompletedEffectAtomV1::ValueProjection],
+            verifier_receipt_root_sha256: nando_operator_kernel::sha256_bytes(b"verifier"),
+            input_tokens: 1,
+            captured_at_unix_ms: 1,
+            completed_at_unix_nanos: 2,
+            accepted: true,
+            topology,
+        };
+        let factored = factor_multi_source_row_v1(&joined);
+        assert_eq!(
+            factored.pre_action_shape,
+            PreActionShapeClassV1::CollectionPlusScalarMetadata
+        );
+        assert_eq!(
+            factored.completed_effect,
+            CompletedEffectFormV1::CollectionTransform
+        );
+    }
+
+    #[test]
+    fn source_ordinals_match_the_runtime_active_turn() {
+        let topology = extract_pre_action_multi_source_topology_v1(
+            &json!({"input":[
+                {"type":"function_call_output","output":{"old": 9}},
+                {"type":"message","role":"user","content":"use current outputs"},
+                {"type":"function_call_output","output":{"first": [1]}},
+                {"type":"custom_tool_call_output","output":{"second": [2]}}
+            ]}),
+            "use current outputs",
+        );
+        topology.validate().expect("active turn topology");
+        assert_eq!(topology.grounded_output_count, 2);
+        assert!(topology.roles.iter().all(|role| role.source_ordinal <= 1));
+        assert!(topology.roles.iter().any(|role| role.source_ordinal == 0));
+        assert!(topology.roles.iter().any(|role| role.source_ordinal == 1));
     }
 
     #[test]
@@ -476,7 +614,14 @@ mod tests {
             MultiSourceExtractionStatusV1::Complete
         ));
         topology.validate().expect("typed ambiguity is canonical");
-        let witness = topology.role_witnesses.first().expect("role witness");
+        let witness = topology
+            .role_witnesses
+            .iter()
+            .find(|witness| {
+                witness.request_reference_ordinal.is_some()
+                    || !witness.request_reference_ordinal_candidates.is_empty()
+            })
+            .expect("request-referenced role witness");
         assert_eq!(witness.request_reference_ordinal, None);
         assert_eq!(witness.request_reference_ordinal_candidates, vec![0]);
         assert!(topology.relations.iter().any(|edge| {

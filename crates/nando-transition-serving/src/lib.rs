@@ -31,6 +31,7 @@ mod multi_source_live;
 mod multi_source_topology_archive;
 mod nginx_terminal;
 pub mod operator_certification;
+mod operator_certification_reconciliation;
 pub mod operator_cleanup;
 mod opportunity_bridge;
 mod provider_capture;
