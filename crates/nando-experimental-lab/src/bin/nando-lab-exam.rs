@@ -1,6 +1,6 @@
 use nando_experimental_lab::{
-    LabError, LawCertificate, ProbeSelection, certify_natural_holdout, execute_probe,
-    filesystem_copy_probe, filesystem_delete_probe, git_rename_probe, select_probe,
+    LabError, LawCertificate, ProbeSelection, execute_probe, filesystem_copy_probe,
+    filesystem_delete_probe, git_rename_probe, select_probe,
 };
 use serde::Serialize;
 
@@ -11,7 +11,9 @@ struct ExamReport {
     e1_probe_selection: ProbeSelection,
     e2_laws_opened: usize,
     e2_environments: usize,
-    e3_certificate: LawCertificate,
+    e3_status: &'static str,
+    e3_certificate: Option<LawCertificate>,
+    e3_candidate_law_id: String,
     authority_granted: bool,
     active_package_allowed: bool,
 }
@@ -35,19 +37,15 @@ fn run() -> Result<ExamReport, LabError> {
         return Err(LabError::NoUniqueLaw);
     }
     let e3_candidate = candidates[0];
-    let e3_certificate = certify_natural_holdout(
-        e3_candidate,
-        "natural/independent-holdout/example-001",
-        e3_candidate.prediction,
-        true,
-    )?;
     Ok(ExamReport {
         schema: "nando.experimental-lab-exam.v1",
         verdict: "LAB_EXAM_PASS_NO_AUTHORITY",
         e1_probe_selection,
         e2_laws_opened: candidates.len(),
         e2_environments: 2,
-        e3_certificate,
+        e3_status: "WAITING_FOR_INDEPENDENT_NATURAL_HOLDOUT",
+        e3_certificate: None,
+        e3_candidate_law_id: e3_candidate.law_id.clone(),
         authority_granted: false,
         active_package_allowed: false,
     })

@@ -322,6 +322,40 @@ pub struct CleanupReceipt {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IndependentNaturalHoldoutReceipt {
+    pub schema: String,
+    pub source_ref: String,
+    pub source_owner: String,
+    pub source_record_sha256: String,
+    pub observed: OutcomeVector,
+}
+
+impl IndependentNaturalHoldoutReceipt {
+    pub fn new(
+        source_ref: impl Into<String>,
+        source_owner: impl Into<String>,
+        source_record_sha256: impl Into<String>,
+        observed: OutcomeVector,
+    ) -> Result<Self, LabError> {
+        let receipt = Self {
+            schema: "nando.independent-natural-holdout-receipt.v1".to_owned(),
+            source_ref: source_ref.into(),
+            source_owner: source_owner.into(),
+            source_record_sha256: source_record_sha256.into(),
+            observed,
+        };
+        if receipt.source_ref.trim().is_empty()
+            || receipt.source_ref.starts_with("lab/")
+            || receipt.source_owner.trim().is_empty()
+            || !is_sha256(&receipt.source_record_sha256)
+        {
+            return Err(LabError::InvalidLawCertificate);
+        }
+        Ok(receipt)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LabProbeReceipt {
     pub schema: String,
     pub probe_digest_sha256: String,
@@ -342,6 +376,8 @@ pub struct LawCertificate {
     pub law_id: String,
     pub lab_probe_digest_sha256: String,
     pub natural_holdout_ref: String,
+    pub natural_holdout_record_sha256: String,
+    pub natural_holdout_source_owner: String,
     pub natural_holdout_outcome: OutcomeVector,
     pub independent_source: bool,
     pub authority_granted: bool,
@@ -442,24 +478,23 @@ pub fn execute_probe(probe: &LabProbe) -> Result<LabProbeReceipt, LabError> {
 
 pub fn certify_natural_holdout(
     candidate: &UniqueLawCandidate,
-    natural_holdout_ref: impl Into<String>,
-    observed: OutcomeVector,
-    independent_source: bool,
+    evidence: IndependentNaturalHoldoutReceipt,
 ) -> Result<LawCertificate, LabError> {
-    let natural_holdout_ref = natural_holdout_ref.into();
-    if !independent_source {
+    if evidence.source_record_sha256 == candidate.lab_probe_digest_sha256 {
         return Err(LabError::NaturalHoldoutNotIndependent);
     }
-    if natural_holdout_ref.trim().is_empty() || observed != candidate.prediction {
+    if evidence.observed != candidate.prediction {
         return Err(LabError::NaturalHoldoutMismatch);
     }
     let mut certificate = LawCertificate {
         schema: LAW_CERTIFICATE_SCHEMA_V1.to_owned(),
         law_id: candidate.law_id.clone(),
         lab_probe_digest_sha256: candidate.lab_probe_digest_sha256.clone(),
-        natural_holdout_ref,
-        natural_holdout_outcome: observed,
-        independent_source,
+        natural_holdout_ref: evidence.source_ref,
+        natural_holdout_record_sha256: evidence.source_record_sha256,
+        natural_holdout_source_owner: evidence.source_owner,
+        natural_holdout_outcome: evidence.observed,
+        independent_source: true,
         authority_granted: false,
         active_package_allowed: false,
         certificate_sha256: String::new(),
@@ -901,6 +936,10 @@ fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 fn io_error(error: std::io::Error) -> LabError {
     LabError::ExecutorFailed(error.to_string())
 }
@@ -995,16 +1034,24 @@ mod tests {
         let candidate = receipt.unique_law_candidate.ok_or(LabError::NoUniqueLaw)?;
         let certificate = certify_natural_holdout(
             &candidate,
-            "natural/git-trajectory/001",
-            candidate.prediction,
-            true,
+            IndependentNaturalHoldoutReceipt::new(
+                "natural/git-trajectory/001",
+                "independent-collector",
+                sha256(b"external-natural-record"),
+                candidate.prediction,
+            )?,
         )?;
         assert_eq!(certificate.schema, LAW_CERTIFICATE_SCHEMA_V1);
         assert!(!certificate.authority_granted);
         assert!(!certificate.active_package_allowed);
         assert!(
-            certify_natural_holdout(&candidate, "same-lab-replay", candidate.prediction, false,)
-                .is_err()
+            IndependentNaturalHoldoutReceipt::new(
+                "lab/same-probe-replay",
+                "same-lab",
+                sha256(b"replay"),
+                candidate.prediction,
+            )
+            .is_err()
         );
         Ok(())
     }

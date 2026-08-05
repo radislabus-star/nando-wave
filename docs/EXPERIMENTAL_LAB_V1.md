@@ -29,8 +29,9 @@ The first exam is executable in the crate tests:
 
 - **E1:** the selector prefers the probe with the stronger outcome partition;
 - **E2:** three laws are identified across filesystem and Git;
-- **E3:** a lab candidate requires an independent natural holdout before a
-  `LawCertificate` can be formed.
+- **E3 boundary:** a lab candidate requires an independent natural holdout
+  receipt before a `LawCertificate` can be formed. The runnable exam does not
+  fabricate this receipt; it reports `WAITING_FOR_INDEPENDENT_NATURAL_HOLDOUT`.
 
 Run the compact exam report with:
 
@@ -39,9 +40,9 @@ cargo run -p nando-experimental-lab --bin nando-lab-exam
 ```
 
 The expected verdict is `LAB_EXAM_PASS_NO_AUTHORITY`. The report includes the
-selected probe, three opened candidate laws, two environments, and a holdout
-certificate whose `authority_granted` and `active_package_allowed` fields are
-both `false`.
+selected probe, three opened candidate laws, two environments, and the exact
+candidate law awaiting an external holdout. It deliberately contains no
+certificate until a separately owned natural receipt is supplied.
 
 This is laboratory evidence, not runtime authority and not a claim of general
 intelligence. Production admission remains owned by the existing external
