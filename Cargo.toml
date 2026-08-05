@@ -17,6 +17,7 @@ members = [
     "crates/nando-expression-runtime",
     "crates/nando-client-connector",
     "crates/nando-client-evidence",
+    "crates/nando-experimental-lab",
 ]
 resolver = "3"
 
