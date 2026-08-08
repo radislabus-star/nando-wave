@@ -1,6 +1,6 @@
 # Law Lab K1 Eligibility Bridge V1
 
-Status: `IMPLEMENTED / LIVE DEPLOYMENT PENDING / RUNTIME OFF`
+Status: `IMPLEMENTED / LIVE / RUNTIME OFF`
 
 Date: `2026-08-08`
 
@@ -36,8 +36,8 @@ fallback to a generated fixture.
 ## 2. Current Live Boundary
 
 The production scheduler is intentionally closed and its latest epistemic
-generation is terminal. Direct ledger inspection before deployment found no
-active candidate freeze. The expected V1 live verdict is therefore:
+generation is terminal. The deployed endpoint restores the signed projection
+and finds no active candidate freeze. Its live verdict is:
 
 ```text
 state       no_eligible_law_lab_probe
@@ -49,6 +49,23 @@ authority   false
 
 This is a waiting observation, not a Law Lab terminal verdict. No generation
 exists for the lab to release or replace.
+
+The deployment-bound snapshot records:
+
+```text
+scheduler ledger revision       91
+scheduler ledger root           1646ee00...dcc826f
+scheduler projection root       ae2f9125...e2fb9f1
+latest scheduler event root     96b8e276...a98d3
+latest terminal verdict root    21e09725...d2451
+latest terminal blocker         all_supported_t1_protocol_modes_already_active
+active candidate freeze         NONE
+K1 laws / semantics / topology  1/3 / 1/3 / 1/2
+```
+
+All eight authority fields are `false`. Law Lab did not write a prediction,
+issue a certificate, mutate K1 or phase memory, activate a package, or receive
+economics credit.
 
 ## 3. Durable Prediction Boundary
 
@@ -137,7 +154,39 @@ structural gate                 PASS / authority false
 
 No local build or test was run.
 
-## 9. Next Trigger
+## 9. Live Deployment
+
+The cold learner alone was restarted. Hot serving, Nginx, gateway control, and
+certification authority retained their PIDs across deployment and a separate
+15-second survival check; every observed `NRestarts` value remained zero.
+
+```text
+source commit          e1ad918681aed21f696d177f720cb272db6c84a3
+installed binary SHA   bab7353548ad53811ea4e29e49909e92f960171c1f87ae8c3640e9e8c9078d47
+cold learner PID       1414858
+hot serving PID        3901227
+gateway control PID    3751169
+authority PID          4138903
+Nginx PID              682430
+```
+
+Durable deployment receipt:
+
+```text
+/var/lib/nando-wave/deployments/20260808T211638Z-e1ad918681ae/deployment-receipt.json
+root  5afdc44a93c79c000de04b19eff25ebf1b0e2cadb281c2cf01496d5539048940
+mode  0400
+```
+
+The receipt binds the eligibility snapshot SHA-256
+`52aed7ea2fd010ff9818208290764556b64844434284029985f7cddd3e7a9649`.
+That snapshot has report root
+`af0b42120af0091c986dd171e9c64dbf12452fe7f53cf48799b8bfee1d70b7fb`
+and the exact `no_eligible_law_lab_probe / no_active_candidate_freeze`
+verdict. The receipt root was independently recomputed from its canonical JSON
+payload after all deployment writers exited.
+
+## 10. Next Trigger
 
 The next code path may execute only after a new ordinary-traffic candidate
 reaches a frozen version space with more than one semantic class. At that
