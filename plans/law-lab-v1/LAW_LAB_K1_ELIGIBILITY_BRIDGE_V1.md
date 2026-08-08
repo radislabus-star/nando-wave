@@ -155,6 +155,8 @@ rustfmt                         PASS
 structural gate                 PASS / authority false
 gateway-control tests           56/56 PASS
 gateway-control Clippy          PASS
+desktop 1440x1000               PASS / no overflow / no JS errors
+mobile 390x844                  PASS / no overflow / no JS errors
 ```
 
 No local build or test was run.
@@ -190,6 +192,33 @@ That snapshot has report root
 and the exact `no_eligible_law_lab_probe / no_active_candidate_freeze`
 verdict. The receipt root was independently recomputed from its canonical JSON
 payload after all deployment writers exited.
+
+The read-only control surface was then deployed separately. That rollout
+restarted only gateway control; it did not restart the learner, hot serving,
+certification authority, Nginx, or connector. The live surface identifies
+itself as build `2026.08.08-b048` and exposes the blocker, signed-ledger roots,
+candidate/version-space state, durable precommit and executor state, research
+policy, all eight authority bits, and the terminal scheduler state.
+
+```text
+dashboard source commit  7214215fe474820cae8dbbb5224c89a37a9addd4
+gateway control PID      1513511
+installed binary SHA     fc793644165b9a675bf14dfa3feb995f75cfc03a98a4778da34c20d1239a35b9
+dashboard verification   desktop PASS / mobile PASS
+browser cleanup          verification tab closed
+```
+
+Dashboard deployment receipt:
+
+```text
+/var/lib/nando-wave/deployments/20260808T213256Z-7214215fe474/deployment-receipt.json
+root  d2fb31e555c28a38e6cd962237e73f0836d92e0cb8acc6b90a4d892ae5d7392d
+mode  0400
+```
+
+After both deployments, gateway control, certification authority, cold
+learner, hot serving, and Nginx survived a separate 15-second check with the
+recorded PIDs unchanged and `NRestarts=0`.
 
 ## 10. Next Trigger
 
