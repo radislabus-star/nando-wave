@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.02-b047";
+const DASHBOARD_BUILD: &str = "2026.08.08-b048";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -447,6 +447,8 @@ const TEMPLATE: &str = r#"
 .certificate-head { display:flex; justify-content:space-between; gap:16px; align-items:baseline; margin-top:20px; }
 .certificate-head h3 { margin:0; color:#dce2e6; font-size:13px; }
 .certificate-head span { color:var(--muted); font-size:11px; text-align:right; }
+.certificate-head span.watch { color:var(--amber); }
+.certificate-head span.locked { color:var(--red); }
 .certificate-scroll { margin-top:9px; overflow-x:auto; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .certificate-table { min-width:820px; }
 .certificate-row { display:grid; grid-template-columns:minmax(250px,2fr) repeat(4,minmax(120px,1fr)); gap:12px; align-items:center; min-height:48px; border-bottom:1px solid var(--line); }
@@ -724,6 +726,17 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">SCHEDULER AUTHORITY</div><div id="k1-scheduler-authority" class="ms3-value locked">FALSE</div><div class="scope-note">PHASE MUTATION FALSE</div></div>
       <div class="ms3-cell"><div class="ms3-label">CURRENT BLOCKER / ACTIVE ROOT</div><div id="k1-scheduler-blocker" class="ms3-value watch">WAITING</div><div id="k1-scheduler-root" class="scope-note">ROOT —</div></div>
     </div>
+    <div class="certificate-head"><h3>LAW LAB · ACTIVE DISTINGUISHING PROBE</h3><span id="law-lab-status" class="watch">LOADING</span></div>
+    <div class="ms3-grid">
+      <div class="ms3-cell"><div class="ms3-label">ELIGIBILITY / BLOCKER</div><div id="law-lab-eligibility" class="ms3-value watch">LOADING</div><div id="law-lab-blocker" class="scope-note">BLOCKER —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">SIGNED EPISTEMIC LEDGER</div><div id="law-lab-ledger" class="ms3-value watch">—</div><div id="law-lab-ledger-roots" class="scope-note">LEDGER — · PROJECTION —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">FROZEN CANDIDATE / VERSION SPACE</div><div id="law-lab-candidate" class="ms3-value muted">NONE</div><div id="law-lab-version-space" class="scope-note">VERSION SPACE NONE · CLASSES 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">DURABLE PRECOMMIT / EXECUTOR</div><div id="law-lab-precommit" class="ms3-value muted">NONE / NONE</div><div id="law-lab-request" class="scope-note">PROBE REQUEST NONE · SOURCE TREE NONE</div></div>
+      <div class="ms3-cell"><div class="ms3-label">RESEARCH / SANDBOX EXECUTION</div><div id="law-lab-policy" class="ms3-value locked">FALSE / FALSE</div><div class="scope-note">ELIGIBILITY IS NOT PRODUCTION CPU AUTHORITY</div></div>
+      <div class="ms3-cell"><div class="ms3-label">PRODUCTION AUTHORITY BITS</div><div id="law-lab-authority" class="ms3-value locked">0 / 8 GRANTED</div><div id="law-lab-authority-note" class="scope-note">LAW FALSE · K1 FALSE · PHASE FALSE · ECONOMICS FALSE</div></div>
+      <div class="ms3-cell"><div class="ms3-label">LATEST TERMINAL SCHEDULER</div><div id="law-lab-terminal" class="ms3-value watch">—</div><div id="law-lab-terminal-root" class="scope-note">ROOT —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">REPORT / CONTRACT ROOT</div><div id="law-lab-report-root" class="ms3-value muted">—</div><div id="law-lab-contract-root" class="scope-note">CONTRACT —</div></div>
+    </div>
     <div class="certificate-head"><h3>PRODUCT REGISTRY / EPISTEMIC REGISTRY</h3><span id="k1-vocabulary-status">K1 VOCABULARY CLOSED</span></div>
     <div class="certificate-scroll"><div class="certificate-table">
       <div class="certificate-row header"><span>PACKAGE</span><span>CPU SAFE</span><span>LAW PROVED</span><span>WAVE CAUSAL</span><span>K1 ELIGIBLE</span></div>
@@ -956,6 +969,8 @@ const TEMPLATE: &str = r#"
     const ms3 = snapshot.ms3 || {};
     const ms4 = snapshot.ms4_closed_loop || {};
     const k1Scheduler = snapshot.k1_natural_scheduler || {};
+    const lawLab = snapshot.k1_law_lab_eligibility || {};
+    const lawLabAuthority = lawLab.authority || {};
     const k1Projection = k1Scheduler.projection || {};
     const k1Transfer = k1Scheduler.transfer_lifecycle || {};
     const k1Catalog = k1Scheduler.catalog || {};
@@ -1119,6 +1134,42 @@ const TEMPLATE: &str = r#"
     text("k1-scheduler-authority", k1Scheduler.authority_ready === true ? "TRUE" : "FALSE");
     text("k1-scheduler-blocker", (k1Transfer.blocker || k1Scheduler.blocker || (k1TerminalPass ? "PASS" : "NONE")).replaceAll("_", " ").toUpperCase());
     text("k1-scheduler-root", `ROOT ${k1LatestRoot || "—"}`);
+    const shortRoot = value => value ? value.slice(0, 12) : "—";
+    const lawLabAvailable = lawLab.schema === "nando.law-lab-k1-eligibility-report.v1";
+    const lawLabState = lawLabAvailable
+      ? (lawLab.state || "unknown").replaceAll("_", " ").toUpperCase()
+      : "ELIGIBILITY UNAVAILABLE";
+    const lawLabBlocker = lawLabAvailable
+      ? (lawLab.blocker || "NONE").replaceAll("_", " ").toUpperCase()
+      : "COLD ENDPOINT UNAVAILABLE";
+    const lawLabClasses = lawLab.current_semantic_class_roots_sha256 || [];
+    const authorityFields = [
+      "prediction_commitments_written",
+      "natural_holdout_satisfied",
+      "law_certificate_issued",
+      "execution_authority_granted",
+      "package_activated",
+      "k1_registry_mutated",
+      "phase_memory_mutated",
+      "economics_credit_granted",
+    ];
+    const authorityGrants = authorityFields.filter(field => lawLabAuthority[field] === true).length;
+    text("law-lab-status", lawLabState);
+    text("law-lab-eligibility", lawLabState);
+    text("law-lab-blocker", `BLOCKER ${lawLabBlocker}`);
+    text("law-lab-ledger", lawLabAvailable ? `R${number.format(lawLab.scheduler_ledger_revision || 0)} · RESTORED` : "UNAVAILABLE");
+    text("law-lab-ledger-roots", `LEDGER ${shortRoot(lawLab.scheduler_ledger_root_sha256)} · PROJECTION ${shortRoot(lawLab.scheduler_projection_root_sha256)}`);
+    text("law-lab-candidate", lawLab.active_candidate_freeze_root_sha256 ? `FROZEN ${shortRoot(lawLab.active_candidate_freeze_root_sha256)}` : "NONE");
+    text("law-lab-version-space", `VERSION SPACE ${shortRoot(lawLab.current_version_space_root_sha256)} · CLASSES ${number.format(lawLabClasses.length)}`);
+    text("law-lab-precommit", `${lawLab.pending_probe_receipt_root_sha256 ? "BOUND" : "NONE"} / ${lawLab.executor_manifest_root_sha256 ? "ATTESTED" : "NONE"}`);
+    text("law-lab-request", `PROBE REQUEST ${shortRoot(lawLab.active_probe_request_root_sha256)} · SOURCE TREE ${shortRoot(lawLab.active_probe_source_tree_root_sha256)}`);
+    text("law-lab-policy", `RESEARCH ${lawLab.multi_source_research_enabled === true ? "TRUE" : "FALSE"} · EXECUTE ${lawLab.sandbox_execution_allowed === true ? "TRUE" : "FALSE"}`);
+    text("law-lab-authority", `${number.format(authorityGrants)} / ${number.format(authorityFields.length)} GRANTED`);
+    text("law-lab-authority-note", `LAW ${lawLabAuthority.law_certificate_issued === true ? "TRUE" : "FALSE"} · K1 ${lawLabAuthority.k1_registry_mutated === true ? "TRUE" : "FALSE"} · PHASE ${lawLabAuthority.phase_memory_mutated === true ? "TRUE" : "FALSE"} · ECONOMICS ${lawLabAuthority.economics_credit_granted === true ? "TRUE" : "FALSE"}`);
+    text("law-lab-terminal", (lawLab.latest_terminal_blocker || "NONE").replaceAll("_", " ").toUpperCase());
+    text("law-lab-terminal-root", `ROOT ${shortRoot(lawLab.latest_terminal_verdict_root_sha256)}`);
+    text("law-lab-report-root", shortRoot(lawLab.report_root_sha256));
+    text("law-lab-contract-root", `CONTRACT ${shortRoot(lawLab.contract_root_sha256)} · GENERATED ${lawLab.generated_at_unix ? localTime(lawLab.generated_at_unix) : "—"}`);
     stateClass("ms3-generation", `ms3-value ${authorityReady || futureVerdict === "future_pass" ? "good" : futureVerdict === "contradiction" || futureAcquisitionFailed ? "locked" : "watch"}`);
     stateClass("ms3-predecessor", `ms3-value ${effectivePredecessorVerdict === "contradiction" || effectivePredecessorVerdict.endsWith("acquisition_fail") ? "locked" : "watch"}`);
     stateClass("ms3-future-applicability", `ms3-value ${!lawFrozen ? "muted" : futureAcquisitionFailed ? "locked" : "watch"}`);
@@ -1144,13 +1195,29 @@ const TEMPLATE: &str = r#"
     stateClass("k1-scheduler-future", `ms3-value ${k1TerminalPass ? "good" : "watch"}`);
     stateClass("k1-scheduler-authority", "ms3-value locked");
     stateClass("k1-scheduler-blocker", `ms3-value ${k1TerminalFail ? "locked" : k1TerminalPass ? "good" : "watch"}`);
+    stateClass("law-lab-status", lawLabAvailable ? "watch" : "locked");
+    stateClass("law-lab-eligibility", `ms3-value ${lawLabAvailable ? "watch" : "locked"}`);
+    stateClass("law-lab-ledger", "ms3-value watch");
+    stateClass("law-lab-candidate", `ms3-value ${lawLab.active_candidate_freeze_root_sha256 ? "watch" : "muted"}`);
+    stateClass("law-lab-precommit", `ms3-value ${lawLab.pending_probe_receipt_root_sha256 || lawLab.executor_manifest_root_sha256 ? "watch" : "muted"}`);
+    stateClass("law-lab-policy", "ms3-value locked");
+    stateClass("law-lab-authority", "ms3-value locked");
+    stateClass("law-lab-terminal", "ms3-value watch");
+    stateClass("law-lab-report-root", "ms3-value muted");
     renderOperatorCertificates(snapshot);
     const predecessorText = predecessor
       ? `G${predecessor.generation_sequence} ${effectivePredecessorVerdict.toUpperCase()}${predecessorBlocker ? ` (${predecessorBlocker})` : ""} → immutable close → `
       : "";
     const currentBlocker = lawFrozen ? futureBlocker : acquisitionBlocker || futureBlocker;
     text("ms3-note", `${predecessorText}G${activeGeneration || "?"} ${activePhase} · linked acquisition ${acquisitionVerdict.toUpperCase()} · future topology ${lawFrozen ? `${number.format(futureTopologies)} / ${number.format(futureTopologyLimit)}` : "NOT OPEN"} · MS4 ${ms4Stage} (${ms4.blocker || "none"}) · authority ${authorityReady ? "TRUE" : "FALSE"} · phase mutation ${phaseMutation ? "TRUE" : "FALSE"}`);
-    text("next-route", ms4Complete && ms4ExactWave
+    const k1VocabularyOpen = ms4.k1_vocabulary_gate?.open === true;
+    text("next-route", k1VocabularyOpen
+      ? "K1 OPEN → natural L2 composition → strategy laws → learning operators"
+      : lawLab.state === "ready_for_sandbox_execution"
+      ? "typed distinguishing probe → exact outcome → version-space reduction → Law #2"
+      : lawLab.state === "no_eligible_law_lab_probe"
+      ? "ordinary evidence → K1 candidate freeze → ambiguous version space → durable probe → Law #2"
+      : ms4Complete && ms4ExactWave
       ? "operational loop complete · independent exact-package Wave proof complete"
       : ms4Complete
       ? "operational loop complete · post-center holdout → independent exact-package Wave proof"
@@ -1422,6 +1489,11 @@ mod tests {
         assert!(html.contains("WAVE CAUSAL"));
         assert!(html.contains("K1 ELIGIBLE"));
         assert!(html.contains("CURRENT BLOCKER / ACTIVE ROOT"));
+        assert!(html.contains("LAW LAB · ACTIVE DISTINGUISHING PROBE"));
+        assert!(html.contains("PRODUCTION AUTHORITY BITS"));
+        assert!(html.contains("snapshot.k1_law_lab_eligibility"));
+        assert!(html.contains("lawLab.state === \"no_eligible_law_lab_probe\""));
+        assert!(html.contains("ordinary evidence → K1 candidate freeze → ambiguous version space → durable probe → Law #2"));
         assert!(html.contains("k1TerminalPass || k1TerminalFail ? k1TerminalRoot : k1ActiveRoot"));
         assert!(html.contains("snapshot.operator_certificate_matrix"));
         assert!(html.contains("k1_vocabulary_gate"));

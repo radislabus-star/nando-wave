@@ -121,8 +121,11 @@ on demand. It remains available while
 `NANDO_MULTI_SOURCE_RESEARCH_ENABLED=0`, but it performs no write and starts no
 timer, watcher, worker, or sandbox process.
 
-The dashboard is intentionally unchanged. A visible success state is not
-added before a real active natural candidate exists.
+The control dashboard consumes this endpoint through its existing read-only
+snapshot route. It exposes the blocker, signed scheduler roots, probe bindings,
+executor attestation, research policy, and all eight authority bits. With no
+active candidate it renders `NO ELIGIBLE LAW LAB PROBE` as a waiting state,
+never as success.
 
 ## 7. Authority Boundary
 
@@ -150,6 +153,8 @@ transition-serving unit suite   263 PASS / 7 ignored
 Clippy -D warnings              PASS
 rustfmt                         PASS
 structural gate                 PASS / authority false
+gateway-control tests           56/56 PASS
+gateway-control Clippy          PASS
 ```
 
 No local build or test was run.
@@ -206,7 +211,7 @@ If no such generation exists, this report remains
 | t04 | K1 PROBE_PENDING receipt | durably precommits | every class prediction | section 3 | 1.0 | signed prediction ledger | hypothesis predictions | precommit | precommit |
 | t05 | active-probe plan root | commits before execution | source tree and typed operations | section 4 | 1.0 | immutable probe plan | isolated action | precommit | precommit |
 | t06 | exact executor manifest | attests | worker hash and supported domain | section 5 | 1.0 | isolation authority | sandbox executable | sandbox | sandbox |
-| t07 | eligibility endpoint | reads without writing | epistemic projection | section 6 | 1.0 | observation interface | signed state | observation | observation |
+| t07 | eligibility endpoint | reads without writing | epistemic projection | sections 6-7 | 1.0 | observation interface | signed state | observation | observation |
 | t08 | eligibility report | cannot grant | production execution authority | section 7 | 1.0 | diagnostic evidence | product authority | authority | authority |
 | t09 | generated fixture | cannot create | natural candidate | section 9 | 1.0 | excluded evidence | candidate source | evidence | evidence |
 | t10 | post-work tree root | is exact oracle for | active probe outcome partition | section 4 | 1.0 | independent outcome | semantic partition | outcome | outcome |
@@ -220,7 +225,7 @@ If no such generation exists, this report remains
 | c04 | K1 PROBE_PENDING receipt | durably precommits | every class prediction | law_lab_eligibility.rs pending_probe | 1.0 | signed prediction ledger | hypothesis predictions | precommit | precommit |
 | c05 | active-probe plan root | commits before execution | source tree and typed operations | law_lab_eligibility.rs active_probe_plan_root | 1.0 | immutable probe plan | isolated action | precommit | precommit |
 | c06 | exact executor manifest | attests | worker hash and supported domain | law_lab_eligibility.rs executor_manifest validation | 1.0 | isolation authority | sandbox executable | sandbox | sandbox |
-| c07 | eligibility endpoint | reads without writing | epistemic projection | service.rs law_lab_eligibility_report_handler | 1.0 | observation interface | signed state | observation | observation |
+| c07 | eligibility endpoint | reads without writing | epistemic projection | service.rs handler and main.rs/live_dashboard.rs read-only snapshot | 1.0 | observation interface | signed state | observation | observation |
 | c08 | eligibility report | cannot grant | production execution authority | LawLabSandboxAuthorityBoundaryV1 | 1.0 | diagnostic evidence | product authority | authority | authority |
 | c09 | generated fixture | cannot create | natural candidate | no candidate writer in bridge | 1.0 | excluded evidence | candidate source | evidence | evidence |
 | c10 | post-work tree root | is exact oracle for | active probe outcome partition | LAW_LAB_ACTIVE_PROBE_OUTCOME_CONTRACT_V1 | 1.0 | independent outcome | semantic partition | outcome | outcome |
