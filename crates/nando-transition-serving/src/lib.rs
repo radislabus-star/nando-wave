@@ -1128,6 +1128,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
             get(k1_natural_scheduler_runtime::mechanism_report_handler),
         )
         .route(
+            "/v2/multi-source/k1-law-lab-eligibility",
+            get(k1_natural_scheduler_runtime::law_lab_eligibility_report_handler),
+        )
+        .route(
             remote_evidence_spool::REMOTE_EVIDENCE_ENDPOINT_V1,
             post(ingest_remote_evidence).layer(DefaultBodyLimit::max(
                 remote_evidence_spool::REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1,

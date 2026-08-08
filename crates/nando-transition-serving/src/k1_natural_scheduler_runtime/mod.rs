@@ -43,11 +43,14 @@ use crate::operator_certification::CertificationAuthorityConfigV1;
 mod advance;
 mod deadline;
 mod evidence;
+mod law_lab_eligibility;
 mod lifecycle;
 mod report;
 mod service;
 
-pub(crate) use service::{advance_state, mechanism_report_handler, report_handler};
+pub(crate) use service::{
+    advance_state, law_lab_eligibility_report_handler, mechanism_report_handler, report_handler,
+};
 
 use advance::*;
 use evidence::*;

@@ -6,7 +6,7 @@ use serde_json::json;
 use super::{
     AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
     K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, advance,
-    restore_projection_for,
+    law_lab_eligibility::law_lab_eligibility_report, restore_projection_for,
 };
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
@@ -17,6 +17,40 @@ pub(crate) async fn report_handler(State(state): State<AppState>) -> Response {
 
 pub(crate) async fn mechanism_report_handler(State(state): State<AppState>) -> Response {
     report_response(&state.k1_mechanism_watch_report)
+}
+
+pub(crate) async fn law_lab_eligibility_report_handler(State(state): State<AppState>) -> Response {
+    let report = restore_projection_for(
+        &state.operator_certification_config,
+        K1SchedulerLaneV1::Epistemic,
+    )
+    .and_then(|projection| {
+        law_lab_eligibility_report(
+            &projection,
+            None,
+            None,
+            state.config.multi_source_research_enabled,
+            unix_now(),
+        )
+    });
+    match report {
+        Ok(report) => json_response(
+            StatusCode::OK,
+            serde_json::to_value(report).unwrap_or_else(|_| {
+                json!({
+                    "schema": "nando.law-lab-k1-eligibility-error.v1",
+                    "error": "report_encode"
+                })
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "schema": "nando.law-lab-k1-eligibility-error.v1",
+                "error": error
+            }),
+        ),
+    }
 }
 
 fn report_response(
