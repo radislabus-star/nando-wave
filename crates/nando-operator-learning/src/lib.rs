@@ -23,6 +23,7 @@ pub mod generation_capture_v3;
 pub mod generation_evidence_v3;
 pub mod generation_shadow_v3;
 pub mod grounding;
+pub mod law_lab_contract;
 pub mod learning_evidence_bridge;
 pub mod learning_structure_record;
 pub mod learning_structure_record_v3;
@@ -66,6 +67,7 @@ pub use generation_capture_v3::*;
 pub use generation_evidence_v3::*;
 pub use generation_shadow_v3::*;
 pub use grounding::*;
+pub use law_lab_contract::*;
 pub use learning_evidence_bridge::*;
 pub use learning_structure_record::*;
 pub use learning_structure_record_v3::*;
@@ -109,3 +111,6 @@ pub(crate) use nando_operator_kernel::{AtomSource, CollectionOutputRenderer};
 
 #[cfg(test)]
 pub(crate) use nando_operator_kernel::RELATION_FRAME_SCHEMA;
+
+#[cfg(test)]
+mod law_lab_contract_tests;
