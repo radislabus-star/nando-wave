@@ -292,6 +292,21 @@ K3  verified strategies
 K4  methods for discovering new strategies
 ```
 
+A small manually authored K0 curriculum is allowed and required. It defines
+source-neutral types, universal executable primitives, verifier semantics, and
+bounded search limits. It is the language in which candidate circuits may be
+formed; it is not a discovered law and never counts toward K1. Manual
+candidate-to-program mappings, source-specific family hints, and handwritten
+K1 laws remain forbidden.
+
+Every production discovery attempt binds a versioned `DiscoveryBasis` before
+identification. The basis commits the hypothesis generator, executable circuit
+builder, K0 curriculum, verifier semantics, and search bounds. A historical
+terminal verdict suppresses a cohort only under the same discovery basis and
+the same active-protocol set. Expanding the basis may reopen that cohort once;
+repeating the same basis may not create an infinite retry loop. An active
+freeze is never reinterpreted under a newer basis.
+
 A proven composition may become a higher-level opcode, but the verifier must be
 able to unfold it to already admitted lower-level behavior. Higher levels never
 inherit authority merely because a lower-level component is ACTIVE.
@@ -1171,6 +1186,14 @@ generation. Receipt IDs are indexing aids and are never sufficient provenance.
 Future evidence must have lineages absent from support. Structural equivalence
 to support is allowed and required for transfer; byte-identical evidence lineage
 reuse is forbidden.
+
+Frozen natural support does not expire merely because unrelated global traffic
+advances. Pre-freeze validity is owned by the candidate's immutable capture
+generation, evidence manifest, readiness receipt, and safety provenance. The
+post-freeze watermark and bounded generation deadline test whether the law still
+occurs naturally. Using a global traffic sequence as a cohort-recency veto is
+forbidden because it can erase a mature low-frequency cohort without new
+evidence about that cohort.
 
 ### Durable capture commitment boundary
 

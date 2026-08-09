@@ -342,12 +342,44 @@ consequence type
 readiness receipt root
 scoring tuple
 scheduler schema
+discovery basis root
 budget
 support watermark
 contract watermark
 future minimum sequence
 selected timestamp
 ```
+
+`discovery basis root` commits the source-neutral K0 curriculum, Raw Phase
+hypothesis generator, executable circuit builder, verifier semantics, and
+bounded search configuration. K0 may contain universal primitives such as typed
+selection, comparison, filtering, counting, transformation, branching, and
+rendering. It may not contain a cohort-to-program mapping, source name, package
+identity, or a law credited to K1.
+
+A duplicate terminal verdict is scoped to:
+
+```text
+cohort structural identity
++ active protocol-mode set root
++ discovery basis root
+```
+
+The same tuple remains excluded. A new discovery basis reopens the cohort once
+without rewriting the historical verdict. An active generation continues under
+its frozen basis and may not be silently upgraded.
+
+Ownership is explicit: operator-learning constructs the basis and runs frozen
+synthesis; the K1 scheduler ranks only structural cohorts; certification
+authority independently checks the basis plus registry/protocol CAS and appends
+the freeze; `OperatorIdentificationMachineV1` alone identifies the law. Reports
+and dashboards have no authority in this route.
+
+Candidate support is not invalidated by unrelated traffic advancing the global
+contract watermark. Readiness is cohort-local: exact capture generation,
+immutable evidence manifest, settled and verified rows, independent lineages,
+and safety provenance. Continued natural occurrence is tested only after freeze
+by `future_min_sequence` and the bounded deadline.
 
 Terminal generation states:
 
