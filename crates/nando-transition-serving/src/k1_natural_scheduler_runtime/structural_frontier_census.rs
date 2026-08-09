@@ -409,29 +409,26 @@ mod tests {
 
     #[test]
     fn immutable_report_and_latest_pointer_are_byte_identical() {
-        let root = tempfile::tempdir().expect("tempdir");
         let report_root = canonical_json_sha256(&("frontier-test", 1u64)).expect("root");
+        let root = std::env::temp_dir().join(format!(
+            "nando-structural-frontier-census-{}-{report_root}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
         let bytes = br#"{"schema":"frontier-test"}"#;
 
-        publish_report_bytes(root.path(), &report_root, bytes).expect("first publish");
-        publish_report_bytes(root.path(), &report_root, bytes).expect("idempotent publish");
+        publish_report_bytes(&root, &report_root, bytes).expect("first publish");
+        publish_report_bytes(&root, &report_root, bytes).expect("idempotent publish");
 
+        assert_eq!(fs::read(root.join("latest.json")).expect("latest"), bytes);
         assert_eq!(
-            fs::read(root.path().join("latest.json")).expect("latest"),
+            fs::read(root.join("reports").join(format!("{report_root}.json"))).expect("immutable"),
             bytes
         );
         assert_eq!(
-            fs::read(
-                root.path()
-                    .join("reports")
-                    .join(format!("{report_root}.json"))
-            )
-            .expect("immutable"),
-            bytes
-        );
-        assert_eq!(
-            publish_report_bytes(root.path(), &report_root, b"different"),
+            publish_report_bytes(&root, &report_root, b"different"),
             Err("structural_frontier_immutable_mismatch".to_owned())
         );
+        fs::remove_dir_all(root).expect("cleanup test root");
     }
 }
