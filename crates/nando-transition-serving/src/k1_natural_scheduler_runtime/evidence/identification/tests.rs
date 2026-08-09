@@ -5,10 +5,12 @@ use nando_operator_learning::multi_source::{
 use super::{
     capture_generation_matches, frozen_support_contains, frozen_support_manifest,
     historical_v1_evidence_row, selected_shape_is_compatible,
+    validate_installed_discovery_basis_fields,
 };
 use nando_operator_learning::multi_source::{
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2, natural_t1_discovery_basis_root_v1,
 };
 
 fn root(value: u64) -> String {
@@ -85,6 +87,31 @@ fn capture_generation_compatibility_is_exact_and_versioned() {
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
         &generation,
     ));
+    assert!(capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+        &generation,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
+        &generation,
+    ));
+    assert!(!capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1,
+        "",
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
+        &generation,
+    ));
+}
+
+#[test]
+fn v3_identification_rejects_an_uninstalled_discovery_basis() {
+    let installed = natural_t1_discovery_basis_root_v1().expect("installed basis");
+    validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, &installed)
+        .expect("supported basis");
+    assert_eq!(
+        validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, &root(99),),
+        Err("k1_runtime_discovery_basis_unsupported".to_owned())
+    );
+    validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, "")
+        .expect("legacy basis compatibility");
 }
 
 #[test]

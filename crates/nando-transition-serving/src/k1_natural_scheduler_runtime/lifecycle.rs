@@ -246,6 +246,7 @@ pub(super) fn advance(
             &candidate,
             queue_row.score.clone(),
             K1_SCHEDULER_SCHEMA_V2.to_owned(),
+            natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?,
             generation_budget(),
             candidate.last_capture_sequence,
             contract_watermark,

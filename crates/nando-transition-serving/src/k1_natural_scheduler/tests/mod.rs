@@ -59,6 +59,10 @@ fn test_context() -> (PathBuf, CertificationAuthorityConfigV1, SigningKey) {
 }
 
 fn candidate_freeze() -> K1NaturalCandidateFreezeV1 {
+    candidate_freeze_with_basis(natural_t1_discovery_basis_root_v1().expect("discovery basis"))
+}
+
+fn candidate_freeze_with_basis(discovery_basis_root_sha256: String) -> K1NaturalCandidateFreezeV1 {
     let rows = (1..=8)
         .map(|index| {
             K1NaturalEvidenceRowV1::seal(
@@ -122,6 +126,7 @@ fn candidate_freeze() -> K1NaturalCandidateFreezeV1 {
         candidate,
         row.score.clone(),
         "nando.k1-operator-blind-scheduler.v1".to_owned(),
+        discovery_basis_root_sha256,
         K1GenerationBudgetV1 {
             maximum_support_rows: 64,
             maximum_probe_rounds: 4,

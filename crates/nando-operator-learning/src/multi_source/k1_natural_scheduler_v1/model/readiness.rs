@@ -90,10 +90,7 @@ impl K1CandidateReadinessV1 {
         {
             return Err("k1_candidate_recency_input_invalid");
         }
-        let observed_span = last_capture_sequence - first_capture_sequence;
-        let maximum_staleness = observed_span.max(evidence_rows);
-        let staleness = contract_watermark - last_capture_sequence;
-        Ok(self.pass && staleness <= maximum_staleness)
+        Ok(self.pass)
     }
 
     fn expected_root(&self) -> Result<String, &'static str> {

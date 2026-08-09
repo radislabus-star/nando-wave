@@ -11,13 +11,13 @@ use std::time::Duration;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::multi_source::{
-    K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1FutureOutcomeReceiptV1,
-    K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
-    K1GenerationTerminalVerdictV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1,
-    K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
-    K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
+    K1FutureOutcomeReceiptV1, K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1,
+    K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1, K1IdentificationFreezeV1,
+    K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1,
+    K1NaturalCohortCatalogV1, K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
     K1SchedulerEventPayloadV1, K1SchedulerEventV1, K1SchedulerLedgerV1, K1TransferSettlementV1,
-    NaturalT1ProgramArtifactV1, PreActionTopologyAuditRowV1,
+    NaturalT1ProgramArtifactV1, PreActionTopologyAuditRowV1, natural_t1_discovery_basis_root_v1,
 };
 use nando_response_actor::{
     CollectionOutputRenderer, ResponseOperation, ResponseProgram, ResponseRegistry,
@@ -374,6 +374,7 @@ pub(crate) fn duplicate_candidate_exclusions_for(
         &restore_anchored_scheduler_for(config, lane)?,
         catalog,
         active_protocol_mode_set_root_sha256,
+        &natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?,
     )
 }
 

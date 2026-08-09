@@ -140,6 +140,7 @@ fn candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV1 {
         candidate,
         queue_row.score.clone(),
         "nando.k1-operator-blind-scheduler.v1".to_owned(),
+        root(706),
         K1GenerationBudgetV1 {
             maximum_support_rows: 64,
             maximum_probe_rounds: 4,
@@ -158,12 +159,34 @@ fn legacy_v1_candidate_freeze_remains_decodable_and_root_stable() {
     let mut freeze = candidate_freeze(1);
     freeze.schema = K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1.to_owned();
     freeze.capture_generation_root_sha256.clear();
+    freeze.discovery_basis_root_sha256.clear();
     freeze.freeze_root_sha256 = freeze.expected_root().expect("legacy freeze root");
     let bytes = serde_json::to_vec(&freeze).expect("encode legacy freeze");
     let restored: K1NaturalCandidateFreezeV1 =
         serde_json::from_slice(&bytes).expect("decode legacy freeze");
     restored.validate().expect("validate legacy freeze");
     assert_eq!(restored.freeze_root_sha256, freeze.freeze_root_sha256);
+    assert_eq!(
+        serde_json::to_vec(&restored).expect("re-encode legacy freeze"),
+        bytes
+    );
+}
+
+#[test]
+fn legacy_v2_candidate_freeze_remains_decodable_and_root_stable() {
+    let mut freeze = candidate_freeze(2);
+    freeze.schema = K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2.to_owned();
+    freeze.discovery_basis_root_sha256.clear();
+    freeze.freeze_root_sha256 = freeze.expected_root().expect("v2 freeze root");
+    let bytes = serde_json::to_vec(&freeze).expect("encode v2 freeze");
+    let restored: K1NaturalCandidateFreezeV1 =
+        serde_json::from_slice(&bytes).expect("decode v2 freeze");
+    restored.validate().expect("validate v2 freeze");
+    assert_eq!(restored.freeze_root_sha256, freeze.freeze_root_sha256);
+    assert_eq!(
+        serde_json::to_vec(&restored).expect("re-encode v2 freeze"),
+        bytes
+    );
 }
 
 fn frozen_generation() -> (

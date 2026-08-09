@@ -38,6 +38,7 @@ fn queue_can_rank_immature_novel_cohort_first_but_freezes_first_ready_cohort() {
             immature,
             queue.rows[0].score.clone(),
             "nando.k1-operator-blind-scheduler.v1".to_owned(),
+            root(706),
             K1GenerationBudgetV1 {
                 maximum_support_rows: 64,
                 maximum_probe_rounds: 4,

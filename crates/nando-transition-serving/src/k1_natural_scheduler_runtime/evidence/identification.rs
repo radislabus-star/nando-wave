@@ -120,6 +120,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     applied_roots: &BTreeSet<String>,
     trial_roots: &BTreeSet<String>,
 ) -> Result<MultiSourceT1IdentificationV3, String> {
+    validate_installed_discovery_basis(freeze)?;
     let mut selected = bindings
         .iter()
         .filter(|binding| {
@@ -190,13 +191,31 @@ fn capture_generation_matches(
                 && row_generation.is_empty()
                 && freeze_generation.is_empty()
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2 => {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 => {
             row_schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2
                 && !row_generation.is_empty()
                 && row_generation == freeze_generation
         }
         _ => false,
     }
+}
+
+fn validate_installed_discovery_basis(freeze: &K1NaturalCandidateFreezeV1) -> Result<(), String> {
+    validate_installed_discovery_basis_fields(&freeze.schema, &freeze.discovery_basis_root_sha256)
+}
+
+fn validate_installed_discovery_basis_fields(
+    freeze_schema: &str,
+    discovery_basis_root_sha256: &str,
+) -> Result<(), String> {
+    if freeze_schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 {
+        return Ok(());
+    }
+    let installed = natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?;
+    if discovery_basis_root_sha256 != installed {
+        return Err("k1_runtime_discovery_basis_unsupported".to_owned());
+    }
+    Ok(())
 }
 
 fn selected_shape_is_compatible(selected: Option<&str>, frozen: &str) -> bool {

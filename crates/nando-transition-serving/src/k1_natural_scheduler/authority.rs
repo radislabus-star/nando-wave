@@ -138,6 +138,7 @@ fn append_candidate_freeze_authoritative(
     request.candidate.validate().map_err(str::to_owned)?;
     request.freeze.validate().map_err(str::to_owned)?;
     validate_active_protocol_mode_cas(config, &request.active_protocol_mode_set_root_sha256)?;
+    let discovery_basis_root_sha256 = validate_discovery_basis_cas(&request.freeze)?;
 
     let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
     let mut completed_candidate_roots_sha256 = projection_for(&scheduler)?
@@ -150,6 +151,7 @@ fn append_candidate_freeze_authoritative(
             &scheduler,
             &request.catalog,
             &request.active_protocol_mode_set_root_sha256,
+            &discovery_basis_root_sha256,
         )?);
     }
     validate_queue_derivation(
@@ -175,6 +177,7 @@ fn append_candidate_freeze_authoritative(
         &request.candidate,
         request.freeze.scoring_tuple.clone(),
         request.freeze.scheduler_schema.clone(),
+        discovery_basis_root_sha256,
         request.freeze.budget,
         request.freeze.support_watermark,
         request.freeze.contract_watermark,
@@ -191,6 +194,18 @@ fn append_candidate_freeze_authoritative(
         &mut scheduler,
         K1SchedulerEventPayloadV1::CandidateFreeze(request.freeze),
     )
+}
+
+pub(super) fn validate_discovery_basis_cas(
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> Result<String, String> {
+    let current = natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?;
+    if freeze.schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3
+        || freeze.discovery_basis_root_sha256 != current
+    {
+        return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned());
+    }
+    Ok(current)
 }
 
 pub(super) fn validate_active_protocol_mode_cas(

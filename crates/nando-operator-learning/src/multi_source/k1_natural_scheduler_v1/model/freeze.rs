@@ -6,8 +6,8 @@ use super::evidence::K1ConsequenceTypeV1;
 use super::queue::{K1CandidateScoreV1, K1DeficitSnapshotV1, K1NaturalCandidateQueueV1};
 use super::{
     K1_IDENTIFICATION_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, K1_VERSION_SPACE_MAX_CLASSES_V1, canonical_root_slice,
-    canonical_roots, version_space_root,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
+    K1_VERSION_SPACE_MAX_CLASSES_V1, canonical_root_slice, canonical_roots, version_space_root,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -39,6 +39,8 @@ pub struct K1NaturalCandidateFreezeV1 {
     pub consequence_type: K1ConsequenceTypeV1,
     pub evidence_manifest_root_sha256: String,
     pub generator_schema: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub discovery_basis_root_sha256: String,
     pub readiness_receipt_root_sha256: String,
     pub scoring_tuple: K1CandidateScoreV1,
     pub scheduler_schema: String,
@@ -126,6 +128,36 @@ struct CandidateFreezeDigestV2<'a> {
     phase_mutation_allowed: bool,
 }
 
+#[derive(Serialize)]
+struct CandidateFreezeDigestV3<'a> {
+    schema: &'static str,
+    generation_sequence: u64,
+    catalog_root_sha256: &'a str,
+    k1_deficit_snapshot_root_sha256: &'a str,
+    epistemic_registry_revision: u64,
+    epistemic_registry_root_sha256: &'a str,
+    fixture_exclusion_root_sha256: &'a str,
+    candidate_root_sha256: &'a str,
+    capture_generation_root_sha256: &'a str,
+    candidate_structural_root_sha256: &'a str,
+    source_neutral_topology_root_sha256: &'a str,
+    semantic_novelty_signature_root_sha256: &'a str,
+    consequence_type: K1ConsequenceTypeV1,
+    evidence_manifest_root_sha256: &'a str,
+    generator_schema: &'a str,
+    discovery_basis_root_sha256: &'a str,
+    readiness_receipt_root_sha256: &'a str,
+    scoring_tuple: &'a K1CandidateScoreV1,
+    scheduler_schema: &'a str,
+    budget: K1GenerationBudgetV1,
+    support_watermark: u64,
+    contract_watermark: u64,
+    future_min_sequence: u64,
+    selected_at_unix: u64,
+    authority_ready: bool,
+    phase_mutation_allowed: bool,
+}
+
 impl K1GenerationBudgetV1 {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.maximum_support_rows == 0
@@ -149,6 +181,7 @@ impl K1NaturalCandidateFreezeV1 {
         candidate: &K1NaturalCohortCandidateV1,
         scoring_tuple: K1CandidateScoreV1,
         scheduler_schema: String,
+        discovery_basis_root_sha256: String,
         budget: K1GenerationBudgetV1,
         support_watermark: u64,
         contract_watermark: u64,
@@ -185,7 +218,7 @@ impl K1NaturalCandidateFreezeV1 {
             return Err("k1_candidate_freeze_binding_invalid");
         }
         let mut freeze = Self {
-            schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2.to_owned(),
+            schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3.to_owned(),
             freeze_root_sha256: String::new(),
             generation_sequence,
             catalog_root_sha256: catalog.catalog_root_sha256.clone(),
@@ -205,6 +238,7 @@ impl K1NaturalCandidateFreezeV1 {
             consequence_type: candidate.consequence_type,
             evidence_manifest_root_sha256: candidate.evidence_manifest_root_sha256.clone(),
             generator_schema: candidate.generator_schema.clone(),
+            discovery_basis_root_sha256,
             readiness_receipt_root_sha256: candidate
                 .readiness
                 .readiness_receipt_root_sha256
@@ -240,13 +274,22 @@ impl K1NaturalCandidateFreezeV1 {
             self.evidence_manifest_root_sha256.as_str(),
             self.readiness_receipt_root_sha256.as_str(),
         ];
-        let capture_generation_valid = if self.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1 {
-            self.capture_generation_root_sha256.is_empty()
-        } else {
-            self.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2
-                && valid_nonzero_sha256(&self.capture_generation_root_sha256)
+        let version_fields_valid = match self.schema.as_str() {
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1 => {
+                self.capture_generation_root_sha256.is_empty()
+                    && self.discovery_basis_root_sha256.is_empty()
+            }
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2 => {
+                valid_nonzero_sha256(&self.capture_generation_root_sha256)
+                    && self.discovery_basis_root_sha256.is_empty()
+            }
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 => {
+                valid_nonzero_sha256(&self.capture_generation_root_sha256)
+                    && valid_nonzero_sha256(&self.discovery_basis_root_sha256)
+            }
+            _ => false,
         };
-        if !capture_generation_valid
+        if !version_fields_valid
             || !roots.into_iter().all(valid_nonzero_sha256)
             || self.generation_sequence == 0
             || self.scheduler_schema.is_empty()
@@ -264,6 +307,37 @@ impl K1NaturalCandidateFreezeV1 {
     }
 
     pub(crate) fn expected_root(&self) -> Result<String, &'static str> {
+        if self.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 {
+            return canonical_json_sha256(&CandidateFreezeDigestV3 {
+                schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
+                generation_sequence: self.generation_sequence,
+                catalog_root_sha256: &self.catalog_root_sha256,
+                k1_deficit_snapshot_root_sha256: &self.k1_deficit_snapshot_root_sha256,
+                epistemic_registry_revision: self.epistemic_registry_revision,
+                epistemic_registry_root_sha256: &self.epistemic_registry_root_sha256,
+                fixture_exclusion_root_sha256: &self.fixture_exclusion_root_sha256,
+                candidate_root_sha256: &self.candidate_root_sha256,
+                capture_generation_root_sha256: &self.capture_generation_root_sha256,
+                candidate_structural_root_sha256: &self.candidate_structural_root_sha256,
+                source_neutral_topology_root_sha256: &self.source_neutral_topology_root_sha256,
+                semantic_novelty_signature_root_sha256: &self
+                    .semantic_novelty_signature_root_sha256,
+                consequence_type: self.consequence_type,
+                evidence_manifest_root_sha256: &self.evidence_manifest_root_sha256,
+                generator_schema: &self.generator_schema,
+                discovery_basis_root_sha256: &self.discovery_basis_root_sha256,
+                readiness_receipt_root_sha256: &self.readiness_receipt_root_sha256,
+                scoring_tuple: &self.scoring_tuple,
+                scheduler_schema: &self.scheduler_schema,
+                budget: self.budget,
+                support_watermark: self.support_watermark,
+                contract_watermark: self.contract_watermark,
+                future_min_sequence: self.future_min_sequence,
+                selected_at_unix: self.selected_at_unix,
+                authority_ready: false,
+                phase_mutation_allowed: false,
+            });
+        }
         if self.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2 {
             return canonical_json_sha256(&CandidateFreezeDigestV2 {
                 schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,

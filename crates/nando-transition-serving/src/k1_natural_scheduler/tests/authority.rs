@@ -6,8 +6,18 @@ use nando_operator_admission::{
 
 use super::*;
 use crate::k1_natural_scheduler::authority::{
-    certification_authorizes_settlement, validate_active_protocol_mode_cas, validate_registry_cas,
+    certification_authorizes_settlement, validate_active_protocol_mode_cas,
+    validate_discovery_basis_cas, validate_registry_cas,
 };
+
+#[test]
+fn authority_rejects_a_valid_freeze_bound_to_an_uninstalled_discovery_basis() {
+    validate_discovery_basis_cas(&candidate_freeze()).expect("installed discovery basis");
+    assert_eq!(
+        validate_discovery_basis_cas(&candidate_freeze_with_basis(root(999))),
+        Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned())
+    );
+}
 
 #[test]
 fn authority_rejects_stale_active_protocol_mode_set_root() {

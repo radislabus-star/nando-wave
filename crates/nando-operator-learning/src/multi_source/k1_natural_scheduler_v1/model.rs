@@ -22,6 +22,7 @@ pub const K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2: &str = "nando.k1-natural-cohort
 pub const K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1: &str = "nando.k1-natural-candidate-queue.v1";
 pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1: &str = "nando.k1-natural-candidate-freeze.v1";
 pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2: &str = "nando.k1-natural-candidate-freeze.v2";
+pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3: &str = "nando.k1-natural-candidate-freeze.v3";
 pub const K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1: &str = "nando.k1-natural-evidence-row.v1";
 pub const K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2: &str = "nando.k1-natural-evidence-row.v2";
 pub const K1_IDENTIFICATION_FREEZE_SCHEMA_V1: &str = "nando.k1-identification-freeze.v1";
