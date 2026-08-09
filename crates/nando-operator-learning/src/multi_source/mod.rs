@@ -67,11 +67,12 @@ pub use frozen_version_space::{
     seal_ms3_independent_future_with_route_receipt_v1,
 };
 pub use identification::{
-    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3,
-    MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1, MultiSourceT1IdentificationStateV1,
-    MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1, PassiveT1ProbeContractV1,
-    RAW_PHASE_T1_HYPOTHESIS_ENVELOPE_SCHEMA_V1, RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1,
-    RawPhaseT1HypothesisEnvelopeV1, RawPhaseT1HypothesisScoreV1, active_t1_protocol_mode_root_v1,
+    FrozenRawPhaseT1ContractV1, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+    MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
+    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1,
+    PassiveT1ProbeContractV1, RAW_PHASE_T1_HYPOTHESIS_ENVELOPE_SCHEMA_V1,
+    RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1, RawPhaseT1HypothesisEnvelopeV1,
+    RawPhaseT1HypothesisScoreV1, active_t1_protocol_mode_root_v1,
     identify_multi_source_t1_operator_v1,
     identify_multi_source_t1_operator_with_active_protocols_v1,
     identify_multi_source_t1_operator_with_candidate_artifacts_v1,

@@ -3704,8 +3704,10 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         &BTreeSet::new(),
         &BTreeSet::new(),
         &[],
-        &frozen_domain_root,
-        1,
+        FrozenRawPhaseT1ContractV1 {
+            frozen_domain_root_sha256: &frozen_domain_root,
+            support_watermark: 1,
+        },
         evidence_epoch.clone(),
     );
     let with_post_watermark = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
@@ -3714,8 +3716,10 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         &BTreeSet::new(),
         &BTreeSet::new(),
         &[],
-        &frozen_domain_root,
-        1,
+        FrozenRawPhaseT1ContractV1 {
+            frozen_domain_root_sha256: &frozen_domain_root,
+            support_watermark: 1,
+        },
         evidence_epoch.clone(),
     );
     let mut reversed_rows = rows.clone();
@@ -3728,8 +3732,10 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         &BTreeSet::new(),
         &BTreeSet::new(),
         &[],
-        &frozen_domain_root,
-        1,
+        FrozenRawPhaseT1ContractV1 {
+            frozen_domain_root_sha256: &frozen_domain_root,
+            support_watermark: 1,
+        },
         evidence_epoch,
     );
 
@@ -3751,8 +3757,10 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
             &BTreeSet::new(),
             &BTreeSet::new(),
             &[],
-            &frozen_domain_root,
-            2,
+            FrozenRawPhaseT1ContractV1 {
+                frozen_domain_root_sha256: &frozen_domain_root,
+                support_watermark: 2,
+            },
             root("raw phase collapse evidence epoch"),
         );
     assert!(

@@ -41,6 +41,12 @@ const MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS: usize = 12;
 pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
     "nando.multi-source-t1.source-neutral-role-version-space.v2";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FrozenRawPhaseT1ContractV1<'a> {
+    pub frozen_domain_root_sha256: &'a str,
+    pub support_watermark: u64,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MultiSourceT1IdentificationStateV1 {
@@ -220,8 +226,7 @@ pub fn identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
     active_intents: &BTreeSet<String>,
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
     candidate_artifacts: &[NaturalT1ProgramArtifactV1],
-    frozen_domain_root_sha256: &str,
-    support_watermark: u64,
+    raw_phase_contract: FrozenRawPhaseT1ContractV1<'_>,
     evidence_epoch_sha256: String,
 ) -> MultiSourceT1IdentificationV3 {
     identify_multi_source_t1_operator_internal_v1(
@@ -230,7 +235,7 @@ pub fn identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
         active_intents,
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
-        Some((frozen_domain_root_sha256, support_watermark)),
+        Some(raw_phase_contract),
         evidence_epoch_sha256,
     )
 }
@@ -241,7 +246,7 @@ fn identify_multi_source_t1_operator_internal_v1(
     active_intents: &BTreeSet<String>,
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
     candidate_artifacts: &[NaturalT1ProgramArtifactV1],
-    raw_phase_contract: Option<(&str, u64)>,
+    raw_phase_contract: Option<FrozenRawPhaseT1ContractV1<'_>>,
     evidence_epoch_sha256: String,
 ) -> MultiSourceT1IdentificationV3 {
     let frame_by_root = frames
@@ -268,7 +273,7 @@ fn identify_multi_source_t1_operator_internal_v1(
     let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
     for joined in joined_rows {
         let is_hypothesis_support = raw_phase_contract
-            .is_none_or(|(_, support_watermark)| joined.capture_sequence <= support_watermark);
+            .is_none_or(|contract| joined.capture_sequence <= contract.support_watermark);
         let factorized = factor_multi_source_row_v1(joined);
         let supported_shape = matches!(
             factorized.pre_action_shape,
@@ -449,7 +454,9 @@ fn identify_multi_source_t1_operator_internal_v1(
 
     let candidate_programs = seed.seed_programs.clone();
     let raw_phase_envelope = match raw_phase_contract {
-        Some((frozen_domain_root_sha256, support_watermark)) => {
+        Some(contract) => {
+            let frozen_domain_root_sha256 = contract.frozen_domain_root_sha256;
+            let support_watermark = contract.support_watermark;
             debug_assert!(
                 accepted
                     .iter()

@@ -161,8 +161,10 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         &BTreeSet::new(),
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
-        &freeze.freeze_root_sha256,
-        freeze.support_watermark,
+        FrozenRawPhaseT1ContractV1 {
+            frozen_domain_root_sha256: &freeze.freeze_root_sha256,
+            support_watermark: freeze.support_watermark,
+        },
         epoch,
     );
     if !report.validate()
