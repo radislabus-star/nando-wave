@@ -1565,7 +1565,7 @@ mod tests {
         assert!(html.contains("K1 ELIGIBLE"));
         assert!(html.contains("CURRENT BLOCKER / ACTIVE ROOT"));
         assert!(html.contains("STRUCTURAL FRONTIER CENSUS V2 · OPERATOR-BLIND"));
-        assert!(html.contains("EXISTING FORM BINDING GAP"));
+        assert!(html.contains("LEADING EXACT COHORT"));
         assert!(html.contains("snapshot.natural_vocabulary_census"));
         assert!(html.contains("nando.structural-frontier-census.v2"));
         assert!(html.contains("nando.natural-vocabulary-census.v1"));
