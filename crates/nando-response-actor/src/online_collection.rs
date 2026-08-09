@@ -303,6 +303,13 @@ pub struct OnlineCollectionReadSnapshot {
 }
 
 impl OnlineCollectionMiner {
+    pub fn natural_t1_program_artifacts(
+        &self,
+    ) -> Result<Vec<nando_operator_learning::multi_source::NaturalT1ProgramArtifactV1>, String>
+    {
+        natural_artifacts::natural_t1_program_artifacts(&self.checkpoint)
+    }
+
     #[must_use]
     pub fn read_snapshot(&self) -> OnlineCollectionReadSnapshot {
         OnlineCollectionReadSnapshot {
@@ -333,7 +340,7 @@ impl OnlineCollectionReadSnapshot {
         &self,
     ) -> Result<Vec<nando_operator_learning::multi_source::NaturalT1ProgramArtifactV1>, String>
     {
-        natural_artifacts::natural_t1_program_artifacts(&self.miner.checkpoint)
+        self.miner.natural_t1_program_artifacts()
     }
 
     #[must_use]

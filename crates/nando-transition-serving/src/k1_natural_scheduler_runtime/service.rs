@@ -178,7 +178,6 @@ pub(crate) fn advance_state(
             miner
                 .lock()
                 .map_err(|_| "k1_scheduler_collection_miner_lock_poisoned".to_owned())?
-                .read_snapshot()
                 .natural_t1_program_artifacts()
         })
         .transpose()?
