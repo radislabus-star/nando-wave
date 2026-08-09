@@ -85,21 +85,27 @@ candidate_binary="${work}/nando-transition-serving"
 candidate_env="${work}/response-learning.env"
 backup_binary="${work}/previous-binary"
 backup_env="${work}/previous-env"
+rollback_env="${work}/rollback-env"
 backup_key="${work}/previous-key"
-state_backup="${LEARNING_STATE}.rollback.$$"
 key_existed=0
-state_existed=0
 learner_was_active=0
 rollback_armed=0
+
+set_env_value_in_file() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  if grep -qE "^${key}=" "${file}"; then
+    sed -i "s#^${key}=.*#${key}=${value}#" "${file}"
+  else
+    printf '%s=%s\n' "${key}" "${value}" >> "${file}"
+  fi
+}
 
 set_env_value() {
   local key="$1"
   local value="$2"
-  if grep -qE "^${key}=" "${candidate_env}"; then
-    sed -i "s#^${key}=.*#${key}=${value}#" "${candidate_env}"
-  else
-    printf '%s=%s\n' "${key}" "${value}" >> "${candidate_env}"
-  fi
+  set_env_value_in_file "${candidate_env}" "${key}" "${value}"
 }
 
 wait_learning_ready() {
@@ -124,7 +130,6 @@ wait_learning_ready() {
 
 cleanup() {
   set +e
-  sudo -n rm -rf "${state_backup}"
   rm -rf "${work}"
 }
 
@@ -135,24 +140,21 @@ rollback() {
   if [[ "${rollback_armed}" == "1" ]]; then
     sudo -n systemctl stop "${SERVICE}"
     sudo -n install -m 0755 "${backup_binary}" "${INSTALL_BINARY}"
-    sudo -n install -m 0644 "${backup_env}" "${ROLE_ENV}"
+    cp -a "${backup_env}" "${rollback_env}"
+    set_env_value_in_file \
+      "${rollback_env}" NANDO_K1_NATURAL_SCHEDULER_ENABLED 0
+    sudo -n install -m 0644 "${rollback_env}" "${ROLE_ENV}"
     if [[ "${key_existed}" == "1" ]]; then
       sudo -n install -o "${service_user}" -g "${service_group}" -m 0600 \
         "${backup_key}" "${key_path}"
     else
       sudo -n rm -f "${key_path}"
     fi
-    if [[ "${state_existed}" == "1" && -d "${state_backup}" ]]; then
-      sudo -n rm -rf "${LEARNING_STATE}"
-      sudo -n mv "${state_backup}" "${LEARNING_STATE}"
-      sudo -n chown -R "${service_user}:${service_group}" "${LEARNING_STATE}"
-    elif [[ "${state_existed}" == "0" ]]; then
-      sudo -n rm -rf "${LEARNING_STATE}"
-    fi
     if [[ "${learner_was_active}" == "1" ]]; then
       sudo -n systemctl start "${SERVICE}"
     fi
-    printf 'remote evidence spool install failed; learner and state restored\n' >&2
+    printf '%s\n' \
+      'remote evidence spool install failed; binary/config restored, K1 disabled, append-only state preserved' >&2
   fi
   cleanup
   exit "${rc}"
@@ -180,11 +182,6 @@ if systemctl is-active --quiet "${SERVICE}"; then
   learner_was_active=1
   sudo -n systemctl stop "${SERVICE}"
 fi
-if sudo -n test -d "${LEARNING_STATE}"; then
-  sudo -n cp -a --reflink=auto "${LEARNING_STATE}" "${state_backup}"
-  state_existed=1
-fi
-
 rollback_armed=1
 sudo -n install -d -o root -g "${service_group}" -m 0750 "${KEY_DIRECTORY}"
 if [[ "${client_key_already_installed}" == "0" ]]; then

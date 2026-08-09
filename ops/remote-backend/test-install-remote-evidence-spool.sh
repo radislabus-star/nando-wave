@@ -82,6 +82,8 @@ set -euo pipefail
 url="${*: -1}"
 if [[ "${url}" == *":18790/health" ]]; then
   if [[ "${NANDO_TEST_FAIL_LEARNING:-0}" == "1" ]]; then
+    printf '%s\n' 'forward append-only state' \
+      >"${NANDO_REMOTE_LEARNING_STATE}/forward-state"
     printf '%s\n' '{"ok":false}'
   else
     printf '%s\n' \
@@ -137,7 +139,10 @@ cmp -s "${CANDIDATE_ONE}" "${INSTALL_BINARY}"
 [[ -e "${SYSTEMCTL_STATE}/active" ]]
 
 cp -a "${INSTALL_BINARY}" "${WORK}/expected-binary"
+printf '%s\n' 'NANDO_K1_NATURAL_SCHEDULER_ENABLED=1' >>"${ROLE_ENV}"
 cp -a "${ROLE_ENV}" "${WORK}/expected-env"
+sed 's/^NANDO_K1_NATURAL_SCHEDULER_ENABLED=.*/NANDO_K1_NATURAL_SCHEDULER_ENABLED=0/' \
+  "${WORK}/expected-env" >"${WORK}/expected-rollback-env"
 cp -a "${KEY_DIRECTORY}/${client_id}.key" "${WORK}/expected-key"
 
 if NANDO_TEST_FAIL_LEARNING=1 "${INSTALLER}" \
@@ -148,9 +153,11 @@ if NANDO_TEST_FAIL_LEARNING=1 "${INSTALLER}" \
 fi
 
 cmp -s "${WORK}/expected-binary" "${INSTALL_BINARY}"
-cmp -s "${WORK}/expected-env" "${ROLE_ENV}"
+cmp -s "${WORK}/expected-rollback-env" "${ROLE_ENV}"
 cmp -s "${WORK}/expected-key" "${KEY_DIRECTORY}/${client_id}.key"
 grep -Fxq 'state marker' "${LEARNING_STATE}/marker"
+grep -Fxq 'forward append-only state' "${LEARNING_STATE}/forward-state"
+grep -Fxq 'NANDO_K1_NATURAL_SCHEDULER_ENABLED=0' "${ROLE_ENV}"
 [[ -e "${SYSTEMCTL_STATE}/active" ]]
 if compgen -G "${LEARNING_STATE}.rollback.*" >/dev/null; then
   printf '%s\n' "installer left a state rollback directory" >&2
