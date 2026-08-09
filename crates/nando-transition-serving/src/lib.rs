@@ -190,6 +190,7 @@ pub struct ServingConfig {
     pub opportunity_bridge_consumer_enabled: bool,
     pub opportunity_bridge_poll_ms: u64,
     pub multi_source_research_enabled: bool,
+    pub k1_natural_scheduler_enabled: bool,
     pub multi_source_snapshot_path: PathBuf,
     pub multi_source_snapshot_poll_ms: u64,
     pub terminal_receipt_archive_path: PathBuf,
@@ -219,6 +220,14 @@ impl ServingConfig {
         let collection_checkpoint = format!(
             "online-collection-program-pools-v{COLLECTION_SYNTHESIS_GENERATION}.checkpoint"
         );
+        let multi_source_research_enabled = env::var("NANDO_MULTI_SOURCE_RESEARCH_ENABLED")
+            .map_or(true, |value| {
+                !matches!(value.as_str(), "0" | "false" | "no")
+            });
+        let k1_natural_scheduler_enabled = env::var("NANDO_K1_NATURAL_SCHEDULER_ENABLED")
+            .map_or(multi_source_research_enabled, |value| {
+                !matches!(value.as_str(), "0" | "false" | "no")
+            });
         Ok(Self {
             bind: env::var("NANDO_TRANSITION_SERVING_BIND")
                 .unwrap_or_else(|_| "127.0.0.1:18789".into()),
@@ -398,10 +407,8 @@ impl ServingConfig {
                 "NANDO_OPPORTUNITY_BRIDGE_CONSUMER_ENABLED",
             ),
             opportunity_bridge_poll_ms: env_u64("NANDO_OPPORTUNITY_BRIDGE_POLL_MS", 100),
-            multi_source_research_enabled: env::var("NANDO_MULTI_SOURCE_RESEARCH_ENABLED")
-                .map_or(true, |value| {
-                    !matches!(value.as_str(), "0" | "false" | "no")
-                }),
+            multi_source_research_enabled,
+            k1_natural_scheduler_enabled,
             multi_source_snapshot_path: env_path_join(
                 "NANDO_MULTI_SOURCE_SNAPSHOT_PATH",
                 &state_dir,
@@ -1171,7 +1178,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         state.config.learning_structure_bridge_consumer_enabled,
     )?;
     spawn_miner_warmup(state.clone())?;
-    if state.config.multi_source_research_enabled {
+    if state.config.multi_source_research_enabled || state.config.k1_natural_scheduler_enabled {
         spawn_multi_source_snapshot_runtime(state.clone())?;
     }
     axum::serve(listener, app)
@@ -1628,6 +1635,10 @@ async fn health(State(state): State<AppState>) -> Response {
         object.insert(
             "multi_source_research_enabled".to_owned(),
             Value::Bool(state.config.multi_source_research_enabled),
+        );
+        object.insert(
+            "k1_natural_scheduler_enabled".to_owned(),
+            Value::Bool(state.config.k1_natural_scheduler_enabled),
         );
         object.insert(
             "remote_evidence".to_owned(),
@@ -2991,9 +3002,11 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                     if let Err(error) = ms4_closed_loop::advance(&state) {
                         eprintln!("nando-ms4-closed-loop: {error}");
                     }
-                    if let Err(error) = k1_natural_scheduler_runtime::advance_state(&state) {
-                        eprintln!("nando-k1-natural-scheduler: {error}");
-                    }
+                }
+                if state.config.k1_natural_scheduler_enabled
+                    && let Err(error) = k1_natural_scheduler_runtime::advance_state(&state)
+                {
+                    eprintln!("nando-k1-natural-scheduler: {error}");
                 }
                 let snapshot_generation = state
                     .config
@@ -8321,6 +8334,7 @@ mod tests {
             opportunity_bridge_consumer_enabled: false,
             opportunity_bridge_poll_ms: 100,
             multi_source_research_enabled: false,
+            k1_natural_scheduler_enabled: false,
             multi_source_snapshot_path: root.join("multi-source-live-v2/snapshot.cbor"),
             multi_source_snapshot_poll_ms: 1_000,
             terminal_receipt_archive_path: root
@@ -8723,6 +8737,7 @@ mod tests {
         let health: Value = serde_json::from_slice(&bytes).expect("health json");
         assert_eq!(health["ok"], true);
         assert_eq!(health["multi_source_research_enabled"], false);
+        assert_eq!(health["k1_natural_scheduler_enabled"], false);
         assert_eq!(health["online_collection_miner"]["ready"], false);
 
         for _ in 0..100 {
