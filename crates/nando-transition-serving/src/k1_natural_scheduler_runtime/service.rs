@@ -787,6 +787,130 @@ fn store_mechanism_report(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nando_operator_kernel::{
+        AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2,
+        LearningRequestStructureV2, MultiSourceCardinalityClassV1,
+        MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1,
+        MultiSourceExtractionStatusV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
+        MultiSourceTemporalClassV1, MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1,
+        PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA, RelationAtom, sha256_bytes,
+    };
+    use nando_operator_learning::SOURCE_NEUTRAL_EXTRACTOR_VERSION;
+
+    fn root(label: &str) -> String {
+        sha256_bytes(label.as_bytes())
+    }
+
+    fn topology(label: &str, capture_sequence: u64) -> PreActionTopologyAuditRowV1 {
+        let session_root = root(&format!("session-{label}"));
+        let structure = LearningRequestStructureV2 {
+            schema: LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
+            turn_intent_id_sha256: root(&format!("intent-{label}")),
+            request_event_id_sha256: root(&format!("request-{label}")),
+            provider_bound_turn_identity: true,
+            session_lineage_roots_sha256: vec![session_root.clone()],
+            request_phase_atom_ids: vec![capture_sequence.saturating_mul(10).saturating_add(1)],
+            pre_action_context_atom_ids: vec![capture_sequence.saturating_mul(10).saturating_add(2)],
+            capability_atom_ids: vec![capture_sequence.saturating_mul(10).saturating_add(3)],
+            estimated_input_tokens: 100,
+            provider_payload_bytes: 400,
+            provider_capture_request_root_sha256: root(&format!("provider-{label}")),
+            decidability_reason_code: "pre_action_pending".to_owned(),
+            topology: PreActionMultiSourceTopologyV1 {
+                extraction_status: MultiSourceExtractionStatusV1::Complete,
+                grounded_output_count: 1,
+                output_part_count: 1,
+                roles: vec![MultiSourceRoleNodeV1 {
+                    local_role_id: 0,
+                    source_ordinal: 0,
+                    value_ordinal: 0,
+                    type_class: MultiSourceTypeClassV1::Number,
+                    container_class: MultiSourceContainerClassV1::Scalar,
+                    cardinality_class: MultiSourceCardinalityClassV1::One,
+                    temporal_class: MultiSourceTemporalClassV1::Latest,
+                    depth_bucket: 1,
+                    structural_flags: 1,
+                }],
+                role_witnesses: vec![MultiSourceRoleWitnessV1 {
+                    local_role_id: 0,
+                    value_sha256: root(&format!("value-{label}")),
+                    request_reference_ordinal: None,
+                    request_reference_ordinal_candidates: Vec::new(),
+                }],
+                relations: Vec::new(),
+            },
+        };
+        let commit = PreActionTopologyCommitV1::seal(
+            &structure,
+            MultiSourceEvidenceOriginV1::FreshLive,
+            sha256_bytes(b"nando.multi-source-extractor.v2"),
+            sha256_bytes(b"nando.multi-source-extractor-config.v2"),
+            capture_sequence,
+        )
+        .expect("topology commit");
+        PreActionTopologyAuditRowV1 {
+            bridge_epoch_sha256: root("bridge-epoch"),
+            bridge_sequence: Some(capture_sequence),
+            record_sha256: Some(root(&format!("record-{label}"))),
+            capture_epoch_sha256: Some(root("capture-epoch")),
+            capture_event_sha256: Some(root(&format!("capture-event-{label}"))),
+            capture_receipt_sha256: Some(root(&format!("capture-receipt-{label}"))),
+            captured_at_unix_ms: Some(1_000_u64.saturating_add(capture_sequence)),
+            session_lineage_sha256: Some(session_root),
+            physical_order_proven: true,
+            structure,
+            commit,
+        }
+    }
+
+    fn completed_frame(label: &str, capture_sequence: u64) -> RelationFrame {
+        let observation_slot = u16::try_from(capture_sequence).unwrap_or(u16::MAX);
+        let action_slot = observation_slot.saturating_add(100);
+        let value_root = root(&format!("value-{label}"));
+        RelationFrame {
+            schema: RELATION_FRAME_SCHEMA.to_owned(),
+            frame_id_sha256: root(&format!("frame-{label}")),
+            event_id_sha256: root(&format!("action-{label}")),
+            client_intent_id_sha256: root(&format!("intent-{label}")),
+            session_id_sha256: root(&format!("session-{label}")),
+            observed_at_unix_nanos: 1_001_u64
+                .saturating_add(capture_sequence)
+                .saturating_mul(1_000_000),
+            estimated_input_tokens: 100,
+            extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+            verifier_label: Some(true),
+            atoms: vec![
+                RelationAtom::CompletionState {
+                    value: "completed".to_owned(),
+                },
+                RelationAtom::TypedSlot {
+                    slot_id: observation_slot,
+                    value_type: AtomValueType::Integer,
+                    source: AtomSource::Observation,
+                    value_sha256: value_root.clone(),
+                },
+                RelationAtom::TypedSlot {
+                    slot_id: action_slot,
+                    value_type: AtomValueType::Integer,
+                    source: AtomSource::Action,
+                    value_sha256: value_root,
+                },
+                RelationAtom::SlotEquality {
+                    left_slot: observation_slot,
+                    right_slot: action_slot,
+                },
+                RelationAtom::ActionFunction {
+                    value: "transport_a".to_owned(),
+                },
+                RelationAtom::ActionRoleArgument {
+                    name: "value".to_owned(),
+                    slot_id: action_slot,
+                    value_type: Some(AtomValueType::Integer),
+                },
+            ],
+            evidence_ref_sha256: root(&format!("evidence-{label}")),
+        }
+    }
 
     #[test]
     fn waiting_tick_rebuilds_only_for_join_relevant_archive_deltas() {
@@ -832,5 +956,52 @@ mod tests {
             true,
             RuntimeState::WaitingForEvidence
         ));
+    }
+
+    #[test]
+    fn incremental_prepared_context_matches_full_join_oracle() {
+        let active_protocols = BTreeSet::new();
+        let first_topology = topology("first", 1);
+        let second_topology = topology("second", 2);
+        let first_frame = completed_frame("first", 1);
+        let second_frame = completed_frame("second", 2);
+
+        let oracle_ledger = MultiSourceJoinLedgerV1::build(
+            &[first_topology.clone(), second_topology.clone()],
+            &[first_frame.clone(), second_frame.clone()],
+        );
+        let oracle = prepare_tick_context_from_join_ledger(oracle_ledger, &active_protocols)
+            .expect("full oracle");
+
+        let initial_ledger = MultiSourceJoinLedgerV1::build(
+            std::slice::from_ref(&first_topology),
+            std::slice::from_ref(&first_frame),
+        );
+        let mut incremental =
+            prepare_tick_context_from_join_ledger(initial_ledger, &active_protocols)
+                .expect("initial context");
+        extend_prepared_from_delta(
+            &mut incremental,
+            2,
+            2,
+            &[Arc::new(second_topology.clone())],
+            &[Arc::new(second_topology)],
+            &[Arc::new(second_frame)],
+            &active_protocols,
+        )
+        .expect("incremental context");
+
+        assert_eq!(incremental.join_report, oracle.join_report);
+        assert_eq!(incremental.bindings, oracle.bindings);
+        assert_eq!(incremental.catalog, oracle.catalog);
+        assert_eq!(
+            incremental.evidence_epoch_root_sha256,
+            oracle.evidence_epoch_root_sha256
+        );
+        assert_eq!(
+            incremental.active_protocol_mode_set_root_sha256,
+            oracle.active_protocol_mode_set_root_sha256
+        );
+        assert_eq!(incremental.contract_watermark, oracle.contract_watermark);
     }
 }

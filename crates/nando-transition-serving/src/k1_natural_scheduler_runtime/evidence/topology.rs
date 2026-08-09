@@ -322,6 +322,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn generation_budget() -> K1Generati
 mod tests {
     use super::*;
     use crate::k1_natural_scheduler_runtime::K1_MAX_SUPPORT_ROWS_V1;
+    use nando_operator_learning::multi_source::CompletedEffectAtomV1;
     use nando_operator_kernel::{
         MultiSourceCardinalityClassV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
         MultiSourceTemporalClassV1, PreActionMultiSourceTopologyV1, canonical_json_sha256,
