@@ -32,6 +32,20 @@ pub use raw_phase::{
     RawPhaseT1HypothesisEnvelopeV1, RawPhaseT1HypothesisScoreV1,
     seal_raw_phase_t1_hypothesis_envelope_v1,
 };
+mod raw_phase_executable;
+pub use raw_phase_executable::{
+    RAW_PHASE_EXECUTABLE_BLUEPRINT_BUILDER_V1, RAW_PHASE_EXECUTABLE_BLUEPRINT_ENVELOPE_SCHEMA_V1,
+    RAW_PHASE_EXECUTABLE_EVIDENCE_SCHEMA_V1, RAW_PHASE_SELECTED_EXECUTABLE_RECEIPT_SCHEMA_V1,
+    RawPhaseExecutableBlueprintDispositionV1, RawPhaseExecutableBlueprintEnvelopeV1,
+    RawPhaseExecutableBlueprintExclusionV1, RawPhaseExecutableEvidenceV1,
+    RawPhaseRebuiltExecutableBlueprintV1, RawPhaseSelectedExecutableReceiptV1,
+    raw_phase_executable_runtime_selectors_v1, raw_phase_executable_surface_bundle_v1,
+    rebuild_raw_phase_selected_executable_v1,
+};
+use raw_phase_executable::{
+    RawPhaseExecutableSupportV1, seal_raw_phase_executable_blueprint_envelope_v1,
+    seal_raw_phase_selected_executable_receipt_v1,
+};
 
 pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3: &str =
     "nando.multi-source-t1-identification.v3";
@@ -79,6 +93,8 @@ pub struct MultiSourceT1ProofBasisV1 {
     pub basis_root_sha256: String,
     pub support_capture_frame_ids_sha256: Vec<String>,
     pub future_capture_frame_ids_sha256: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub raw_phase_future_evidence: Vec<RawPhaseExecutableEvidenceV1>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -90,6 +106,14 @@ pub struct MultiSourceT1IdentificationV3 {
     pub raw_phase_hypothesis_root_sha256: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_phase_support_watermark: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_phase_executable_blueprint_root_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_phase_executable_programs: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_phase_excluded_programs: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_phase_selected_executable: Option<RawPhaseSelectedExecutableReceiptV1>,
     pub selected_shape_root_sha256: Option<String>,
     pub selected_protocol_mode_root_sha256: Option<String>,
     pub selected_marginal_input_tokens: u64,
@@ -142,6 +166,14 @@ struct T1IdentificationDigest<'a> {
     raw_phase_hypothesis_root_sha256: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     raw_phase_support_watermark: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_phase_executable_blueprint_root_sha256: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_phase_executable_programs: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_phase_excluded_programs: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_phase_selected_executable: &'a Option<RawPhaseSelectedExecutableReceiptV1>,
     selected_shape_root_sha256: Option<&'a str>,
     selected_protocol_mode_root_sha256: Option<&'a str>,
     selected_marginal_input_tokens: u64,
@@ -168,6 +200,37 @@ struct T1IdentificationDigest<'a> {
     state: MultiSourceT1IdentificationStateV1,
     blocker: Option<&'a str>,
     execution_authority: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RawPhaseIdentificationMetadata {
+    hypothesis_root_sha256: Option<String>,
+    support_watermark: Option<u64>,
+    executable_blueprint_root_sha256: Option<String>,
+    executable_programs: Option<usize>,
+    excluded_programs: Option<usize>,
+}
+
+impl RawPhaseIdentificationMetadata {
+    fn from_hypothesis(envelope: &RawPhaseT1HypothesisEnvelopeV1) -> Self {
+        Self {
+            hypothesis_root_sha256: Some(envelope.envelope_root_sha256.clone()),
+            support_watermark: Some(envelope.support_watermark),
+            ..Self::default()
+        }
+    }
+
+    fn bind_executable(mut self, envelope: &RawPhaseExecutableBlueprintEnvelopeV1) -> Self {
+        self.executable_blueprint_root_sha256 = Some(envelope.envelope_root_sha256.clone());
+        self.executable_programs = Some(envelope.executable_program_roots_sha256.len());
+        self.excluded_programs = Some(
+            envelope
+                .candidate_program_roots_sha256
+                .len()
+                .saturating_sub(envelope.executable_program_roots_sha256.len()),
+        );
+        self
+    }
 }
 
 #[must_use]
@@ -460,7 +523,7 @@ fn identify_multi_source_t1_operator_internal_v1(
         );
     };
 
-    let candidate_programs = seed.seed_programs.clone();
+    let hypothesis_programs = seed.seed_programs.clone();
     let raw_phase_envelope = match raw_phase_contract {
         Some(contract) => {
             let frozen_domain_root_sha256 = contract.frozen_domain_root_sha256;
@@ -490,7 +553,7 @@ fn identify_multi_source_t1_operator_internal_v1(
                 &support_frames,
                 support_lineages,
                 artifact_roots,
-                &candidate_programs,
+                &hypothesis_programs,
             ) {
                 Ok(envelope) => Some(envelope),
                 Err(blocker) => {
@@ -506,47 +569,118 @@ fn identify_multi_source_t1_operator_internal_v1(
         }
         None => None,
     };
-    let evidence_epoch_sha256 = match raw_phase_envelope.as_ref() {
-        Some(envelope) => match canonical_json_sha256(&(
-            "nando.multi-source-t1-raw-phase-evidence-epoch.v1",
+    let mut raw_phase_metadata = raw_phase_envelope
+        .as_ref()
+        .map(RawPhaseIdentificationMetadata::from_hypothesis)
+        .unwrap_or_default();
+    let raw_phase_executable_envelope = match raw_phase_envelope.as_ref() {
+        Some(hypothesis) => {
+            let support = accepted
+                .iter()
+                .map(|row| RawPhaseExecutableSupportV1 {
+                    capture_sequence: row.joined.capture_sequence,
+                    lineage_root_sha256: &row.joined.session_lineage_sha256,
+                    topology: &row.joined.topology,
+                    frame: &row.frame,
+                })
+                .collect::<Vec<_>>();
+            match seal_raw_phase_executable_blueprint_envelope_v1(
+                hypothesis,
+                &support,
+                &hypothesis_programs,
+            ) {
+                Ok(envelope) => Some(envelope),
+                Err(blocker) => {
+                    return selected_terminal_report_with_raw_phase(
+                        evidence_epoch_sha256,
+                        shape_root,
+                        selected_marginal_input_tokens,
+                        MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                        blocker,
+                        &raw_phase_metadata,
+                    );
+                }
+            }
+        }
+        None => None,
+    };
+    if let Some(envelope) = raw_phase_executable_envelope.as_ref() {
+        raw_phase_metadata = raw_phase_metadata.bind_executable(envelope);
+    }
+    let evidence_epoch_sha256 = match (
+        raw_phase_envelope.as_ref(),
+        raw_phase_executable_envelope.as_ref(),
+    ) {
+        (Some(hypothesis), Some(executable)) => match canonical_json_sha256(&(
+            "nando.multi-source-t1-raw-phase-evidence-epoch.v2",
             evidence_epoch_sha256.as_str(),
-            envelope.envelope_root_sha256.as_str(),
+            hypothesis.envelope_root_sha256.as_str(),
+            executable.envelope_root_sha256.as_str(),
         )) {
             Ok(root) => root,
             Err(_) => {
-                return selected_terminal_report(
+                return selected_terminal_report_with_raw_phase(
                     evidence_epoch_sha256,
                     shape_root,
                     selected_marginal_input_tokens,
                     MultiSourceT1IdentificationStateV1::InvalidEvidence,
                     "raw_phase_t1_evidence_epoch_failed",
+                    &raw_phase_metadata,
                 );
             }
         },
-        None => evidence_epoch_sha256,
+        (None, None) => evidence_epoch_sha256,
+        _ => {
+            return selected_terminal_report_with_raw_phase(
+                evidence_epoch_sha256,
+                shape_root,
+                selected_marginal_input_tokens,
+                MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                "raw_phase_t1_executable_envelope_missing",
+                &raw_phase_metadata,
+            );
+        }
     };
-    let raw_phase_hypothesis_root_sha256 = raw_phase_envelope
-        .as_ref()
-        .map(|envelope| envelope.envelope_root_sha256.clone());
-    let raw_phase_support_watermark = raw_phase_envelope
-        .as_ref()
-        .map(|envelope| envelope.support_watermark);
-    let manifest = match generation_manifest_with_hypothesis_root(
+    let candidate_programs = raw_phase_executable_envelope.as_ref().map_or_else(
+        || hypothesis_programs.clone(),
+        |envelope| envelope.executable_programs(&hypothesis_programs),
+    );
+    if candidate_programs.is_empty() {
+        return selected_terminal_report_with_raw_phase(
+            evidence_epoch_sha256,
+            shape_root,
+            selected_marginal_input_tokens,
+            MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty,
+            "raw_phase_executable_hypotheses_empty",
+            &raw_phase_metadata,
+        );
+    }
+    let raw_phase_hypothesis_root_sha256 = raw_phase_metadata.hypothesis_root_sha256.clone();
+    let raw_phase_support_watermark = raw_phase_metadata.support_watermark;
+    let raw_phase_executable_blueprint_root_sha256 =
+        raw_phase_metadata.executable_blueprint_root_sha256.clone();
+    let raw_phase_executable_programs = raw_phase_metadata.executable_programs;
+    let raw_phase_excluded_programs = raw_phase_metadata.excluded_programs;
+    let manifest = match generation_manifest_with_raw_phase_roots(
         &shape_root,
         &protocol_mode_root,
         &candidate_programs,
         raw_phase_envelope
             .as_ref()
             .map(|envelope| envelope.envelope_root_sha256.as_str()),
+        raw_phase_executable_envelope
+            .as_ref()
+            .map(|envelope| envelope.envelope_root_sha256.as_str()),
     ) {
         Ok(manifest) => manifest,
         Err(blocker) => {
-            return selected_terminal_report(
+            return selected_terminal_report_with_raw_phase(
                 evidence_epoch_sha256,
                 shape_root,
                 selected_marginal_input_tokens,
                 MultiSourceT1IdentificationStateV1::InvalidEvidence,
                 blocker,
+                &raw_phase_metadata,
             );
         }
     };
@@ -564,12 +698,13 @@ fn identify_multi_source_t1_operator_internal_v1(
             match semantic_descriptor(&shape_root, &protocol_mode_root, program_root, program) {
                 Ok(descriptor) => descriptor,
                 Err(blocker) => {
-                    return selected_terminal_report(
+                    return selected_terminal_report_with_raw_phase(
                         evidence_epoch_sha256,
                         shape_root,
                         selected_marginal_input_tokens,
                         MultiSourceT1IdentificationStateV1::InvalidEvidence,
                         blocker,
+                        &raw_phase_metadata,
                     );
                 }
             };
@@ -577,12 +712,13 @@ fn identify_multi_source_t1_operator_internal_v1(
         let registered_root = match machine.register_candidate(program.clone(), descriptor) {
             Ok(root) => root,
             Err(error) => {
-                return selected_terminal_report(
+                return selected_terminal_report_with_raw_phase(
                     evidence_epoch_sha256,
                     shape_root,
                     selected_marginal_input_tokens,
                     MultiSourceT1IdentificationStateV1::SearchExhausted,
                     format!("candidate_registration:{error}"),
+                    &raw_phase_metadata,
                 );
             }
         };
@@ -591,21 +727,23 @@ fn identify_multi_source_t1_operator_internal_v1(
     }
     match machine.complete_candidate_generation() {
         CandidateSearchCompletion::Incomplete => {
-            return selected_terminal_report(
+            return selected_terminal_report_with_raw_phase(
                 evidence_epoch_sha256,
                 shape_root,
                 selected_marginal_input_tokens,
                 MultiSourceT1IdentificationStateV1::SearchIncomplete,
                 "candidate_generation_incomplete",
+                &raw_phase_metadata,
             );
         }
         CandidateSearchCompletion::Exhausted => {
-            return selected_terminal_report(
+            return selected_terminal_report_with_raw_phase(
                 evidence_epoch_sha256,
                 shape_root,
                 selected_marginal_input_tokens,
                 MultiSourceT1IdentificationStateV1::SearchExhausted,
                 "candidate_generation_exhausted",
+                &raw_phase_metadata,
             );
         }
         CandidateSearchCompletion::Complete => {}
@@ -615,19 +753,20 @@ fn identify_multi_source_t1_operator_internal_v1(
     let mut canonical_program = None;
     let mut support_capture_frame_ids_sha256 = Vec::new();
     let mut support_lineages = BTreeSet::new();
-    for row in accepted {
+    for (support_index, row) in accepted.iter().enumerate() {
         if freeze.is_some() {
             continue;
         }
-        let observation = match observation_for_row(&row, &registered) {
+        let observation = match observation_for_row(row, &registered) {
             Ok(observation) => observation,
             Err(blocker) => {
-                return selected_terminal_report(
+                return selected_terminal_report_with_raw_phase(
                     evidence_epoch_sha256,
                     shape_root,
                     selected_marginal_input_tokens,
                     MultiSourceT1IdentificationStateV1::InvalidEvidence,
                     blocker,
+                    &raw_phase_metadata,
                 );
             }
         };
@@ -635,37 +774,45 @@ fn identify_multi_source_t1_operator_internal_v1(
         let state = match machine.apply_support(observation) {
             Ok(update) => update.state,
             Err(error) => {
-                return selected_terminal_report(
+                return selected_terminal_report_with_raw_phase(
                     evidence_epoch_sha256,
                     shape_root,
                     selected_marginal_input_tokens,
                     MultiSourceT1IdentificationStateV1::InvalidEvidence,
                     format!("support_evidence:{error}"),
+                    &raw_phase_metadata,
                 );
             }
         };
         support_capture_frame_ids_sha256.push(row.frame.frame_id_sha256.clone());
         if support_capture_frame_ids_sha256.len() > MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS {
-            return selected_terminal_report(
+            return selected_terminal_report_with_raw_phase(
                 evidence_epoch_sha256,
                 shape_root,
                 selected_marginal_input_tokens,
                 MultiSourceT1IdentificationStateV1::SearchExhausted,
                 "support_proof_basis_budget_exhausted",
+                &raw_phase_metadata,
             );
         }
         match state {
             OperatorIdentificationStateV1::Identified { class } => {
+                let freeze_allowed = raw_phase_support_watermark
+                    .is_none_or(|_| support_index.saturating_add(1) == accepted.len());
+                if !freeze_allowed {
+                    continue;
+                }
                 let selected = registered
                     .get(class.canonical_program_root_sha256())
                     .cloned();
                 let Some(selected) = selected else {
-                    return selected_terminal_report(
+                    return selected_terminal_report_with_raw_phase(
                         evidence_epoch_sha256,
                         shape_root,
                         selected_marginal_input_tokens,
                         MultiSourceT1IdentificationStateV1::InvalidEvidence,
                         "canonical_program_missing",
+                        &raw_phase_metadata,
                     );
                 };
                 let scope = canonical_json_sha256(&(
@@ -676,16 +823,20 @@ fn identify_multi_source_t1_operator_internal_v1(
                     response_program_required_routing_atom_ids(&selected),
                 ))
                 .expect("T1 applicability scope serializes");
-                let watermark = row.joined.capture_sequence.saturating_add(1);
+                let watermark = raw_phase_support_watermark.map_or_else(
+                    || row.joined.capture_sequence.saturating_add(1),
+                    |support_watermark| support_watermark.saturating_add(1),
+                );
                 let sealed = match machine.freeze_candidate(watermark, scope) {
                     Ok(sealed) => sealed.clone(),
                     Err(error) => {
-                        return selected_terminal_report(
+                        return selected_terminal_report_with_raw_phase(
                             evidence_epoch_sha256,
                             shape_root,
                             selected_marginal_input_tokens,
                             MultiSourceT1IdentificationStateV1::InvalidEvidence,
                             format!("candidate_freeze:{error}"),
+                            &raw_phase_metadata,
                         );
                     }
                 };
@@ -693,30 +844,33 @@ fn identify_multi_source_t1_operator_internal_v1(
                 freeze = Some(sealed);
             }
             OperatorIdentificationStateV1::Empty { .. } => {
-                return selected_terminal_report(
+                return selected_terminal_report_with_raw_phase(
                     evidence_epoch_sha256,
                     shape_root,
                     selected_marginal_input_tokens,
                     MultiSourceT1IdentificationStateV1::NoConsistentProgram,
                     "support_eliminated_all_candidates",
+                    &raw_phase_metadata,
                 );
             }
             OperatorIdentificationStateV1::Exhausted { .. } => {
-                return selected_terminal_report(
+                return selected_terminal_report_with_raw_phase(
                     evidence_epoch_sha256,
                     shape_root,
                     selected_marginal_input_tokens,
                     MultiSourceT1IdentificationStateV1::SearchExhausted,
                     "search_exhausted_after_evidence",
+                    &raw_phase_metadata,
                 );
             }
             OperatorIdentificationStateV1::Contradicted { .. } => {
-                return selected_terminal_report(
+                return selected_terminal_report_with_raw_phase(
                     evidence_epoch_sha256,
                     shape_root,
                     selected_marginal_input_tokens,
                     MultiSourceT1IdentificationStateV1::InvalidEvidence,
                     "support_hard_contradiction",
+                    &raw_phase_metadata,
                 );
             }
             OperatorIdentificationStateV1::Collecting { .. }
@@ -737,6 +891,10 @@ fn identify_multi_source_t1_operator_internal_v1(
             evidence_epoch_sha256,
             raw_phase_hypothesis_root_sha256,
             raw_phase_support_watermark,
+            raw_phase_executable_blueprint_root_sha256,
+            raw_phase_executable_programs,
+            raw_phase_excluded_programs,
+            raw_phase_selected_executable: None,
             selected_shape_root_sha256: Some(shape_root),
             selected_protocol_mode_root_sha256: Some(protocol_mode_root),
             selected_marginal_input_tokens,
@@ -765,6 +923,48 @@ fn identify_multi_source_t1_operator_internal_v1(
         });
     };
     let selected_program = canonical_program.expect("freeze owns canonical program");
+    let raw_phase_selected_executable = match raw_phase_executable_envelope.as_ref() {
+        Some(envelope) => {
+            let support_evidence = accepted
+                .iter()
+                .map(|row| {
+                    RawPhaseExecutableEvidenceV1::seal(row.joined.clone(), row.frame.clone())
+                })
+                .collect::<Result<Vec<_>, _>>();
+            let support_evidence = match support_evidence {
+                Ok(evidence) => evidence,
+                Err(blocker) => {
+                    return selected_terminal_report_with_raw_phase(
+                        evidence_epoch_sha256,
+                        shape_root,
+                        selected_marginal_input_tokens,
+                        MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                        blocker,
+                        &raw_phase_metadata,
+                    );
+                }
+            };
+            match seal_raw_phase_selected_executable_receipt_v1(
+                envelope,
+                &candidate_freeze,
+                &selected_program,
+                support_evidence,
+            ) {
+                Ok(receipt) => Some(receipt),
+                Err(blocker) => {
+                    return selected_terminal_report_with_raw_phase(
+                        evidence_epoch_sha256,
+                        shape_root,
+                        selected_marginal_input_tokens,
+                        MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                        blocker,
+                        &raw_phase_metadata,
+                    );
+                }
+            }
+        }
+        None => None,
+    };
     let remaining_semantic_class_roots_sha256 =
         vec![candidate_freeze.semantic_class_id().as_str().to_owned()];
     let mut future_candidates = eligible_rows
@@ -790,6 +990,7 @@ fn identify_multi_source_t1_operator_internal_v1(
     let mut wrong_role_bindings = 0usize;
     let mut future_rejection_reasons = BTreeMap::<String, usize>::new();
     let mut future_capture_frame_ids_sha256 = Vec::new();
+    let mut raw_phase_future_evidence = Vec::new();
     let mut future_basis_lineages = BTreeSet::new();
     for row in future_candidates {
         if support_lineages.contains(&row.joined.session_lineage_sha256) {
@@ -821,6 +1022,24 @@ fn identify_multi_source_t1_operator_internal_v1(
         } else if future_capture_frame_ids_sha256.len() < MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS
             && future_basis_lineages.insert(row.joined.session_lineage_sha256.clone())
         {
+            if raw_phase_selected_executable.is_some() {
+                let evidence =
+                    match RawPhaseExecutableEvidenceV1::seal(row.joined.clone(), row.frame.clone())
+                    {
+                        Ok(evidence) => evidence,
+                        Err(blocker) => {
+                            return selected_terminal_report_with_raw_phase(
+                                evidence_epoch_sha256,
+                                shape_root,
+                                selected_marginal_input_tokens,
+                                MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                                blocker,
+                                &raw_phase_metadata,
+                            );
+                        }
+                    };
+                raw_phase_future_evidence.push(evidence);
+            }
             future_capture_frame_ids_sha256.push(row.frame.frame_id_sha256.clone());
         }
     }
@@ -860,13 +1079,15 @@ fn identify_multi_source_t1_operator_internal_v1(
     let Some(proof_basis) = seal_t1_proof_basis_v1(
         support_capture_frame_ids_sha256,
         future_capture_frame_ids_sha256,
+        raw_phase_future_evidence,
     ) else {
-        return selected_terminal_report(
+        return selected_terminal_report_with_raw_phase(
             evidence_epoch_sha256,
             shape_root,
             selected_marginal_input_tokens,
             MultiSourceT1IdentificationStateV1::InvalidEvidence,
             "proof_basis_seal_failed",
+            &raw_phase_metadata,
         );
     };
     finalize_report(MultiSourceT1IdentificationV3 {
@@ -875,6 +1096,10 @@ fn identify_multi_source_t1_operator_internal_v1(
         evidence_epoch_sha256,
         raw_phase_hypothesis_root_sha256,
         raw_phase_support_watermark,
+        raw_phase_executable_blueprint_root_sha256,
+        raw_phase_executable_programs,
+        raw_phase_excluded_programs,
+        raw_phase_selected_executable,
         selected_shape_root_sha256: Some(shape_root),
         selected_protocol_mode_root_sha256: Some(protocol_mode_root),
         selected_marginal_input_tokens,
@@ -1080,14 +1305,15 @@ pub(super) fn generation_manifest(
     protocol_mode_root: &str,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<nando_operator_kernel::OperatorGenerationManifestV3, String> {
-    generation_manifest_with_hypothesis_root(shape_root, protocol_mode_root, programs, None)
+    generation_manifest_with_raw_phase_roots(shape_root, protocol_mode_root, programs, None, None)
 }
 
-fn generation_manifest_with_hypothesis_root(
+fn generation_manifest_with_raw_phase_roots(
     shape_root: &str,
     protocol_mode_root: &str,
     programs: &BTreeMap<String, ResponseProgram>,
     raw_phase_hypothesis_root_sha256: Option<&str>,
+    raw_phase_executable_blueprint_root_sha256: Option<&str>,
 ) -> Result<nando_operator_kernel::OperatorGenerationManifestV3, String> {
     let candidate_roots = programs.keys().cloned().collect::<Vec<_>>();
     let verifier_roots = programs
@@ -1101,11 +1327,24 @@ fn generation_manifest_with_hypothesis_root(
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let artifact_set_sha256 = match raw_phase_hypothesis_root_sha256 {
-        Some(root) => canonical_json_sha256(&(
-            "nando.multi-source-t1-candidate-set.v3",
+    let raw_phase_roots = match (
+        raw_phase_hypothesis_root_sha256,
+        raw_phase_executable_blueprint_root_sha256,
+    ) {
+        (None, None) => None,
+        (Some(hypothesis), Some(executable))
+            if valid_nonzero_sha256(hypothesis) && valid_nonzero_sha256(executable) =>
+        {
+            Some((hypothesis, executable))
+        }
+        _ => return Err("raw_phase_generation_roots_invalid".to_owned()),
+    };
+    let artifact_set_sha256 = match raw_phase_roots {
+        Some((hypothesis, executable)) => canonical_json_sha256(&(
+            "nando.multi-source-t1-candidate-set.v4",
             MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
-            root,
+            hypothesis,
+            executable,
             &candidate_roots,
         )),
         None => canonical_json_sha256(&(
@@ -1115,11 +1354,12 @@ fn generation_manifest_with_hypothesis_root(
         )),
     }
     .map_err(|_| "candidate_set_commitment_failed".to_owned())?;
-    let dispatch_index_sha256 = match raw_phase_hypothesis_root_sha256 {
-        Some(root) => canonical_json_sha256(&(
-            "nando.multi-source-t1-dispatch.v3",
+    let dispatch_index_sha256 = match raw_phase_roots {
+        Some((hypothesis, executable)) => canonical_json_sha256(&(
+            "nando.multi-source-t1-dispatch.v4",
             MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
-            root,
+            hypothesis,
+            executable,
             shape_root,
             protocol_mode_root,
         )),
@@ -1131,11 +1371,12 @@ fn generation_manifest_with_hypothesis_root(
         )),
     }
     .map_err(|_| "dispatch_commitment_failed".to_owned())?;
-    let resource_budget_sha256 = match raw_phase_hypothesis_root_sha256 {
-        Some(root) => canonical_json_sha256(&(
-            "nando.multi-source-t1-budget.v3",
+    let resource_budget_sha256 = match raw_phase_roots {
+        Some((hypothesis, executable)) => canonical_json_sha256(&(
+            "nando.multi-source-t1-budget.v4",
             MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
-            root,
+            hypothesis,
+            executable,
             programs.len(),
             VersionSpaceConfig::default(),
         )),
@@ -1586,6 +1827,10 @@ fn terminal_report(
         evidence_epoch_sha256,
         raw_phase_hypothesis_root_sha256: None,
         raw_phase_support_watermark: None,
+        raw_phase_executable_blueprint_root_sha256: None,
+        raw_phase_executable_programs: None,
+        raw_phase_excluded_programs: None,
+        raw_phase_selected_executable: None,
         selected_shape_root_sha256: None,
         selected_protocol_mode_root_sha256: None,
         selected_marginal_input_tokens: 0,
@@ -1627,6 +1872,33 @@ fn selected_terminal_report(
     finalize_report(report)
 }
 
+fn selected_terminal_report_with_raw_phase(
+    evidence_epoch_sha256: String,
+    shape_root: String,
+    selected_marginal_input_tokens: u64,
+    state: MultiSourceT1IdentificationStateV1,
+    blocker: impl Into<String>,
+    metadata: &RawPhaseIdentificationMetadata,
+) -> MultiSourceT1IdentificationV3 {
+    let mut report = selected_terminal_report(
+        evidence_epoch_sha256,
+        shape_root,
+        selected_marginal_input_tokens,
+        state,
+        blocker,
+    );
+    report.raw_phase_hypothesis_root_sha256 = metadata.hypothesis_root_sha256.clone();
+    report.raw_phase_support_watermark = metadata.support_watermark;
+    report.raw_phase_executable_blueprint_root_sha256 =
+        metadata.executable_blueprint_root_sha256.clone();
+    report.raw_phase_executable_programs = metadata.executable_programs;
+    report.raw_phase_excluded_programs = metadata.excluded_programs;
+    if let Some(executable_programs) = metadata.executable_programs {
+        report.candidate_programs = executable_programs;
+    }
+    finalize_report(report)
+}
+
 fn finalize_report(mut report: MultiSourceT1IdentificationV3) -> MultiSourceT1IdentificationV3 {
     report.report_root_sha256 = report.expected_root();
     report
@@ -1651,6 +1923,7 @@ fn seal_t1_support_manifest_root_v1(frame_ids_sha256: &[String]) -> Option<Strin
 fn seal_t1_proof_basis_v1(
     support_capture_frame_ids_sha256: Vec<String>,
     future_capture_frame_ids_sha256: Vec<String>,
+    raw_phase_future_evidence: Vec<RawPhaseExecutableEvidenceV1>,
 ) -> Option<MultiSourceT1ProofBasisV1> {
     if support_capture_frame_ids_sha256.is_empty()
         || support_capture_frame_ids_sha256.len() > MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS
@@ -1663,6 +1936,7 @@ fn seal_t1_proof_basis_v1(
         basis_root_sha256: String::new(),
         support_capture_frame_ids_sha256,
         future_capture_frame_ids_sha256,
+        raw_phase_future_evidence,
     };
     if !basis.members_are_valid() {
         return None;
@@ -1681,6 +1955,16 @@ impl MultiSourceT1ProofBasisV1 {
             .future_capture_frame_ids_sha256
             .iter()
             .collect::<BTreeSet<_>>();
+        let raw_phase_future_frame_ids = self
+            .raw_phase_future_evidence
+            .iter()
+            .map(|evidence| evidence.frame.frame_id_sha256.as_str())
+            .collect::<Vec<_>>();
+        let future_frame_ids = self
+            .future_capture_frame_ids_sha256
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
         !support.is_empty()
             && support.len() == self.support_capture_frame_ids_sha256.len()
             && future.len() == self.future_capture_frame_ids_sha256.len()
@@ -1689,10 +1973,28 @@ impl MultiSourceT1ProofBasisV1 {
                 .iter()
                 .chain(future.iter())
                 .all(|root| valid_nonzero_sha256(root))
+            && (self.raw_phase_future_evidence.is_empty()
+                || (raw_phase_future_frame_ids == future_frame_ids
+                    && self
+                        .raw_phase_future_evidence
+                        .iter()
+                        .all(|evidence| evidence.validate().is_ok())))
     }
 
     #[must_use]
     pub fn expected_root(&self) -> String {
+        if !self.raw_phase_future_evidence.is_empty() {
+            return canonical_json_sha256(&(
+                "nando.multi-source-t1-proof-basis.raw-phase.v1",
+                &self.support_capture_frame_ids_sha256,
+                &self.future_capture_frame_ids_sha256,
+                self.raw_phase_future_evidence
+                    .iter()
+                    .map(|evidence| evidence.evidence_root_sha256.as_str())
+                    .collect::<Vec<_>>(),
+            ))
+            .expect("raw Phase T1 proof basis serializes");
+        }
         canonical_json_sha256(&(
             MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
             &self.support_capture_frame_ids_sha256,
@@ -1717,6 +2019,12 @@ impl MultiSourceT1IdentificationV3 {
             evidence_epoch_sha256: self.evidence_epoch_sha256.as_str(),
             raw_phase_hypothesis_root_sha256: self.raw_phase_hypothesis_root_sha256.as_deref(),
             raw_phase_support_watermark: self.raw_phase_support_watermark,
+            raw_phase_executable_blueprint_root_sha256: self
+                .raw_phase_executable_blueprint_root_sha256
+                .as_deref(),
+            raw_phase_executable_programs: self.raw_phase_executable_programs,
+            raw_phase_excluded_programs: self.raw_phase_excluded_programs,
+            raw_phase_selected_executable: &self.raw_phase_selected_executable,
             selected_shape_root_sha256: self.selected_shape_root_sha256.as_deref(),
             selected_protocol_mode_root_sha256: self.selected_protocol_mode_root_sha256.as_deref(),
             selected_marginal_input_tokens: self.selected_marginal_input_tokens,
@@ -1751,15 +2059,76 @@ impl MultiSourceT1IdentificationV3 {
         let raw_phase_metadata_valid = match (
             self.raw_phase_hypothesis_root_sha256.as_deref(),
             self.raw_phase_support_watermark,
+            self.raw_phase_executable_blueprint_root_sha256.as_deref(),
+            self.raw_phase_executable_programs,
+            self.raw_phase_excluded_programs,
+        ) {
+            (None, None, None, None, None) => true,
+            (
+                Some(hypothesis_root),
+                Some(watermark),
+                Some(executable_root),
+                Some(executable_programs),
+                Some(excluded_programs),
+            ) => {
+                valid_nonzero_sha256(hypothesis_root)
+                    && valid_nonzero_sha256(executable_root)
+                    && watermark > 0
+                    && executable_programs == self.candidate_programs
+                    && executable_programs.saturating_add(excluded_programs) > 0
+            }
+            (Some(hypothesis_root), Some(watermark), None, None, None) => {
+                self.state == MultiSourceT1IdentificationStateV1::InvalidEvidence
+                    && valid_nonzero_sha256(hypothesis_root)
+                    && watermark > 0
+            }
+            _ => false,
+        };
+        let raw_phase_selection_valid = match (
+            self.raw_phase_executable_blueprint_root_sha256.as_deref(),
+            self.raw_phase_selected_executable.as_ref(),
         ) {
             (None, None) => true,
-            (Some(root), Some(watermark)) => valid_nonzero_sha256(root) && watermark > 0,
-            _ => false,
+            (Some(_), None) => self.candidate_freeze.is_none(),
+            (None, Some(_)) => false,
+            (Some(executable_root), Some(receipt)) => {
+                let support_frame_ids = receipt
+                    .support_evidence
+                    .iter()
+                    .map(|evidence| evidence.frame.frame_id_sha256.as_str())
+                    .collect::<BTreeSet<_>>();
+                receipt.validate().is_ok()
+                    && receipt.executable_envelope_root_sha256 == executable_root
+                    && Some(receipt.support_watermark) == self.raw_phase_support_watermark
+                    && self.candidate_freeze.as_ref().is_some_and(|freeze| {
+                        receipt.candidate_freeze_root_sha256 == freeze.freeze_root_sha256()
+                            && receipt.canonical_program_root_sha256
+                                == freeze.canonical_program_root_sha256()
+                    })
+                    && self.canonical_program.as_ref().is_some_and(|program| {
+                        response_program_version_root_sha256(program)
+                            .ok()
+                            .as_deref()
+                            == Some(receipt.canonical_program_root_sha256.as_str())
+                    })
+                    && self.proof_basis.as_ref().is_some_and(|basis| {
+                        let basis_support = basis
+                            .support_capture_frame_ids_sha256
+                            .iter()
+                            .map(String::as_str)
+                            .collect::<BTreeSet<_>>();
+                        support_frame_ids.is_subset(&basis_support)
+                            && (basis.future_capture_frame_ids_sha256.is_empty()
+                                || basis.raw_phase_future_evidence.len()
+                                    == basis.future_capture_frame_ids_sha256.len())
+                    })
+            }
         };
         if self.schema != MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3
             || self.execution_authority
             || self.report_root_sha256 != self.expected_root()
             || !raw_phase_metadata_valid
+            || !raw_phase_selection_valid
             || self.remaining_semantic_class_roots_sha256.len() != self.semantic_classes_remaining
             || self
                 .remaining_semantic_class_roots_sha256

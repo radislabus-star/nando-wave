@@ -1,16 +1,19 @@
 use std::collections::BTreeSet;
 
 use nando_operator_kernel::{
-    AtomSource, AtomValueType, MultiSourceCardinalityClassV1, MultiSourceContainerClassV1,
+    AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, LearningRequestStructureV2,
+    MultiSourceCardinalityClassV1, MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1,
     MultiSourceExtractionStatusV1, MultiSourceRelationEdgeV1, MultiSourceRelationKindV1,
     MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1,
-    MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1, RELATION_FRAME_SCHEMA, RelationAtom,
-    RelationFrame, ResponseRenderSegment, ResponseValueSelector, ValueProjectionFormat,
-    canonical_json_sha256, sha256_bytes,
+    MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1,
+    RELATION_FRAME_SCHEMA, RelationAtom, RelationFrame, ResponseRenderSegment,
+    ResponseValueSelector, ValueProjectionFormat, canonical_json_sha256, sha256_bytes,
 };
 use nando_operator_learning::multi_source::{
-    BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1,
-    MultiSourceT1IdentificationStateV1, identify_multi_source_t1_operator_v1,
+    BlindThenRevealJoinedTransitionV1, FrozenRawPhaseT1ContractV1, MultiSourceJoinLedgerV1,
+    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, PreActionTopologyAuditRowV1,
+    identify_multi_source_t1_operator_v1,
+    identify_multi_source_t1_operator_with_frozen_raw_phase_v1,
 };
 use nando_operator_learning::{
     CaptureEvidenceReceipt, CaptureRecordCommitment, CaptureTransitionBinding,
@@ -89,7 +92,7 @@ fn joined_row(
     capture_sequence: u64,
 ) -> BlindThenRevealJoinedTransitionV1 {
     let value_root = canonical_json_sha256(&json!(7)).expect("value root");
-    let topology = PreActionMultiSourceTopologyV1 {
+    let mut topology = PreActionMultiSourceTopologyV1 {
         extraction_status: MultiSourceExtractionStatusV1::Complete,
         grounded_output_count: 1,
         output_part_count: 1,
@@ -123,34 +126,262 @@ fn joined_row(
             },
         ],
     };
-    BlindThenRevealJoinedTransitionV1 {
-        schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1.to_owned(),
-        join_root_sha256: root(&format!("join:{request_event}")),
-        capture_sequence,
+    topology.relations.sort();
+    let structure = LearningRequestStructureV2 {
+        schema: LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
         turn_intent_id_sha256: frame.client_intent_id_sha256.clone(),
         request_event_id_sha256: root(request_event),
-        action_event_id_sha256: frame.event_id_sha256.clone(),
-        session_lineage_sha256: root(session),
-        session_id_sha256: frame.session_id_sha256.clone(),
-        topology_commitment_root_sha256: root(&format!("topology:{request_event}")),
-        extractor_root_sha256: root("extractor-v2"),
-        extractor_config_root_sha256: root("extractor-config-v2"),
-        capture_generation_root_sha256: root("capture-generation-v2"),
-        pre_action_record_root_sha256: root(&format!("record:{request_event}")),
-        completed_frame_root_sha256: canonical_json_sha256(frame).expect("frame root"),
-        physical_action_root_sha256: root("physical action"),
-        semantic_action_root_sha256: root("semantic action"),
-        effect_atoms: vec![
-            CompletedEffectAtomV1::RoleInput,
-            CompletedEffectAtomV1::ValueProjection,
-        ],
-        verifier_receipt_root_sha256: root(&format!("verifier:{request_event}")),
-        input_tokens: 100,
-        captured_at_unix_ms: capture_sequence,
-        completed_at_unix_nanos: frame.observed_at_unix_nanos,
-        accepted: true,
+        provider_bound_turn_identity: true,
+        session_lineage_roots_sha256: vec![root(session)],
+        request_phase_atom_ids: vec![1],
+        pre_action_context_atom_ids: vec![2],
+        capability_atom_ids: vec![3],
+        estimated_input_tokens: 100,
+        provider_payload_bytes: 400,
+        provider_capture_request_root_sha256: root(&format!("request:{capture_sequence}")),
+        decidability_reason_code: "pre_action_pending".to_owned(),
         topology,
-    }
+    };
+    let commit = PreActionTopologyCommitV1::seal(
+        &structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("topology commit");
+    let topology_row = PreActionTopologyAuditRowV1 {
+        bridge_epoch_sha256: root("bridge"),
+        bridge_sequence: Some(capture_sequence),
+        record_sha256: Some(root(&format!("record:{capture_sequence}"))),
+        capture_epoch_sha256: Some(root("capture epoch")),
+        capture_event_sha256: Some(root(&format!("capture event:{capture_sequence}"))),
+        capture_receipt_sha256: Some(root(&format!("receipt:{capture_sequence}"))),
+        captured_at_unix_ms: Some(capture_sequence),
+        session_lineage_sha256: Some(root(session)),
+        physical_order_proven: true,
+        structure,
+        commit,
+    };
+    MultiSourceJoinLedgerV1::build(&[topology_row], std::slice::from_ref(frame))
+        .rows()
+        .into_iter()
+        .next()
+        .expect("joined row")
+}
+
+fn raw_phase_fixture() -> (MultiSourceT1IdentificationV3, Vec<TeacherTransition>) {
+    let support_a = completed_projection_frame(
+        "raw-intent-a",
+        "raw-event-a",
+        "raw-session-a",
+        "alpha",
+        1_500_000_000,
+    );
+    let support_b = completed_projection_frame(
+        "raw-intent-b",
+        "raw-event-b",
+        "raw-session-b",
+        "alpha",
+        2_500_000_000,
+    );
+    let future = completed_projection_frame(
+        "raw-intent-c",
+        "raw-event-c",
+        "raw-session-c",
+        "alpha",
+        3_500_000_000,
+    );
+    let future_d = completed_projection_frame(
+        "raw-intent-d",
+        "raw-event-d",
+        "raw-session-d",
+        "alpha",
+        4_500_000_000,
+    );
+    let future_e = completed_projection_frame(
+        "raw-intent-e",
+        "raw-event-e",
+        "raw-session-e",
+        "alpha",
+        5_500_000_000,
+    );
+    let future_f = completed_projection_frame(
+        "raw-intent-f",
+        "raw-event-f",
+        "raw-session-f",
+        "alpha",
+        6_500_000_000,
+    );
+    let joined = vec![
+        joined_row(&support_a, "raw-request-a", "raw-session-a", 1),
+        joined_row(&support_b, "raw-request-b", "raw-session-b", 2),
+        joined_row(&future, "raw-request-c", "raw-session-c", 3),
+        joined_row(&future_d, "raw-request-d", "raw-session-d", 4),
+        joined_row(&future_e, "raw-request-e", "raw-session-e", 5),
+        joined_row(&future_f, "raw-request-f", "raw-session-f", 6),
+    ];
+    let frames = vec![
+        support_a.clone(),
+        support_b.clone(),
+        future.clone(),
+        future_d.clone(),
+        future_e.clone(),
+        future_f.clone(),
+    ];
+    let identification = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+        &joined,
+        &frames,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+        &[],
+        FrozenRawPhaseT1ContractV1 {
+            frozen_domain_root_sha256: &root("raw phase response actor domain"),
+            support_watermark: 2,
+        },
+        root("raw phase response actor epoch"),
+    );
+    assert_eq!(
+        identification.state,
+        MultiSourceT1IdentificationStateV1::TransferReady,
+        "{identification:#?}"
+    );
+    assert!(identification.raw_phase_selected_executable.is_some());
+    let transitions = vec![
+        runtime_transition(&support_a, "alpha", 1),
+        runtime_transition(&support_b, "alpha", 2),
+        runtime_transition(&future, "alpha", 3),
+        runtime_transition(&future_d, "alpha", 4),
+        runtime_transition(&future_e, "alpha", 5),
+        runtime_transition(&future_f, "alpha", 6),
+    ];
+
+    (identification, transitions)
+}
+
+#[test]
+fn raw_phase_selected_executable_reconstructs_before_crystallization() {
+    let (identification, transitions) = raw_phase_fixture();
+
+    let candidate =
+        crystallize_multi_source_t1_candidate_v1(&identification, &transitions).expect("candidate");
+    assert_eq!(candidate.package.proof.wrong_accepts, 0);
+    assert_eq!(candidate.package.proof.runtime_parity_failures, 0);
+    assert_eq!(candidate.support.len(), 2);
+    assert_eq!(candidate.future.len(), 4);
+}
+
+#[test]
+fn raw_phase_selected_receipt_tampering_is_rejected() {
+    let (identification, _) = raw_phase_fixture();
+    let receipt = identification
+        .raw_phase_selected_executable
+        .as_ref()
+        .expect("selected executable receipt");
+    let freeze = identification
+        .candidate_freeze
+        .as_ref()
+        .expect("candidate freeze");
+    let program = identification
+        .canonical_program
+        .as_ref()
+        .expect("canonical program");
+
+    let mut root_tamper = receipt.clone();
+    root_tamper.receipt_root_sha256 = root("tampered selected receipt");
+    assert_eq!(
+        nando_operator_learning::multi_source::rebuild_raw_phase_selected_executable_v1(
+            &root_tamper,
+            freeze,
+            program,
+        ),
+        Err("raw_phase_selected_executable_receipt_invalid")
+    );
+
+    let mut disposition_tamper = receipt.clone();
+    disposition_tamper.selected_disposition.support_bundle_count = disposition_tamper
+        .selected_disposition
+        .support_bundle_count
+        .saturating_add(1);
+    assert_eq!(
+        nando_operator_learning::multi_source::rebuild_raw_phase_selected_executable_v1(
+            &disposition_tamper,
+            freeze,
+            program,
+        ),
+        Err("raw_phase_selected_executable_receipt_invalid")
+    );
+
+    let mut fingerprint_tamper = receipt.clone();
+    fingerprint_tamper
+        .selected_disposition
+        .blueprint_fingerprints_sha256[0] = root("tampered blueprint fingerprint");
+    assert_eq!(
+        nando_operator_learning::multi_source::rebuild_raw_phase_selected_executable_v1(
+            &fingerprint_tamper,
+            freeze,
+            program,
+        ),
+        Err("raw_phase_selected_executable_receipt_invalid")
+    );
+}
+
+#[test]
+fn raw_phase_capture_sequence_mismatch_is_rejected() {
+    let (identification, mut transitions) = raw_phase_fixture();
+    let future_frame_id = identification
+        .proof_basis
+        .as_ref()
+        .and_then(|basis| basis.raw_phase_future_evidence.first())
+        .map(|evidence| evidence.frame.frame_id_sha256.clone())
+        .expect("future frame id");
+    let transition = transitions
+        .iter_mut()
+        .find(|transition| {
+            transition
+                .runtime_parity_case
+                .as_ref()
+                .is_some_and(|parity| parity.evidence_ref_sha256 == future_frame_id)
+        })
+        .expect("future transition");
+    let mut receipt = CaptureEvidenceReceipt::new(vec![CaptureRecordCommitment {
+        sequence: 99,
+        record_sha256: root("capture:99"),
+    }])
+    .expect("tampered capture receipt");
+    let binding = CaptureTransitionBinding::new(99, &future_frame_id, &receipt)
+        .expect("tampered transition binding");
+    receipt
+        .bind_transition(binding)
+        .expect("bind tampered receipt");
+    transition
+        .runtime_parity_case
+        .as_mut()
+        .expect("runtime parity")
+        .capture_receipt = Some(receipt);
+
+    assert_eq!(
+        crystallize_multi_source_t1_candidate_v1(&identification, &transitions),
+        Err("multi_source_raw_phase_transition_binding_mismatch".to_owned())
+    );
+}
+
+#[test]
+fn raw_phase_future_evidence_removal_invalidates_identification() {
+    let (mut identification, transitions) = raw_phase_fixture();
+    let basis = identification
+        .proof_basis
+        .as_mut()
+        .expect("raw Phase proof basis");
+    basis.raw_phase_future_evidence.clear();
+    basis.basis_root_sha256 = basis.expected_root();
+    identification.report_root_sha256 = identification.expected_root();
+
+    assert!(!identification.validate());
+    assert_eq!(
+        crystallize_multi_source_t1_candidate_v1(&identification, &transitions),
+        Err("multi_source_identification_not_transfer_ready".to_owned())
+    );
 }
 
 fn runtime_transition(frame: &RelationFrame, field: &str, sequence: u64) -> TeacherTransition {
@@ -289,7 +520,7 @@ fn joined_multi_row(
     capture_sequence: u64,
     values: (&str, &str),
 ) -> BlindThenRevealJoinedTransitionV1 {
-    let topology = PreActionMultiSourceTopologyV1 {
+    let mut topology = PreActionMultiSourceTopologyV1 {
         extraction_status: MultiSourceExtractionStatusV1::Complete,
         grounded_output_count: 1,
         output_part_count: 2,
@@ -338,41 +569,48 @@ fn joined_multi_row(
             },
         ],
     };
-    BlindThenRevealJoinedTransitionV1 {
-        schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1.to_owned(),
-        join_root_sha256: root(&format!("join:{request_event}")),
-        capture_sequence,
+    topology.relations.sort();
+    let structure = LearningRequestStructureV2 {
+        schema: LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
         turn_intent_id_sha256: frame.client_intent_id_sha256.clone(),
         request_event_id_sha256: root(request_event),
-        action_event_id_sha256: frame.event_id_sha256.clone(),
-        session_lineage_sha256: root(session),
-        session_id_sha256: frame.session_id_sha256.clone(),
-        topology_commitment_root_sha256: root(&format!("topology:{request_event}")),
-        extractor_root_sha256: root("extractor-v2"),
-        extractor_config_root_sha256: root("extractor-config-v2"),
-        capture_generation_root_sha256: root("capture-generation-v2"),
-        pre_action_record_root_sha256: root(&format!("record:{request_event}")),
-        completed_frame_root_sha256: canonical_json_sha256(frame).expect("frame root"),
-        physical_action_root_sha256: root(&format!("physical:{request_event}")),
-        semantic_action_root_sha256: root("multi-role semantic action"),
-        effect_atoms: vec![
-            CompletedEffectAtomV1::RoleInputSlot {
-                slot_id: 7,
-                value_type: Some(AtomValueType::String),
-            },
-            CompletedEffectAtomV1::RoleInputSlot {
-                slot_id: 8,
-                value_type: Some(AtomValueType::String),
-            },
-            CompletedEffectAtomV1::ValueProjection,
-        ],
-        verifier_receipt_root_sha256: root(&format!("verifier:{request_event}")),
-        input_tokens: 100,
-        captured_at_unix_ms: capture_sequence,
-        completed_at_unix_nanos: frame.observed_at_unix_nanos,
-        accepted: true,
+        provider_bound_turn_identity: true,
+        session_lineage_roots_sha256: vec![root(session)],
+        request_phase_atom_ids: vec![1],
+        pre_action_context_atom_ids: vec![2],
+        capability_atom_ids: vec![3],
+        estimated_input_tokens: 100,
+        provider_payload_bytes: 400,
+        provider_capture_request_root_sha256: root(&format!("request:{capture_sequence}")),
+        decidability_reason_code: "pre_action_pending".to_owned(),
         topology,
-    }
+    };
+    let commit = PreActionTopologyCommitV1::seal(
+        &structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("topology commit");
+    let topology_row = PreActionTopologyAuditRowV1 {
+        bridge_epoch_sha256: root("bridge"),
+        bridge_sequence: Some(capture_sequence),
+        record_sha256: Some(root(&format!("record:{capture_sequence}"))),
+        capture_epoch_sha256: Some(root("capture epoch")),
+        capture_event_sha256: Some(root(&format!("capture event:{capture_sequence}"))),
+        capture_receipt_sha256: Some(root(&format!("receipt:{capture_sequence}"))),
+        captured_at_unix_ms: Some(capture_sequence),
+        session_lineage_sha256: Some(root(session)),
+        physical_order_proven: true,
+        structure,
+        commit,
+    };
+    MultiSourceJoinLedgerV1::build(&[topology_row], std::slice::from_ref(frame))
+        .rows()
+        .into_iter()
+        .next()
+        .expect("joined row")
 }
 
 fn runtime_multi_transition(
@@ -420,8 +658,10 @@ fn runtime_multi_transition(
 
 #[test]
 fn multi_source_freeze_reconstructs_through_independent_admission() {
-    let support_frame = completed_projection_frame("intent-a", "event-a", "session-a", "alpha", 1);
-    let future_frame = completed_projection_frame("intent-b", "event-b", "session-b", "beta", 2);
+    let support_frame =
+        completed_projection_frame("intent-a", "event-a", "session-a", "alpha", 1_500_000_000);
+    let future_frame =
+        completed_projection_frame("intent-b", "event-b", "session-b", "beta", 2_500_000_000);
     let joined = vec![
         joined_row(&support_frame, "request-a", "session-a", 1),
         joined_row(&future_frame, "request-b", "session-b", 2),
@@ -437,6 +677,7 @@ fn multi_source_freeze_reconstructs_through_independent_admission() {
         identification.state,
         MultiSourceT1IdentificationStateV1::TransferReady
     );
+    assert!(identification.raw_phase_selected_executable.is_none());
     let transitions = vec![
         runtime_transition(&support_frame, "alpha", 1),
         runtime_transition(&future_frame, "beta", 2),
@@ -489,7 +730,7 @@ fn rich_multi_role_law_reconstructs_through_independent_admission() {
         "session-rich-a",
         support_fields,
         support_values,
-        1,
+        1_500_000_000,
     );
     let future_frame = completed_multi_projection_frame(
         "intent-rich-b",
@@ -497,7 +738,7 @@ fn rich_multi_role_law_reconstructs_through_independent_admission() {
         "session-rich-b",
         future_fields,
         future_values,
-        2,
+        2_500_000_000,
     );
     let joined = vec![
         joined_multi_row(

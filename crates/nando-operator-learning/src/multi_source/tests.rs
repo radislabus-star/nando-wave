@@ -3482,8 +3482,15 @@ fn t1_identification_uses_one_support_and_one_independent_future() {
     assert_eq!(report.wrong_role_bindings, 0);
     assert_eq!(report.negative_accepts, 0);
     assert!(report.exact_transfer_parity);
+    assert_eq!(
+        report.report_root_sha256,
+        "c21bfbdffb65be173b1f08b4a23a2dbde55d699e37219390476f21071c1b7170"
+    );
     assert!(report.raw_phase_hypothesis_root_sha256.is_none());
     assert!(report.raw_phase_support_watermark.is_none());
+    assert!(report.raw_phase_executable_blueprint_root_sha256.is_none());
+    assert!(report.raw_phase_executable_programs.is_none());
+    assert!(report.raw_phase_excluded_programs.is_none());
     let legacy_json = serde_json::to_value(&report).expect("legacy identification JSON");
     assert!(
         legacy_json
@@ -3491,6 +3498,13 @@ fn t1_identification_uses_one_support_and_one_independent_future() {
             .is_none()
     );
     assert!(legacy_json.get("raw_phase_support_watermark").is_none());
+    assert!(
+        legacy_json
+            .get("raw_phase_executable_blueprint_root_sha256")
+            .is_none()
+    );
+    assert!(legacy_json.get("raw_phase_executable_programs").is_none());
+    assert!(legacy_json.get("raw_phase_excluded_programs").is_none());
     let basis = report.proof_basis.as_ref().expect("sealed runtime basis");
     assert!(basis.validate());
     assert_eq!(
@@ -3648,6 +3662,52 @@ fn distinguishing_observation_selects_role_then_requires_independent_future() {
 }
 
 #[test]
+fn frozen_raw_phase_requires_two_independent_support_lineages_for_executable_hypotheses() {
+    let topologies = vec![t1_competing_role_topology_row(
+        "raw-phase-single-support",
+        "request-raw-phase-single-support",
+        "session-a",
+        1,
+        1_000,
+        true,
+    )];
+    let frames = vec![t1_competing_role_projection_frame(
+        "raw-phase-single-support",
+        "action-raw-phase-single-support",
+        "session-a",
+        1_500,
+        true,
+    )];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let report = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+        &[],
+        FrozenRawPhaseT1ContractV1 {
+            frozen_domain_root_sha256: &root("raw phase single-lineage domain"),
+            support_watermark: 1,
+        },
+        root("raw phase single-lineage epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty
+    );
+    assert_eq!(report.candidate_programs, 0);
+    assert_eq!(report.raw_phase_executable_programs, Some(0));
+    assert_eq!(report.raw_phase_excluded_programs, Some(2));
+    assert_eq!(
+        report.blocker.as_deref(),
+        Some("raw_phase_executable_hypotheses_empty")
+    );
+    assert!(!report.execution_authority);
+}
+
+#[test]
 fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
     let topologies = vec![
         t1_competing_role_topology_row(
@@ -3659,19 +3719,27 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
             true,
         ),
         t1_competing_role_topology_row(
-            "raw-phase-distinguishing",
-            "request-raw-phase-distinguishing",
+            "raw-phase-support-b",
+            "request-raw-phase-support-b",
             "session-b",
             2,
             2_000,
+            true,
+        ),
+        t1_competing_role_topology_row(
+            "raw-phase-distinguishing",
+            "request-raw-phase-distinguishing",
+            "session-c",
+            3,
+            3_000,
             false,
         ),
         t1_competing_role_topology_row(
             "raw-phase-future",
             "request-raw-phase-future",
-            "session-c",
-            3,
-            3_000,
+            "session-d",
+            4,
+            4_000,
             false,
         ),
     ];
@@ -3684,17 +3752,24 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
             true,
         ),
         t1_competing_role_projection_frame(
-            "raw-phase-distinguishing",
-            "action-raw-phase-distinguishing",
+            "raw-phase-support-b",
+            "action-raw-phase-support-b",
             "session-b",
             2_500,
+            true,
+        ),
+        t1_competing_role_projection_frame(
+            "raw-phase-distinguishing",
+            "action-raw-phase-distinguishing",
+            "session-c",
+            3_500,
             false,
         ),
         t1_competing_role_projection_frame(
             "raw-phase-future",
             "action-raw-phase-future",
-            "session-c",
-            3_500,
+            "session-d",
+            4_500,
             false,
         ),
     ];
@@ -3702,7 +3777,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
     let rows = ledger.rows();
     let support_only = rows
         .iter()
-        .filter(|row| row.capture_sequence == 1)
+        .filter(|row| row.capture_sequence <= 2)
         .cloned()
         .collect::<Vec<_>>();
     let frozen_domain_root = root("raw phase frozen K1 domain");
@@ -3715,7 +3790,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         &[],
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &frozen_domain_root,
-            support_watermark: 1,
+            support_watermark: 2,
         },
         evidence_epoch.clone(),
     );
@@ -3727,7 +3802,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         &[],
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &frozen_domain_root,
-            support_watermark: 1,
+            support_watermark: 2,
         },
         evidence_epoch.clone(),
     );
@@ -3743,7 +3818,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         &[],
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &frozen_domain_root,
-            support_watermark: 1,
+            support_watermark: 2,
         },
         evidence_epoch,
     );
@@ -3756,14 +3831,22 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         MultiSourceT1IdentificationStateV1::Ambiguous
     );
     assert_eq!(baseline.candidate_programs, 2);
-    assert_eq!(baseline.support_rows, 1);
+    assert_eq!(baseline.support_rows, 2);
     assert!(
         baseline
             .raw_phase_hypothesis_root_sha256
             .as_deref()
             .is_some_and(valid_nonzero_sha256)
     );
-    assert_eq!(baseline.raw_phase_support_watermark, Some(1));
+    assert_eq!(baseline.raw_phase_support_watermark, Some(2));
+    assert!(
+        baseline
+            .raw_phase_executable_blueprint_root_sha256
+            .as_deref()
+            .is_some_and(valid_nonzero_sha256)
+    );
+    assert_eq!(baseline.raw_phase_executable_programs, Some(2));
+    assert_eq!(baseline.raw_phase_excluded_programs, Some(0));
     assert!(!baseline.execution_authority);
 
     let collapsed_by_existing_identifier =
@@ -3775,7 +3858,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
             &[],
             FrozenRawPhaseT1ContractV1 {
                 frozen_domain_root_sha256: &frozen_domain_root,
-                support_watermark: 2,
+                support_watermark: 3,
             },
             root("raw phase collapse evidence epoch"),
         );
@@ -3787,11 +3870,11 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         collapsed_by_existing_identifier.state,
         MultiSourceT1IdentificationStateV1::TransferReady
     );
-    assert_eq!(collapsed_by_existing_identifier.support_rows, 2);
+    assert_eq!(collapsed_by_existing_identifier.support_rows, 3);
     assert_eq!(collapsed_by_existing_identifier.independent_future_rows, 1);
     assert_eq!(
         collapsed_by_existing_identifier.raw_phase_support_watermark,
-        Some(2)
+        Some(3)
     );
     assert!(collapsed_by_existing_identifier.candidate_freeze.is_some());
     assert!(!collapsed_by_existing_identifier.execution_authority);

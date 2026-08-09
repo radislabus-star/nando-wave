@@ -2449,7 +2449,7 @@ pub(super) fn commitment_hex(value: &[u8; 32]) -> String {
     value.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+pub(super) fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(domain);
     for part in parts {
@@ -2459,7 +2459,7 @@ fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-fn extractor_version(value: &str) -> u32 {
+pub(super) fn extractor_version(value: &str) -> u32 {
     let digest = Sha256::digest(value.as_bytes());
     u32::from_le_bytes(digest[..4].try_into().expect("fixed digest width"))
 }

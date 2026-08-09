@@ -9,6 +9,7 @@ use super::induction::{
     program_transform_flags, program_transform_opcode, reextract_live_scalar_circuit_sample,
     rich_scalar_program_roles, scalar_program_role_slot_types, source_neutral_scalar_program_shape,
 };
+use super::raw_phase::crystallize_raw_phase_transfer_v1;
 use super::transfer_basis::crystallize_minimal_transfer_basis_v1;
 use super::*;
 
@@ -959,6 +960,37 @@ pub fn crystallize_multi_source_t1_candidate_v1(
         .as_ref()
         .filter(|basis| basis.validate())
         .ok_or_else(|| "multi_source_proof_basis_missing".to_owned())?;
+    if let Some(receipt) = identification.raw_phase_selected_executable.as_ref() {
+        let basis =
+            crystallize_raw_phase_transfer_v1(receipt, freeze, &program, proof_basis, transitions)?;
+        let law = LiveScalarLawState {
+            support: basis.support,
+            future: basis.future.clone(),
+            support_actor_hypotheses: vec![program.clone()],
+            support_hypotheses_initialized: true,
+        };
+        let canonical_program_root_sha256 =
+            nando_operator_kernel::response_program_version_root_sha256(&program)
+                .map_err(str::to_owned)?;
+        let external_identification = super::identification::LiveScalarIdentificationV1 {
+            freeze_root_sha256: freeze.freeze_root_sha256().to_owned(),
+            semantic_class_id_sha256: freeze.semantic_class_id().as_str().to_owned(),
+            member_program_roots_sha256: vec![canonical_program_root_sha256],
+            applicability_scope_root_sha256: freeze.applicability_scope_root_sha256().to_owned(),
+        };
+        let mut candidate = live_admission_candidate(
+            &law,
+            &basis.future,
+            &basis.operator,
+            &external_identification,
+        )?;
+        candidate.multi_source_identification = Some(identification.clone());
+        candidate.seal_evidence_partition().map_err(str::to_owned)?;
+        return Ok(candidate);
+    }
+    if !proof_basis.raw_phase_future_evidence.is_empty() {
+        return Err("multi_source_raw_phase_receipt_missing".to_owned());
+    }
     let support = select_multi_source_basis_transitions(
         &proof_basis.support_capture_frame_ids_sha256,
         transitions,

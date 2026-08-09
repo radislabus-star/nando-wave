@@ -17,6 +17,7 @@ use sha2::{Digest, Sha256};
 
 mod identification;
 mod induction;
+mod raw_phase;
 mod state;
 mod transfer_basis;
 
