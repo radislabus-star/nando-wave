@@ -142,9 +142,7 @@ fn candidate_identity_from_row(row: &K1NaturalEvidenceRowV1) -> CandidateIdentit
         capture_generation_root_sha256: row.capture_generation_root_sha256.clone(),
         candidate_structural_root_sha256: row.candidate_structural_root_sha256.clone(),
         source_neutral_topology_root_sha256: row.source_neutral_topology_root_sha256.clone(),
-        semantic_novelty_signature_root_sha256: row
-            .semantic_novelty_signature_root_sha256
-            .clone(),
+        semantic_novelty_signature_root_sha256: row.semantic_novelty_signature_root_sha256.clone(),
         consequence_type: row.consequence_type,
     }
 }
@@ -463,8 +461,7 @@ mod tests {
     fn incremental_evidence_rejects_out_of_order_delta() {
         let mut incremental = build_evidence_bindings(vec![joined(2, 2)]).expect("initial");
         assert_eq!(
-            extend_evidence_bindings(&mut incremental, vec![joined(1, 1)])
-                .expect_err("fallback"),
+            extend_evidence_bindings(&mut incremental, vec![joined(1, 1)]).expect_err("fallback"),
             "k1_incremental_evidence_out_of_order"
         );
     }

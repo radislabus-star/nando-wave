@@ -69,7 +69,11 @@ fn archive_exposes_restart_stable_append_cursor() {
         "nando-multi-source-frame-cursor-{}",
         std::process::id()
     ));
-    let expected = [frame(3, "intent-3"), frame(1, "intent-1"), frame(2, "intent-2")];
+    let expected = [
+        frame(3, "intent-3"),
+        frame(1, "intent-1"),
+        frame(2, "intent-2"),
+    ];
     let mut archive = MultiSourceFrameArchive::open(&root).expect("archive");
     for row in &expected {
         archive.append(row).expect("append");

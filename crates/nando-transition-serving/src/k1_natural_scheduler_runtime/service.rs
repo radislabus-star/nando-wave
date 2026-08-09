@@ -14,11 +14,12 @@ use super::{
     join_prepared_multi_source_frame_v1,
     law_lab_eligibility::law_lab_eligibility_report,
     prepare_multi_source_join_frame_v1, prepare_tick_context_from_join_ledger,
-    restore_projection_for, validate_pre_action_topology_join_eligibility_v1,
+    restore_projection_for,
     structural_frontier_census::{
         build_report as build_frontier_report, publish_report as publish_frontier_report,
         source_root as frontier_source_root,
     },
+    validate_pre_action_topology_join_eligibility_v1,
 };
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
@@ -513,7 +514,10 @@ fn extend_prepared_from_delta(
             if idempotent {
                 report.duplicate_idempotent = report.duplicate_idempotent.saturating_add(1);
             } else {
-                increment_censor(&mut report, MultiSourceJoinCensoredReasonV1::DuplicateConflict);
+                increment_censor(
+                    &mut report,
+                    MultiSourceJoinCensoredReasonV1::DuplicateConflict,
+                );
             }
             continue;
         }
@@ -539,10 +543,7 @@ fn extend_prepared_from_delta(
     extend_prepared_tick_context(prepared, joined_rows, report, active_protocols)
 }
 
-fn increment_censor(
-    report: &mut MultiSourceJoinReportV1,
-    reason: MultiSourceJoinCensoredReasonV1,
-) {
+fn increment_censor(report: &mut MultiSourceJoinReportV1, reason: MultiSourceJoinCensoredReasonV1) {
     let count = report.censored.entry(reason).or_default();
     *count = count.saturating_add(1);
 }
