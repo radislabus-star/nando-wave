@@ -155,12 +155,14 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
             .collect::<Vec<_>>(),
     ))
     .map_err(str::to_owned)?;
-    let report = identify_multi_source_t1_operator_with_candidate_artifacts_v1(
+    let report = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
         &selected,
         frames,
         &BTreeSet::new(),
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
+        &freeze.freeze_root_sha256,
+        freeze.support_watermark,
         epoch,
     );
     if !report.validate()

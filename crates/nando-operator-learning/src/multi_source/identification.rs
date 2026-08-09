@@ -26,6 +26,12 @@ mod natural_artifacts;
 use natural_artifacts::{
     ExternalProgramEvidence, collection_candidate_programs, index_candidate_artifacts,
 };
+mod raw_phase;
+pub use raw_phase::{
+    RAW_PHASE_T1_HYPOTHESIS_ENVELOPE_SCHEMA_V1, RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1,
+    RawPhaseT1HypothesisEnvelopeV1, RawPhaseT1HypothesisScoreV1,
+    seal_raw_phase_t1_hypothesis_envelope_v1,
+};
 
 pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3: &str =
     "nando.multi-source-t1-identification.v3";
@@ -193,6 +199,51 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
     candidate_artifacts: &[NaturalT1ProgramArtifactV1],
     evidence_epoch_sha256: String,
 ) -> MultiSourceT1IdentificationV3 {
+    identify_multi_source_t1_operator_internal_v1(
+        joined_rows,
+        frames,
+        active_intents,
+        active_protocol_mode_roots_sha256,
+        candidate_artifacts,
+        None,
+        evidence_epoch_sha256,
+    )
+}
+
+/// Runs hypothesis formation only inside an already immutable K1 domain.
+/// Raw Phase scores and seals the supplied bounded candidate set; the existing
+/// identification machine remains the only component that may collapse it.
+#[must_use]
+pub fn identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+    joined_rows: &[BlindThenRevealJoinedTransitionV1],
+    frames: &[RelationFrame],
+    active_intents: &BTreeSet<String>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+    candidate_artifacts: &[NaturalT1ProgramArtifactV1],
+    frozen_domain_root_sha256: &str,
+    support_watermark: u64,
+    evidence_epoch_sha256: String,
+) -> MultiSourceT1IdentificationV3 {
+    identify_multi_source_t1_operator_internal_v1(
+        joined_rows,
+        frames,
+        active_intents,
+        active_protocol_mode_roots_sha256,
+        candidate_artifacts,
+        Some((frozen_domain_root_sha256, support_watermark)),
+        evidence_epoch_sha256,
+    )
+}
+
+fn identify_multi_source_t1_operator_internal_v1(
+    joined_rows: &[BlindThenRevealJoinedTransitionV1],
+    frames: &[RelationFrame],
+    active_intents: &BTreeSet<String>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+    candidate_artifacts: &[NaturalT1ProgramArtifactV1],
+    raw_phase_contract: Option<(&str, u64)>,
+    evidence_epoch_sha256: String,
+) -> MultiSourceT1IdentificationV3 {
     let frame_by_root = frames
         .iter()
         .filter_map(|frame| {
@@ -216,6 +267,8 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
     let mut active_duplicate_tokens = 0u64;
     let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
     for joined in joined_rows {
+        let is_hypothesis_support = raw_phase_contract
+            .is_none_or(|(_, support_watermark)| joined.capture_sequence <= support_watermark);
         let factorized = factor_multi_source_row_v1(joined);
         let supported_shape = matches!(
             factorized.pre_action_shape,
@@ -252,23 +305,26 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
                 "joined_frame_missing",
             );
         };
-        let external_program_evidence =
-            if factorized.completed_effect == CompletedEffectFormV1::CollectionTransform {
-                match collection_candidate_programs(joined, &artifact_by_identity) {
-                    Ok(evidence) => Some(evidence),
-                    Err(blocker) => {
+        let external_program_evidence = if factorized.completed_effect
+            == CompletedEffectFormV1::CollectionTransform
+        {
+            match collection_candidate_programs(joined, &artifact_by_identity) {
+                Ok(evidence) => Some(evidence),
+                Err(blocker) => {
+                    if is_hypothesis_support {
                         let blocked_tokens = candidate_generation_blocks
                             .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
                             .or_default();
                         if joined.accepted {
                             *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
                         }
-                        continue;
                     }
+                    continue;
                 }
-            } else {
-                None
-            };
+            }
+        } else {
+            None
+        };
         let seed_programs = match external_program_evidence.as_ref() {
             Some(evidence) => Ok(evidence.programs.clone()),
             None => super::source_neutral_t1::enumerate_source_neutral_t1_candidates(joined, frame),
@@ -276,11 +332,13 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
         let seed_programs = match seed_programs {
             Ok(programs) => programs,
             Err(blocker) => {
-                let blocked_tokens = candidate_generation_blocks
-                    .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
-                    .or_default();
-                if joined.accepted {
-                    *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                if is_hypothesis_support {
+                    let blocked_tokens = candidate_generation_blocks
+                        .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                        .or_default();
+                    if joined.accepted {
+                        *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                    }
                 }
                 continue;
             }
@@ -288,17 +346,19 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
         let protocol_mode_root_sha256 = match t1_protocol_mode_root(&seed_programs) {
             Ok(root) => root,
             Err(blocker) => {
-                let blocked_tokens = candidate_generation_blocks
-                    .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
-                    .or_default();
-                if joined.accepted {
-                    *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                if is_hypothesis_support {
+                    let blocked_tokens = candidate_generation_blocks
+                        .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                        .or_default();
+                    if joined.accepted {
+                        *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                    }
                 }
                 continue;
             }
         };
         if active_protocol_mode_roots_sha256.contains(&protocol_mode_root_sha256) {
-            if joined.accepted {
+            if is_hypothesis_support && joined.accepted {
                 active_duplicate_tokens =
                     active_duplicate_tokens.saturating_add(joined.input_tokens);
             }
@@ -312,13 +372,18 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
             seed_programs,
             external_program_evidence,
         };
-        cohorts
-            .entry(T1CohortKey {
-                effect_shape_root_sha256: row.factorized.applicability_shape_root_sha256.clone(),
-                protocol_mode_root_sha256,
-            })
-            .or_default()
-            .push(row.clone());
+        if is_hypothesis_support {
+            cohorts
+                .entry(T1CohortKey {
+                    effect_shape_root_sha256: row
+                        .factorized
+                        .applicability_shape_root_sha256
+                        .clone(),
+                    protocol_mode_root_sha256,
+                })
+                .or_default()
+                .push(row.clone());
+        }
         eligible_rows.push(row);
     }
     let Some((cohort_key, mut cohort)) = select_highest_marginal_cohort(cohorts) else {
@@ -383,8 +448,76 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
     };
 
     let candidate_programs = seed.seed_programs.clone();
-    let manifest = match generation_manifest(&shape_root, &protocol_mode_root, &candidate_programs)
-    {
+    let raw_phase_envelope = match raw_phase_contract {
+        Some((frozen_domain_root_sha256, support_watermark)) => {
+            debug_assert!(
+                accepted
+                    .iter()
+                    .all(|row| row.joined.capture_sequence <= support_watermark)
+            );
+            let support = accepted.iter().collect::<Vec<_>>();
+            let support_frames = support
+                .iter()
+                .map(|row| row.frame.clone())
+                .collect::<Vec<_>>();
+            let support_lineages = support
+                .iter()
+                .map(|row| row.joined.session_lineage_sha256.clone())
+                .collect::<Vec<_>>();
+            let artifact_roots = support
+                .iter()
+                .filter_map(|row| row.external_program_evidence.as_ref())
+                .flat_map(|evidence| evidence.artifact_roots_sha256.iter().cloned())
+                .collect::<Vec<_>>();
+            match seal_raw_phase_t1_hypothesis_envelope_v1(
+                frozen_domain_root_sha256.to_owned(),
+                support_watermark,
+                &support_frames,
+                support_lineages,
+                artifact_roots,
+                &candidate_programs,
+            ) {
+                Ok(envelope) => Some(envelope),
+                Err(blocker) => {
+                    return selected_terminal_report(
+                        evidence_epoch_sha256,
+                        shape_root,
+                        selected_marginal_input_tokens,
+                        MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                        blocker,
+                    );
+                }
+            }
+        }
+        None => None,
+    };
+    let evidence_epoch_sha256 = match raw_phase_envelope.as_ref() {
+        Some(envelope) => match canonical_json_sha256(&(
+            "nando.multi-source-t1-raw-phase-evidence-epoch.v1",
+            evidence_epoch_sha256.as_str(),
+            envelope.envelope_root_sha256.as_str(),
+        )) {
+            Ok(root) => root,
+            Err(_) => {
+                return selected_terminal_report(
+                    evidence_epoch_sha256,
+                    shape_root,
+                    selected_marginal_input_tokens,
+                    MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                    "raw_phase_t1_evidence_epoch_failed",
+                );
+            }
+        },
+        None => evidence_epoch_sha256,
+    };
+    let manifest = match generation_manifest_with_hypothesis_root(
+        &shape_root,
+        &protocol_mode_root,
+        &candidate_programs,
+        raw_phase_envelope
+            .as_ref()
+            .map(|envelope| envelope.envelope_root_sha256.as_str()),
+    ) {
         Ok(manifest) => manifest,
         Err(blocker) => {
             return selected_terminal_report(
@@ -922,6 +1055,15 @@ pub(super) fn generation_manifest(
     protocol_mode_root: &str,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<nando_operator_kernel::OperatorGenerationManifestV3, String> {
+    generation_manifest_with_hypothesis_root(shape_root, protocol_mode_root, programs, None)
+}
+
+fn generation_manifest_with_hypothesis_root(
+    shape_root: &str,
+    protocol_mode_root: &str,
+    programs: &BTreeMap<String, ResponseProgram>,
+    raw_phase_hypothesis_root_sha256: Option<&str>,
+) -> Result<nando_operator_kernel::OperatorGenerationManifestV3, String> {
     let candidate_roots = programs.keys().cloned().collect::<Vec<_>>();
     let verifier_roots = programs
         .values()
@@ -934,23 +1076,58 @@ pub(super) fn generation_manifest(
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let artifact_set_sha256 = match raw_phase_hypothesis_root_sha256 {
+        Some(root) => canonical_json_sha256(&(
+            "nando.multi-source-t1-candidate-set.v3",
+            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            root,
+            &candidate_roots,
+        )),
+        None => canonical_json_sha256(&(
+            "nando.multi-source-t1-candidate-set.v2",
+            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            &candidate_roots,
+        )),
+    }
+    .map_err(|_| "candidate_set_commitment_failed".to_owned())?;
+    let dispatch_index_sha256 = match raw_phase_hypothesis_root_sha256 {
+        Some(root) => canonical_json_sha256(&(
+            "nando.multi-source-t1-dispatch.v3",
+            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            root,
+            shape_root,
+            protocol_mode_root,
+        )),
+        None => canonical_json_sha256(&(
+            "nando.multi-source-t1-dispatch.v2",
+            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            shape_root,
+            protocol_mode_root,
+        )),
+    }
+    .map_err(|_| "dispatch_commitment_failed".to_owned())?;
+    let resource_budget_sha256 = match raw_phase_hypothesis_root_sha256 {
+        Some(root) => canonical_json_sha256(&(
+            "nando.multi-source-t1-budget.v3",
+            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            root,
+            programs.len(),
+            VersionSpaceConfig::default(),
+        )),
+        None => canonical_json_sha256(&(
+            "nando.multi-source-t1-budget.v2",
+            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            programs.len(),
+            VersionSpaceConfig::default(),
+        )),
+    }
+    .map_err(|_| "resource_budget_commitment_failed".to_owned())?;
     seal_operator_generation_manifest_v3(
         1,
         None,
         OperatorGenerationComponentRootsV3 {
-            artifact_set_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-candidate-set.v2",
-                MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
-                &candidate_roots,
-            ))
-            .map_err(|_| "candidate_set_commitment_failed".to_owned())?,
-            dispatch_index_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-dispatch.v2",
-                MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
-                shape_root,
-                protocol_mode_root,
-            ))
-            .map_err(|_| "dispatch_commitment_failed".to_owned())?,
+            artifact_set_sha256,
+            dispatch_index_sha256,
             actor_program_sha256: canonical_json_sha256(&candidate_roots)
                 .map_err(|_| "actor_commitment_failed".to_owned())?,
             renderer_program_sha256: canonical_json_sha256(&(
@@ -965,13 +1142,7 @@ pub(super) fn generation_manifest(
                 shape_root,
             ))
             .map_err(|_| "capability_commitment_failed".to_owned())?,
-            resource_budget_sha256: canonical_json_sha256(&(
-                "nando.multi-source-t1-budget.v2",
-                MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
-                programs.len(),
-                VersionSpaceConfig::default(),
-            ))
-            .map_err(|_| "resource_budget_commitment_failed".to_owned())?,
+            resource_budget_sha256,
         },
     )
     .map_err(|error| format!("generation_manifest:{error:?}").to_lowercase())

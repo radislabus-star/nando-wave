@@ -3639,6 +3639,137 @@ fn distinguishing_observation_selects_role_then_requires_independent_future() {
 }
 
 #[test]
+fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
+    let topologies = vec![
+        t1_competing_role_topology_row(
+            "raw-phase-support",
+            "request-raw-phase-support",
+            "session-a",
+            1,
+            1_000,
+            true,
+        ),
+        t1_competing_role_topology_row(
+            "raw-phase-distinguishing",
+            "request-raw-phase-distinguishing",
+            "session-b",
+            2,
+            2_000,
+            false,
+        ),
+        t1_competing_role_topology_row(
+            "raw-phase-future",
+            "request-raw-phase-future",
+            "session-c",
+            3,
+            3_000,
+            false,
+        ),
+    ];
+    let frames = vec![
+        t1_competing_role_projection_frame(
+            "raw-phase-support",
+            "action-raw-phase-support",
+            "session-a",
+            1_500,
+            true,
+        ),
+        t1_competing_role_projection_frame(
+            "raw-phase-distinguishing",
+            "action-raw-phase-distinguishing",
+            "session-b",
+            2_500,
+            false,
+        ),
+        t1_competing_role_projection_frame(
+            "raw-phase-future",
+            "action-raw-phase-future",
+            "session-c",
+            3_500,
+            false,
+        ),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let rows = ledger.rows();
+    let support_only = rows
+        .iter()
+        .filter(|row| row.capture_sequence == 1)
+        .cloned()
+        .collect::<Vec<_>>();
+    let frozen_domain_root = root("raw phase frozen K1 domain");
+    let evidence_epoch = root("raw phase immutable evidence epoch");
+    let baseline = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+        &support_only,
+        &frames,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+        &[],
+        &frozen_domain_root,
+        1,
+        evidence_epoch.clone(),
+    );
+    let with_post_watermark = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+        &rows,
+        &frames,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+        &[],
+        &frozen_domain_root,
+        1,
+        evidence_epoch.clone(),
+    );
+    let mut reversed_rows = rows.clone();
+    reversed_rows.reverse();
+    let mut reversed_frames = frames.clone();
+    reversed_frames.reverse();
+    let reordered = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+        &reversed_rows,
+        &reversed_frames,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+        &[],
+        &frozen_domain_root,
+        1,
+        evidence_epoch,
+    );
+
+    assert!(baseline.validate(), "{baseline:#?}");
+    assert_eq!(baseline, with_post_watermark);
+    assert_eq!(baseline, reordered);
+    assert_eq!(
+        baseline.state,
+        MultiSourceT1IdentificationStateV1::Ambiguous
+    );
+    assert_eq!(baseline.candidate_programs, 2);
+    assert_eq!(baseline.support_rows, 1);
+    assert!(!baseline.execution_authority);
+
+    let collapsed_by_existing_identifier =
+        identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+            &rows,
+            &frames,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &[],
+            &frozen_domain_root,
+            2,
+            root("raw phase collapse evidence epoch"),
+        );
+    assert!(
+        collapsed_by_existing_identifier.validate(),
+        "{collapsed_by_existing_identifier:#?}"
+    );
+    assert_eq!(
+        collapsed_by_existing_identifier.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(collapsed_by_existing_identifier.support_rows, 2);
+    assert_eq!(collapsed_by_existing_identifier.independent_future_rows, 1);
+    assert!(collapsed_by_existing_identifier.candidate_freeze.is_some());
+    assert!(!collapsed_by_existing_identifier.execution_authority);
+}
+
+#[test]
 fn multi_role_projection_identifies_one_law_across_renamed_surfaces() {
     let topologies = vec![
         t1_multi_role_topology_row("turn-a", "request-a", "session-a", 1, 1_000),
