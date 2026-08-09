@@ -774,6 +774,7 @@ struct AppState {
         Arc<RwLock<Option<k1_natural_scheduler_runtime::K1NaturalSchedulerRuntimeReportV1>>>,
     k1_natural_scheduler_report:
         Arc<RwLock<Option<k1_natural_scheduler_runtime::K1NaturalSchedulerRuntimeReportV1>>>,
+    k1_structural_frontier_source_root: Arc<RwLock<Option<String>>>,
 }
 
 #[derive(Default)]
@@ -1069,6 +1070,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         operator_certification_config: Arc::new(certification_config),
         k1_mechanism_watch_report: Arc::new(RwLock::new(None)),
         k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
+        k1_structural_frontier_source_root: Arc::new(RwLock::new(None)),
     };
     if state.config.multi_source_research_enabled {
         validate_ms3_scientific_denominator_link(&state)?;
@@ -8446,6 +8448,7 @@ mod tests {
             operator_certification_config: certification_config,
             k1_mechanism_watch_report: Arc::new(RwLock::new(None)),
             k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
+            k1_structural_frontier_source_root: Arc::new(RwLock::new(None)),
         };
         refresh_response_executor(&state);
         state

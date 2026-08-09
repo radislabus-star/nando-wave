@@ -5,8 +5,14 @@ use serde_json::json;
 
 use super::{
     AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
-    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, advance,
-    law_lab_eligibility::law_lab_eligibility_report, prepare_tick_context, restore_projection_for,
+    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, PreparedK1TickContextV1,
+    advance,
+    law_lab_eligibility::law_lab_eligibility_report,
+    prepare_tick_context, restore_projection_for,
+    structural_frontier_census::{
+        build_report as build_frontier_report, publish_report as publish_frontier_report,
+        source_root as frontier_source_root,
+    },
 };
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
@@ -209,7 +215,7 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
                 continue;
             }
             report.attach_transfer_lifecycle(lifecycle)?;
-            store_report(state, report)?;
+            store_report(state, &prepared, report)?;
             return Ok(());
         }
         let stable = matches!(
@@ -224,7 +230,7 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
                 | RuntimeState::K1VocabularyOpen
                 | RuntimeState::MechanismWatchComplete
         );
-        store_report(state, report)?;
+        store_report(state, &prepared, report)?;
         if stable {
             return Ok(());
         }
@@ -260,11 +266,51 @@ fn trigger_candidate_publication(state: &AppState) {
     }
 }
 
-fn store_report(state: &AppState, report: K1NaturalSchedulerRuntimeReportV1) -> Result<(), String> {
+fn store_report(
+    state: &AppState,
+    prepared: &PreparedK1TickContextV1,
+    report: K1NaturalSchedulerRuntimeReportV1,
+) -> Result<(), String> {
+    publish_frontier_if_changed(state, prepared, &report)?;
     *state
         .k1_natural_scheduler_report
         .write()
         .map_err(|_| "k1_scheduler_report_lock_poisoned".to_owned())? = Some(report);
+    Ok(())
+}
+
+fn publish_frontier_if_changed(
+    state: &AppState,
+    prepared: &PreparedK1TickContextV1,
+    runtime: &K1NaturalSchedulerRuntimeReportV1,
+) -> Result<(), String> {
+    let source_root = frontier_source_root(prepared, runtime)?;
+    let root = state
+        .config
+        .multi_source_topology_archive_path
+        .parent()
+        .ok_or_else(|| "structural_frontier_root_parent_missing".to_owned())?
+        .join("structural-frontier-census-v2");
+    let already_published = state
+        .k1_structural_frontier_source_root
+        .read()
+        .map_err(|_| "structural_frontier_source_root_lock_poisoned".to_owned())?
+        .as_ref()
+        .is_some_and(|published| published == &source_root)
+        && root.join("latest.json").is_file();
+    if already_published {
+        return Ok(());
+    }
+    let report = build_frontier_report(prepared, runtime)?;
+    if report.source_root_sha256 != source_root {
+        return Err("structural_frontier_source_root_mismatch".to_owned());
+    }
+    publish_frontier_report(&root, &report)?;
+    *state
+        .k1_structural_frontier_source_root
+        .write()
+        .map_err(|_| "structural_frontier_source_root_lock_poisoned".to_owned())? =
+        Some(source_root);
     Ok(())
 }
 

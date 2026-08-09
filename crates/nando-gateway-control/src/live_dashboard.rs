@@ -726,13 +726,13 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">SCHEDULER AUTHORITY</div><div id="k1-scheduler-authority" class="ms3-value locked">FALSE</div><div class="scope-note">PHASE MUTATION FALSE</div></div>
       <div class="ms3-cell"><div class="ms3-label">CURRENT BLOCKER / ACTIVE ROOT</div><div id="k1-scheduler-blocker" class="ms3-value watch">WAITING</div><div id="k1-scheduler-root" class="scope-note">ROOT —</div></div>
     </div>
-    <div class="certificate-head"><h3>NATURAL VOCABULARY CENSUS · READ-ONLY</h3><span id="vocabulary-census-status" class="watch">LOADING</span></div>
+    <div class="certificate-head"><h3>STRUCTURAL FRONTIER CENSUS V2 · OPERATOR-BLIND</h3><span id="vocabulary-census-status" class="watch">LOADING</span></div>
     <div class="ms3-grid">
       <div class="ms3-cell"><div class="ms3-label">VERDICT / BLOCKER</div><div id="vocabulary-census-verdict" class="ms3-value watch">LOADING</div><div id="vocabulary-census-blocker" class="scope-note">BLOCKER —</div></div>
       <div class="ms3-cell"><div class="ms3-label">TOPOLOGY / FRAME / JOINED</div><div id="vocabulary-census-archive" class="ms3-value watch">0 / 0 / 0</div><div id="vocabulary-census-accepted" class="scope-note">ACCEPTED 0</div></div>
-      <div class="ms3-cell"><div class="ms3-label">MISSING GENERIC FORM</div><div id="vocabulary-census-missing" class="ms3-value watch">NONE</div><div id="vocabulary-census-history" class="scope-note">HISTORICAL —</div></div>
-      <div class="ms3-cell"><div class="ms3-label">CAPTURE V2 READINESS</div><div id="vocabulary-census-readiness" class="ms3-value watch">0 / 8</div><div id="vocabulary-census-readiness-note" class="scope-note">VERIFIED 0 / 2 · LINEAGES 0 / 2</div></div>
-      <div class="ms3-cell"><div class="ms3-label">EXISTING FORM BINDING GAP</div><div id="vocabulary-census-binding" class="ms3-value watch">NONE</div><div id="vocabulary-census-binding-note" class="scope-note">NOT A VOCABULARY GAP</div></div>
+      <div class="ms3-cell"><div class="ms3-label">EXACT COHORTS / CONSEQUENCE TYPES</div><div id="vocabulary-census-missing" class="ms3-value watch">0 / 0</div><div id="vocabulary-census-history" class="scope-note">SCALAR 0 · RECORD 0 · COLLECTION 0 · BOOLEAN 0 · RENDERED 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">READINESS PASS / SCHEDULABLE</div><div id="vocabulary-census-readiness" class="ms3-value watch">0 / 0</div><div id="vocabulary-census-readiness-note" class="scope-note">RETAINED 0 · COMPLETED 0 · CAPACITY 0</div></div>
+      <div class="ms3-cell"><div class="ms3-label">LEADING EXACT COHORT</div><div id="vocabulary-census-binding" class="ms3-value watch">NONE</div><div id="vocabulary-census-binding-note" class="scope-note">SETTLED 0 · VERIFIED 0 · LINEAGES 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">AUTHORITY / PHASE</div><div id="vocabulary-census-authority" class="ms3-value locked">FALSE / FALSE</div><div class="scope-note">DIAGNOSTIC SNAPSHOT ONLY</div></div>
       <div class="ms3-cell"><div class="ms3-label">REPORT / SOURCE ROOT</div><div id="vocabulary-census-root" class="ms3-value muted">—</div><div id="vocabulary-census-source-root" class="scope-note">SOURCE —</div></div>
     </div>
@@ -1146,7 +1146,17 @@ const TEMPLATE: &str = r#"
     text("k1-scheduler-blocker", (k1Transfer.blocker || k1Scheduler.blocker || (k1TerminalPass ? "PASS" : "NONE")).replaceAll("_", " ").toUpperCase());
     text("k1-scheduler-root", `ROOT ${k1LatestRoot || "—"}`);
     const shortRoot = value => value ? value.slice(0, 12) : "—";
-    const vocabularyCensusAvailable = vocabularyCensus.schema === "nando.natural-vocabulary-census.v1";
+    const frontierV2Available = vocabularyCensus.schema === "nando.structural-frontier-census.v2";
+    const vocabularyV1Available = vocabularyCensus.schema === "nando.natural-vocabulary-census.v1";
+    const vocabularyCensusAvailable = frontierV2Available || vocabularyV1Available;
+    const frontierCatalog = vocabularyCensus.catalog || {};
+    const frontierQueue = vocabularyCensus.queue || {};
+    const frontierCohorts = Array.isArray(frontierCatalog.candidates) ? frontierCatalog.candidates : [];
+    const frontierLeadingRoot = vocabularyCensus.leading_candidate_root_sha256 || "";
+    const frontierLeading = frontierCohorts.find(cohort => cohort.candidate_root_sha256 === frontierLeadingRoot) || {};
+    const frontierConsequences = vocabularyCensus.consequence_type_counts || {};
+    const frontierConsequenceKinds = Object.values(frontierConsequences).filter(value => (value || 0) > 0).length;
+    const frontierSchedulable = vocabularyCensus.schedulable_ready_cohorts || 0;
     const vocabularyForms = Array.isArray(vocabularyCensus.forms) ? vocabularyCensus.forms : [];
     const missingVocabularyForm = vocabularyForms.find(form => form.missing_from_current_vocabulary === true) || {};
     const bindingGapForm = vocabularyForms
@@ -1164,13 +1174,23 @@ const TEMPLATE: &str = r#"
     text("vocabulary-census-verdict", vocabularyVerdict);
     text("vocabulary-census-blocker", `BLOCKER ${vocabularyBlocker}`);
     text("vocabulary-census-archive", `${number.format(vocabularyCensus.topology_rows || 0)} / ${number.format(vocabularyCensus.frame_rows || 0)} / ${number.format(vocabularyCensus.joined_rows || 0)}`);
-    text("vocabulary-census-accepted", `ACCEPTED ${number.format(vocabularyCensus.accepted_rows || 0)} · NO PHYSICAL ${number.format(vocabularyCensus.rows_without_physical_candidates || 0)}`);
-    text("vocabulary-census-missing", missingFormName);
-    text("vocabulary-census-history", `HISTORICAL ${number.format(missingVocabularyForm.joined_rows || 0)} · LINEAGES ${number.format(missingVocabularyForm.independent_lineages || 0)}`);
-    text("vocabulary-census-readiness", `${number.format(missingVocabularyForm.readiness_settled_rows || 0)} / 8`);
-    text("vocabulary-census-readiness-note", `VERIFIED ${number.format(missingVocabularyForm.readiness_verified_rows || 0)} / 2 · LINEAGES ${number.format(missingVocabularyForm.readiness_independent_lineages || 0)} / 2`);
-    text("vocabulary-census-binding", bindingGapForm.operation_form ? `${bindingGapForm.operation_form.replaceAll("_", " ").toUpperCase()} · ${number.format(bindingGap)}` : "NONE");
-    text("vocabulary-census-binding-note", `SOURCE-NEUTRAL ${number.format(bindingGapForm.source_neutral_candidate_rows || 0)} / ${number.format(bindingGapForm.joined_rows || 0)} · NOT A VOCABULARY GAP`);
+    if (frontierV2Available) {
+      text("vocabulary-census-accepted", `NATURAL ${number.format(vocabularyCensus.natural_rows || 0)} · CONTROLLED ${number.format(frontierCatalog.controlled_rows_excluded || 0)} · GENERATED ${number.format(frontierCatalog.generated_fixture_rows_excluded || 0)} · SAFETY ${number.format(frontierCatalog.safety_veto_rows_excluded || 0)}`);
+      text("vocabulary-census-missing", `${number.format(vocabularyCensus.cohorts_total || 0)} / ${number.format(frontierConsequenceKinds)}`);
+      text("vocabulary-census-history", `SCALAR ${number.format(frontierConsequences.scalar || 0)} · RECORD ${number.format(frontierConsequences.record || 0)} · COLLECTION ${number.format(frontierConsequences.collection || 0)} · BOOLEAN ${number.format(frontierConsequences.boolean || 0)} · RENDERED ${number.format(frontierConsequences.rendered_sequence || 0)}`);
+      text("vocabulary-census-readiness", `${number.format(vocabularyCensus.readiness_pass_cohorts || 0)} / ${number.format(frontierSchedulable)}`);
+      text("vocabulary-census-readiness-note", `RETAINED ${number.format(vocabularyCensus.retained_cohorts || 0)} · COMPLETED ${number.format(vocabularyCensus.completed_cohorts_excluded || 0)} · CAPACITY ${number.format(vocabularyCensus.capacity_excluded_cohorts || 0)}`);
+      text("vocabulary-census-binding", frontierLeadingRoot ? `${(frontierLeading.consequence_type || "cohort").replaceAll("_", " ").toUpperCase()} · ${shortRoot(frontierLeadingRoot)}` : "NONE");
+      text("vocabulary-census-binding-note", frontierLeadingRoot ? `SETTLED ${number.format(frontierLeading.settled_rows || 0)} · VERIFIED ${number.format(frontierLeading.verified_rows || 0)} · LINEAGES ${number.format(frontierLeading.independent_lineages || 0)} · ${(frontierLeading.readiness?.blocker || "READY").replaceAll("_", " ").toUpperCase()}` : "NO RETAINED COHORT");
+    } else {
+      text("vocabulary-census-accepted", `LEGACY V1 · ACCEPTED ${number.format(vocabularyCensus.accepted_rows || 0)} · NO PHYSICAL ${number.format(vocabularyCensus.rows_without_physical_candidates || 0)}`);
+      text("vocabulary-census-missing", missingFormName);
+      text("vocabulary-census-history", `HISTORICAL ${number.format(missingVocabularyForm.joined_rows || 0)} · LINEAGES ${number.format(missingVocabularyForm.independent_lineages || 0)}`);
+      text("vocabulary-census-readiness", `${number.format(missingVocabularyForm.readiness_settled_rows || 0)} / 8`);
+      text("vocabulary-census-readiness-note", `VERIFIED ${number.format(missingVocabularyForm.readiness_verified_rows || 0)} / 2 · LINEAGES ${number.format(missingVocabularyForm.readiness_independent_lineages || 0)} / 2`);
+      text("vocabulary-census-binding", bindingGapForm.operation_form ? `${bindingGapForm.operation_form.replaceAll("_", " ").toUpperCase()} · ${number.format(bindingGap)}` : "NONE");
+      text("vocabulary-census-binding-note", `SOURCE-NEUTRAL ${number.format(bindingGapForm.source_neutral_candidate_rows || 0)} / ${number.format(bindingGapForm.joined_rows || 0)} · NOT A VOCABULARY GAP`);
+    }
     text("vocabulary-census-authority", `${vocabularyCensus.authority_ready === true ? "TRUE" : "FALSE"} / ${vocabularyCensus.phase_mutation_allowed === true ? "TRUE" : "FALSE"}`);
     text("vocabulary-census-root", shortRoot(vocabularyCensus.report_root_sha256));
     text("vocabulary-census-source-root", `SOURCE ${shortRoot(vocabularyCensus.source_root_sha256)}`);
@@ -1237,8 +1257,8 @@ const TEMPLATE: &str = r#"
     stateClass("vocabulary-census-status", vocabularyCensusAvailable ? "watch" : "locked");
     stateClass("vocabulary-census-verdict", `ms3-value ${vocabularyCensusAvailable ? "watch" : "locked"}`);
     stateClass("vocabulary-census-archive", "ms3-value watch");
-    stateClass("vocabulary-census-missing", `ms3-value ${missingVocabularyForm.readiness_pass === true ? "good" : "watch"}`);
-    stateClass("vocabulary-census-readiness", `ms3-value ${missingVocabularyForm.readiness_pass === true ? "good" : "watch"}`);
+    stateClass("vocabulary-census-missing", `ms3-value ${frontierV2Available && (vocabularyCensus.cohorts_total || 0) > 0 ? "good" : missingVocabularyForm.readiness_pass === true ? "good" : "watch"}`);
+    stateClass("vocabulary-census-readiness", `ms3-value ${frontierV2Available && frontierSchedulable > 0 ? "good" : missingVocabularyForm.readiness_pass === true ? "good" : "watch"}`);
     stateClass("vocabulary-census-binding", "ms3-value watch");
     stateClass("vocabulary-census-authority", "ms3-value locked");
     stateClass("vocabulary-census-root", "ms3-value muted");
@@ -1260,6 +1280,10 @@ const TEMPLATE: &str = r#"
     const k1VocabularyOpen = ms4.k1_vocabulary_gate?.open === true;
     text("next-route", k1VocabularyOpen
       ? "K1 OPEN → natural L2 composition → strategy laws → learning operators"
+      : frontierV2Available && vocabularyCensus.verdict === "ready_cohort"
+      ? "readiness-PASS exact cohort → frozen generation → existing identifier → Law #2 → K1 2/3"
+      : frontierV2Available
+      ? "operator-blind structural frontier → natural evidence → exact cohort readiness → Law #2/#3 → K1 OPEN → natural L2"
       : vocabularyCensus.verdict === "ready_form"
       ? "ready natural form → frozen generation → identifier → Law #2 → K1 2/3"
       : vocabularyCensus.verdict === "no_ready_form"
@@ -1540,9 +1564,11 @@ mod tests {
         assert!(html.contains("WAVE CAUSAL"));
         assert!(html.contains("K1 ELIGIBLE"));
         assert!(html.contains("CURRENT BLOCKER / ACTIVE ROOT"));
-        assert!(html.contains("NATURAL VOCABULARY CENSUS · READ-ONLY"));
+        assert!(html.contains("STRUCTURAL FRONTIER CENSUS V2 · OPERATOR-BLIND"));
         assert!(html.contains("EXISTING FORM BINDING GAP"));
         assert!(html.contains("snapshot.natural_vocabulary_census"));
+        assert!(html.contains("nando.structural-frontier-census.v2"));
+        assert!(html.contains("nando.natural-vocabulary-census.v1"));
         assert!(html.contains("Law #2/#3 → K1 OPEN → natural L2"));
         assert!(html.contains("LAW LAB · ACTIVE DISTINGUISHING PROBE"));
         assert!(html.contains("PRODUCTION AUTHORITY BITS"));

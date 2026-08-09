@@ -43,6 +43,8 @@ const COLD_K1_NATURAL_SCHEDULER_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/k1-natural-scheduler";
 const COLD_K1_LAW_LAB_ELIGIBILITY_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/k1-law-lab-eligibility";
+const STRUCTURAL_FRONTIER_CENSUS_PATH: &str =
+    "/var/lib/nando-wave/transition/multi-source-live-v2/structural-frontier-census-v2/latest.json";
 const NATURAL_VOCABULARY_CENSUS_PATH: &str =
     "/var/lib/nando-wave/proofs/natural-vocabulary-census/latest.json";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
@@ -1070,7 +1072,17 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let response_registry = read_json(&state.config.response_registry_path);
     let response_admission_controller =
         read_json(&state.config.response_admission_controller_report_path);
-    let natural_vocabulary_census = read_json(std::path::Path::new(NATURAL_VOCABULARY_CENSUS_PATH));
+    let structural_frontier_census =
+        read_json(std::path::Path::new(STRUCTURAL_FRONTIER_CENSUS_PATH));
+    let natural_vocabulary_census = if structural_frontier_census
+        .get("schema")
+        .and_then(Value::as_str)
+        == Some("nando.structural-frontier-census.v2")
+    {
+        structural_frontier_census
+    } else {
+        read_json(std::path::Path::new(NATURAL_VOCABULARY_CENSUS_PATH))
+    };
     let (
         live,
         hot_health,

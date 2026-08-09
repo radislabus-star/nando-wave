@@ -47,6 +47,7 @@ mod law_lab_eligibility;
 mod lifecycle;
 mod report;
 mod service;
+mod structural_frontier_census;
 
 pub(crate) use service::{
     advance_state, law_lab_eligibility_report_handler, mechanism_report_handler, report_handler,
@@ -54,7 +55,7 @@ pub(crate) use service::{
 
 use advance::*;
 use evidence::*;
-use lifecycle::{AdvanceInput, advance};
+use lifecycle::{AdvanceInput, advance, prepare_tick_context};
 use report::*;
 
 const K1_RUNTIME_REPORT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-runtime-report.v1";
