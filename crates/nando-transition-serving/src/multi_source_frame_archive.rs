@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::Arc;
 
 use nando_operator_kernel::{RelationFrame, canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::{
@@ -15,7 +16,7 @@ const MAX_ARCHIVE_ROWS: usize = 262_144;
 
 pub(super) struct MultiSourceFrameArchive {
     ledger: FramedCborLedger,
-    by_frame: BTreeMap<String, RelationFrame>,
+    by_frame: BTreeMap<String, Arc<RelationFrame>>,
     payload_bytes: u64,
 }
 
@@ -25,13 +26,13 @@ impl MultiSourceFrameArchive {
             .map_err(|error| format!("multi_source_frame_archive_dir:{error}"))?;
         let ledger = FramedCborLedger::open(directory, LEDGER_PREFIX)?;
         let frames = read_framed_cbor::<RelationFrame>(directory, LEDGER_PREFIX)?;
-        let mut by_frame = BTreeMap::new();
+        let mut by_frame = BTreeMap::<String, Arc<RelationFrame>>::new();
         let mut payload_bytes = 0_u64;
         for frame in frames {
             validate_frame(&frame)?;
             let bytes = frame_bytes(&frame)?;
             match by_frame.get(&frame.frame_id_sha256) {
-                Some(existing) if existing == &frame => continue,
+                Some(existing) if existing.as_ref() == &frame => continue,
                 Some(_) => return Err("multi_source_frame_archive_rebound".to_owned()),
                 None => {}
             }
@@ -39,7 +40,7 @@ impl MultiSourceFrameArchive {
             if payload_bytes > MAX_ARCHIVE_BYTES || by_frame.len() >= MAX_ARCHIVE_ROWS {
                 return Err("multi_source_frame_archive_budget".to_owned());
             }
-            by_frame.insert(frame.frame_id_sha256.clone(), frame);
+            by_frame.insert(frame.frame_id_sha256.clone(), Arc::new(frame));
         }
         Ok(Self {
             ledger,
@@ -63,7 +64,7 @@ impl MultiSourceFrameArchive {
     fn append_unsynced(&mut self, frame: &RelationFrame) -> Result<(), String> {
         validate_frame(frame)?;
         if let Some(existing) = self.by_frame.get(&frame.frame_id_sha256) {
-            return if existing == frame {
+            return if existing.as_ref() == frame {
                 Ok(())
             } else {
                 Err("multi_source_frame_archive_rebound".to_owned())
@@ -78,7 +79,7 @@ impl MultiSourceFrameArchive {
         self.ledger.append(frame)?;
         self.payload_bytes = self.payload_bytes.saturating_add(bytes);
         self.by_frame
-            .insert(frame.frame_id_sha256.clone(), frame.clone());
+            .insert(frame.frame_id_sha256.clone(), Arc::new(frame.clone()));
         Ok(())
     }
 
@@ -86,19 +87,21 @@ impl MultiSourceFrameArchive {
         self.by_frame
             .values()
             .filter(|frame| intent_ids.contains(&frame.client_intent_id_sha256))
-            .cloned()
+            .map(|frame| frame.as_ref().clone())
             .collect()
     }
 
-    pub(super) fn frames(&self) -> Vec<RelationFrame> {
+    pub(super) fn shared_frames(&self) -> Vec<Arc<RelationFrame>> {
         self.by_frame.values().cloned().collect()
     }
 
     pub(super) fn frame_by_root(&self, frame_root_sha256: &str) -> Option<RelationFrame> {
         self.by_frame
             .values()
-            .find(|frame| canonical_json_sha256(*frame).is_ok_and(|root| root == frame_root_sha256))
-            .cloned()
+            .find(|frame| {
+                canonical_json_sha256(frame.as_ref()).is_ok_and(|root| root == frame_root_sha256)
+            })
+            .map(|frame| frame.as_ref().clone())
     }
 
     pub(super) fn len(&self) -> usize {

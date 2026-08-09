@@ -17,14 +17,14 @@ struct CohortSupportReservoir {
 }
 
 pub(in crate::k1_natural_scheduler_runtime) fn build_evidence_bindings(
-    joined_rows: &[BlindThenRevealJoinedTransitionV1],
+    joined_rows: Vec<BlindThenRevealJoinedTransitionV1>,
 ) -> Result<Vec<EvidenceBinding>, String> {
     let mut prepared = joined_rows
-        .iter()
+        .into_iter()
         .map(|joined| {
-            let factorized = factor_multi_source_row_v1(joined);
-            let identity = candidate_identity(joined, &factorized)?;
-            Ok((joined.clone(), factorized, identity))
+            let factorized = factor_multi_source_row_v1(&joined);
+            let identity = candidate_identity(&joined, &factorized)?;
+            Ok((joined, factorized, identity))
         })
         .collect::<Result<Vec<_>, String>>()?;
     prepared.sort_by(|left, right| {

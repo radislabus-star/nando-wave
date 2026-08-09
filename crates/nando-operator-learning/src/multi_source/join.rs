@@ -182,6 +182,14 @@ struct JoinedDigestV2<'a> {
 impl MultiSourceJoinLedgerV1 {
     #[must_use]
     pub fn build(topologies: &[PreActionTopologyAuditRowV1], frames: &[RelationFrame]) -> Self {
+        Self::build_from_iter(topologies.iter(), frames.iter())
+    }
+
+    #[must_use]
+    pub fn build_from_iter<'topology, 'frame>(
+        topologies: impl ExactSizeIterator<Item = &'topology PreActionTopologyAuditRowV1>,
+        frames: impl ExactSizeIterator<Item = &'frame RelationFrame>,
+    ) -> Self {
         let mut ledger = Self::default();
         ledger.report.topology_rows = u64::try_from(topologies.len()).unwrap_or(u64::MAX);
         ledger.report.completed_frames = u64::try_from(frames.len()).unwrap_or(u64::MAX);
@@ -277,6 +285,11 @@ impl MultiSourceJoinLedgerV1 {
     #[must_use]
     pub fn rows(&self) -> Vec<BlindThenRevealJoinedTransitionV1> {
         self.joined_by_root.values().cloned().collect()
+    }
+
+    #[must_use]
+    pub fn into_rows(self) -> Vec<BlindThenRevealJoinedTransitionV1> {
+        self.joined_by_root.into_values().collect()
     }
 
     #[must_use]

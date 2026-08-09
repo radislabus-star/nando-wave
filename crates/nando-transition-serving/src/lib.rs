@@ -2947,6 +2947,8 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
             let mut published = false;
             let mut last_future_generation = None;
             let mut last_snapshot_generation = None;
+            let mut k1_evidence_cursor =
+                k1_natural_scheduler_runtime::K1EvidenceCursorV1::default();
             loop {
                 if let (Some(archive), Some(source_path)) = (
                     state.terminal_receipt_archive.as_ref(),
@@ -3006,7 +3008,8 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                     }
                 }
                 if state.config.k1_natural_scheduler_enabled
-                    && let Err(error) = k1_natural_scheduler_runtime::advance_state(&state)
+                    && let Err(error) =
+                        k1_natural_scheduler_runtime::advance_state(&state, &mut k1_evidence_cursor)
                 {
                     eprintln!("nando-k1-natural-scheduler: {error}");
                 }

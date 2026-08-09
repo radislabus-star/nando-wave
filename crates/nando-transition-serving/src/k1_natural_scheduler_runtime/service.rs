@@ -2,13 +2,16 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use serde_json::json;
+use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use super::{
     AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
-    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, PreparedK1TickContextV1,
-    advance,
+    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, MultiSourceJoinLedgerV1,
+    PreActionTopologyAuditRowV1, PreparedK1TickContextV1, RelationFrame, advance,
+    current_deficit_snapshot,
     law_lab_eligibility::law_lab_eligibility_report,
-    prepare_tick_context, restore_projection_for,
+    prepare_tick_context_from_join_ledger, restore_projection_for,
     structural_frontier_census::{
         build_report as build_frontier_report, publish_report as publish_frontier_report,
         source_root as frontier_source_root,
@@ -91,23 +94,81 @@ fn report_response(
     }
 }
 
-pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
-    let topologies = state
+#[derive(Default)]
+pub(crate) struct K1EvidenceCursorV1 {
+    initialized: bool,
+    topology_rows: usize,
+    frame_rows: usize,
+    frame_intent_ids_sha256: BTreeSet<String>,
+    active_protocol_mode_set_root_sha256: String,
+}
+
+impl K1EvidenceCursorV1 {
+    fn record(
+        &mut self,
+        topology_rows: usize,
+        frame_rows: usize,
+        frame_intent_ids_sha256: BTreeSet<String>,
+        active_protocol_mode_set_root_sha256: String,
+    ) {
+        self.initialized = true;
+        self.topology_rows = topology_rows;
+        self.frame_rows = frame_rows;
+        self.frame_intent_ids_sha256 = frame_intent_ids_sha256;
+        self.active_protocol_mode_set_root_sha256 = active_protocol_mode_set_root_sha256;
+    }
+}
+
+pub(crate) fn advance_state(
+    state: &AppState,
+    evidence_cursor: &mut K1EvidenceCursorV1,
+) -> Result<(), String> {
+    let active_protocols =
+        multi_source_live::active_protocol_mode_roots(&state.config.response_registry_path)?;
+    let active_protocol_mode_set_root_sha256 =
+        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+            &active_protocols,
+        )?;
+    let epistemic_projection = restore_projection_for(
+        &state.operator_certification_config,
+        K1SchedulerLaneV1::Epistemic,
+    )?;
+    let deficit = current_deficit_snapshot(&state.operator_certification_config)?;
+    let mechanism_terminal = mechanism_watch_is_terminal(state)?;
+    if reuse_waiting_tick(
+        state,
+        evidence_cursor,
+        mechanism_terminal,
+        &active_protocol_mode_set_root_sha256,
+        &epistemic_projection.projection_root_sha256,
+        &deficit.snapshot_root_sha256,
+    )? {
+        return Ok(());
+    }
+
+    let topologies_shared = state
         .multi_source_topology_archive
         .as_ref()
         .ok_or_else(|| "k1_scheduler_topology_archive_not_configured".to_owned())?
         .lock()
         .map_err(|_| "k1_scheduler_topology_archive_lock_poisoned".to_owned())?
-        .rows();
-    let frames = state
+        .shared_rows();
+    let frames_shared = state
         .multi_source_frame_archive
         .as_ref()
         .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
         .lock()
         .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
-        .frames();
-    let active_protocols =
-        multi_source_live::active_protocol_mode_roots(&state.config.response_registry_path)?;
+        .shared_frames();
+    let frame_intent_ids_sha256 = frames_shared
+        .iter()
+        .map(|frame| frame.client_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let join_ledger = MultiSourceJoinLedgerV1::build_from_iter(
+        topologies_shared.iter().map(|row| row.as_ref()),
+        frames_shared.iter().map(|frame| frame.as_ref()),
+    );
+    let prepared = prepare_tick_context_from_join_ledger(join_ledger, &active_protocols)?;
     let candidate_artifacts = crate::current_collection_miner(state)
         .map(|miner| {
             miner
@@ -118,8 +179,25 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         })
         .transpose()?
         .unwrap_or_default();
-    let prepared = prepare_tick_context(&topologies, &frames, &active_protocols)?;
-    if !mechanism_watch_is_terminal(state)? {
+    let mechanism_projection = (!mechanism_terminal)
+        .then(|| {
+            restore_projection_for(
+                &state.operator_certification_config,
+                K1SchedulerLaneV1::Mechanism,
+            )
+        })
+        .transpose()?;
+    let evidence_snapshot_required = epistemic_projection.active_candidate_freeze.is_some()
+        || !epistemic_projection.future_predictions.is_empty()
+        || mechanism_projection
+            .as_ref()
+            .is_some_and(|projection| projection.active_candidate_freeze.is_some());
+    let (mut topologies, mut frames) = if evidence_snapshot_required {
+        materialize_evidence(&topologies_shared, &frames_shared)
+    } else {
+        (Vec::new(), Vec::new())
+    };
+    if !mechanism_terminal {
         let mechanism = advance(
             &state.operator_certification_config,
             K1SchedulerLaneV1::Mechanism,
@@ -136,10 +214,6 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         )?;
         store_mechanism_report(state, mechanism)?;
     }
-    let epistemic_projection = restore_projection_for(
-        &state.operator_certification_config,
-        K1SchedulerLaneV1::Epistemic,
-    )?;
     let pending_request_ids = epistemic_projection
         .future_predictions
         .iter()
@@ -216,6 +290,12 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
             }
             report.attach_transfer_lifecycle(lifecycle)?;
             store_report(state, &prepared, report)?;
+            evidence_cursor.record(
+                topologies_shared.len(),
+                frames_shared.len(),
+                frame_intent_ids_sha256.clone(),
+                active_protocol_mode_set_root_sha256.clone(),
+            );
             return Ok(());
         }
         let stable = matches!(
@@ -232,10 +312,104 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         );
         store_report(state, &prepared, report)?;
         if stable {
+            evidence_cursor.record(
+                topologies_shared.len(),
+                frames_shared.len(),
+                frame_intent_ids_sha256.clone(),
+                active_protocol_mode_set_root_sha256.clone(),
+            );
             return Ok(());
+        }
+        if topologies.is_empty() && frames.is_empty() {
+            (topologies, frames) = materialize_evidence(&topologies_shared, &frames_shared);
         }
     }
     Err("k1_scheduler_tick_budget_exhausted".to_owned())
+}
+
+fn materialize_evidence(
+    topologies: &[Arc<PreActionTopologyAuditRowV1>],
+    frames: &[Arc<RelationFrame>],
+) -> (Vec<PreActionTopologyAuditRowV1>, Vec<RelationFrame>) {
+    (
+        topologies.iter().map(|row| row.as_ref().clone()).collect(),
+        frames.iter().map(|frame| frame.as_ref().clone()).collect(),
+    )
+}
+
+fn reuse_waiting_tick(
+    state: &AppState,
+    evidence_cursor: &mut K1EvidenceCursorV1,
+    mechanism_terminal: bool,
+    active_protocol_mode_set_root_sha256: &str,
+    projection_root_sha256: &str,
+    deficit_snapshot_root_sha256: &str,
+) -> Result<bool, String> {
+    let report = state
+        .k1_natural_scheduler_report
+        .read()
+        .map_err(|_| "k1_scheduler_report_lock_poisoned".to_owned())?;
+    let Some(report) = report.as_ref() else {
+        return Ok(false);
+    };
+    if !waiting_lanes_are_reusable(mechanism_terminal, report.state)
+        || report.projection.projection_root_sha256 != projection_root_sha256
+        || report.queue.k1_deficit_snapshot_root_sha256 != deficit_snapshot_root_sha256
+        || evidence_cursor.active_protocol_mode_set_root_sha256
+            != active_protocol_mode_set_root_sha256
+    {
+        return Ok(false);
+    }
+    let frame_rows = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
+        .len();
+    let topology_archive = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_topology_archive_lock_poisoned".to_owned())?;
+    let topology_rows = topology_archive.len();
+    let appended = if evidence_cursor.initialized && topology_rows >= evidence_cursor.topology_rows
+    {
+        topology_archive.shared_rows_after(evidence_cursor.topology_rows)?
+    } else {
+        Vec::new()
+    };
+    if waiting_delta_requires_rebuild(
+        evidence_cursor,
+        topology_rows,
+        frame_rows,
+        appended
+            .iter()
+            .map(|row| row.structure.turn_intent_id_sha256.as_str()),
+    ) {
+        return Ok(false);
+    }
+    evidence_cursor.topology_rows = topology_rows;
+    Ok(true)
+}
+
+fn waiting_lanes_are_reusable(mechanism_terminal: bool, epistemic_state: RuntimeState) -> bool {
+    mechanism_terminal && epistemic_state == RuntimeState::WaitingForEvidence
+}
+
+fn waiting_delta_requires_rebuild<'a>(
+    evidence_cursor: &K1EvidenceCursorV1,
+    topology_rows: usize,
+    frame_rows: usize,
+    appended_topology_intents_sha256: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    !evidence_cursor.initialized
+        || topology_rows < evidence_cursor.topology_rows
+        || frame_rows != evidence_cursor.frame_rows
+        || appended_topology_intents_sha256
+            .into_iter()
+            .any(|intent| evidence_cursor.frame_intent_ids_sha256.contains(intent))
 }
 
 fn mechanism_watch_is_terminal(state: &AppState) -> Result<bool, String> {
@@ -323,4 +497,54 @@ fn store_mechanism_report(
         .write()
         .map_err(|_| "k1_mechanism_watch_report_lock_poisoned".to_owned())? = Some(report);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waiting_tick_rebuilds_only_for_join_relevant_archive_deltas() {
+        let mut cursor = K1EvidenceCursorV1 {
+            initialized: true,
+            topology_rows: 10,
+            frame_rows: 4,
+            frame_intent_ids_sha256: BTreeSet::from(["completed-intent".to_owned()]),
+            active_protocol_mode_set_root_sha256: "active-root".to_owned(),
+        };
+
+        assert!(!waiting_delta_requires_rebuild(
+            &cursor,
+            12,
+            4,
+            ["unsettled-a", "unsettled-b"]
+        ));
+        assert!(waiting_delta_requires_rebuild(
+            &cursor,
+            12,
+            4,
+            ["completed-intent"]
+        ));
+        assert!(waiting_delta_requires_rebuild(&cursor, 12, 5, []));
+        assert!(waiting_delta_requires_rebuild(&cursor, 9, 4, []));
+
+        cursor.initialized = false;
+        assert!(waiting_delta_requires_rebuild(&cursor, 10, 4, []));
+    }
+
+    #[test]
+    fn waiting_tick_cannot_skip_a_live_mechanism_lane() {
+        assert!(!waiting_lanes_are_reusable(
+            false,
+            RuntimeState::WaitingForEvidence
+        ));
+        assert!(!waiting_lanes_are_reusable(
+            true,
+            RuntimeState::AwaitingIndependentFuture
+        ));
+        assert!(waiting_lanes_are_reusable(
+            true,
+            RuntimeState::WaitingForEvidence
+        ));
+    }
 }

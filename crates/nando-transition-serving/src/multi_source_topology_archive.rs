@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use nando_operator_learning::{
@@ -15,7 +16,7 @@ const MAX_ARCHIVE_ROWS: usize = 262_144;
 
 pub(super) struct MultiSourceTopologyArchive {
     ledger: FramedCborLedger,
-    by_commitment: BTreeMap<String, PreActionTopologyAuditRowV1>,
+    by_commitment: BTreeMap<String, Arc<PreActionTopologyAuditRowV1>>,
     append_order: Vec<String>,
     payload_bytes: u64,
 }
@@ -26,7 +27,7 @@ impl MultiSourceTopologyArchive {
             .map_err(|error| format!("multi_source_topology_archive_dir:{error}"))?;
         let ledger = FramedCborLedger::open(directory, LEDGER_PREFIX)?;
         let rows = read_framed_cbor::<PreActionTopologyAuditRowV1>(directory, LEDGER_PREFIX)?;
-        let mut by_commitment = BTreeMap::new();
+        let mut by_commitment = BTreeMap::<String, Arc<PreActionTopologyAuditRowV1>>::new();
         let mut append_order = Vec::new();
         let mut payload_bytes = 0_u64;
         for row in rows {
@@ -34,7 +35,7 @@ impl MultiSourceTopologyArchive {
             let bytes = row_bytes(&row)?;
             let root = row.commit.commitment_root_sha256.clone();
             match by_commitment.get(&root) {
-                Some(existing) if existing == &row => continue,
+                Some(existing) if existing.as_ref() == &row => continue,
                 Some(_) => return Err("multi_source_topology_archive_rebound".to_owned()),
                 None => {}
             }
@@ -43,7 +44,7 @@ impl MultiSourceTopologyArchive {
                 return Err("multi_source_topology_archive_budget".to_owned());
             }
             append_order.push(root.clone());
-            by_commitment.insert(root, row);
+            by_commitment.insert(root, Arc::new(row));
         }
         Ok(Self {
             ledger,
@@ -72,7 +73,7 @@ impl MultiSourceTopologyArchive {
         validate_row(row)?;
         let root = &row.commit.commitment_root_sha256;
         if let Some(existing) = self.by_commitment.get(root) {
-            return if existing == row {
+            return if existing.as_ref() == row {
                 Ok(())
             } else {
                 Err("multi_source_topology_archive_rebound".to_owned())
@@ -87,19 +88,47 @@ impl MultiSourceTopologyArchive {
         self.ledger.append(row)?;
         self.payload_bytes = self.payload_bytes.saturating_add(bytes);
         self.append_order.push(root.clone());
-        self.by_commitment.insert(root.clone(), row.clone());
+        self.by_commitment
+            .insert(root.clone(), Arc::new(row.clone()));
         Ok(())
     }
 
     pub(super) fn rows(&self) -> Vec<PreActionTopologyAuditRowV1> {
+        self.by_commitment
+            .values()
+            .map(|row| row.as_ref().clone())
+            .collect()
+    }
+
+    pub(super) fn shared_rows(&self) -> Vec<Arc<PreActionTopologyAuditRowV1>> {
         self.by_commitment.values().cloned().collect()
+    }
+
+    pub(super) fn shared_rows_after(
+        &self,
+        watermark_rows: usize,
+    ) -> Result<Vec<Arc<PreActionTopologyAuditRowV1>>, String> {
+        if watermark_rows > self.append_order.len() {
+            return Err("multi_source_topology_archive_watermark_out_of_range".to_owned());
+        }
+        self.append_order[watermark_rows..]
+            .iter()
+            .map(|root| {
+                self.by_commitment
+                    .get(root)
+                    .cloned()
+                    .ok_or_else(|| "multi_source_topology_archive_index_invalid".to_owned())
+            })
+            .collect()
     }
 
     pub(super) fn row_by_root(
         &self,
         topology_root_sha256: &str,
     ) -> Option<PreActionTopologyAuditRowV1> {
-        self.by_commitment.get(topology_root_sha256).cloned()
+        self.by_commitment
+            .get(topology_root_sha256)
+            .map(|row| row.as_ref().clone())
     }
 
     pub(super) fn len(&self) -> usize {
@@ -190,7 +219,7 @@ impl MultiSourceTopologyArchive {
             .map(|root| {
                 self.by_commitment
                     .get(root)
-                    .cloned()
+                    .map(|row| row.as_ref().clone())
                     .ok_or_else(|| "multi_source_topology_archive_index_invalid".to_owned())
             })
             .collect()
@@ -209,7 +238,7 @@ impl MultiSourceTopologyArchive {
             .map(|root| {
                 self.by_commitment
                     .get(root)
-                    .cloned()
+                    .map(|row| row.as_ref().clone())
                     .ok_or_else(|| "multi_source_topology_archive_index_invalid".to_owned())
             })
             .collect()

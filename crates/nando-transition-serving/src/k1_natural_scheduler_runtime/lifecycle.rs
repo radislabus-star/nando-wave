@@ -19,14 +19,22 @@ pub(super) struct PreparedK1TickContextV1 {
     pub contract_watermark: u64,
 }
 
+#[cfg(test)]
 pub(super) fn prepare_tick_context(
     topologies: &[PreActionTopologyAuditRowV1],
     frames: &[RelationFrame],
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
 ) -> Result<PreparedK1TickContextV1, String> {
     let join_ledger = MultiSourceJoinLedgerV1::build(topologies, frames);
+    prepare_tick_context_from_join_ledger(join_ledger, active_protocol_mode_roots_sha256)
+}
+
+pub(super) fn prepare_tick_context_from_join_ledger(
+    join_ledger: MultiSourceJoinLedgerV1,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+) -> Result<PreparedK1TickContextV1, String> {
     let join_report = join_ledger.report();
-    let bindings = build_evidence_bindings(&join_ledger.rows())?;
+    let bindings = build_evidence_bindings(join_ledger.into_rows())?;
     let evidence_epoch_root_sha256 = evidence_epoch_root(&bindings)?;
     let catalog = build_k1_natural_cohort_catalog_v1(
         &bindings
