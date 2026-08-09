@@ -55,7 +55,7 @@ pub(crate) use service::{
 
 use advance::*;
 use evidence::*;
-use lifecycle::{AdvanceInput, advance, prepare_tick_context};
+use lifecycle::{AdvanceInput, PreparedK1TickContextV1, advance, prepare_tick_context};
 use report::*;
 
 const K1_RUNTIME_REPORT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-runtime-report.v1";
