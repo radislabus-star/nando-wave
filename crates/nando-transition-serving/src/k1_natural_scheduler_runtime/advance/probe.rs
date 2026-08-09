@@ -69,7 +69,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
             );
         };
         let mut trial_roots = BTreeSet::new();
-        trial_roots.insert(future.joined.join_root_sha256.clone());
+        trial_roots.insert(future.join_root_sha256().to_owned());
         let trial = identify_frozen_candidate(
             bindings,
             frames,
@@ -93,8 +93,8 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
         let applied = disposition == ProbeOutcomeDisposition::Applied;
         let outcome = K1ProbeRoundReceiptV1::seal_outcome(
             &pending,
-            future.joined.join_root_sha256.clone(),
-            future.joined.verifier_receipt_root_sha256.clone(),
+            future.join_root_sha256().to_owned(),
+            future.joined().verifier_receipt_root_sha256.clone(),
             if applied {
                 next_classes
             } else {
@@ -116,8 +116,8 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
                 current_classes(&projection),
                 vec![
                     trial.report_root_sha256.clone(),
-                    future.joined.join_root_sha256.clone(),
-                    future.joined.verifier_receipt_root_sha256.clone(),
+                    future.join_root_sha256().to_owned(),
+                    future.joined().verifier_receipt_root_sha256.clone(),
                     outcome_root,
                 ],
                 K1GenerationVerdictClassV1::Abstain,

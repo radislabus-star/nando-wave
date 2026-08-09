@@ -196,84 +196,31 @@ impl MultiSourceJoinLedgerV1 {
         topologies: impl ExactSizeIterator<Item = &'topology PreActionTopologyAuditRowV1>,
         frames: impl ExactSizeIterator<Item = &'frame RelationFrame>,
     ) -> Self {
-        let mut ledger = Self::default();
-        ledger.report.topology_rows = u64::try_from(topologies.len()).unwrap_or(u64::MAX);
-        ledger.report.completed_frames = u64::try_from(frames.len()).unwrap_or(u64::MAX);
-
-        let mut eligible = Vec::new();
-        for row in topologies {
-            match validate_pre_action_topology_join_eligibility_v1(row) {
-                Ok(()) => eligible.push(row),
-                Err(reason) => ledger.censor(reason),
-            }
-        }
-        eligible.sort_by_key(|row| {
-            (
-                row.structure.turn_intent_id_sha256.as_str(),
-                row.captured_at_unix_ms.unwrap_or(0),
-                row.commit.commitment_root_sha256.as_str(),
-            )
-        });
-        let mut eligible_by_intent = BTreeMap::<&str, Vec<&PreActionTopologyAuditRowV1>>::new();
-        for row in &eligible {
-            eligible_by_intent
-                .entry(row.structure.turn_intent_id_sha256.as_str())
-                .or_default()
-                .push(*row);
-        }
-
-        for frame in frames {
-            if ledger.joined_by_root.len() >= MULTI_SOURCE_JOIN_MAX_ROWS_V1 {
-                ledger.censor(MultiSourceJoinCensoredReasonV1::CapacityExhausted);
-                break;
-            }
-            let prepared = match prepare_multi_source_join_frame_v1(frame) {
-                Ok(prepared) => prepared,
-                Err(reason) => {
-                    ledger.censor(reason);
-                    continue;
-                }
-            };
-            if ledger
-                .used_completed_frames
-                .contains(&prepared.action.completed_frame_root_sha256)
-            {
-                ledger.report.duplicate_idempotent =
-                    ledger.report.duplicate_idempotent.saturating_add(1);
-                continue;
-            }
-            let same_intent = eligible_by_intent
-                .get(prepared.action.turn_intent_id_sha256.as_str())
-                .map(Vec::as_slice)
-                .unwrap_or_default();
-            match join_prepared_multi_source_frame_v1(&prepared, same_intent) {
-                Ok(joined) => {
-                    if let Some(existing) = ledger.joined_by_root.get(&joined.join_root_sha256) {
-                        if existing == &joined {
-                            ledger.report.duplicate_idempotent =
-                                ledger.report.duplicate_idempotent.saturating_add(1);
-                        } else {
-                            ledger.censor(MultiSourceJoinCensoredReasonV1::DuplicateConflict);
-                        }
-                        continue;
+        let mut joined_by_root = BTreeMap::new();
+        let result = visit_multi_source_joins(
+            topologies,
+            frames,
+            |joined| -> Result<JoinVisitDisposition, std::convert::Infallible> {
+                let disposition = match joined_by_root.get(&joined.join_root_sha256) {
+                    Some(existing) if existing == &joined => JoinVisitDisposition::Idempotent,
+                    Some(_) => JoinVisitDisposition::Conflict,
+                    None => {
+                        joined_by_root.insert(joined.join_root_sha256.clone(), joined);
+                        JoinVisitDisposition::Inserted
                     }
-                    ledger
-                        .used_completed_frames
-                        .insert(prepared.action.completed_frame_root_sha256.clone());
-                    if joined.accepted {
-                        ledger.report.accepted_rows = ledger.report.accepted_rows.saturating_add(1);
-                    } else {
-                        ledger.report.negative_rows = ledger.report.negative_rows.saturating_add(1);
-                    }
-                    ledger
-                        .joined_by_root
-                        .insert(joined.join_root_sha256.clone(), joined);
-                }
-                Err(reason) => ledger.censor(reason),
-            }
+                };
+                Ok(disposition)
+            },
+        );
+        let (report, used_completed_frames) = match result {
+            Ok(value) => value,
+            Err(never) => match never {},
+        };
+        Self {
+            joined_by_root,
+            used_completed_frames,
+            report,
         }
-        ledger.report.joined_rows = u64::try_from(ledger.joined_by_root.len()).unwrap_or(u64::MAX);
-        ledger
     }
 
     #[must_use]
@@ -290,11 +237,127 @@ impl MultiSourceJoinLedgerV1 {
     pub fn report(&self) -> MultiSourceJoinReportV1 {
         self.report.clone()
     }
+}
 
-    fn censor(&mut self, reason: MultiSourceJoinCensoredReasonV1) {
-        let count = self.report.censored.entry(reason).or_default();
-        *count = count.saturating_add(1);
+#[derive(Clone, Copy)]
+enum JoinVisitDisposition {
+    Inserted,
+    Idempotent,
+    Conflict,
+}
+
+fn visit_multi_source_joins<'topology, 'frame, Error>(
+    topologies: impl ExactSizeIterator<Item = &'topology PreActionTopologyAuditRowV1>,
+    frames: impl ExactSizeIterator<Item = &'frame RelationFrame>,
+    mut visitor: impl FnMut(BlindThenRevealJoinedTransitionV1) -> Result<JoinVisitDisposition, Error>,
+) -> Result<(MultiSourceJoinReportV1, BTreeSet<String>), Error> {
+    let mut report = MultiSourceJoinReportV1 {
+        topology_rows: u64::try_from(topologies.len()).unwrap_or(u64::MAX),
+        completed_frames: u64::try_from(frames.len()).unwrap_or(u64::MAX),
+        ..MultiSourceJoinReportV1::default()
+    };
+    let mut eligible = Vec::new();
+    for row in topologies {
+        match validate_pre_action_topology_join_eligibility_v1(row) {
+            Ok(()) => eligible.push(row),
+            Err(reason) => increment_censor(&mut report, reason),
+        }
     }
+    eligible.sort_by_key(|row| {
+        (
+            row.structure.turn_intent_id_sha256.as_str(),
+            row.captured_at_unix_ms.unwrap_or(0),
+            row.commit.commitment_root_sha256.as_str(),
+        )
+    });
+    let mut eligible_by_intent = BTreeMap::<&str, Vec<&PreActionTopologyAuditRowV1>>::new();
+    for row in &eligible {
+        eligible_by_intent
+            .entry(row.structure.turn_intent_id_sha256.as_str())
+            .or_default()
+            .push(*row);
+    }
+
+    let mut used_completed_frames = BTreeSet::new();
+    for frame in frames {
+        if usize::try_from(report.joined_rows).unwrap_or(usize::MAX)
+            >= MULTI_SOURCE_JOIN_MAX_ROWS_V1
+        {
+            increment_censor(
+                &mut report,
+                MultiSourceJoinCensoredReasonV1::CapacityExhausted,
+            );
+            break;
+        }
+        let prepared = match prepare_multi_source_join_frame_v1(frame) {
+            Ok(prepared) => prepared,
+            Err(reason) => {
+                increment_censor(&mut report, reason);
+                continue;
+            }
+        };
+        if used_completed_frames.contains(&prepared.action.completed_frame_root_sha256) {
+            report.duplicate_idempotent = report.duplicate_idempotent.saturating_add(1);
+            continue;
+        }
+        let same_intent = eligible_by_intent
+            .get(prepared.action.turn_intent_id_sha256.as_str())
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let joined = match join_prepared_multi_source_frame_v1(&prepared, same_intent) {
+            Ok(joined) => joined,
+            Err(reason) => {
+                increment_censor(&mut report, reason);
+                continue;
+            }
+        };
+        match visitor(joined)? {
+            JoinVisitDisposition::Inserted => {
+                used_completed_frames.insert(prepared.action.completed_frame_root_sha256.clone());
+                report.joined_rows = report.joined_rows.saturating_add(1);
+                if prepared.outcome.accepted {
+                    report.accepted_rows = report.accepted_rows.saturating_add(1);
+                } else {
+                    report.negative_rows = report.negative_rows.saturating_add(1);
+                }
+            }
+            JoinVisitDisposition::Idempotent => {
+                report.duplicate_idempotent = report.duplicate_idempotent.saturating_add(1);
+            }
+            JoinVisitDisposition::Conflict => {
+                increment_censor(
+                    &mut report,
+                    MultiSourceJoinCensoredReasonV1::DuplicateConflict,
+                );
+            }
+        }
+    }
+    Ok((report, used_completed_frames))
+}
+
+pub fn stream_multi_source_joins_from_iter<'topology, 'frame>(
+    topologies: impl ExactSizeIterator<Item = &'topology PreActionTopologyAuditRowV1>,
+    frames: impl ExactSizeIterator<Item = &'frame RelationFrame>,
+    mut visitor: impl FnMut(BlindThenRevealJoinedTransitionV1) -> Result<(), String>,
+) -> Result<MultiSourceJoinReportV1, String> {
+    let mut joined_roots = BTreeSet::new();
+    let (report, _) = visit_multi_source_joins(
+        topologies,
+        frames,
+        |joined| -> Result<JoinVisitDisposition, String> {
+            if !joined_roots.insert(joined.join_root_sha256.clone()) {
+                return Ok(JoinVisitDisposition::Idempotent);
+            }
+            visitor(joined)?;
+            Ok(JoinVisitDisposition::Inserted)
+        },
+    )?;
+    Ok(report)
+}
+
+fn increment_censor(report: &mut MultiSourceJoinReportV1, reason: MultiSourceJoinCensoredReasonV1) {
+    let count = report.censored.entry(reason).or_default();
+    *count = count.saturating_add(1);
 }
 
 pub fn prepare_multi_source_join_frame_v1(

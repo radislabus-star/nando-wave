@@ -6,21 +6,23 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use super::{
-    AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
-    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1,
-    MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinLedgerV1,
-    MultiSourceJoinReportV1, PreActionTopologyAuditRowV1, PreparedK1TickContextV1, RelationFrame,
-    advance, current_deficit_snapshot, extend_prepared_tick_context,
-    join_prepared_multi_source_frame_v1,
+    AdvanceInput, EvidenceBindingAccumulator, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
+    K1NaturalSchedulerRuntimeReportV1, K1NaturalSchedulerRuntimeStateV1 as RuntimeState,
+    K1SchedulerLaneV1, K1SchedulerProjectionV1, MULTI_SOURCE_JOIN_MAX_ROWS_V1,
+    MultiSourceJoinCensoredReasonV1, MultiSourceJoinReportV1, PreActionTopologyAuditRowV1,
+    PreparedK1TickContextV1, RelationFrame, advance, current_deficit_snapshot,
+    extend_prepared_tick_context, join_prepared_multi_source_frame_v1,
     law_lab_eligibility::law_lab_eligibility_report,
-    prepare_multi_source_join_frame_v1, prepare_tick_context_from_join_ledger,
-    restore_projection_for,
+    prepare_multi_source_join_frame_v1, prepare_tick_context_from_bindings, restore_projection_for,
+    stream_multi_source_joins_from_iter,
     structural_frontier_census::{
         build_report as build_frontier_report, publish_report as publish_frontier_report,
         source_root as frontier_source_root,
     },
     validate_pre_action_topology_join_eligibility_v1,
 };
+#[cfg(test)]
+use super::{MultiSourceJoinLedgerV1, prepare_tick_context_from_join_ledger};
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
 
@@ -105,6 +107,7 @@ pub(crate) struct K1EvidenceCursorV1 {
     frame_rows: usize,
     frame_intent_ids_sha256: BTreeSet<String>,
     active_protocol_mode_set_root_sha256: String,
+    retain_safety_payloads: bool,
     prepared: Option<PreparedK1TickContextV1>,
 }
 
@@ -115,12 +118,14 @@ impl K1EvidenceCursorV1 {
         frame_rows: usize,
         frame_intent_ids_sha256: BTreeSet<String>,
         active_protocol_mode_set_root_sha256: String,
+        retain_safety_payloads: bool,
     ) {
         self.initialized = true;
         self.topology_rows = topology_rows;
         self.frame_rows = frame_rows;
         self.frame_intent_ids_sha256 = frame_intent_ids_sha256;
         self.active_protocol_mode_set_root_sha256 = active_protocol_mode_set_root_sha256;
+        self.retain_safety_payloads = retain_safety_payloads;
     }
 }
 
@@ -140,6 +145,16 @@ pub(crate) fn advance_state(
     )?;
     let deficit = current_deficit_snapshot(&state.operator_certification_config)?;
     let mechanism_terminal = mechanism_watch_is_terminal(state)?;
+    let mechanism_projection = (!mechanism_terminal)
+        .then(|| {
+            restore_projection_for(
+                &state.operator_certification_config,
+                K1SchedulerLaneV1::Mechanism,
+            )
+        })
+        .transpose()?;
+    let retain_safety_payloads =
+        legacy_safety_payloads_required(&epistemic_projection, mechanism_projection.as_ref());
     if reuse_waiting_tick(
         state,
         evidence_cursor,
@@ -147,11 +162,17 @@ pub(crate) fn advance_state(
         &active_protocol_mode_set_root_sha256,
         &epistemic_projection.projection_root_sha256,
         &deficit.snapshot_root_sha256,
+        retain_safety_payloads,
     )? {
         return Ok(());
     }
 
-    refresh_prepared_context(state, evidence_cursor, &active_protocols)?;
+    refresh_prepared_context(
+        state,
+        evidence_cursor,
+        &active_protocols,
+        retain_safety_payloads,
+    )?;
     let candidate_artifacts = crate::current_collection_miner(state)
         .map(|miner| {
             miner
@@ -162,14 +183,6 @@ pub(crate) fn advance_state(
         })
         .transpose()?
         .unwrap_or_default();
-    let mechanism_projection = (!mechanism_terminal)
-        .then(|| {
-            restore_projection_for(
-                &state.operator_certification_config,
-                K1SchedulerLaneV1::Mechanism,
-            )
-        })
-        .transpose()?;
     let evidence_snapshot_required = epistemic_projection.active_candidate_freeze.is_some()
         || !epistemic_projection.future_predictions.is_empty()
         || mechanism_projection
@@ -306,6 +319,7 @@ fn refresh_prepared_context(
     state: &AppState,
     evidence_cursor: &mut K1EvidenceCursorV1,
     active_protocols: &BTreeSet<String>,
+    retain_safety_payloads: bool,
 ) -> Result<(), String> {
     let active_protocol_root =
         crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
@@ -337,14 +351,20 @@ fn refresh_prepared_context(
     let invalid_cursor = !evidence_cursor.initialized
         || evidence_cursor.prepared.is_none()
         || topology_rows < evidence_cursor.topology_rows
-        || frame_rows < evidence_cursor.frame_rows;
+        || frame_rows < evidence_cursor.frame_rows
+        || retain_safety_payloads != evidence_cursor.retain_safety_payloads;
     let late_topology = appended_since_cursor.iter().any(|row| {
         evidence_cursor
             .frame_intent_ids_sha256
             .contains(&row.structure.turn_intent_id_sha256)
     });
     if invalid_cursor || late_topology {
-        return rebuild_prepared_context(state, evidence_cursor, active_protocols);
+        return rebuild_prepared_context(
+            state,
+            evidence_cursor,
+            active_protocols,
+            retain_safety_payloads,
+        );
     }
 
     if frame_rows == evidence_cursor.frame_rows {
@@ -377,7 +397,12 @@ fn refresh_prepared_context(
         .and_then(|prepared| usize::try_from(prepared.join_report.topology_rows).ok())
         .ok_or_else(|| "k1_scheduler_prepared_topology_count_invalid".to_owned())?;
     if prepared_rows > topology_rows {
-        return rebuild_prepared_context(state, evidence_cursor, active_protocols);
+        return rebuild_prepared_context(
+            state,
+            evidence_cursor,
+            active_protocols,
+            retain_safety_payloads,
+        );
     }
     let (topologies, pending_topologies) = {
         let archive = state
@@ -410,7 +435,12 @@ fn refresh_prepared_context(
         &incremental,
         Err(error) if error == "k1_incremental_evidence_out_of_order"
     ) {
-        return rebuild_prepared_context(state, evidence_cursor, active_protocols);
+        return rebuild_prepared_context(
+            state,
+            evidence_cursor,
+            active_protocols,
+            retain_safety_payloads,
+        );
     }
     incremental?;
 
@@ -421,6 +451,7 @@ fn refresh_prepared_context(
         frame_rows,
         frame_intent_ids_sha256,
         active_protocol_root,
+        retain_safety_payloads,
     );
     Ok(())
 }
@@ -455,12 +486,12 @@ fn extend_prepared_from_delta(
     let mut used_completed_frames = prepared
         .bindings
         .iter()
-        .map(|binding| binding.joined.completed_frame_root_sha256.clone())
+        .map(|binding| binding.completed_frame_root_sha256.clone())
         .collect::<BTreeSet<_>>();
     let mut joined_roots = prepared
         .bindings
         .iter()
-        .map(|binding| binding.joined.join_root_sha256.clone())
+        .map(|binding| binding.join_root_sha256().to_owned())
         .collect::<BTreeSet<_>>();
     let mut joined_rows = Vec::new();
     let capacity_already_exhausted = report
@@ -508,9 +539,9 @@ fn extend_prepared_from_delta(
             let idempotent = prepared
                 .bindings
                 .iter()
-                .map(|binding| &binding.joined)
-                .chain(joined_rows.iter())
-                .any(|existing| existing == &joined);
+                .find(|binding| binding.join_root_sha256() == joined.join_root_sha256)
+                .is_some_and(|binding| !binding.payload_retained() || binding.joined() == &joined)
+                || joined_rows.iter().any(|existing| existing == &joined);
             if idempotent {
                 report.duplicate_idempotent = report.duplicate_idempotent.saturating_add(1);
             } else {
@@ -552,6 +583,7 @@ fn rebuild_prepared_context(
     state: &AppState,
     evidence_cursor: &mut K1EvidenceCursorV1,
     active_protocols: &BTreeSet<String>,
+    retain_safety_payloads: bool,
 ) -> Result<(), String> {
     let topologies = state
         .multi_source_topology_archive
@@ -571,11 +603,19 @@ fn rebuild_prepared_context(
         .iter()
         .map(|frame| frame.client_intent_id_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let join_ledger = MultiSourceJoinLedgerV1::build_from_iter(
+    let mut accumulator = EvidenceBindingAccumulator::new(retain_safety_payloads);
+    let join_report = stream_multi_source_joins_from_iter(
         topologies.iter().map(|row| row.as_ref()),
         frames.iter().map(|frame| frame.as_ref()),
-    );
-    let prepared = prepare_tick_context_from_join_ledger(join_ledger, active_protocols)?;
+        |joined| accumulator.push(joined),
+    )?;
+    let bindings = accumulator.finish()?;
+    let prepared = prepare_tick_context_from_bindings(
+        join_report,
+        bindings,
+        active_protocols,
+        retain_safety_payloads,
+    )?;
     let active_protocol_root = prepared.active_protocol_mode_set_root_sha256.clone();
     evidence_cursor.prepared = Some(prepared);
     evidence_cursor.record(
@@ -583,6 +623,7 @@ fn rebuild_prepared_context(
         frames.len(),
         frame_intent_ids_sha256,
         active_protocol_root,
+        retain_safety_payloads,
     );
     Ok(())
 }
@@ -624,6 +665,7 @@ fn reuse_waiting_tick(
     active_protocol_mode_set_root_sha256: &str,
     projection_root_sha256: &str,
     deficit_snapshot_root_sha256: &str,
+    retain_safety_payloads: bool,
 ) -> Result<bool, String> {
     let report = state
         .k1_natural_scheduler_report
@@ -642,6 +684,7 @@ fn reuse_waiting_tick(
         || report.catalog.catalog_root_sha256 != prepared.catalog.catalog_root_sha256
         || evidence_cursor.active_protocol_mode_set_root_sha256
             != active_protocol_mode_set_root_sha256
+        || evidence_cursor.retain_safety_payloads != retain_safety_payloads
     {
         return Ok(false);
     }
@@ -677,6 +720,16 @@ fn reuse_waiting_tick(
     }
     evidence_cursor.topology_rows = topology_rows;
     Ok(true)
+}
+
+fn legacy_safety_payloads_required(
+    epistemic: &K1SchedulerProjectionV1,
+    mechanism: Option<&K1SchedulerProjectionV1>,
+) -> bool {
+    std::iter::once(epistemic)
+        .chain(mechanism)
+        .filter_map(|projection| projection.active_candidate_freeze.as_ref())
+        .any(|freeze| freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1)
 }
 
 fn waiting_lanes_are_reusable(mechanism_terminal: bool, epistemic_state: RuntimeState) -> bool {
@@ -922,6 +975,7 @@ mod tests {
             frame_rows: 4,
             frame_intent_ids_sha256: BTreeSet::from(["completed-intent".to_owned()]),
             active_protocol_mode_set_root_sha256: "active-root".to_owned(),
+            retain_safety_payloads: false,
             prepared: None,
         };
 
@@ -975,6 +1029,21 @@ mod tests {
         let oracle = prepare_tick_context_from_join_ledger(oracle_ledger, &active_protocols)
             .expect("full oracle");
 
+        let mut accumulator = EvidenceBindingAccumulator::new(false);
+        let streamed_report = stream_multi_source_joins_from_iter(
+            [first_topology.clone(), second_topology.clone()].iter(),
+            [first_frame.clone(), second_frame.clone()].iter(),
+            |joined| accumulator.push(joined),
+        )
+        .expect("streamed join");
+        let streamed = prepare_tick_context_from_bindings(
+            streamed_report,
+            accumulator.finish().expect("streamed bindings"),
+            &active_protocols,
+            false,
+        )
+        .expect("streamed context");
+
         let initial_ledger = MultiSourceJoinLedgerV1::build(
             std::slice::from_ref(&first_topology),
             std::slice::from_ref(&first_frame),
@@ -1005,5 +1074,12 @@ mod tests {
             oracle.active_protocol_mode_set_root_sha256
         );
         assert_eq!(incremental.contract_watermark, oracle.contract_watermark);
+        assert_eq!(streamed.join_report, oracle.join_report);
+        assert_eq!(streamed.catalog, oracle.catalog);
+        assert_eq!(
+            streamed.evidence_epoch_root_sha256,
+            oracle.evidence_epoch_root_sha256
+        );
+        assert_eq!(streamed.contract_watermark, oracle.contract_watermark);
     }
 }

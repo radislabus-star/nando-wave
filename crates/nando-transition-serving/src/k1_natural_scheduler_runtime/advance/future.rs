@@ -46,7 +46,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
             binding_matches_freeze(binding, &candidate_freeze)
                 && !binding.row.safety_veto
                 && (binding.row.capture_sequence <= candidate_freeze.contract_watermark
-                    || applied_roots.contains(&binding.joined.join_root_sha256))
+                    || applied_roots.contains(binding.join_root_sha256()))
         })
         .map(|binding| binding.row.lineage_root_sha256.clone())
         .collect::<BTreeSet<_>>();
@@ -54,18 +54,18 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
         .iter()
         .filter_map(|binding| {
             let outcome = projection.future_outcomes.iter().find(|outcome| {
-                outcome.join_root_sha256 == binding.joined.join_root_sha256
+                outcome.join_root_sha256 == binding.join_root_sha256()
                     && outcome.independent_verifier_pass
             })?;
             let prediction = projection.future_predictions.iter().find(|prediction| {
                 prediction.prediction_root_sha256 == outcome.prediction_root_sha256
                     && prediction.topology_commitment_root_sha256
-                        == binding.joined.topology_commitment_root_sha256
+                        == binding.topology_commitment_root_sha256
             })?;
             (binding_matches_freeze(binding, &candidate_freeze)
                 && !binding.row.safety_veto
                 && binding.row.capture_sequence >= candidate_freeze.future_min_sequence
-                && !consumed.contains(&binding.joined.join_root_sha256)
+                && !consumed.contains(binding.join_root_sha256())
                 && !used_lineages.contains(&binding.row.lineage_root_sha256))
             .then_some((binding, prediction, outcome))
         })
@@ -73,11 +73,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
             left.row
                 .capture_sequence
                 .cmp(&right.row.capture_sequence)
-                .then_with(|| {
-                    left.joined
-                        .join_root_sha256
-                        .cmp(&right.joined.join_root_sha256)
-                })
+                .then_with(|| left.join_root_sha256().cmp(right.join_root_sha256()))
         })
     else {
         return runtime_report(
@@ -101,13 +97,13 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
                 && !binding.row.safety_veto
                 && binding.row.capture_sequence >= candidate_freeze.future_min_sequence
                 && binding.row.capture_sequence <= future.row.capture_sequence
-                && !consumed.contains(&binding.joined.join_root_sha256)
+                && !consumed.contains(binding.join_root_sha256())
                 && projection.future_outcomes.iter().any(|outcome| {
-                    outcome.join_root_sha256 == binding.joined.join_root_sha256
+                    outcome.join_root_sha256 == binding.join_root_sha256()
                         && outcome.independent_verifier_pass
                 })
         })
-        .map(|binding| binding.joined.join_root_sha256.clone())
+        .map(|binding| binding.join_root_sha256().to_owned())
         .collect::<BTreeSet<_>>();
     let trial = identify_frozen_candidate(
         bindings,
@@ -122,7 +118,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
         .iter()
         .find(|frame| {
             canonical_json_sha256(*frame)
-                .is_ok_and(|root| root == future.joined.completed_frame_root_sha256)
+                .is_ok_and(|root| root == future.completed_frame_root_sha256)
         })
         .map(|frame| frame.frame_id_sha256.as_str());
     let future_in_basis = future_frame_id.is_some_and(|frame_id| {
@@ -171,7 +167,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_independent_future(
     };
     let mut evidence = vec![
         trial.report_root_sha256.clone(),
-        future.joined.join_root_sha256.clone(),
+        future.join_root_sha256().to_owned(),
         prediction.prediction_root_sha256.clone(),
         outcome.outcome_root_sha256.clone(),
     ];

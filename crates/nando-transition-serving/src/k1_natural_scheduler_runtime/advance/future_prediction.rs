@@ -189,7 +189,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn settle_precommitted_future_eviden
             },
         )?;
         debug_assert_eq!(
-            binding.joined.topology_commitment_root_sha256,
+            binding.topology_commitment_root_sha256,
             prediction.topology_commitment_root_sha256
         );
         return Ok(Some((
@@ -256,12 +256,11 @@ fn next_settleable_outcome<'a>(
             topology.commit.commitment_root_sha256 == prediction.topology_commitment_root_sha256
         })?;
         let binding = bindings.iter().find(|binding| {
-            binding.joined.topology_commitment_root_sha256
-                == prediction.topology_commitment_root_sha256
+            binding.topology_commitment_root_sha256 == prediction.topology_commitment_root_sha256
         })?;
         let frame = frames.iter().find(|frame| {
             canonical_json_sha256(*frame)
-                .is_ok_and(|root| root == binding.joined.completed_frame_root_sha256)
+                .is_ok_and(|root| root == binding.completed_frame_root_sha256)
         })?;
         Some((prediction, topology, binding, frame, None))
     })
@@ -283,7 +282,7 @@ fn next_pre_action_topology<'a>(
     }
     let joined_topologies = bindings
         .iter()
-        .map(|binding| binding.joined.topology_commitment_root_sha256.as_str())
+        .map(|binding| binding.topology_commitment_root_sha256.as_str())
         .collect::<BTreeSet<_>>();
     let completed_intents = frames
         .iter()

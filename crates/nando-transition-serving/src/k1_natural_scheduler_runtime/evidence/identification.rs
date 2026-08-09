@@ -126,10 +126,10 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
             binding_matches_freeze(binding, freeze)
                 && frozen_row_is_eligible(&binding.row, freeze)
                 && (frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
-                    || applied_roots.contains(&binding.joined.join_root_sha256)
-                    || trial_roots.contains(&binding.joined.join_root_sha256))
+                    || applied_roots.contains(binding.join_root_sha256())
+                    || trial_roots.contains(binding.join_root_sha256()))
         })
-        .map(|binding| binding.joined.clone())
+        .map(|binding| binding.joined().clone())
         .collect::<Vec<_>>();
     selected.sort_by(|left, right| {
         left.capture_sequence
@@ -359,7 +359,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn next_future_binding<'a>(
                 && binding.row.verified
                 && binding.row.capture_sequence >= freeze.future_min_sequence
                 && binding.row.capture_sequence >= minimum_capture_sequence
-                && !consumed_roots.contains(&binding.joined.join_root_sha256)
+                && !consumed_roots.contains(binding.join_root_sha256())
                 && excluded_lineages
                     .is_none_or(|lineages| !lineages.contains(&binding.row.lineage_root_sha256))
         })

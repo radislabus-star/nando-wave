@@ -16,34 +16,125 @@ struct CohortSupportReservoir {
     selected_lineages: BTreeSet<String>,
 }
 
+enum PendingEvidenceBinding {
+    Fixed {
+        binding: Box<EvidenceBinding>,
+        identity: CandidateIdentity,
+        generator_eligible: bool,
+    },
+    Eligible {
+        joined: Box<BlindThenRevealJoinedTransitionV1>,
+        identity: CandidateIdentity,
+    },
+}
+
+impl PendingEvidenceBinding {
+    fn order_key(&self) -> (u64, &str) {
+        match self {
+            Self::Fixed { binding, .. } => {
+                (binding.row.capture_sequence, binding.join_root_sha256())
+            }
+            Self::Eligible { joined, .. } => {
+                (joined.capture_sequence, joined.join_root_sha256.as_str())
+            }
+        }
+    }
+}
+
+pub(in crate::k1_natural_scheduler_runtime) struct EvidenceBindingAccumulator {
+    pending: Vec<PendingEvidenceBinding>,
+    retain_safety_payloads: bool,
+}
+
+impl EvidenceBindingAccumulator {
+    pub(in crate::k1_natural_scheduler_runtime) fn new(retain_safety_payloads: bool) -> Self {
+        Self {
+            pending: Vec::new(),
+            retain_safety_payloads,
+        }
+    }
+
+    pub(in crate::k1_natural_scheduler_runtime) fn push(
+        &mut self,
+        joined: BlindThenRevealJoinedTransitionV1,
+    ) -> Result<(), String> {
+        let factorized = factor_multi_source_row_v1(&joined);
+        let identity = candidate_identity(&joined, &factorized)?;
+        let generator_eligible = generator_eligible(&joined, &factorized);
+        if capture_generation_v2(&joined) && generator_eligible {
+            self.pending.push(PendingEvidenceBinding::Eligible {
+                joined: Box::new(joined),
+                identity,
+            });
+        } else {
+            self.pending.push(PendingEvidenceBinding::Fixed {
+                binding: Box::new(seal_evidence_binding(
+                    joined,
+                    identity.clone(),
+                    true,
+                    self.retain_safety_payloads,
+                )?),
+                identity,
+                generator_eligible,
+            });
+        }
+        Ok(())
+    }
+
+    pub(in crate::k1_natural_scheduler_runtime) fn finish(
+        mut self,
+    ) -> Result<Vec<EvidenceBinding>, String> {
+        self.pending
+            .sort_by(|left, right| left.order_key().cmp(&right.order_key()));
+        let mut cohort_reservoirs = BTreeMap::<CandidateIdentity, CohortSupportReservoir>::new();
+        let mut bindings = Vec::with_capacity(self.pending.len());
+        for pending in self.pending {
+            match pending {
+                PendingEvidenceBinding::Fixed {
+                    binding,
+                    identity,
+                    generator_eligible,
+                } => {
+                    let _ = support_reservoir_overflow(
+                        cohort_reservoirs.entry(identity).or_default(),
+                        &binding.row.lineage_root_sha256,
+                        generator_eligible,
+                    );
+                    bindings.push(*binding);
+                }
+                PendingEvidenceBinding::Eligible { joined, identity } => {
+                    let support_overflow = support_reservoir_overflow(
+                        cohort_reservoirs.entry(identity.clone()).or_default(),
+                        &joined.session_lineage_sha256,
+                        true,
+                    );
+                    bindings.push(seal_evidence_binding(
+                        *joined,
+                        identity,
+                        support_overflow,
+                        self.retain_safety_payloads,
+                    )?);
+                }
+            }
+        }
+        Ok(bindings)
+    }
+}
+
+#[cfg(test)]
 pub(in crate::k1_natural_scheduler_runtime) fn build_evidence_bindings(
     joined_rows: Vec<BlindThenRevealJoinedTransitionV1>,
 ) -> Result<Vec<EvidenceBinding>, String> {
-    let mut prepared = joined_rows
-        .into_iter()
-        .map(|joined| {
-            let factorized = factor_multi_source_row_v1(&joined);
-            let identity = candidate_identity(&joined, &factorized)?;
-            Ok((joined, factorized, identity))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    prepared.sort_by(|left, right| {
-        left.0
-            .capture_sequence
-            .cmp(&right.0.capture_sequence)
-            .then_with(|| left.0.join_root_sha256.cmp(&right.0.join_root_sha256))
-    });
-    let mut cohort_reservoirs = BTreeMap::<CandidateIdentity, CohortSupportReservoir>::new();
-    prepared
-        .into_iter()
-        .map(|(joined, factorized, identity)| {
-            seal_evidence_binding(joined, &factorized, identity, &mut cohort_reservoirs)
-        })
-        .collect()
+    let mut accumulator = EvidenceBindingAccumulator::new(true);
+    for joined in joined_rows {
+        accumulator.push(joined)?;
+    }
+    accumulator.finish()
 }
 
 pub(in crate::k1_natural_scheduler_runtime) fn extend_evidence_bindings(
     bindings: &mut Vec<EvidenceBinding>,
+    retain_safety_payloads: bool,
     mut joined_rows: Vec<BlindThenRevealJoinedTransitionV1>,
 ) -> Result<(), String> {
     joined_rows.sort_by(|left, right| {
@@ -53,10 +144,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn extend_evidence_bindings(
     });
     if let (Some(previous), Some(next)) = (bindings.last(), joined_rows.first())
         && (next.capture_sequence, next.join_root_sha256.as_str())
-            <= (
-                previous.joined.capture_sequence,
-                previous.joined.join_root_sha256.as_str(),
-            )
+            <= (previous.row.capture_sequence, previous.join_root_sha256())
     {
         return Err("k1_incremental_evidence_out_of_order".to_owned());
     }
@@ -75,11 +163,18 @@ pub(in crate::k1_natural_scheduler_runtime) fn extend_evidence_bindings(
     for joined in joined_rows {
         let factorized = factor_multi_source_row_v1(&joined);
         let identity = candidate_identity(&joined, &factorized)?;
+        let capture_v2 = capture_generation_v2(&joined);
+        let generator_eligible = generator_eligible(&joined, &factorized);
+        let support_overflow = support_reservoir_overflow(
+            cohort_reservoirs.entry(identity.clone()).or_default(),
+            &joined.session_lineage_sha256,
+            generator_eligible,
+        );
         bindings.push(seal_evidence_binding(
             joined,
-            &factorized,
             identity,
-            &mut cohort_reservoirs,
+            !capture_v2 || !generator_eligible || support_overflow,
+            retain_safety_payloads,
         )?);
     }
     Ok(())
@@ -87,18 +182,13 @@ pub(in crate::k1_natural_scheduler_runtime) fn extend_evidence_bindings(
 
 fn seal_evidence_binding(
     joined: BlindThenRevealJoinedTransitionV1,
-    factorized: &FactorizedMultiSourceRowV1,
     identity: CandidateIdentity,
-    cohort_reservoirs: &mut BTreeMap<CandidateIdentity, CohortSupportReservoir>,
+    safety_veto: bool,
+    retain_safety_payloads: bool,
 ) -> Result<EvidenceBinding, String> {
     let capture_v2 = capture_generation_v2(&joined);
-    let generator_eligible = generator_eligible(&joined, factorized);
-    let support_overflow = support_reservoir_overflow(
-        cohort_reservoirs.entry(identity.clone()).or_default(),
-        &joined.session_lineage_sha256,
-        generator_eligible,
-    );
-    let safety_veto = !generator_eligible || support_overflow;
+    let completed_frame_root_sha256 = joined.completed_frame_root_sha256.clone();
+    let topology_commitment_root_sha256 = joined.topology_commitment_root_sha256.clone();
     let row = if capture_v2 {
         K1NaturalEvidenceRowV1::seal(
             joined.join_root_sha256.clone(),
@@ -134,7 +224,13 @@ fn seal_evidence_binding(
         )
     }
     .map_err(str::to_owned)?;
-    Ok(EvidenceBinding { row, joined })
+    let joined = (!safety_veto || retain_safety_payloads).then(|| Box::new(joined));
+    Ok(EvidenceBinding {
+        row,
+        joined,
+        completed_frame_root_sha256,
+        topology_commitment_root_sha256,
+    })
 }
 
 fn candidate_identity_from_row(row: &K1NaturalEvidenceRowV1) -> CandidateIdentity {
@@ -450,7 +546,7 @@ mod tests {
         let second = joined(2, 2);
         let oracle = build_evidence_bindings(vec![first.clone(), second.clone()]).expect("oracle");
         let mut incremental = build_evidence_bindings(vec![first]).expect("initial");
-        extend_evidence_bindings(&mut incremental, vec![second]).expect("extend");
+        extend_evidence_bindings(&mut incremental, true, vec![second]).expect("extend");
         assert_eq!(incremental, oracle);
         assert_eq!(
             evidence_epoch_root(&incremental).expect("incremental root"),
@@ -462,8 +558,47 @@ mod tests {
     fn incremental_evidence_rejects_out_of_order_delta() {
         let mut incremental = build_evidence_bindings(vec![joined(2, 2)]).expect("initial");
         assert_eq!(
-            extend_evidence_bindings(&mut incremental, vec![joined(1, 1)]).expect_err("fallback"),
+            extend_evidence_bindings(&mut incremental, true, vec![joined(1, 1)])
+                .expect_err("fallback"),
             "k1_incremental_evidence_out_of_order"
         );
+    }
+
+    #[test]
+    fn compact_bindings_preserve_roots_and_drop_only_veto_payloads() {
+        let joined_rows = (1..=K1_MAX_SUPPORT_ROWS_V1 + 1)
+            .map(|sequence| joined(sequence as u64, (sequence % 2) as u64 + 1))
+            .collect::<Vec<_>>();
+        let full = build_evidence_bindings(joined_rows.clone()).expect("full bindings");
+        let mut accumulator = EvidenceBindingAccumulator::new(false);
+        for row in joined_rows {
+            accumulator.push(row).expect("compact row");
+        }
+        let compact = accumulator.finish().expect("compact bindings");
+
+        assert_eq!(
+            compact
+                .iter()
+                .map(|binding| &binding.row)
+                .collect::<Vec<_>>(),
+            full.iter().map(|binding| &binding.row).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            evidence_epoch_root(&compact).expect("compact root"),
+            evidence_epoch_root(&full).expect("full root")
+        );
+        assert!(
+            compact
+                .iter()
+                .filter(|binding| binding.row.safety_veto)
+                .all(|binding| !binding.payload_retained())
+        );
+        assert!(
+            compact
+                .iter()
+                .filter(|binding| !binding.row.safety_veto)
+                .all(EvidenceBinding::payload_retained)
+        );
+        assert!(full.iter().all(EvidenceBinding::payload_retained));
     }
 }

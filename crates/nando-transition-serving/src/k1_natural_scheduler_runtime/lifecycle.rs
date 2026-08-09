@@ -17,6 +17,7 @@ pub(super) struct PreparedK1TickContextV1 {
     pub catalog: K1NaturalCohortCatalogV1,
     pub active_protocol_mode_set_root_sha256: String,
     pub contract_watermark: u64,
+    pub retain_safety_payloads: bool,
 }
 
 #[cfg(test)]
@@ -29,12 +30,27 @@ pub(super) fn prepare_tick_context(
     prepare_tick_context_from_join_ledger(join_ledger, active_protocol_mode_roots_sha256)
 }
 
+#[cfg(test)]
 pub(super) fn prepare_tick_context_from_join_ledger(
     join_ledger: MultiSourceJoinLedgerV1,
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
 ) -> Result<PreparedK1TickContextV1, String> {
     let join_report = join_ledger.report();
     let bindings = build_evidence_bindings(join_ledger.into_rows())?;
+    prepare_tick_context_from_bindings(
+        join_report,
+        bindings,
+        active_protocol_mode_roots_sha256,
+        true,
+    )
+}
+
+pub(super) fn prepare_tick_context_from_bindings(
+    join_report: MultiSourceJoinReportV1,
+    bindings: Vec<EvidenceBinding>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+    retain_safety_payloads: bool,
+) -> Result<PreparedK1TickContextV1, String> {
     let evidence_epoch_root_sha256 = evidence_epoch_root(&bindings)?;
     let catalog = build_k1_natural_cohort_catalog_v1(
         &bindings
@@ -63,6 +79,7 @@ pub(super) fn prepare_tick_context_from_join_ledger(
         catalog,
         active_protocol_mode_set_root_sha256,
         contract_watermark,
+        retain_safety_payloads,
     })
 }
 
@@ -72,7 +89,11 @@ pub(super) fn extend_prepared_tick_context(
     join_report: MultiSourceJoinReportV1,
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
 ) -> Result<(), String> {
-    extend_evidence_bindings(&mut prepared.bindings, joined_rows)?;
+    extend_evidence_bindings(
+        &mut prepared.bindings,
+        prepared.retain_safety_payloads,
+        joined_rows,
+    )?;
     let evidence_epoch_root_sha256 = evidence_epoch_root(&prepared.bindings)?;
     let catalog = build_k1_natural_cohort_catalog_v1(
         &prepared

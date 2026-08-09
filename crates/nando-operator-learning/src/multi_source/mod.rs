@@ -81,7 +81,8 @@ pub use join::{
     MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, ObservedTeacherActionRefV1, PreparedMultiSourceJoinFrameV1,
     VerifiedOutcomeReceiptRefV1, join_prepared_multi_source_frame_v1,
-    prepare_multi_source_join_frame_v1, validate_pre_action_topology_join_eligibility_v1,
+    prepare_multi_source_join_frame_v1, stream_multi_source_joins_from_iter,
+    validate_pre_action_topology_join_eligibility_v1,
 };
 pub use k1_natural_scheduler_v1::{
     K1_CANDIDATE_READINESS_MIN_LINEAGES_V1, K1_CANDIDATE_READINESS_MIN_SETTLED_ROWS_V1,
