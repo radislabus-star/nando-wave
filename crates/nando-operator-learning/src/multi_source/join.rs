@@ -123,6 +123,12 @@ pub struct MultiSourceJoinReportV1 {
     pub authority_ready: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PreparedMultiSourceJoinFrameV1 {
+    pub action: ObservedTeacherActionRefV1,
+    pub outcome: VerifiedOutcomeReceiptRefV1,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MultiSourceJoinLedgerV1 {
     joined_by_root: BTreeMap<String, BlindThenRevealJoinedTransitionV1>,
@@ -221,8 +227,8 @@ impl MultiSourceJoinLedgerV1 {
                 ledger.censor(MultiSourceJoinCensoredReasonV1::CapacityExhausted);
                 break;
             }
-            let (action, outcome) = match completed_refs(frame) {
-                Ok(refs) => refs,
+            let prepared = match prepare_multi_source_join_frame_v1(frame) {
+                Ok(prepared) => prepared,
                 Err(reason) => {
                     ledger.censor(reason);
                     continue;
@@ -230,29 +236,17 @@ impl MultiSourceJoinLedgerV1 {
             };
             if ledger
                 .used_completed_frames
-                .contains(&action.completed_frame_root_sha256)
+                .contains(&prepared.action.completed_frame_root_sha256)
             {
                 ledger.report.duplicate_idempotent =
                     ledger.report.duplicate_idempotent.saturating_add(1);
                 continue;
             }
             let same_intent = eligible_by_intent
-                .get(action.turn_intent_id_sha256.as_str())
+                .get(prepared.action.turn_intent_id_sha256.as_str())
                 .map(Vec::as_slice)
                 .unwrap_or_default();
-            // One immutable request topology may ground several unique actions from the
-            // same response. Evidence independence is enforced later by session lineage.
-            let candidates = same_intent
-                .iter()
-                .copied()
-                .filter(|row| topology_matches_frame(row, &action))
-                .collect::<Vec<_>>();
-            let Some(selected) = select_latest_unique(&candidates) else {
-                let reason = classify_missing_match(same_intent, &action, &candidates);
-                ledger.censor(reason);
-                continue;
-            };
-            match joined_row(selected, &action, &outcome) {
+            match join_prepared_multi_source_frame_v1(&prepared, same_intent) {
                 Ok(joined) => {
                     if let Some(existing) = ledger.joined_by_root.get(&joined.join_root_sha256) {
                         if existing == &joined {
@@ -265,7 +259,7 @@ impl MultiSourceJoinLedgerV1 {
                     }
                     ledger
                         .used_completed_frames
-                        .insert(action.completed_frame_root_sha256.clone());
+                        .insert(prepared.action.completed_frame_root_sha256.clone());
                     if joined.accepted {
                         ledger.report.accepted_rows = ledger.report.accepted_rows.saturating_add(1);
                     } else {
@@ -301,6 +295,34 @@ impl MultiSourceJoinLedgerV1 {
         let count = self.report.censored.entry(reason).or_default();
         *count = count.saturating_add(1);
     }
+}
+
+pub fn prepare_multi_source_join_frame_v1(
+    frame: &RelationFrame,
+) -> Result<PreparedMultiSourceJoinFrameV1, MultiSourceJoinCensoredReasonV1> {
+    let (action, outcome) = completed_refs(frame)?;
+    Ok(PreparedMultiSourceJoinFrameV1 { action, outcome })
+}
+
+pub fn join_prepared_multi_source_frame_v1(
+    prepared: &PreparedMultiSourceJoinFrameV1,
+    same_intent: &[&PreActionTopologyAuditRowV1],
+) -> Result<BlindThenRevealJoinedTransitionV1, MultiSourceJoinCensoredReasonV1> {
+    // One immutable request topology may ground several unique actions from the
+    // same response. Evidence independence is enforced later by session lineage.
+    let candidates = same_intent
+        .iter()
+        .copied()
+        .filter(|row| topology_matches_frame(row, &prepared.action))
+        .collect::<Vec<_>>();
+    let Some(selected) = select_latest_unique(&candidates) else {
+        return Err(classify_missing_match(
+            same_intent,
+            &prepared.action,
+            &candidates,
+        ));
+    };
+    joined_row(selected, &prepared.action, &prepared.outcome)
 }
 
 impl BlindThenRevealJoinedTransitionV1 {

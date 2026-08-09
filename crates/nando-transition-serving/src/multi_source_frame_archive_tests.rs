@@ -62,3 +62,43 @@ fn archive_rejects_unverified_frame() {
     );
     std::fs::remove_dir_all(root).expect("cleanup");
 }
+
+#[test]
+fn archive_exposes_restart_stable_append_cursor() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-frame-cursor-{}",
+        std::process::id()
+    ));
+    let expected = [frame(3, "intent-3"), frame(1, "intent-1"), frame(2, "intent-2")];
+    let mut archive = MultiSourceFrameArchive::open(&root).expect("archive");
+    for row in &expected {
+        archive.append(row).expect("append");
+    }
+    assert_eq!(
+        archive
+            .shared_frames_after(1)
+            .expect("cursor")
+            .iter()
+            .map(|row| row.frame_id_sha256.as_str())
+            .collect::<Vec<_>>(),
+        expected[1..]
+            .iter()
+            .map(|row| row.frame_id_sha256.as_str())
+            .collect::<Vec<_>>()
+    );
+    drop(archive);
+
+    let restored = MultiSourceFrameArchive::open(&root).expect("restore");
+    assert_eq!(
+        restored
+            .shared_frames()
+            .iter()
+            .map(|row| row.frame_id_sha256.as_str())
+            .collect::<Vec<_>>(),
+        expected
+            .iter()
+            .map(|row| row.frame_id_sha256.as_str())
+            .collect::<Vec<_>>()
+    );
+    std::fs::remove_dir_all(root).expect("cleanup");
+}

@@ -2,16 +2,19 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use serde_json::json;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use super::{
     AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
-    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, MultiSourceJoinLedgerV1,
-    PreActionTopologyAuditRowV1, PreparedK1TickContextV1, RelationFrame, advance,
-    current_deficit_snapshot,
+    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1,
+    MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinLedgerV1,
+    MultiSourceJoinReportV1, PreActionTopologyAuditRowV1, PreparedK1TickContextV1, RelationFrame,
+    advance, current_deficit_snapshot, extend_prepared_tick_context,
+    join_prepared_multi_source_frame_v1,
     law_lab_eligibility::law_lab_eligibility_report,
-    prepare_tick_context_from_join_ledger, restore_projection_for,
+    prepare_multi_source_join_frame_v1, prepare_tick_context_from_join_ledger,
+    restore_projection_for, validate_pre_action_topology_join_eligibility_v1,
     structural_frontier_census::{
         build_report as build_frontier_report, publish_report as publish_frontier_report,
         source_root as frontier_source_root,
@@ -101,6 +104,7 @@ pub(crate) struct K1EvidenceCursorV1 {
     frame_rows: usize,
     frame_intent_ids_sha256: BTreeSet<String>,
     active_protocol_mode_set_root_sha256: String,
+    prepared: Option<PreparedK1TickContextV1>,
 }
 
 impl K1EvidenceCursorV1 {
@@ -146,29 +150,7 @@ pub(crate) fn advance_state(
         return Ok(());
     }
 
-    let topologies_shared = state
-        .multi_source_topology_archive
-        .as_ref()
-        .ok_or_else(|| "k1_scheduler_topology_archive_not_configured".to_owned())?
-        .lock()
-        .map_err(|_| "k1_scheduler_topology_archive_lock_poisoned".to_owned())?
-        .shared_rows();
-    let frames_shared = state
-        .multi_source_frame_archive
-        .as_ref()
-        .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
-        .lock()
-        .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
-        .shared_frames();
-    let frame_intent_ids_sha256 = frames_shared
-        .iter()
-        .map(|frame| frame.client_intent_id_sha256.clone())
-        .collect::<BTreeSet<_>>();
-    let join_ledger = MultiSourceJoinLedgerV1::build_from_iter(
-        topologies_shared.iter().map(|row| row.as_ref()),
-        frames_shared.iter().map(|frame| frame.as_ref()),
-    );
-    let prepared = prepare_tick_context_from_join_ledger(join_ledger, &active_protocols)?;
+    refresh_prepared_context(state, evidence_cursor, &active_protocols)?;
     let candidate_artifacts = crate::current_collection_miner(state)
         .map(|miner| {
             miner
@@ -193,17 +175,21 @@ pub(crate) fn advance_state(
             .as_ref()
             .is_some_and(|projection| projection.active_candidate_freeze.is_some());
     let (mut topologies, mut frames) = if evidence_snapshot_required {
-        materialize_evidence(&topologies_shared, &frames_shared)
+        materialize_current_evidence(state)?
     } else {
         (Vec::new(), Vec::new())
     };
+    let prepared = evidence_cursor
+        .prepared
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_prepared_context_missing".to_owned())?;
     if !mechanism_terminal {
         let mechanism = advance(
             &state.operator_certification_config,
             K1SchedulerLaneV1::Mechanism,
             false,
             AdvanceInput {
-                prepared: &prepared,
+                prepared,
                 topologies: &topologies,
                 frames: &frames,
                 terminal_receipts: &[],
@@ -250,7 +236,7 @@ pub(crate) fn advance_state(
             K1SchedulerLaneV1::Epistemic,
             true,
             AdvanceInput {
-                prepared: &prepared,
+                prepared,
                 topologies: &topologies,
                 frames: &frames,
                 terminal_receipts: &terminal_receipts,
@@ -289,13 +275,7 @@ pub(crate) fn advance_state(
                 continue;
             }
             report.attach_transfer_lifecycle(lifecycle)?;
-            store_report(state, &prepared, report)?;
-            evidence_cursor.record(
-                topologies_shared.len(),
-                frames_shared.len(),
-                frame_intent_ids_sha256.clone(),
-                active_protocol_mode_set_root_sha256.clone(),
-            );
+            store_report(state, prepared, report)?;
             return Ok(());
         }
         let stable = matches!(
@@ -310,21 +290,320 @@ pub(crate) fn advance_state(
                 | RuntimeState::K1VocabularyOpen
                 | RuntimeState::MechanismWatchComplete
         );
-        store_report(state, &prepared, report)?;
+        store_report(state, prepared, report)?;
         if stable {
-            evidence_cursor.record(
-                topologies_shared.len(),
-                frames_shared.len(),
-                frame_intent_ids_sha256.clone(),
-                active_protocol_mode_set_root_sha256.clone(),
-            );
             return Ok(());
         }
         if topologies.is_empty() && frames.is_empty() {
-            (topologies, frames) = materialize_evidence(&topologies_shared, &frames_shared);
+            (topologies, frames) = materialize_current_evidence(state)?;
         }
     }
     Err("k1_scheduler_tick_budget_exhausted".to_owned())
+}
+
+fn refresh_prepared_context(
+    state: &AppState,
+    evidence_cursor: &mut K1EvidenceCursorV1,
+    active_protocols: &BTreeSet<String>,
+) -> Result<(), String> {
+    let active_protocol_root =
+        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+            active_protocols,
+        )?;
+    let (topology_rows, appended_since_cursor) = {
+        let archive = state
+            .multi_source_topology_archive
+            .as_ref()
+            .ok_or_else(|| "k1_scheduler_topology_archive_not_configured".to_owned())?
+            .lock()
+            .map_err(|_| "k1_scheduler_topology_archive_lock_poisoned".to_owned())?;
+        let rows = archive.len();
+        let appended = if evidence_cursor.initialized && rows >= evidence_cursor.topology_rows {
+            archive.shared_rows_after(evidence_cursor.topology_rows)?
+        } else {
+            Vec::new()
+        };
+        (rows, appended)
+    };
+    let frame_rows = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
+        .len();
+
+    let invalid_cursor = !evidence_cursor.initialized
+        || evidence_cursor.prepared.is_none()
+        || topology_rows < evidence_cursor.topology_rows
+        || frame_rows < evidence_cursor.frame_rows;
+    let late_topology = appended_since_cursor.iter().any(|row| {
+        evidence_cursor
+            .frame_intent_ids_sha256
+            .contains(&row.structure.turn_intent_id_sha256)
+    });
+    if invalid_cursor || late_topology {
+        return rebuild_prepared_context(state, evidence_cursor, active_protocols);
+    }
+
+    if frame_rows == evidence_cursor.frame_rows {
+        evidence_cursor.topology_rows = topology_rows;
+        if evidence_cursor.active_protocol_mode_set_root_sha256 != active_protocol_root {
+            let prepared = evidence_cursor
+                .prepared
+                .as_mut()
+                .ok_or_else(|| "k1_scheduler_prepared_context_missing".to_owned())?;
+            prepared.active_protocol_mode_set_root_sha256 = active_protocol_root.clone();
+            evidence_cursor.active_protocol_mode_set_root_sha256 = active_protocol_root;
+        }
+        return Ok(());
+    }
+
+    let new_frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
+        .shared_frames_after(evidence_cursor.frame_rows)?;
+    let frame_intents = new_frames
+        .iter()
+        .map(|frame| frame.client_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let prepared_rows = evidence_cursor
+        .prepared
+        .as_ref()
+        .and_then(|prepared| usize::try_from(prepared.join_report.topology_rows).ok())
+        .ok_or_else(|| "k1_scheduler_prepared_topology_count_invalid".to_owned())?;
+    if prepared_rows > topology_rows {
+        return rebuild_prepared_context(state, evidence_cursor, active_protocols);
+    }
+    let (topologies, pending_topologies) = {
+        let archive = state
+            .multi_source_topology_archive
+            .as_ref()
+            .ok_or_else(|| "k1_scheduler_topology_archive_not_configured".to_owned())?
+            .lock()
+            .map_err(|_| "k1_scheduler_topology_archive_lock_poisoned".to_owned())?;
+        let relevant = archive
+            .shared_rows()
+            .into_iter()
+            .filter(|row| frame_intents.contains(&row.structure.turn_intent_id_sha256))
+            .collect::<Vec<_>>();
+        (relevant, archive.shared_rows_after(prepared_rows)?)
+    };
+
+    let incremental = extend_prepared_from_delta(
+        evidence_cursor
+            .prepared
+            .as_mut()
+            .ok_or_else(|| "k1_scheduler_prepared_context_missing".to_owned())?,
+        topology_rows,
+        frame_rows,
+        &topologies,
+        &pending_topologies,
+        &new_frames,
+        active_protocols,
+    );
+    if matches!(
+        &incremental,
+        Err(error) if error == "k1_incremental_evidence_out_of_order"
+    ) {
+        return rebuild_prepared_context(state, evidence_cursor, active_protocols);
+    }
+    incremental?;
+
+    let mut frame_intent_ids_sha256 = evidence_cursor.frame_intent_ids_sha256.clone();
+    frame_intent_ids_sha256.extend(frame_intents);
+    evidence_cursor.record(
+        topology_rows,
+        frame_rows,
+        frame_intent_ids_sha256,
+        active_protocol_root,
+    );
+    Ok(())
+}
+
+fn extend_prepared_from_delta(
+    prepared: &mut PreparedK1TickContextV1,
+    topology_rows: usize,
+    frame_rows: usize,
+    relevant_topologies: &[Arc<PreActionTopologyAuditRowV1>],
+    pending_topologies: &[Arc<PreActionTopologyAuditRowV1>],
+    new_frames: &[Arc<RelationFrame>],
+    active_protocols: &BTreeSet<String>,
+) -> Result<(), String> {
+    let mut report = prepared.join_report.clone();
+    report.topology_rows = u64::try_from(topology_rows).unwrap_or(u64::MAX);
+    report.completed_frames = u64::try_from(frame_rows).unwrap_or(u64::MAX);
+    for row in pending_topologies {
+        if let Err(reason) = validate_pre_action_topology_join_eligibility_v1(row) {
+            increment_censor(&mut report, reason);
+        }
+    }
+
+    let mut eligible_by_intent = BTreeMap::<String, Vec<&PreActionTopologyAuditRowV1>>::new();
+    for row in relevant_topologies {
+        if validate_pre_action_topology_join_eligibility_v1(row).is_ok() {
+            eligible_by_intent
+                .entry(row.structure.turn_intent_id_sha256.clone())
+                .or_default()
+                .push(row.as_ref());
+        }
+    }
+    let mut used_completed_frames = prepared
+        .bindings
+        .iter()
+        .map(|binding| binding.joined.completed_frame_root_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let mut joined_roots = prepared
+        .bindings
+        .iter()
+        .map(|binding| binding.joined.join_root_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let mut joined_rows = Vec::new();
+    let capacity_already_exhausted = report
+        .censored
+        .get(&MultiSourceJoinCensoredReasonV1::CapacityExhausted)
+        .copied()
+        .unwrap_or(0)
+        > 0;
+    for frame in new_frames {
+        if capacity_already_exhausted {
+            break;
+        }
+        if usize::try_from(report.joined_rows).unwrap_or(usize::MAX)
+            >= MULTI_SOURCE_JOIN_MAX_ROWS_V1
+        {
+            increment_censor(
+                &mut report,
+                MultiSourceJoinCensoredReasonV1::CapacityExhausted,
+            );
+            break;
+        }
+        let frame = match prepare_multi_source_join_frame_v1(frame) {
+            Ok(frame) => frame,
+            Err(reason) => {
+                increment_censor(&mut report, reason);
+                continue;
+            }
+        };
+        if used_completed_frames.contains(&frame.action.completed_frame_root_sha256) {
+            report.duplicate_idempotent = report.duplicate_idempotent.saturating_add(1);
+            continue;
+        }
+        let same_intent = eligible_by_intent
+            .get(frame.action.turn_intent_id_sha256.as_str())
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let joined = match join_prepared_multi_source_frame_v1(&frame, same_intent) {
+            Ok(joined) => joined,
+            Err(reason) => {
+                increment_censor(&mut report, reason);
+                continue;
+            }
+        };
+        if joined_roots.contains(&joined.join_root_sha256) {
+            let idempotent = prepared
+                .bindings
+                .iter()
+                .map(|binding| &binding.joined)
+                .chain(joined_rows.iter())
+                .any(|existing| existing == &joined);
+            if idempotent {
+                report.duplicate_idempotent = report.duplicate_idempotent.saturating_add(1);
+            } else {
+                increment_censor(&mut report, MultiSourceJoinCensoredReasonV1::DuplicateConflict);
+            }
+            continue;
+        }
+        used_completed_frames.insert(frame.action.completed_frame_root_sha256);
+        joined_roots.insert(joined.join_root_sha256.clone());
+        report.joined_rows = report.joined_rows.saturating_add(1);
+        if joined.accepted {
+            report.accepted_rows = report.accepted_rows.saturating_add(1);
+        } else {
+            report.negative_rows = report.negative_rows.saturating_add(1);
+        }
+        joined_rows.push(joined);
+    }
+
+    if joined_rows.is_empty() {
+        prepared.join_report = report;
+        prepared.active_protocol_mode_set_root_sha256 =
+            crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+                active_protocols,
+            )?;
+        return Ok(());
+    }
+    extend_prepared_tick_context(prepared, joined_rows, report, active_protocols)
+}
+
+fn increment_censor(
+    report: &mut MultiSourceJoinReportV1,
+    reason: MultiSourceJoinCensoredReasonV1,
+) {
+    let count = report.censored.entry(reason).or_default();
+    *count = count.saturating_add(1);
+}
+
+fn rebuild_prepared_context(
+    state: &AppState,
+    evidence_cursor: &mut K1EvidenceCursorV1,
+    active_protocols: &BTreeSet<String>,
+) -> Result<(), String> {
+    let topologies = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_topology_archive_lock_poisoned".to_owned())?
+        .shared_rows();
+    let frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
+        .shared_frames();
+    let frame_intent_ids_sha256 = frames
+        .iter()
+        .map(|frame| frame.client_intent_id_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let join_ledger = MultiSourceJoinLedgerV1::build_from_iter(
+        topologies.iter().map(|row| row.as_ref()),
+        frames.iter().map(|frame| frame.as_ref()),
+    );
+    let prepared = prepare_tick_context_from_join_ledger(join_ledger, active_protocols)?;
+    let active_protocol_root = prepared.active_protocol_mode_set_root_sha256.clone();
+    evidence_cursor.prepared = Some(prepared);
+    evidence_cursor.record(
+        topologies.len(),
+        frames.len(),
+        frame_intent_ids_sha256,
+        active_protocol_root,
+    );
+    Ok(())
+}
+
+fn materialize_current_evidence(
+    state: &AppState,
+) -> Result<(Vec<PreActionTopologyAuditRowV1>, Vec<RelationFrame>), String> {
+    let topologies = state
+        .multi_source_topology_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_topology_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_topology_archive_lock_poisoned".to_owned())?
+        .shared_rows();
+    let frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
+        .shared_frames();
+    Ok(materialize_evidence(&topologies, &frames))
 }
 
 fn materialize_evidence(
@@ -352,9 +631,14 @@ fn reuse_waiting_tick(
     let Some(report) = report.as_ref() else {
         return Ok(false);
     };
+    let Some(prepared) = evidence_cursor.prepared.as_ref() else {
+        return Ok(false);
+    };
     if !waiting_lanes_are_reusable(mechanism_terminal, report.state)
         || report.projection.projection_root_sha256 != projection_root_sha256
         || report.queue.k1_deficit_snapshot_root_sha256 != deficit_snapshot_root_sha256
+        || report.join != prepared.join_report
+        || report.catalog.catalog_root_sha256 != prepared.catalog.catalog_root_sha256
         || evidence_cursor.active_protocol_mode_set_root_sha256
             != active_protocol_mode_set_root_sha256
     {
@@ -511,6 +795,7 @@ mod tests {
             frame_rows: 4,
             frame_intent_ids_sha256: BTreeSet::from(["completed-intent".to_owned()]),
             active_protocol_mode_set_root_sha256: "active-root".to_owned(),
+            prepared: None,
         };
 
         assert!(!waiting_delta_requires_rebuild(

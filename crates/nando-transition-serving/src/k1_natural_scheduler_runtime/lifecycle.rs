@@ -66,6 +66,44 @@ pub(super) fn prepare_tick_context_from_join_ledger(
     })
 }
 
+pub(super) fn extend_prepared_tick_context(
+    prepared: &mut PreparedK1TickContextV1,
+    joined_rows: Vec<BlindThenRevealJoinedTransitionV1>,
+    join_report: MultiSourceJoinReportV1,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+) -> Result<(), String> {
+    extend_evidence_bindings(&mut prepared.bindings, joined_rows)?;
+    let evidence_epoch_root_sha256 = evidence_epoch_root(&prepared.bindings)?;
+    let catalog = build_k1_natural_cohort_catalog_v1(
+        &prepared
+            .bindings
+            .iter()
+            .map(|binding| binding.row.clone())
+            .collect::<Vec<_>>(),
+        evidence_epoch_root_sha256.clone(),
+        fixture_exclusion_root()?,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2.to_owned(),
+    )
+    .map_err(str::to_owned)?;
+    let active_protocol_mode_set_root_sha256 =
+        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+            active_protocol_mode_roots_sha256,
+        )?;
+    let contract_watermark = prepared
+        .bindings
+        .iter()
+        .map(|binding| binding.row.capture_sequence)
+        .max()
+        .unwrap_or(0);
+
+    prepared.join_report = join_report;
+    prepared.evidence_epoch_root_sha256 = evidence_epoch_root_sha256;
+    prepared.catalog = catalog;
+    prepared.active_protocol_mode_set_root_sha256 = active_protocol_mode_set_root_sha256;
+    prepared.contract_watermark = contract_watermark;
+    Ok(())
+}
+
 pub(super) fn advance(
     certification: &CertificationAuthorityConfigV1,
     lane: K1SchedulerLaneV1,

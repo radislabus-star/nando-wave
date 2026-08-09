@@ -15,13 +15,15 @@ use nando_operator_learning::multi_source::{
     K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1,
     K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
     K1SchedulerEventPayloadV1, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MultiSourceJoinLedgerV1,
-    MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
-    MultiSourceT1IdentificationV3, NaturalT1ProgramArtifactV1, PassiveT1ProbeContractV1,
-    PreActionShapeClassV1, PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
+    MultiSourceJoinCensoredReasonV1, MultiSourceJoinReportV1, MultiSourceReasonV1,
+    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3,
+    NaturalT1ProgramArtifactV1, PassiveT1ProbeContractV1, PreActionShapeClassV1,
+    PreActionTopologyAuditRowV1, TransportTerminalReceiptV1, MULTI_SOURCE_JOIN_MAX_ROWS_V1,
     build_k1_natural_candidate_queue_with_exclusions_v1, build_k1_natural_cohort_catalog_v1,
     factor_multi_source_row_v1, identify_multi_source_t1_operator_with_candidate_artifacts_v1,
-    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
-    source_neutral_topology_root_v1,
+    join_prepared_multi_source_frame_v1, pre_action_applicability_shape_root_v1,
+    pre_action_t1_binding_root, prepare_multi_source_join_frame_v1,
+    source_neutral_topology_root_v1, validate_pre_action_topology_join_eligibility_v1,
 };
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +59,8 @@ pub(crate) use service::{
 use advance::*;
 use evidence::*;
 use lifecycle::{
-    AdvanceInput, PreparedK1TickContextV1, advance, prepare_tick_context_from_join_ledger,
+    AdvanceInput, PreparedK1TickContextV1, advance, extend_prepared_tick_context,
+    prepare_tick_context_from_join_ledger,
 };
 use report::*;
 

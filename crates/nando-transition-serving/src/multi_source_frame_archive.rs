@@ -17,6 +17,7 @@ const MAX_ARCHIVE_ROWS: usize = 262_144;
 pub(super) struct MultiSourceFrameArchive {
     ledger: FramedCborLedger,
     by_frame: BTreeMap<String, Arc<RelationFrame>>,
+    append_order: Vec<String>,
     payload_bytes: u64,
 }
 
@@ -27,6 +28,7 @@ impl MultiSourceFrameArchive {
         let ledger = FramedCborLedger::open(directory, LEDGER_PREFIX)?;
         let frames = read_framed_cbor::<RelationFrame>(directory, LEDGER_PREFIX)?;
         let mut by_frame = BTreeMap::<String, Arc<RelationFrame>>::new();
+        let mut append_order = Vec::new();
         let mut payload_bytes = 0_u64;
         for frame in frames {
             validate_frame(&frame)?;
@@ -40,11 +42,13 @@ impl MultiSourceFrameArchive {
             if payload_bytes > MAX_ARCHIVE_BYTES || by_frame.len() >= MAX_ARCHIVE_ROWS {
                 return Err("multi_source_frame_archive_budget".to_owned());
             }
+            append_order.push(frame.frame_id_sha256.clone());
             by_frame.insert(frame.frame_id_sha256.clone(), Arc::new(frame));
         }
         Ok(Self {
             ledger,
             by_frame,
+            append_order,
             payload_bytes,
         })
     }
@@ -78,6 +82,7 @@ impl MultiSourceFrameArchive {
         }
         self.ledger.append(frame)?;
         self.payload_bytes = self.payload_bytes.saturating_add(bytes);
+        self.append_order.push(frame.frame_id_sha256.clone());
         self.by_frame
             .insert(frame.frame_id_sha256.clone(), Arc::new(frame.clone()));
         Ok(())
@@ -92,7 +97,28 @@ impl MultiSourceFrameArchive {
     }
 
     pub(super) fn shared_frames(&self) -> Vec<Arc<RelationFrame>> {
-        self.by_frame.values().cloned().collect()
+        self.append_order
+            .iter()
+            .filter_map(|root| self.by_frame.get(root).cloned())
+            .collect()
+    }
+
+    pub(super) fn shared_frames_after(
+        &self,
+        watermark_rows: usize,
+    ) -> Result<Vec<Arc<RelationFrame>>, String> {
+        if watermark_rows > self.append_order.len() {
+            return Err("multi_source_frame_archive_watermark_out_of_range".to_owned());
+        }
+        self.append_order[watermark_rows..]
+            .iter()
+            .map(|root| {
+                self.by_frame
+                    .get(root)
+                    .cloned()
+                    .ok_or_else(|| "multi_source_frame_archive_index_invalid".to_owned())
+            })
+            .collect()
     }
 
     pub(super) fn frame_by_root(&self, frame_root_sha256: &str) -> Option<RelationFrame> {
