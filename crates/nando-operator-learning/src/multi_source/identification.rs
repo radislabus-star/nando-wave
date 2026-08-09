@@ -86,6 +86,10 @@ pub struct MultiSourceT1IdentificationV3 {
     pub schema: String,
     pub report_root_sha256: String,
     pub evidence_epoch_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_phase_hypothesis_root_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_phase_support_watermark: Option<u64>,
     pub selected_shape_root_sha256: Option<String>,
     pub selected_protocol_mode_root_sha256: Option<String>,
     pub selected_marginal_input_tokens: u64,
@@ -134,6 +138,10 @@ struct T1CohortKey {
 struct T1IdentificationDigest<'a> {
     schema: &'static str,
     evidence_epoch_sha256: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_phase_hypothesis_root_sha256: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_phase_support_watermark: Option<u64>,
     selected_shape_root_sha256: Option<&'a str>,
     selected_protocol_mode_root_sha256: Option<&'a str>,
     selected_marginal_input_tokens: u64,
@@ -517,6 +525,12 @@ fn identify_multi_source_t1_operator_internal_v1(
         },
         None => evidence_epoch_sha256,
     };
+    let raw_phase_hypothesis_root_sha256 = raw_phase_envelope
+        .as_ref()
+        .map(|envelope| envelope.envelope_root_sha256.clone());
+    let raw_phase_support_watermark = raw_phase_envelope
+        .as_ref()
+        .map(|envelope| envelope.support_watermark);
     let manifest = match generation_manifest_with_hypothesis_root(
         &shape_root,
         &protocol_mode_root,
@@ -721,6 +735,8 @@ fn identify_multi_source_t1_operator_internal_v1(
             schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3.to_owned(),
             report_root_sha256: String::new(),
             evidence_epoch_sha256,
+            raw_phase_hypothesis_root_sha256,
+            raw_phase_support_watermark,
             selected_shape_root_sha256: Some(shape_root),
             selected_protocol_mode_root_sha256: Some(protocol_mode_root),
             selected_marginal_input_tokens,
@@ -857,6 +873,8 @@ fn identify_multi_source_t1_operator_internal_v1(
         schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3.to_owned(),
         report_root_sha256: String::new(),
         evidence_epoch_sha256,
+        raw_phase_hypothesis_root_sha256,
+        raw_phase_support_watermark,
         selected_shape_root_sha256: Some(shape_root),
         selected_protocol_mode_root_sha256: Some(protocol_mode_root),
         selected_marginal_input_tokens,
@@ -1566,6 +1584,8 @@ fn terminal_report(
         schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3.to_owned(),
         report_root_sha256: String::new(),
         evidence_epoch_sha256,
+        raw_phase_hypothesis_root_sha256: None,
+        raw_phase_support_watermark: None,
         selected_shape_root_sha256: None,
         selected_protocol_mode_root_sha256: None,
         selected_marginal_input_tokens: 0,
@@ -1695,6 +1715,8 @@ impl MultiSourceT1IdentificationV3 {
         canonical_json_sha256(&T1IdentificationDigest {
             schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3,
             evidence_epoch_sha256: self.evidence_epoch_sha256.as_str(),
+            raw_phase_hypothesis_root_sha256: self.raw_phase_hypothesis_root_sha256.as_deref(),
+            raw_phase_support_watermark: self.raw_phase_support_watermark,
             selected_shape_root_sha256: self.selected_shape_root_sha256.as_deref(),
             selected_protocol_mode_root_sha256: self.selected_protocol_mode_root_sha256.as_deref(),
             selected_marginal_input_tokens: self.selected_marginal_input_tokens,
@@ -1726,9 +1748,18 @@ impl MultiSourceT1IdentificationV3 {
 
     #[must_use]
     pub fn validate(&self) -> bool {
+        let raw_phase_metadata_valid = match (
+            self.raw_phase_hypothesis_root_sha256.as_deref(),
+            self.raw_phase_support_watermark,
+        ) {
+            (None, None) => true,
+            (Some(root), Some(watermark)) => valid_nonzero_sha256(root) && watermark > 0,
+            _ => false,
+        };
         if self.schema != MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3
             || self.execution_authority
             || self.report_root_sha256 != self.expected_root()
+            || !raw_phase_metadata_valid
             || self.remaining_semantic_class_roots_sha256.len() != self.semantic_classes_remaining
             || self
                 .remaining_semantic_class_roots_sha256

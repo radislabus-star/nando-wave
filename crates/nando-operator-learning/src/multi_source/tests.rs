@@ -3482,6 +3482,15 @@ fn t1_identification_uses_one_support_and_one_independent_future() {
     assert_eq!(report.wrong_role_bindings, 0);
     assert_eq!(report.negative_accepts, 0);
     assert!(report.exact_transfer_parity);
+    assert!(report.raw_phase_hypothesis_root_sha256.is_none());
+    assert!(report.raw_phase_support_watermark.is_none());
+    let legacy_json = serde_json::to_value(&report).expect("legacy identification JSON");
+    assert!(
+        legacy_json
+            .get("raw_phase_hypothesis_root_sha256")
+            .is_none()
+    );
+    assert!(legacy_json.get("raw_phase_support_watermark").is_none());
     let basis = report.proof_basis.as_ref().expect("sealed runtime basis");
     assert!(basis.validate());
     assert_eq!(
@@ -3748,6 +3757,13 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
     );
     assert_eq!(baseline.candidate_programs, 2);
     assert_eq!(baseline.support_rows, 1);
+    assert!(
+        baseline
+            .raw_phase_hypothesis_root_sha256
+            .as_deref()
+            .is_some_and(valid_nonzero_sha256)
+    );
+    assert_eq!(baseline.raw_phase_support_watermark, Some(1));
     assert!(!baseline.execution_authority);
 
     let collapsed_by_existing_identifier =
@@ -3773,6 +3789,10 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
     );
     assert_eq!(collapsed_by_existing_identifier.support_rows, 2);
     assert_eq!(collapsed_by_existing_identifier.independent_future_rows, 1);
+    assert_eq!(
+        collapsed_by_existing_identifier.raw_phase_support_watermark,
+        Some(2)
+    );
     assert!(collapsed_by_existing_identifier.candidate_freeze.is_some());
     assert!(!collapsed_by_existing_identifier.execution_authority);
 }

@@ -720,7 +720,7 @@ const TEMPLATE: &str = r#"
       <div class="ms3-cell"><div class="ms3-label">GENERATION / JOURNAL</div><div id="k1-scheduler-generation" class="ms3-value watch">— / —</div></div>
       <div class="ms3-cell"><div class="ms3-label">CATALOG / RETAINED / READY</div><div id="k1-scheduler-queue" class="ms3-value watch">0 / 0 / 0</div><div id="k1-scheduler-exclusions" class="scope-note">EXCLUSIONS —</div></div>
       <div class="ms3-cell"><div class="ms3-label">FROZEN COHORT</div><div id="k1-scheduler-cohort" class="ms3-value muted">NOT FROZEN</div><div id="k1-scheduler-watermark" class="scope-note">WATERMARK —</div></div>
-      <div class="ms3-cell"><div class="ms3-label">MONOTONIC VERSION SPACE</div><div id="k1-scheduler-version-space" class="ms3-value watch">NOT IDENTIFIED</div><div id="k1-scheduler-identification" class="scope-note">IDENTIFICATION —</div></div>
+      <div class="ms3-cell"><div class="ms3-label">RAW PHASE / MONOTONIC VERSION SPACE</div><div id="k1-scheduler-version-space" class="ms3-value watch">NOT IDENTIFIED</div><div id="k1-scheduler-identification" class="scope-note">IDENTIFICATION —</div><div id="k1-scheduler-raw-phase" class="scope-note">HYPOTHESIS_ONLY · ENVELOPE —</div></div>
       <div class="ms3-cell"><div class="ms3-label">PROBE ROUNDS / BUDGET</div><div id="k1-scheduler-probes" class="ms3-value watch">0 / 0</div><div id="k1-scheduler-probe-state" class="scope-note">NO PENDING PROBE</div></div>
       <div class="ms3-cell"><div class="ms3-label">POST-PRECOMMIT FUTURE</div><div id="k1-scheduler-future" class="ms3-value watch">0</div><div id="k1-scheduler-future-note" class="scope-note">OUTCOME ROOTS 0 / 0</div></div>
       <div class="ms3-cell"><div class="ms3-label">SCHEDULER AUTHORITY</div><div id="k1-scheduler-authority" class="ms3-value locked">FALSE</div><div class="scope-note">PHASE MUTATION FALSE</div></div>
@@ -987,6 +987,7 @@ const TEMPLATE: &str = r#"
     const k1Catalog = k1Scheduler.catalog || {};
     const k1Queue = k1Scheduler.queue || {};
     const k1Identification = k1Scheduler.identification || {};
+    const k1RawPhaseRoot = k1Identification.raw_phase_hypothesis_root_sha256 || "";
     const k1Candidate = k1Projection.active_candidate_freeze || {};
     const k1Probe = k1Projection.latest_probe_round || {};
     const k1Budget = k1Projection.remaining_probe_budget || {};
@@ -1138,6 +1139,7 @@ const TEMPLATE: &str = r#"
     text("k1-scheduler-watermark", k1CandidateRoot ? `SUPPORT ${number.format(k1Candidate.support_watermark || 0)} · CONTRACT ${number.format(k1Candidate.contract_watermark || 0)} · FUTURE ≥ ${number.format(k1Candidate.future_min_sequence || 0)}` : "WATERMARK —");
     text("k1-scheduler-version-space", k1Classes.length > 0 ? `${number.format(k1Classes.length)} SEMANTIC CLASS${k1Classes.length === 1 ? "" : "ES"}` : "NOT IDENTIFIED");
     text("k1-scheduler-identification", k1Identification.state ? `${k1Identification.state.replaceAll("_", " ").toUpperCase()} · SUPPORT ${number.format(k1Identification.support_rows || 0)} · LINEAGES ${number.format(k1Identification.support_lineages || 0)}` : "IDENTIFICATION —");
+    text("k1-scheduler-raw-phase", k1RawPhaseRoot ? `HYPOTHESIS_ONLY · CANDIDATES ${number.format(k1Identification.candidate_programs || 0)} · SUPPORT ≤ ${number.format(k1Identification.raw_phase_support_watermark || 0)} · ENVELOPE ${k1RawPhaseRoot}` : "HYPOTHESIS_ONLY · ENVELOPE —");
     text("k1-scheduler-probes", `${number.format(k1Projection.completed_probe_rounds || 0)} / ${number.format(k1Budget.probe_rounds || 0)}`);
     text("k1-scheduler-probe-state", k1Probe.state ? `${k1Probe.state.replaceAll("_", " ").toUpperCase()} · COST LEFT ${number.format(k1Budget.probe_cost_units || 0)} · OUTCOME ≥ ${number.format(k1Probe.outcome_min_capture_sequence || 0)}` : "NO PENDING PROBE");
     text("k1-scheduler-future", number.format(k1Scheduler.future_eligible_rows || 0));
@@ -1564,6 +1566,9 @@ mod tests {
         assert!(html.contains("WAVE CAUSAL"));
         assert!(html.contains("K1 ELIGIBLE"));
         assert!(html.contains("CURRENT BLOCKER / ACTIVE ROOT"));
+        assert!(html.contains("RAW PHASE / MONOTONIC VERSION SPACE"));
+        assert!(html.contains("HYPOTHESIS_ONLY · CANDIDATES"));
+        assert!(html.contains("raw_phase_hypothesis_root_sha256"));
         assert!(html.contains("STRUCTURAL FRONTIER CENSUS V2 · OPERATOR-BLIND"));
         assert!(html.contains("LEADING EXACT COHORT"));
         assert!(html.contains("snapshot.natural_vocabulary_census"));
