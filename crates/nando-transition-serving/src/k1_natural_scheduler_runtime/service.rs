@@ -789,11 +789,11 @@ mod tests {
     use super::*;
     use nando_operator_kernel::{
         AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2,
-        LearningRequestStructureV2, MultiSourceCardinalityClassV1,
-        MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1,
-        MultiSourceExtractionStatusV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
-        MultiSourceTemporalClassV1, MultiSourceTypeClassV1, PreActionMultiSourceTopologyV1,
-        PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA, RelationAtom, sha256_bytes,
+        LearningRequestStructureV2, MultiSourceCardinalityClassV1, MultiSourceContainerClassV1,
+        MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1, MultiSourceRoleNodeV1,
+        MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
+        PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA,
+        RelationAtom, sha256_bytes,
     };
     use nando_operator_learning::SOURCE_NEUTRAL_EXTRACTOR_VERSION;
 
@@ -810,7 +810,9 @@ mod tests {
             provider_bound_turn_identity: true,
             session_lineage_roots_sha256: vec![session_root.clone()],
             request_phase_atom_ids: vec![capture_sequence.saturating_mul(10).saturating_add(1)],
-            pre_action_context_atom_ids: vec![capture_sequence.saturating_mul(10).saturating_add(2)],
+            pre_action_context_atom_ids: vec![
+                capture_sequence.saturating_mul(10).saturating_add(2),
+            ],
             capability_atom_ids: vec![capture_sequence.saturating_mul(10).saturating_add(3)],
             estimated_input_tokens: 100,
             provider_payload_bytes: 400,
