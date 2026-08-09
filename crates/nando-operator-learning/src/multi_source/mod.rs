@@ -15,6 +15,7 @@ mod live_snapshot;
 mod marginal;
 mod ms3_generation_registry_v1;
 mod natural_program_artifact;
+mod natural_vocabulary_census;
 mod north_star_cellular_support_v1;
 mod north_star_proof_v1;
 mod representation_gap;
@@ -150,6 +151,11 @@ pub use ms3_generation_registry_v1::{
 pub use natural_program_artifact::{
     NATURAL_T1_PROGRAM_ARTIFACT_MAX_PROGRAMS_V1, NATURAL_T1_PROGRAM_ARTIFACT_SCHEMA_V1,
     NaturalT1ProgramArtifactV1,
+};
+pub use natural_vocabulary_census::{
+    NATURAL_VOCABULARY_CENSUS_SCHEMA_V1, NaturalVocabularyCensusV1,
+    NaturalVocabularyCensusVerdictV1, NaturalVocabularyFormCensusV1,
+    NaturalVocabularyOperationFormV1, build_natural_vocabulary_census_v1,
 };
 pub use north_star_cellular_support_v1::{
     NORTH_STAR_CELLULAR_SUPPORT_SCHEMA_V1, NorthStarCellularSupportErrorV1,

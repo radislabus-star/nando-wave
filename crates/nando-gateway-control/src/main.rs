@@ -43,6 +43,8 @@ const COLD_K1_NATURAL_SCHEDULER_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/k1-natural-scheduler";
 const COLD_K1_LAW_LAB_ELIGIBILITY_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/k1-law-lab-eligibility";
+const NATURAL_VOCABULARY_CENSUS_PATH: &str =
+    "/var/lib/nando-wave/proofs/natural-vocabulary-census/latest.json";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -1068,6 +1070,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let response_registry = read_json(&state.config.response_registry_path);
     let response_admission_controller =
         read_json(&state.config.response_admission_controller_report_path);
+    let natural_vocabulary_census = read_json(std::path::Path::new(NATURAL_VOCABULARY_CENSUS_PATH));
     let (
         live,
         hot_health,
@@ -1470,6 +1473,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "ms4_closed_loop": ms4_closed_loop,
             "k1_natural_scheduler": k1_natural_scheduler,
             "k1_law_lab_eligibility": k1_law_lab_eligibility,
+            "natural_vocabulary_census": natural_vocabulary_census,
             "operator_certificate_matrix": operator_certificate_matrix,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
