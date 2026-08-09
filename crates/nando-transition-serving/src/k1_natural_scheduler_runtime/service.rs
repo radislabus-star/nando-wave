@@ -6,7 +6,7 @@ use serde_json::json;
 use super::{
     AdvanceInput, K1NaturalSchedulerRuntimeReportV1,
     K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, advance,
-    law_lab_eligibility::law_lab_eligibility_report, restore_projection_for,
+    law_lab_eligibility::law_lab_eligibility_report, prepare_tick_context, restore_projection_for,
 };
 use crate::k1_transfer_lifecycle::{K1TransferLifecycleReportV1, advance_transfer_lifecycle};
 use crate::{AppState, json_response, multi_source_live, unix_now};
@@ -112,20 +112,24 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         })
         .transpose()?
         .unwrap_or_default();
-    let mechanism = advance(
-        &state.operator_certification_config,
-        K1SchedulerLaneV1::Mechanism,
-        false,
-        AdvanceInput {
-            topologies: &topologies,
-            frames: &frames,
-            terminal_receipts: &[],
-            active_protocol_mode_roots_sha256: &active_protocols,
-            candidate_artifacts: &candidate_artifacts,
-            generated_at_unix: unix_now(),
-        },
-    )?;
-    store_mechanism_report(state, mechanism)?;
+    let prepared = prepare_tick_context(&topologies, &frames, &active_protocols)?;
+    if !mechanism_watch_is_terminal(state)? {
+        let mechanism = advance(
+            &state.operator_certification_config,
+            K1SchedulerLaneV1::Mechanism,
+            false,
+            AdvanceInput {
+                prepared: &prepared,
+                topologies: &topologies,
+                frames: &frames,
+                terminal_receipts: &[],
+                active_protocol_mode_roots_sha256: &active_protocols,
+                candidate_artifacts: &candidate_artifacts,
+                generated_at_unix: unix_now(),
+            },
+        )?;
+        store_mechanism_report(state, mechanism)?;
+    }
     let epistemic_projection = restore_projection_for(
         &state.operator_certification_config,
         K1SchedulerLaneV1::Epistemic,
@@ -166,6 +170,7 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
             K1SchedulerLaneV1::Epistemic,
             true,
             AdvanceInput {
+                prepared: &prepared,
                 topologies: &topologies,
                 frames: &frames,
                 terminal_receipts: &terminal_receipts,
@@ -225,6 +230,15 @@ pub(crate) fn advance_state(state: &AppState) -> Result<(), String> {
         }
     }
     Err("k1_scheduler_tick_budget_exhausted".to_owned())
+}
+
+fn mechanism_watch_is_terminal(state: &AppState) -> Result<bool, String> {
+    Ok(state
+        .k1_mechanism_watch_report
+        .read()
+        .map_err(|_| "k1_mechanism_watch_report_lock_poisoned".to_owned())?
+        .as_ref()
+        .is_some_and(|report| report.state == RuntimeState::MechanismWatchComplete))
 }
 
 fn retained_transitions(

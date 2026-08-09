@@ -1,12 +1,61 @@
 use super::*;
 
 pub(super) struct AdvanceInput<'a> {
+    pub prepared: &'a PreparedK1TickContextV1,
     pub topologies: &'a [PreActionTopologyAuditRowV1],
     pub frames: &'a [RelationFrame],
     pub terminal_receipts: &'a [TransportTerminalReceiptV1],
     pub active_protocol_mode_roots_sha256: &'a BTreeSet<String>,
     pub candidate_artifacts: &'a [NaturalT1ProgramArtifactV1],
     pub generated_at_unix: u64,
+}
+
+pub(super) struct PreparedK1TickContextV1 {
+    pub join_report: MultiSourceJoinReportV1,
+    pub bindings: Vec<EvidenceBinding>,
+    pub evidence_epoch_root_sha256: String,
+    pub catalog: K1NaturalCohortCatalogV1,
+    pub active_protocol_mode_set_root_sha256: String,
+    pub contract_watermark: u64,
+}
+
+pub(super) fn prepare_tick_context(
+    topologies: &[PreActionTopologyAuditRowV1],
+    frames: &[RelationFrame],
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+) -> Result<PreparedK1TickContextV1, String> {
+    let join_ledger = MultiSourceJoinLedgerV1::build(topologies, frames);
+    let join_report = join_ledger.report();
+    let bindings = build_evidence_bindings(&join_ledger.rows())?;
+    let evidence_epoch_root_sha256 = evidence_epoch_root(&bindings)?;
+    let catalog = build_k1_natural_cohort_catalog_v1(
+        &bindings
+            .iter()
+            .map(|binding| binding.row.clone())
+            .collect::<Vec<_>>(),
+        evidence_epoch_root_sha256.clone(),
+        fixture_exclusion_root()?,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2.to_owned(),
+    )
+    .map_err(str::to_owned)?;
+    let active_protocol_mode_set_root_sha256 =
+        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+            active_protocol_mode_roots_sha256,
+        )?;
+    let contract_watermark = bindings
+        .iter()
+        .map(|binding| binding.row.capture_sequence)
+        .max()
+        .unwrap_or(0);
+
+    Ok(PreparedK1TickContextV1 {
+        join_report,
+        bindings,
+        evidence_epoch_root_sha256,
+        catalog,
+        active_protocol_mode_set_root_sha256,
+        contract_watermark,
+    })
 }
 
 pub(super) fn advance(
@@ -16,6 +65,7 @@ pub(super) fn advance(
     input: AdvanceInput<'_>,
 ) -> Result<K1NaturalSchedulerRuntimeReportV1, String> {
     let AdvanceInput {
+        prepared,
         topologies,
         frames,
         terminal_receipts,
@@ -23,26 +73,14 @@ pub(super) fn advance(
         candidate_artifacts,
         generated_at_unix,
     } = input;
-    let join_ledger = MultiSourceJoinLedgerV1::build(topologies, frames);
-    let join_report = join_ledger.report();
-    let bindings = build_evidence_bindings(&join_ledger.rows())?;
-    let evidence_epoch_root_sha256 = evidence_epoch_root(&bindings)?;
-    let fixture_exclusion_root_sha256 = fixture_exclusion_root()?;
-    let catalog = build_k1_natural_cohort_catalog_v1(
-        &bindings
-            .iter()
-            .map(|binding| binding.row.clone())
-            .collect::<Vec<_>>(),
-        evidence_epoch_root_sha256,
-        fixture_exclusion_root_sha256,
-        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2.to_owned(),
-    )
-    .map_err(str::to_owned)?;
+    let join_report = prepared.join_report.clone();
+    let bindings = &prepared.bindings;
+    let catalog = prepared.catalog.clone();
+    if catalog.evidence_epoch_root_sha256 != prepared.evidence_epoch_root_sha256 {
+        return Err("k1_prepared_context_evidence_epoch_mismatch".to_owned());
+    }
     let deficit = current_deficit_snapshot(certification)?;
-    let active_protocol_mode_set_root_sha256 =
-        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
-            active_protocol_mode_roots_sha256,
-        )?;
+    let active_protocol_mode_set_root_sha256 = &prepared.active_protocol_mode_set_root_sha256;
     let mut projection = restore_projection_for(certification, lane)?;
     let mut completed = projection
         .completed_candidate_roots_sha256
@@ -54,13 +92,9 @@ pub(super) fn advance(
         certification,
         lane,
         &catalog,
-        &active_protocol_mode_set_root_sha256,
+        active_protocol_mode_set_root_sha256,
     )?);
-    let contract_watermark = bindings
-        .iter()
-        .map(|binding| binding.row.capture_sequence)
-        .max()
-        .unwrap_or(0);
+    let contract_watermark = prepared.contract_watermark;
     let queue = build_k1_natural_candidate_queue_with_exclusions_v1(
         &catalog,
         &deficit,
@@ -162,7 +196,7 @@ pub(super) fn advance(
                 queue: queue.clone(),
                 candidate,
                 freeze,
-                active_protocol_mode_set_root_sha256,
+                active_protocol_mode_set_root_sha256: active_protocol_mode_set_root_sha256.clone(),
             },
         )?;
         return runtime_report(
@@ -184,7 +218,7 @@ pub(super) fn advance(
         .active_candidate_freeze
         .clone()
         .ok_or_else(|| "k1_runtime_active_candidate_missing".to_owned())?;
-    let support = frozen_support(&bindings, &candidate_freeze)?;
+    let support = frozen_support(bindings, &candidate_freeze)?;
     let frozen_evidence_rows = u64::try_from(support.len()).unwrap_or(u64::MAX);
     let future_eligible_rows = u64::try_from(
         bindings
@@ -238,7 +272,7 @@ pub(super) fn advance(
         .cloned()
         .collect::<BTreeSet<_>>();
     let base_identification = identify_frozen_candidate(
-        &bindings,
+        bindings,
         frames,
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
@@ -361,7 +395,7 @@ pub(super) fn advance(
             &projection,
             &base_identification,
             topologies,
-            &bindings,
+            bindings,
             frames,
             terminal_receipts,
             candidate_artifacts,
@@ -446,7 +480,7 @@ pub(super) fn advance(
             base_identification,
             candidate_freeze,
             identification_freeze,
-            &bindings,
+            bindings,
             frames,
             active_protocol_mode_roots_sha256,
             candidate_artifacts,
@@ -464,7 +498,7 @@ pub(super) fn advance(
         &identification_freeze,
         &base_identification,
         topologies,
-        &bindings,
+        bindings,
         frames,
         terminal_receipts,
         candidate_artifacts,
@@ -502,7 +536,7 @@ pub(super) fn advance(
         base_identification,
         candidate_freeze,
         identification_freeze,
-        &bindings,
+        bindings,
         frames,
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
@@ -510,4 +544,30 @@ pub(super) fn advance(
         frozen_evidence_rows,
         future_eligible_rows,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prepared_tick_context_is_deterministic_and_authority_free() {
+        let active_protocols = BTreeSet::new();
+        let first = prepare_tick_context(&[], &[], &active_protocols).expect("first context");
+        let second = prepare_tick_context(&[], &[], &active_protocols).expect("second context");
+
+        assert_eq!(first.join_report, second.join_report);
+        assert_eq!(first.bindings, second.bindings);
+        assert_eq!(first.catalog, second.catalog);
+        assert_eq!(
+            first.active_protocol_mode_set_root_sha256,
+            second.active_protocol_mode_set_root_sha256
+        );
+        assert_eq!(first.contract_watermark, 0);
+        assert_eq!(
+            first.evidence_epoch_root_sha256,
+            first.catalog.evidence_epoch_root_sha256
+        );
+        assert!(!first.catalog.authority_ready);
+    }
 }
