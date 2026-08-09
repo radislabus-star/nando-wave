@@ -89,6 +89,11 @@ if [[ "${url}" == *":18790/health" ]]; then
     printf '%s\n' \
       '{"ok":true,"remote_evidence":{"enabled":true,"transport_ready":true,"configured_clients":1,"learning_closed_loop_ready":false},"learning_health":{"serving_healthy":true,"authority_ready":false,"phase_mutation_allowed":false}}'
   fi
+elif [[ "${url}" == *"/k1-natural-scheduler" ]] \
+  || [[ "${url}" == *"/k1-mechanism-watch" ]]; then
+  printf '%s\n' '{"authority_ready":false,"phase_mutation_allowed":false}'
+elif [[ "${url}" == *"/k1-law-lab-eligibility" ]]; then
+  printf '%s\n' '{"blocker":"awaiting_natural_evidence"}'
 elif [[ "${url}" == *":18789/health" ]]; then
   printf '%s\n' '{"ok":true}'
 else
@@ -119,12 +124,14 @@ export NANDO_REMOTE_EVIDENCE_READINESS_SLEEP_SECONDS=0
 
 "${INSTALLER}" \
   --binary "${CANDIDATE_ONE}" \
-  --client-key "${CLIENT_KEY}" >/dev/null
+  --client-key "${CLIENT_KEY}" \
+  --enable-k1-scheduler >/dev/null
 
 cmp -s "${CANDIDATE_ONE}" "${INSTALL_BINARY}"
 grep -Fxq 'NANDO_REMOTE_EVIDENCE_SPOOL_ENABLED=1' "${ROLE_ENV}"
 grep -Fxq "NANDO_REMOTE_EVIDENCE_SPOOL=${SPOOL_DIRECTORY}" "${ROLE_ENV}"
 grep -Fxq "NANDO_REMOTE_EVIDENCE_CLIENT_KEYS=${KEY_DIRECTORY}" "${ROLE_ENV}"
+grep -Fxq 'NANDO_K1_NATURAL_SCHEDULER_ENABLED=1' "${ROLE_ENV}"
 grep -Fxq 'state marker' "${LEARNING_STATE}/marker"
 [[ -e "${SYSTEMCTL_STATE}/active" ]]
 client_id="$(sha256sum "${CLIENT_KEY}")"
@@ -139,7 +146,6 @@ cmp -s "${CANDIDATE_ONE}" "${INSTALL_BINARY}"
 [[ -e "${SYSTEMCTL_STATE}/active" ]]
 
 cp -a "${INSTALL_BINARY}" "${WORK}/expected-binary"
-printf '%s\n' 'NANDO_K1_NATURAL_SCHEDULER_ENABLED=1' >>"${ROLE_ENV}"
 cp -a "${ROLE_ENV}" "${WORK}/expected-env"
 sed 's/^NANDO_K1_NATURAL_SCHEDULER_ENABLED=.*/NANDO_K1_NATURAL_SCHEDULER_ENABLED=0/' \
   "${WORK}/expected-env" >"${WORK}/expected-rollback-env"
@@ -147,7 +153,8 @@ cp -a "${KEY_DIRECTORY}/${client_id}.key" "${WORK}/expected-key"
 
 if NANDO_TEST_FAIL_LEARNING=1 "${INSTALLER}" \
   --binary "${CANDIDATE_TWO}" \
-  --client-key "${CLIENT_KEY}" >/dev/null 2>&1; then
+  --client-key "${CLIENT_KEY}" \
+  --enable-k1-scheduler >/dev/null 2>&1; then
   printf '%s\n' "installer accepted a failed learner health check" >&2
   exit 1
 fi

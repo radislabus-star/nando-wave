@@ -3,6 +3,7 @@ set -euo pipefail
 
 BINARY_SOURCE=""
 CLIENT_KEY_SOURCE=""
+ENABLE_K1_SCHEDULER=0
 SERVICE="nando-response-learning.service"
 INSTALL_BINARY="${NANDO_REMOTE_SERVING_BINARY:-/opt/nando-wave/bin/nando-transition-serving}"
 ROLE_ENV="${NANDO_REMOTE_LEARNING_ENV:-/etc/nando-wave/roles/response-learning.env}"
@@ -10,6 +11,9 @@ KEY_DIRECTORY="${NANDO_REMOTE_EVIDENCE_KEYS:-/etc/nando-wave/evidence-clients}"
 SPOOL_DIRECTORY="${NANDO_REMOTE_EVIDENCE_SPOOL:-/var/lib/nando-wave/transition/multi-source-live-v2/remote-evidence-spool-v1}"
 LEARNING_HEALTH="${NANDO_REMOTE_LEARNING_HEALTH:-http://127.0.0.1:18790/health}"
 HOT_HEALTH="${NANDO_REMOTE_HOT_HEALTH:-http://127.0.0.1:18789/health}"
+K1_SCHEDULER_REPORT="${NANDO_REMOTE_K1_SCHEDULER_REPORT:-http://127.0.0.1:18790/v2/multi-source/k1-natural-scheduler}"
+K1_MECHANISM_REPORT="${NANDO_REMOTE_K1_MECHANISM_REPORT:-http://127.0.0.1:18790/v2/multi-source/k1-mechanism-watch}"
+K1_LAW_LAB_REPORT="${NANDO_REMOTE_K1_LAW_LAB_REPORT:-http://127.0.0.1:18790/v2/multi-source/k1-law-lab-eligibility}"
 LEARNING_STATE="${NANDO_REMOTE_LEARNING_STATE:-/var/lib/nando-wave/transition/multi-source-live-v2}"
 READINESS_ATTEMPTS="${NANDO_REMOTE_EVIDENCE_READINESS_ATTEMPTS:-12}"
 READINESS_SLEEP_SECONDS="${NANDO_REMOTE_EVIDENCE_READINESS_SLEEP_SECONDS:-0.5}"
@@ -22,7 +26,8 @@ Transactionally enable the authenticated remote evidence spool.
 Usage:
   ops/remote-backend/install-remote-evidence-spool.sh \
     --binary /path/to/nando-transition-serving \
-    --client-key /path/to/raw-32-byte-client.key
+    --client-key /path/to/raw-32-byte-client.key \
+    [--enable-k1-scheduler]
 
 Only the cold learner is stopped. The hot serving process and Nginx stay up.
 EOF
@@ -37,6 +42,10 @@ while [[ $# -gt 0 ]]; do
     --client-key)
       CLIENT_KEY_SOURCE="${2:-}"
       shift 2
+      ;;
+    --enable-k1-scheduler)
+      ENABLE_K1_SCHEDULER=1
+      shift
       ;;
     --help)
       usage
@@ -120,7 +129,18 @@ wait_learning_ready() {
           and .learning_health.serving_healthy == true
           and .learning_health.authority_ready == false
           and .learning_health.phase_mutation_allowed == false
-        ' >/dev/null 2>&1; then
+        ' >/dev/null 2>&1 \
+      && { [[ "${ENABLE_K1_SCHEDULER}" == "0" ]] \
+        || { curl -fsS --max-time "${LEARNING_HEALTH_TIMEOUT_SECONDS}" \
+               "${K1_SCHEDULER_REPORT}" \
+               | jq -e '.authority_ready == false and .phase_mutation_allowed == false' \
+                 >/dev/null 2>&1 \
+          && curl -fsS --max-time "${LEARNING_HEALTH_TIMEOUT_SECONDS}" \
+               "${K1_MECHANISM_REPORT}" \
+               | jq -e '.authority_ready == false and .phase_mutation_allowed == false' \
+                 >/dev/null 2>&1 \
+          && curl -fsS --max-time "${LEARNING_HEALTH_TIMEOUT_SECONDS}" \
+               "${K1_LAW_LAB_REPORT}" >/dev/null 2>&1; }; }; then
       return 0
     fi
     sleep "${READINESS_SLEEP_SECONDS}"
@@ -171,6 +191,9 @@ cp -a "${ROLE_ENV}" "${candidate_env}"
 set_env_value NANDO_REMOTE_EVIDENCE_SPOOL_ENABLED 1
 set_env_value NANDO_REMOTE_EVIDENCE_SPOOL "${SPOOL_DIRECTORY}"
 set_env_value NANDO_REMOTE_EVIDENCE_CLIENT_KEYS "${KEY_DIRECTORY}"
+if [[ "${ENABLE_K1_SCHEDULER}" == "1" ]]; then
+  set_env_value NANDO_K1_NATURAL_SCHEDULER_ENABLED 1
+fi
 
 cp -a "${INSTALL_BINARY}" "${backup_binary}"
 cp -a "${ROLE_ENV}" "${backup_env}"

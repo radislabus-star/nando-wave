@@ -141,12 +141,15 @@ printed. Enable the remote cold spool transactionally:
 ```bash
 ops/remote-backend/install-remote-evidence-spool.sh \
   --binary target/release/nando-transition-serving \
-  --client-key /secure/path/client.key
+  --client-key /secure/path/client.key \
+  --enable-k1-scheduler
 ```
 
-Only the cold learner stops during this operation. The installer snapshots its
-state and restores the binary, environment, key, and state automatically if
-readiness fails. Hot serving and the connector remain online.
+Only the cold learner stops during this operation. If readiness fails, the
+installer restores the binary, environment, and key, forces the K1 scheduler
+off, and preserves append-only state written by the failed process. Hot serving
+and the connector remain online. Omit `--enable-k1-scheduler` when installing
+the spool without opening the scheduler.
 
 Install the client agent separately:
 
