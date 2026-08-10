@@ -671,6 +671,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "nando-operator-admission",
+ "nando-operator-learning",
  "serde",
  "serde_json",
  "sha2",
