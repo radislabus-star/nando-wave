@@ -421,6 +421,50 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     Ok(report)
 }
 
+pub(in crate::k1_natural_scheduler_runtime) fn frozen_support_completed_frame_roots(
+    bindings: &[EvidenceBinding],
+    motif_archive: Option<&MotifEvidenceArchive>,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> Result<BTreeSet<String>, String> {
+    let roots = if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+        let archive = motif_archive.ok_or_else(|| "k1_motif_archive_missing".to_owned())?;
+        archive.validate(bindings)?;
+        archive
+            .occurrences
+            .iter()
+            .filter(|binding| {
+                row_identity_matches_freeze(&binding.row, freeze)
+                    && frozen_row_is_eligible(&binding.row, freeze)
+                    && frozen_support_contains(
+                        binding.row.capture_sequence,
+                        freeze.support_watermark,
+                    )
+            })
+            .map(|binding| {
+                archive
+                    .joined_for(bindings, binding)
+                    .map(|joined| joined.completed_frame_root_sha256.clone())
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?
+    } else {
+        bindings
+            .iter()
+            .filter(|binding| {
+                binding_is_eligible_for_freeze(binding, freeze)
+                    && frozen_support_contains(
+                        binding.row.capture_sequence,
+                        freeze.support_watermark,
+                    )
+            })
+            .map(|binding| binding.completed_frame_root_sha256.clone())
+            .collect()
+    };
+    if roots.is_empty() {
+        return Err("k1_runtime_frozen_support_frames_missing".to_owned());
+    }
+    Ok(roots)
+}
+
 type FrozenMotifIdentificationEvidence = (
     Vec<BlindThenRevealJoinedTransitionV1>,
     Vec<SourceNeutralTopologyMotifV1>,

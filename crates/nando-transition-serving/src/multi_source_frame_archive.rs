@@ -17,6 +17,7 @@ const MAX_ARCHIVE_ROWS: usize = 262_144;
 pub(super) struct MultiSourceFrameArchive {
     ledger: FramedCborLedger,
     by_frame: BTreeMap<String, Arc<RelationFrame>>,
+    by_canonical_root: BTreeMap<String, Arc<RelationFrame>>,
     append_order: Vec<String>,
     payload_bytes: u64,
 }
@@ -28,6 +29,7 @@ impl MultiSourceFrameArchive {
         let ledger = FramedCborLedger::open(directory, LEDGER_PREFIX)?;
         let frames = read_framed_cbor::<RelationFrame>(directory, LEDGER_PREFIX)?;
         let mut by_frame = BTreeMap::<String, Arc<RelationFrame>>::new();
+        let mut by_canonical_root = BTreeMap::<String, Arc<RelationFrame>>::new();
         let mut append_order = Vec::new();
         let mut payload_bytes = 0_u64;
         for frame in frames {
@@ -42,12 +44,20 @@ impl MultiSourceFrameArchive {
             if payload_bytes > MAX_ARCHIVE_BYTES || by_frame.len() >= MAX_ARCHIVE_ROWS {
                 return Err("multi_source_frame_archive_budget".to_owned());
             }
+            let canonical_root = canonical_json_sha256(&frame)
+                .map_err(|error| format!("multi_source_frame_archive_root:{error}"))?;
+            if by_canonical_root.contains_key(&canonical_root) {
+                return Err("multi_source_frame_archive_canonical_root_reused".to_owned());
+            }
+            let frame = Arc::new(frame);
             append_order.push(frame.frame_id_sha256.clone());
-            by_frame.insert(frame.frame_id_sha256.clone(), Arc::new(frame));
+            by_frame.insert(frame.frame_id_sha256.clone(), frame.clone());
+            by_canonical_root.insert(canonical_root, frame);
         }
         Ok(Self {
             ledger,
             by_frame,
+            by_canonical_root,
             append_order,
             payload_bytes,
         })
@@ -80,11 +90,18 @@ impl MultiSourceFrameArchive {
         {
             return Err("multi_source_frame_archive_budget".to_owned());
         }
+        let canonical_root = canonical_json_sha256(frame)
+            .map_err(|error| format!("multi_source_frame_archive_root:{error}"))?;
+        if self.by_canonical_root.contains_key(&canonical_root) {
+            return Err("multi_source_frame_archive_canonical_root_reused".to_owned());
+        }
         self.ledger.append(frame)?;
         self.payload_bytes = self.payload_bytes.saturating_add(bytes);
         self.append_order.push(frame.frame_id_sha256.clone());
+        let frame = Arc::new(frame.clone());
         self.by_frame
-            .insert(frame.frame_id_sha256.clone(), Arc::new(frame.clone()));
+            .insert(frame.frame_id_sha256.clone(), frame.clone());
+        self.by_canonical_root.insert(canonical_root, frame);
         Ok(())
     }
 
@@ -121,12 +138,20 @@ impl MultiSourceFrameArchive {
             .collect()
     }
 
+    pub(super) fn frames_for_roots(
+        &self,
+        frame_roots_sha256: &BTreeSet<String>,
+    ) -> Vec<RelationFrame> {
+        frame_roots_sha256
+            .iter()
+            .filter_map(|root| self.by_canonical_root.get(root))
+            .map(|frame| frame.as_ref().clone())
+            .collect()
+    }
+
     pub(super) fn frame_by_root(&self, frame_root_sha256: &str) -> Option<RelationFrame> {
-        self.by_frame
-            .values()
-            .find(|frame| {
-                canonical_json_sha256(frame.as_ref()).is_ok_and(|root| root == frame_root_sha256)
-            })
+        self.by_canonical_root
+            .get(frame_root_sha256)
             .map(|frame| frame.as_ref().clone())
     }
 

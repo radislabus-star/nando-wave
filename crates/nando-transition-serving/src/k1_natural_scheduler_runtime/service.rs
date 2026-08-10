@@ -7,11 +7,12 @@ use std::sync::Arc;
 
 use super::{
     AdvanceInput, EvidenceBindingAccumulator, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
-    K1NaturalSchedulerRuntimeReportV1, K1NaturalSchedulerRuntimeStateV1 as RuntimeState,
-    K1SchedulerLaneV1, K1SchedulerProjectionV1, MULTI_SOURCE_JOIN_MAX_ROWS_V1,
-    MultiSourceJoinCensoredReasonV1, MultiSourceJoinReportV1, PreActionTopologyAuditRowV1,
-    PreparedK1TickContextV1, RelationFrame, advance, current_deficit_snapshot,
-    extend_prepared_tick_context, join_prepared_multi_source_frame_v1,
+    K1NaturalCandidateFreezeV1, K1NaturalSchedulerRuntimeReportV1,
+    K1NaturalSchedulerRuntimeStateV1 as RuntimeState, K1SchedulerLaneV1, K1SchedulerProjectionV1,
+    MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinReportV1,
+    PreActionTopologyAuditRowV1, PreparedK1TickContextV1, RelationFrame, advance,
+    current_deficit_snapshot, extend_prepared_tick_context, frozen_support_completed_frame_roots,
+    join_prepared_multi_source_frame_v1,
     law_lab_eligibility::law_lab_eligibility_report,
     prepare_multi_source_join_frame_v1, prepare_tick_context_from_bindings, restore_projection_for,
     stream_multi_source_joins_from_iter,
@@ -257,20 +258,33 @@ pub(crate) fn advance_state(
         })
         .transpose()?
         .unwrap_or_default();
+    let prepared = evidence_cursor
+        .prepared
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_prepared_context_missing".to_owned())?;
+    let initial_identification_freeze = if mechanism_terminal
+        && epistemic_projection.identification_freeze.is_none()
+        && epistemic_projection.future_predictions.is_empty()
+    {
+        epistemic_projection.active_candidate_freeze.as_ref()
+    } else {
+        None
+    };
     let evidence_snapshot_required = epistemic_projection.active_candidate_freeze.is_some()
         || !epistemic_projection.future_predictions.is_empty()
         || mechanism_projection
             .as_ref()
             .is_some_and(|projection| projection.active_candidate_freeze.is_some());
-    let (mut topologies, mut frames) = if evidence_snapshot_required {
+    let (mut topologies, mut frames) = if let Some(freeze) = initial_identification_freeze {
+        (
+            Vec::new(),
+            materialize_frozen_support_frames(state, prepared, freeze)?,
+        )
+    } else if evidence_snapshot_required {
         materialize_current_evidence(state)?
     } else {
         (Vec::new(), Vec::new())
     };
-    let prepared = evidence_cursor
-        .prepared
-        .as_ref()
-        .ok_or_else(|| "k1_scheduler_prepared_context_missing".to_owned())?;
     if !mechanism_terminal {
         let mechanism = advance(
             &state.operator_certification_config,
@@ -378,11 +392,17 @@ pub(crate) fn advance_state(
                 | RuntimeState::K1VocabularyOpen
                 | RuntimeState::MechanismWatchComplete
         );
+        let newly_frozen = (report.state == RuntimeState::CandidateFrozen)
+            .then(|| report.projection.active_candidate_freeze.clone())
+            .flatten();
+        let identification_frozen = report.projection.identification_freeze.is_some();
         store_report(state, prepared, report)?;
         if stable {
             return Ok(());
         }
-        if topologies.is_empty() && frames.is_empty() {
+        if let Some(freeze) = newly_frozen {
+            frames = materialize_frozen_support_frames(state, prepared, &freeze)?;
+        } else if topologies.is_empty() && (identification_frozen || frames.is_empty()) {
             (topologies, frames) = materialize_current_evidence(state)?;
         }
     }
@@ -715,6 +735,29 @@ fn materialize_current_evidence(
         .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
         .shared_frames();
     Ok(materialize_evidence(&topologies, &frames))
+}
+
+fn materialize_frozen_support_frames(
+    state: &AppState,
+    prepared: &PreparedK1TickContextV1,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> Result<Vec<RelationFrame>, String> {
+    let roots = frozen_support_completed_frame_roots(
+        &prepared.bindings,
+        prepared.motif_archive.as_ref(),
+        freeze,
+    )?;
+    let frames = state
+        .multi_source_frame_archive
+        .as_ref()
+        .ok_or_else(|| "k1_scheduler_frame_archive_not_configured".to_owned())?
+        .lock()
+        .map_err(|_| "k1_scheduler_frame_archive_lock_poisoned".to_owned())?
+        .frames_for_roots(&roots);
+    if frames.len() != roots.len() {
+        return Err("k1_runtime_frozen_support_frame_lookup_incomplete".to_owned());
+    }
+    Ok(frames)
 }
 
 fn materialize_evidence(

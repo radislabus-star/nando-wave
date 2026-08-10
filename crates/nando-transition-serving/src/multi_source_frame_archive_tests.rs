@@ -106,3 +106,30 @@ fn archive_exposes_restart_stable_append_cursor() {
     );
     std::fs::remove_dir_all(root).expect("cleanup");
 }
+
+#[test]
+fn archive_resolves_only_requested_canonical_roots_after_restart() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-frame-roots-{}",
+        std::process::id()
+    ));
+    let expected = [frame(11, "intent-11"), frame(12, "intent-12")];
+    let roots = expected
+        .iter()
+        .map(|row| canonical_json_sha256(row).expect("root"))
+        .collect::<Vec<_>>();
+    let mut archive = MultiSourceFrameArchive::open(&root).expect("archive");
+    for row in &expected {
+        archive.append(row).expect("append");
+    }
+    drop(archive);
+
+    let restored = MultiSourceFrameArchive::open(&root).expect("restore");
+    let selected = BTreeSet::from([roots[1].clone()]);
+    assert_eq!(
+        restored.frames_for_roots(&selected),
+        vec![expected[1].clone()]
+    );
+    assert_eq!(restored.frame_by_root(&roots[0]), Some(expected[0].clone()));
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
