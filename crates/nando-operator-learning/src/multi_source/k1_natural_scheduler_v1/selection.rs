@@ -12,7 +12,7 @@ use super::model::{
     K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1MotifCandidateSupportV1,
     K1MotifDispositionSummaryV1, K1NaturalCandidateQueueRowV1, K1NaturalCandidateQueueV1,
     K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1,
-    K1NaturalEvidenceRowV1,
+    K1NaturalEvidenceRowV1, ValidatedK1NaturalCohortCatalogV1,
 };
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -245,6 +245,36 @@ pub fn build_k1_natural_candidate_queue_with_exclusions_v1(
     contract_watermark: u64,
 ) -> Result<K1NaturalCandidateQueueV1, &'static str> {
     catalog.validate()?;
+    build_k1_natural_candidate_queue_from_validated_catalog_v1(
+        catalog,
+        deficit,
+        excluded_candidate_roots_sha256,
+        contract_watermark,
+    )
+}
+
+impl ValidatedK1NaturalCohortCatalogV1 {
+    pub fn build_candidate_queue_with_exclusions(
+        &self,
+        deficit: &K1DeficitSnapshotV1,
+        excluded_candidate_roots_sha256: &BTreeSet<String>,
+        contract_watermark: u64,
+    ) -> Result<K1NaturalCandidateQueueV1, &'static str> {
+        build_k1_natural_candidate_queue_from_validated_catalog_v1(
+            self.as_ref(),
+            deficit,
+            excluded_candidate_roots_sha256,
+            contract_watermark,
+        )
+    }
+}
+
+fn build_k1_natural_candidate_queue_from_validated_catalog_v1(
+    catalog: &K1NaturalCohortCatalogV1,
+    deficit: &K1DeficitSnapshotV1,
+    excluded_candidate_roots_sha256: &BTreeSet<String>,
+    contract_watermark: u64,
+) -> Result<K1NaturalCandidateQueueV1, &'static str> {
     deficit.validate()?;
     if excluded_candidate_roots_sha256
         .iter()

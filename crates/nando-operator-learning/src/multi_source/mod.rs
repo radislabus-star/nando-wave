@@ -132,10 +132,10 @@ pub use k1_natural_scheduler_v1::{
     K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
     K1PreActionExecutionReceiptV1, K1ProbeBudgetRemainingV1, K1ProbeClassPredictionV1,
     K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
-    K1SchedulerLedgerV1, K1TransferSettlementV1, build_k1_motif_cohort_catalog_v1,
-    build_k1_natural_candidate_queue_v1, build_k1_natural_candidate_queue_with_exclusions_v1,
-    build_k1_natural_cohort_catalog_v1, observed_typed_consequence_root_v1,
-    typed_consequence_root_v1,
+    K1SchedulerLedgerV1, K1TransferSettlementV1, ValidatedK1NaturalCohortCatalogV1,
+    build_k1_motif_cohort_catalog_v1, build_k1_natural_candidate_queue_v1,
+    build_k1_natural_candidate_queue_with_exclusions_v1, build_k1_natural_cohort_catalog_v1,
+    observed_typed_consequence_root_v1, typed_consequence_root_v1,
 };
 pub use linked_frame_acquisition::{
     MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH,

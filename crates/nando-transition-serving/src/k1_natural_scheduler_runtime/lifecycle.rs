@@ -14,10 +14,10 @@ pub(super) struct PreparedK1TickContextV1 {
     pub join_report: MultiSourceJoinReportV1,
     pub bindings: Vec<EvidenceBinding>,
     pub evidence_epoch_root_sha256: String,
-    pub catalog: K1NaturalCohortCatalogV1,
+    pub catalog: ValidatedK1NaturalCohortCatalogV1,
     pub motif_archive: Option<MotifEvidenceArchive>,
     pub motif_evidence_epoch_root_sha256: String,
-    pub motif_catalog: K1NaturalCohortCatalogV1,
+    pub motif_catalog: ValidatedK1NaturalCohortCatalogV1,
     pub active_protocol_mode_set_root_sha256: String,
     pub contract_watermark: u64,
 }
@@ -49,6 +49,8 @@ pub(super) fn prepare_tick_context_from_bindings(
 ) -> Result<PreparedK1TickContextV1, String> {
     let motif_archive = build_motif_archive(&bindings)?;
     let (motif_evidence_epoch_root_sha256, motif_catalog) = build_motif_catalog(&motif_archive)?;
+    let motif_catalog =
+        ValidatedK1NaturalCohortCatalogV1::try_new(motif_catalog).map_err(str::to_owned)?;
     let evidence_epoch_root_sha256 = evidence_epoch_root(&bindings)?;
     let catalog = build_k1_natural_cohort_catalog_v1(
         &bindings
@@ -60,6 +62,7 @@ pub(super) fn prepare_tick_context_from_bindings(
         MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3.to_owned(),
     )
     .map_err(str::to_owned)?;
+    let catalog = ValidatedK1NaturalCohortCatalogV1::try_new(catalog).map_err(str::to_owned)?;
     let active_protocol_mode_set_root_sha256 =
         crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
             active_protocol_mode_roots_sha256,
@@ -110,6 +113,8 @@ pub(super) fn extend_prepared_tick_context(
     }
     let motif_archive = motif_accumulator.finish(&prepared.bindings)?;
     let (motif_evidence_epoch_root_sha256, motif_catalog) = build_motif_catalog(&motif_archive)?;
+    let motif_catalog =
+        ValidatedK1NaturalCohortCatalogV1::try_new(motif_catalog).map_err(str::to_owned)?;
     let evidence_epoch_root_sha256 = evidence_epoch_root(&prepared.bindings)?;
     let catalog = build_k1_natural_cohort_catalog_v1(
         &prepared
@@ -122,6 +127,7 @@ pub(super) fn extend_prepared_tick_context(
         MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3.to_owned(),
     )
     .map_err(str::to_owned)?;
+    let catalog = ValidatedK1NaturalCohortCatalogV1::try_new(catalog).map_err(str::to_owned)?;
     let active_protocol_mode_set_root_sha256 =
         crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
             active_protocol_mode_roots_sha256,
@@ -206,22 +212,23 @@ pub(super) fn advance(
         .active_candidate_freeze
         .as_ref()
         .is_none_or(|freeze| freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6);
-    let (catalog, expected_evidence_epoch, candidate_freeze_schema, discovery_basis_root) =
+    let (validated_catalog, expected_evidence_epoch, candidate_freeze_schema, discovery_basis_root) =
         if motif_v6 {
             (
-                prepared.motif_catalog.clone(),
+                &prepared.motif_catalog,
                 &prepared.motif_evidence_epoch_root_sha256,
                 K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
                 natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?,
             )
         } else {
             (
-                prepared.catalog.clone(),
+                &prepared.catalog,
                 &prepared.evidence_epoch_root_sha256,
                 K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
                 natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
             )
         };
+    let catalog = validated_catalog.as_ref().clone();
     if catalog.evidence_epoch_root_sha256 != *expected_evidence_epoch {
         return Err("k1_prepared_context_evidence_epoch_mismatch".to_owned());
     }
@@ -234,13 +241,9 @@ pub(super) fn advance(
         &discovery_basis_root,
     )?;
     let contract_watermark = prepared.contract_watermark;
-    let queue = build_k1_natural_candidate_queue_with_exclusions_v1(
-        &catalog,
-        &deficit,
-        &completed,
-        contract_watermark,
-    )
-    .map_err(str::to_owned)?;
+    let queue = validated_catalog
+        .build_candidate_queue_with_exclusions(&deficit, &completed, contract_watermark)
+        .map_err(str::to_owned)?;
 
     if let Some(terminal) = projection.pending_terminal_transfer.as_ref() {
         return runtime_report(
@@ -310,21 +313,21 @@ pub(super) fn advance(
             .find(|candidate| candidate.candidate_root_sha256 == queue_row.candidate_root_sha256)
             .cloned()
             .ok_or_else(|| "k1_runtime_queue_candidate_missing".to_owned())?;
-        let freeze = K1NaturalCandidateFreezeV1::seal(
-            projection.next_generation_sequence,
-            &catalog,
-            &deficit,
-            &queue,
-            &candidate,
-            queue_row.score.clone(),
-            K1_SCHEDULER_SCHEMA_V2.to_owned(),
-            discovery_basis_root,
-            generation_budget(),
-            candidate.last_capture_sequence,
-            contract_watermark,
-            generated_at_unix,
-        )
-        .map_err(str::to_owned)?;
+        let freeze = validated_catalog
+            .seal_candidate_freeze(
+                projection.next_generation_sequence,
+                &deficit,
+                &queue,
+                &candidate,
+                queue_row.score.clone(),
+                K1_SCHEDULER_SCHEMA_V2.to_owned(),
+                discovery_basis_root,
+                generation_budget(),
+                candidate.last_capture_sequence,
+                contract_watermark,
+                generated_at_unix,
+            )
+            .map_err(str::to_owned)?;
         projection = append_candidate_freeze_for(
             certification,
             lane,

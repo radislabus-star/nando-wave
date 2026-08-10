@@ -9,7 +9,7 @@ use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
 pub use cohort::{
     K1MotifCandidateSupportV1, K1MotifDispositionSummaryV1, K1NaturalCohortCandidateV1,
-    K1NaturalCohortCatalogV1,
+    K1NaturalCohortCatalogV1, ValidatedK1NaturalCohortCatalogV1,
 };
 pub use evidence::{K1ConsequenceTypeV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1};
 pub use freeze::{K1GenerationBudgetV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1};

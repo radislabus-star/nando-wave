@@ -200,7 +200,7 @@ fn validated_catalog<'a>(
     prepared: &PreparedK1TickContextV1,
     catalog: &'a K1NaturalCohortCatalogV1,
 ) -> Result<&'a K1NaturalCohortCatalogV1, String> {
-    if catalog != &prepared.catalog && catalog != &prepared.motif_catalog {
+    if catalog != prepared.catalog.as_ref() && catalog != prepared.motif_catalog.as_ref() {
         return Err("structural_frontier_runtime_context_mismatch".to_owned());
     }
     Ok(catalog)
@@ -432,14 +432,14 @@ mod tests {
             prepared.motif_catalog.catalog_root_sha256
         );
 
-        for catalog in [&prepared.catalog, &prepared.motif_catalog] {
+        for catalog in [prepared.catalog.as_ref(), prepared.motif_catalog.as_ref()] {
             assert_eq!(
                 validated_catalog(&prepared, catalog).expect("catalog"),
                 catalog
             );
         }
 
-        let mut unrelated = prepared.motif_catalog.clone();
+        let mut unrelated = prepared.motif_catalog.as_ref().clone();
         unrelated.catalog_root_sha256 =
             canonical_json_sha256(&("unrelated-catalog", 1u64)).expect("unrelated root");
         assert_eq!(

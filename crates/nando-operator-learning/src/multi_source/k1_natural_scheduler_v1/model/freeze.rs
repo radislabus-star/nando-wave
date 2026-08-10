@@ -1,7 +1,9 @@
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
-use super::cohort::{K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1};
+use super::cohort::{
+    K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, ValidatedK1NaturalCohortCatalogV1,
+};
 use super::evidence::K1ConsequenceTypeV1;
 use super::queue::{K1CandidateScoreV1, K1DeficitSnapshotV1, K1NaturalCandidateQueueV1};
 use super::{
@@ -243,6 +245,37 @@ impl K1NaturalCandidateFreezeV1 {
         selected_at_unix: u64,
     ) -> Result<Self, &'static str> {
         catalog.validate()?;
+        Self::seal_with_validated_catalog(
+            generation_sequence,
+            catalog,
+            deficit,
+            queue,
+            candidate,
+            scoring_tuple,
+            scheduler_schema,
+            discovery_basis_root_sha256,
+            budget,
+            support_watermark,
+            contract_watermark,
+            selected_at_unix,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn seal_with_validated_catalog(
+        generation_sequence: u64,
+        catalog: &K1NaturalCohortCatalogV1,
+        deficit: &K1DeficitSnapshotV1,
+        queue: &K1NaturalCandidateQueueV1,
+        candidate: &K1NaturalCohortCandidateV1,
+        scoring_tuple: K1CandidateScoreV1,
+        scheduler_schema: String,
+        discovery_basis_root_sha256: String,
+        budget: K1GenerationBudgetV1,
+        support_watermark: u64,
+        contract_watermark: u64,
+        selected_at_unix: u64,
+    ) -> Result<Self, &'static str> {
         deficit.validate()?;
         queue.validate()?;
         candidate.validate()?;
@@ -546,6 +579,39 @@ impl K1NaturalCandidateFreezeV1 {
             authority_ready: false,
             phase_mutation_allowed: false,
         })
+    }
+}
+
+impl ValidatedK1NaturalCohortCatalogV1 {
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal_candidate_freeze(
+        &self,
+        generation_sequence: u64,
+        deficit: &K1DeficitSnapshotV1,
+        queue: &K1NaturalCandidateQueueV1,
+        candidate: &K1NaturalCohortCandidateV1,
+        scoring_tuple: K1CandidateScoreV1,
+        scheduler_schema: String,
+        discovery_basis_root_sha256: String,
+        budget: K1GenerationBudgetV1,
+        support_watermark: u64,
+        contract_watermark: u64,
+        selected_at_unix: u64,
+    ) -> Result<K1NaturalCandidateFreezeV1, &'static str> {
+        K1NaturalCandidateFreezeV1::seal_with_validated_catalog(
+            generation_sequence,
+            self.as_ref(),
+            deficit,
+            queue,
+            candidate,
+            scoring_tuple,
+            scheduler_schema,
+            discovery_basis_root_sha256,
+            budget,
+            support_watermark,
+            contract_watermark,
+            selected_at_unix,
+        )
     }
 }
 

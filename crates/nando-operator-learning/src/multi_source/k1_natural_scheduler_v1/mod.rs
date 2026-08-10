@@ -21,7 +21,7 @@ pub use model::{
     K1MotifDispositionSummaryV1, K1MotifSourceDispositionClassV1, K1MotifSourceDispositionV1,
     K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueRowV1, K1NaturalCandidateQueueV1,
     K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1,
-    K1NaturalEvidenceRowV1,
+    K1NaturalEvidenceRowV1, ValidatedK1NaturalCohortCatalogV1,
 };
 pub use probe::{
     K1_DUPLICATE_PROTOCOL_BLOCKER_V1, K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1,

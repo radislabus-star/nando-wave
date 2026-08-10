@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +67,30 @@ pub struct K1NaturalCohortCatalogV1 {
     pub motif_retained_occurrences: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub motif_disposition: Option<K1MotifDispositionSummaryV1>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedK1NaturalCohortCatalogV1(K1NaturalCohortCatalogV1);
+
+impl ValidatedK1NaturalCohortCatalogV1 {
+    pub fn try_new(catalog: K1NaturalCohortCatalogV1) -> Result<Self, &'static str> {
+        catalog.validate()?;
+        Ok(Self(catalog))
+    }
+}
+
+impl AsRef<K1NaturalCohortCatalogV1> for ValidatedK1NaturalCohortCatalogV1 {
+    fn as_ref(&self) -> &K1NaturalCohortCatalogV1 {
+        &self.0
+    }
+}
+
+impl Deref for ValidatedK1NaturalCohortCatalogV1 {
+    type Target = K1NaturalCohortCatalogV1;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

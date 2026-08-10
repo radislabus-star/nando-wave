@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::*;
 
 #[test]
@@ -408,6 +410,44 @@ fn motif_freeze_v6_seals_every_catalog_and_embedding_root() {
         serde_json::to_vec(&restored).expect("re-encode v6 freeze"),
         bytes
     );
+
+    let validated_catalog =
+        ValidatedK1NaturalCohortCatalogV1::try_new(catalog.clone()).expect("validated catalog");
+    let optimized_queue = validated_catalog
+        .build_candidate_queue_with_exclusions(&deficit, &BTreeSet::new(), 8)
+        .expect("optimized motif queue");
+    assert_eq!(optimized_queue, queue);
+    let optimized_queue_row = optimized_queue
+        .first_readiness_pass()
+        .expect("optimized ready motif");
+    let optimized_candidate = validated_catalog
+        .candidates
+        .iter()
+        .find(|candidate| {
+            candidate.candidate_root_sha256 == optimized_queue_row.candidate_root_sha256
+        })
+        .expect("optimized motif candidate");
+    let optimized_freeze = validated_catalog
+        .seal_candidate_freeze(
+            6,
+            &deficit,
+            &optimized_queue,
+            optimized_candidate,
+            optimized_queue_row.score.clone(),
+            "nando.k1-operator-blind-scheduler.v2".to_owned(),
+            root(706),
+            K1GenerationBudgetV1 {
+                maximum_support_rows: 64,
+                maximum_probe_rounds: 4,
+                maximum_probe_cost_units: 100,
+                maximum_generation_seconds: 3_600,
+            },
+            8,
+            8,
+            1_700_000_000,
+        )
+        .expect("optimized motif freeze");
+    assert_eq!(optimized_freeze, freeze);
 
     let mut tampered = freeze;
     tampered.motif_embedding_manifest_root_sha256 = root(99_999);
