@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v10";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v11";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -424,9 +424,9 @@ const TEMPLATE: &str = r#"
       </div>
     </section>
 
-    <section class="law" aria-labelledby="l1-title">
+    <section class="law" aria-labelledby="k1-title">
       <div class="law-head">
-        <div class="law-title"><h2 id="l1-title">Алфавит L1</h2><span>K1 Vocabulary · источник <b id="k1-source">—</b></span></div>
+        <div class="law-title"><h2 id="k1-title">K1 · операционные законы</h2><span>минимальный базис · источник <b id="k1-source">—</b></span></div>
         <strong id="k1-progress" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
       <div class="law-body">
@@ -538,7 +538,7 @@ const TEMPLATE: &str = r#"
         : lawCount + 1 === threshold
           ? "ПОИСК"
           : "WAIT";
-    text("k1-progress", k1Available ? `${number.format(lawCount)} / ${number.format(minimumLaws)} ДОКАЗАНО` : "UNKNOWN");
+    text("k1-progress", k1Available ? `${number.format(lawCount)} / ${number.format(minimumLaws)} В БАЗИСЕ` : "UNKNOWN");
     className("k1-progress", `law-verdict ${k1Available && lawCount >= minimumLaws ? "good" : ""}`);
     text("law1-state", slotState(1));
     text("law2-state", slotState(2));
@@ -663,7 +663,8 @@ mod tests {
         assert!(html.contains("677</b> upstream не вызван"));
         assert!(html.contains("это не весь ingress"));
         assert!(html.contains("С момента открытия страницы"));
-        assert!(html.contains("Алфавит L1"));
+        assert!(html.contains("K1 · операционные законы"));
+        assert!(html.contains("минимальный базис"));
         assert!(html.contains("Law #1"));
         assert!(html.contains("Law #2"));
         assert!(html.contains("Law #3"));

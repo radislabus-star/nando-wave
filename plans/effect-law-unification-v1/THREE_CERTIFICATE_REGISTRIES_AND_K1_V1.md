@@ -98,7 +98,7 @@ ExecutionCertificate PASS
 + false_bad_apply = 0
 ```
 
-Opening the natural L2 experiment requires the full vocabulary gate:
+Opening the first K2 grounded-meaning experiment requires the minimum K1 basis:
 
 ```text
 law certificates       >= 3
@@ -112,10 +112,21 @@ Mechanism classification is recorded but does not block K1. This preserves
 the distinction between discovering a real transferable law and proving that
 Wave was the necessary discovery mechanism.
 
-L2 receives only opcode identity, role contract, verified consequence, cost,
-and applicability. It does not receive a prepared composition DAG, family
-mapping, meta-skill name, correct ordering, exact episode identity, tool name,
-or field name.
+This `3 / 3` gate is a minimum experimental seed, not a completed alphabet and
+not a cap on K1. Every additional independently certified K1 law can increase
+CPU coverage and provide more diverse grounded transitions for K2.
+
+K2 receives frozen source-neutral K1 action contracts plus independently
+verified transition views. It does not receive a prepared composition DAG,
+family mapping, meta-skill name, correct ordering, exact episode identity, tool
+name, field name, or latent vector as law identity.
+
+A hidden representation may rank an explicit equivalence or composition
+candidate only under
+`GROUNDED_MEANING_ARCHITECTURE_V1.md`. It has no execution, certification,
+phase-mutation, or admission authority. The resulting K2 candidate must return
+to an explicit bounded meta-program, independent future, existing certificate
+chain, and external admission.
 
 ## Current Honest Projection
 

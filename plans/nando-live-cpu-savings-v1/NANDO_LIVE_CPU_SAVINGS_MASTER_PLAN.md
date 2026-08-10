@@ -2,15 +2,16 @@
 
 Status: canonical execution plan.
 
-Revision: 2026-08-10, exact connected-motif reviewer repair.
+Revision: 2026-08-10, exact connected-motif live route plus Grounded Meaning V1.
 
 ```text
 PLAN_STRUCTURE_PASS        PASS
 IMPLEMENTATION_PASS        PARTIAL
 MOTIF V4/V6 BRANCH         IMPLEMENTATION PASS
-MOTIF V4/V6 LIVE           NOT DEPLOYED
+MOTIF V4/V6 LIVE           IMPLEMENTATION PASS
 AUTONOMOUS LAW #2          NOT PROVED
 NATURAL RAW PHASE CAUSAL   NOT PROVED
+K2 GROUNDED MEANING        NOT EVALUATED
 ```
 
 Architectural authority remains `ARCHITECTURE_CANON.md`. This document owns
@@ -61,14 +62,19 @@ missing terminal receipts      0
 The scientific north star is:
 
 ```text
-K1 operators
--> natural L2 composition
--> strategy laws
--> learning operators
+K1 certified operational laws
+-> K2 grounded meanings and composition laws
+-> K3 verified strategies
+-> K4 learning operators
 -> self-growing verified action language
 ```
 
 CPU savings finance and feed the scientific loop. They do not replace it.
+
+Two namespaces must not be mixed. `W1/W2/W3` name internal Wave
+representation layers. `K1/K2/K3/K4` name recursively proved executable
+knowledge. The old dashboard phrase `L1 alphabet` meant the minimum K1 law
+basis; it did not count surface symbols or prove a semantic representation.
 
 ## 2. Claim Levels
 
@@ -82,6 +88,11 @@ These verdicts are independent and must never be collapsed:
 | `LAW_PASS` | Natural support, frozen version space, independent future, ordinary verified CPU completion, exact economics, cleanup, and LawCertificate all pass. |
 | `MECHANISM_PASS` | Causal ablations and heldout transfer prove the claimed Raw Phase/Wave mechanism. |
 | `PRODUCT_PASS` | An admitted package completed ordinary traffic locally before upstream with an independent verifier. |
+
+K2 adds four independent scoped claims defined in
+`GROUNDED_MEANING_ARCHITECTURE_V1.md`: representation transfer, explicit K2
+law, mechanism necessity, and product execution. A latent predictor, an
+executable DAG, or `K1 3/3` alone proves none of them.
 
 The 2026-08-09 `PLAN_STRUCTURE_PASS` is backed by six owner-bounded gates:
 end-to-end route, discovery authority, adaptive frontier, product/accounting,
@@ -106,12 +117,14 @@ Snapshot: 2026-08-10, mini-PC `e@192.168.3.94`.
 ### Deployment
 
 ```text
-deployed source commit       c822feda4fdb84dd74f66ab958f8fd5e621822e2
-deployment receipt root      6b056a838950d8969d4045ff0eb94888dc6b478de888e479f8453b50e677ba0d
-K1 research on hot serving   disabled
+latest control commit        f7864664bd26
+deployment receipt root      8ec3e493ab01b80fc892daf56f2ee30ca1ad574f8fb222e2f94483e0115bfc6e
+exact motif K1 scheduler     LIVE / COLD
 retired MS3 research         CLOSED
 Nginx PID unchanged          682430
-service restarts             0
+hot / cold PID               165670 / 369456
+control PID                  465706
+data-plane restarts          0
 ```
 
 The cold learner passed the preregistered live resource gate:
@@ -134,18 +147,14 @@ Authoritative rolling snapshot:
 `nando.economics-snapshot.v4`.
 
 ```text
-current epoch input tokens           2,915,218,037
-verified avoided input tokens          566,009,968
-current epoch token share                    19.4%
-verified local accepts                       2,287
-avoided upstream calls                       2,287
-verification coverage                         100%
+measured gateway ingress tokens        13,785,907,534
+current epoch input tokens              5,912,906,084
+verified avoided input tokens           2,160,288,011
+current epoch token share                      36.54%
+verified local accepts                         9,468
+avoided upstream calls                         9,468
 active economics false accepts                   0
 runtime parity mismatches                        0
-missing evidence receipts                        0
-unresolved local outcomes                        0
-dedupe conflicts                                 0
-pipeline drops                                   0
 Product M1                                     PASS
 provider-billed counterfactual          UNAVAILABLE
 ```
@@ -153,66 +162,37 @@ provider-billed counterfactual          UNAVAILABLE
 The dashboard's all-recorded-partitions view was approximately:
 
 ```text
-lifetime verified CPU tokens       84,812,803 / 6,450,984,071
-lifetime token share                              1.31%
+lifetime verified CPU tokens    2,202,803,308 / 11,875,331,720
+lifetime token share                             18.55%
 ```
 
-The natural MS4 package has a separate conditional denominator:
-
-```text
-package-matched tokens            671,290,096 / 671,290,096
-package CPU accepts                              2,750
-```
-
-That `100%` is package-conditional and must never be presented as global
-traffic coverage.
-
-The miner/corpus view still exposes a separate historical completed-window
-counter of `8` false accepts and `0` parity failures. It is not the active
-economics epoch and cannot be silently merged with active runtime safety. Both
-denominators remain visible until the historical rows are independently
-adjudicated or permanently retained as historical failures.
+These values are one frozen dashboard sample and will drift. Gateway ingress,
+miner recognition, current V4 economics, and lifetime accounting remain
+separate denominators on the live panel.
 
 ### K1 And Frontier
 
 ```text
-K1 state                         waiting_for_evidence
-K1 blocker                       no_readiness_pass_candidate
-catalog cohorts                  746
-readiness-PASS cohorts           37
-schedulable cohorts              0
-schedulability blocker           complete ambient topology identity
-settled below 8                  708
-lineage below 2                    1
+K1 certified laws                1 / 3 minimum basis
+catalog motif cohorts            803
+readiness-PASS now               150
+terminal generations             302
+next generation                  303
+latest terminal                  ACQUISITION_FAIL
+latest blocker                   motif program candidates empty
 scheduler authority              false
 phase mutation                   false
 ```
 
-The root-complete reviewer audit found that the remaining blocker is the unit
-of repetition. The exact V2 quotient correctly removes role-ID permutations,
-but the scheduler still groups by the complete request-specific graph. A local
-law recurring inside different ambient graphs is therefore split into mostly
-singleton cohorts. The quotient must not be weakened and non-isomorphic complete
-graphs must not be merged.
-
-A read-only connected-motif census over the live natural archive found:
-
-```text
-topology / frame / joined rows    53,968 / 10,404 / 9,218
-bounded exact motif candidates    1,156
-readiness-PASS motifs               658
-  scalar / record / collection      308 / 179 / 171
-enumeration-budget dispositions      116
-empty-topology dispositions        1,048
-```
-
-This is evidence availability, not Law #2. Production integration is governed
-by `K1_EXACT_CONNECTED_MOTIF_DISCOVERY_CONTRACT_V1.md`.
+The complete-ambient-topology blocker is repaired. Production now enumerates
+bounded exact connected motifs and durably terminalizes each generation
+instead of reporting aggregate `candidate input = 1`. Readiness is evidence
+availability, not Law #2. `ACQUISITION_FAIL` means the frozen motif did not
+yield an admissible executable class under the current discovery basis.
 
 ### Verified Development Checkpoint
 
-The working branch implements the preregistered motif route without changing
-the deployed `c822fed` baseline:
+The deployed branch implements the preregistered motif route:
 
 ```text
 Evidence V1-V3 / Freeze V1-V5     exact legacy dispatch preserved
@@ -226,31 +206,29 @@ controlled BundleV4 route         admission + unseen CPU execution PASS
 exact economics completion        ingress tokens + package + verifier bound
 ```
 
-Fresh mini-PC verification for this branch:
+Fresh mini-PC verification for the latest control-only projection:
 
 ```text
-nando-operator-learning           402 unit PASS; auxiliary suites PASS
-nando-response-actor              377 unit PASS; 3 integration PASS
-nando-transition-serving          291 PASS / 7 ignored
-strict Clippy, three crates        PASS
+nando-gateway-control             54 PASS
+strict Clippy                     PASS
 rustfmt                            PASS
+transactional control deploy      PASS
+hot / cold / Nginx unchanged      PASS
 ```
 
-The cross-ambient transfer and downstream CPU test is controlled regression
-evidence. It proves implementation compatibility through canonical BundleV4,
-external admission, independent execution verification, and fail-closed
-economics accounting. It does not count as natural evidence, a LawCertificate,
-Law #2, production deployment, or autonomous live scheduling.
-
-Generation 77 terminated honestly:
+The controlled downstream regression proves implementation compatibility. Live
+generation advancement proves scheduling and terminalization, not a new law.
+Generation 302 terminated honestly:
 
 ```text
 ACQUISITION_FAIL
--> selected_role_witness_missing
+-> motif program candidates empty
 -> no law, no phase update, no package authority
 ```
 
-K1 remains `1/3` laws, `1/3` semantic laws, and `1/2` role topologies.
+K1 remains `1/3` certified operational laws. The first K2 experiment remains
+closed until the minimum K1 basis plus the transition and baseline contracts
+defined in `GROUNDED_MEANING_ARCHITECTURE_V1.md` exist.
 
 ## 4. Four Independent Lanes
 
@@ -692,14 +670,14 @@ As of the verified baseline:
 | Full observed frontier disposition coverage | `PARTIAL`; motif budget/overflow dispositions not deployed |
 | Exact connected-motif discovery lane | `IMPLEMENTATION_PASS` in branch; live deployment pending |
 | V1-V5 compatibility and V6 authority dispatch | `IMPLEMENTATION_PASS` in branch |
-| Exact program-to-embedding binding | `IMPLEMENTATION_PASS` through synthesis, replay, future, actor, and authority |
+| Exact program-to-embedding binding | `IMPLEMENTATION_PASS` for the existing motif identity; this is not K2 latent meaning |
 | V6 transfer -> BundleV4 -> admission -> CPU | `CAPABILITY_PASS`; controlled regression only |
 | Exact package CPU completion accounting | `IMPLEMENTATION_PASS`; ingress token denominator and verifier root bound |
 | Autonomous natural V6 generation | `NOT PROVED`; branch not deployed |
 | Raw Phase as sole natural synthesis path | `PARTIAL`; production causal route not proved |
 | Natural Law #2 | `NOT PROVED` |
-| K1 vocabulary open | `NO`, 1/3 |
-| Natural L2 | `BLOCKED` by K1 |
+| K1 minimum basis | `NO`, 1/3 |
+| K2 grounded meaning | `BLOCKED` by K1 basis and missing transition/baseline contracts |
 | Provider-billed money savings | `UNKNOWN` |
 
 ## 14. Ordered Delivery
@@ -725,10 +703,17 @@ As of the verified baseline:
 8. Repeat the same autonomous route for Law #3. Freeze
    `K1VocabularySnapshotV1` only at 3 distinct laws,
    3 semantic consequences, 2 topology roots, complete cleanup, and zero active
-   false bad apply.
-9. Open natural L2 over the frozen K1 vocabulary without supplying a DAG. MS7
-   is only the bounded executor; the composition law must be discovered.
-10. Continue product portfolio optimization independently, with the next target
+   false bad apply. This is a minimum K2 seed, not a completed alphabet or a
+   limit on further K1 CPU laws.
+9. Build `GroundedTransitionEpisodeV1` as a read-only cold projection of
+   durable K1 actor/verifier receipts. Freeze ID, surface, retrieval, and typed
+   effect-algebra baselines before training any hidden representation.
+10. Open the K2 grounded-meaning experiment over the frozen K1 basis. The
+   hidden model may propose relations and probes but may not supply authority.
+   MS7 is only the bounded executor; an explicit meta-law must survive
+   substitution, intervention, novel composition, independent natural future,
+   and the existing certificate/admission route.
+11. Continue product portfolio optimization independently, with the next target
    being stable >=10% global current-epoch token savings and then progressively
    higher verified coverage.
 
@@ -756,16 +741,18 @@ M3 LAW #2 PRODUCT TRANSFER
   incremental global denominator reported
   status: NOT PROVED
 
-M4 K1 OPEN
+M4 K1 MINIMUM BASIS
   3 laws / 3 semantics / 2 topologies
   cleanup complete / false bad apply 0
   stable >=10% global verified token saving
   status: CLOSED
 
-M5 NATURAL L2
-  composition discovered from K1 effects
-  no supplied DAG or family mapping
-  independent future and MetaSkillPackage
+M5 K2 GROUNDED MEANING
+  hidden representation beats frozen typed-algebra baseline
+  implementation substitution + causal/nuisance intervention PASS
+  explicit composition/equivalence law discovered from K1 transitions
+  no supplied DAG, family mapping, episode IDs, or latent authority
+  independent natural future and MetaSkillPackage
   status: BLOCKED
 ```
 

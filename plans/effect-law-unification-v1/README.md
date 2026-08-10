@@ -5,6 +5,13 @@ Current core status: [`../../docs/CORE.md`](../../docs/CORE.md).
 Owning roadmap:
 [`EFFECT_LAW_UNIFICATION_REFACTOR_V1.md`](EFFECT_LAW_UNIFICATION_REFACTOR_V1.md).
 
+Forward recursive-meaning architecture:
+[`GROUNDED_MEANING_ARCHITECTURE_V1.md`](GROUNDED_MEANING_ARCHITECTURE_V1.md).
+
+The forward contract keeps K1 operational laws, K2 grounded meanings, and the
+historical W1/W2/W3 Wave representation layers in separate namespaces. It does
+not rewrite or promote any frozen evidence receipt in this directory.
+
 This directory contains one migration ladder and its immutable checkpoint
 evidence. Read the ladder in order; do not infer current authority from the
 newest-looking filename.

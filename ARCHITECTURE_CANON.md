@@ -287,7 +287,7 @@ Recursive growth is ordered as follows:
 ```text
 K0  relation primitives
 K1  transferable actions
-K2  action compositions
+K2  grounded meanings and action-composition laws
 K3  verified strategies
 K4  methods for discovering new strategies
 ```
@@ -363,11 +363,35 @@ The novelty claim is the tested composition of phase-attractor circuit birth
 with executable program crystallization, not the invention of attractors,
 oscillators, phase locking, or grokking.
 
-## 2. The L1 -> L2 -> L3 Meaning
+## 2. Two Axes: Wave Representation And Knowledge
 
-### L1: surface coherence
+The repository historically used `L1/L2/L3` for internal Wave representations
+and later used similar names for recursive operator knowledge. That collision
+is forbidden in new canonical claims. The axes are now namespaced:
 
-L1 converts text surfaces into a compact wave:
+```text
+W1  surface-wave representation
+W2  contextual motif/interference representation
+W3  transferable action-induction representation
+
+K0  source-neutral relation and execution primitives
+K1  certified operational action laws
+K2  grounded meanings and composition laws over verified transitions
+K3  verified strategies over K2 meanings
+K4  methods that improve strategy and law discovery
+```
+
+`W1/W2/W3` describe how evidence is represented inside the learner.
+`K0/K1/K2/K3/K4` describe what executable knowledge has been proved. A K1 law
+may be formed through W1-W3 machinery; that does not make it a K3 law.
+
+Bare `L1`, `L2`, or `L3` is insufficient in a new architecture, proof, or
+dashboard claim. Name the axis, for example `W2 motif transfer`, `K1
+LawCertificate`, or `K2 grounded-meaning experiment`.
+
+### W1: surface coherence
+
+W1 converts text surfaces into a compact wave:
 
 ```text
 byte 4-grams
@@ -378,7 +402,7 @@ byte 4-grams
 -> SurfaceWave4096
 ```
 
-L1 does not understand an operator. It makes differently written observations
+W1 does not understand an operator. It makes differently written observations
 comparable and lets character fragments cohere into stable lexical surfaces.
 The hot representation is deliberately small and sparse.
 
@@ -388,13 +412,13 @@ Current primary implementation:
 crates/nando-core/src/wave/surface_wave.rs
 ```
 
-### L2: motifs, interference, and context
+### W2: motifs, interference, and context
 
-L2 combines active L1 lanes into reusable motifs and contextual centers.
+W2 combines active W1 lanes into reusable motifs and contextual centers.
 Interference reinforces compatible motifs. Lens/carrier context constrains the
 field. Counter-wave evidence suppresses noise and false attraction.
 
-L2 is not a bag of labels. It is the intermediate structure that allows new
+W2 is not a bag of labels. It is the intermediate structure that allows new
 wording and layouts to reach the same law without exact lookup.
 
 Relevant design and implementation references:
@@ -406,9 +430,9 @@ crates/nando-core/src/wave/semantic_wave.rs
 crates/nando-core/src/wave/semantic_extract.rs
 ```
 
-### L3: transferable action
+### W3 and K1: transferable operational action
 
-L3 binds roles, state transitions, and action structure. Here repeated
+W3 binds roles, state transitions, and action structure. Here repeated
 completed transitions can stabilize into a transferable action operator:
 
 ```text
@@ -419,10 +443,11 @@ same law across different surfaces
 -> compact transferable operator
 ```
 
-In this project, grokking means that examples no longer have to be retained as
-the authority: their common law has stabilized into a compact center. At L3,
-the important result is a transferable action, including its applicability
-boundary, not merely a recognized phrase.
+In this project, K1 operator grokking means that examples no longer have to be
+retained as the authority: their common operational law has stabilized into a
+compact center and survived the independent proof route. The important result
+is a transferable action, including its applicability boundary and verified
+consequence, not merely a recognized phrase.
 
 Relevant implementation:
 
@@ -433,38 +458,71 @@ crates/nando-response-actor/src/online_subcenter.rs
 crates/nando-response-actor/src/cegis.rs
 ```
 
-### Optional JEPA-inspired research layer, not the system core
+### K2: grounded meanings over verified transitions
 
-The phrase "hidden part" in the product architecture refers to a compact
-JEPA-inspired latent world model, not to hidden Wave memory and not to another
-name for L3 phase centers.
-
-This is an optional future research layer. It is not required for extracting
-repeatable operators from completed LLM traffic, is not part of the production
-hot path, and must not block the CPU-coverage goal. The canonical core is the
-bidirectional transferable Wave operator defined below.
-
-Its conceptual contract is:
+A K1 law has real operational semantics:
 
 ```text
-current structural state
--> encoder -> latent state z_t
-
-z_t + candidate action
--> action-conditioned predictor
--> predicted latent consequence z_t+1
+pre-action structural state
++ grounded roles
++ applicability boundary
++ typed action
+-> independently verified consequence
 ```
 
-For this repository the latent state is expected to describe structured
-software/runtime consequences, such as diagnostic graphs, AST relations,
-state deltas, or tool outcomes. It does not reconstruct a full textual world.
-It predicts which candidate actions are promising before an expensive probe or
-execution.
+K2 asks a different question: can Nando discover a compact invariant that
+preserves this meaning across different implementations, causal interventions,
+and novel action compositions? Composition is one scored surface; a supplied
+or merely executable DAG is not K2 understanding.
 
-This layer has no authority to execute. A latent prediction is search evidence,
-not truth. A real actor and independent verifier must still evaluate the
-consequence. Prediction error updates latent dynamics; it must not be silently
-converted into an applicability anti-center.
+The unit of K2 evidence is a verified transition, not a permanent vector stored
+inside one operator:
+
+```text
+state + constraints + roles + K1 action + VerifiedDeltaReceipt + next state
+-> GroundedTransitionEpisodeV1
+```
+
+The first candidate mechanism is JEPA-inspired:
+
+```text
+pre-action context -> context encoder -> h_t
+source-neutral K1 action contract -> action encoder -> a_t
+h_t + a_t + u_t -> predictor -> predicted target representation
+verified post-action transition -> target encoder -> observed representation
+```
+
+`h_t` is a candidate meaning representation. `u_t` is uncertainty or missing
+information and must remain distinct. Neither is truth, a law identity, or
+execution authority. The representation belongs to a versioned model snapshot
+and transition episode; it is never serialized into BundleV4.
+
+The hidden model must compete against ID, surface, retrieval, and the strongest
+explicit typed-effect-algebra baseline. It earns a scoped representation claim
+only through frozen lineage-disjoint tests of implementation substitution,
+causal intervention, nuisance invariance, novel composition, and natural
+post-freeze future. If explicit algebra performs as well, the result is
+`EXPLICIT_ALGEBRA_SUFFICIENT`, not semantic grokking.
+
+The hidden model may rank candidates and safe probes. It cannot execute, issue
+a certificate, mutate Wave phase memory, or enter runtime authority. A useful
+candidate must still become an explicit bounded meta-program, survive semantic
+quotient and independent future, crystallize into a `MetaSkillPackage`, and
+pass the existing verifier and external admission route.
+
+The minimum K1 gate of three laws is only the seed for this experiment. It is
+not a completed alphabet or automatic K2 PASS. K1 product growth continues
+independently and may produce hundreds or thousands of CPU laws.
+
+The full schemas, baselines, authority matrix, falsification surfaces, and
+ordered implementation slices are canonical in:
+
+```text
+plans/effect-law-unification-v1/GROUNDED_MEANING_ARCHITECTURE_V1.md
+```
+
+This K2 research plane is first-class for the scientific north star but remains
+outside the production hot path. K1 CPU coverage does not wait for it.
 
 The existing file:
 
@@ -472,7 +530,7 @@ The existing file:
 crates/nando-cli/src/phase_streaming_cmd/live_store_adapter/hidden_state.rs
 ```
 
-does **not** by itself implement this JEPA-like contract. It derives bounded
+does **not** by itself implement this K2 contract. It derives bounded
 cross-layer and combination atoms for subcenter/quarantine refinement. Its
 historical `hidden_state` name must not be used as evidence that an
 action-conditioned latent consequence predictor already exists.
@@ -545,7 +603,7 @@ the law.
 
 ### Setun balanced ternary and the operator-state tensor
 
-Balanced ternary is a foundational representation, not an L1-only hashing
+Balanced ternary is a foundational representation, not a W1-only hashing
 detail. The canonical local state alphabet is:
 
 ```text
@@ -1372,8 +1430,9 @@ relations <= 256
 ```
 
 Budget exhaustion preserves the incomplete training state but yields ABSTAIN,
-never the first candidate. A JEPA-like predictor may later rank expansions and
-probes, but it cannot create evidence, crystallize a circuit, or grant authority.
+never the first candidate. A frozen K2 candidate model may later rank expansions
+and probes, but it cannot create evidence, crystallize a circuit, or grant
+authority.
 
 Canonical implementation plan:
 
@@ -1783,8 +1842,8 @@ CensoredUnknown         -> uncertainty only, no semantic update
 
 The first executable compiler opcode is generic unique-scalar projection. More
 transform families must be added only with the same actor/verifier parity
-contract. Checkpoint, JEPA ranking, live admission, and economics follow after
-the compiler covers the intended operator family.
+contract. Checkpoint, frozen K2 candidate ranking, live admission, and economics
+follow after the compiler covers the intended operator family.
 
 Canonical implementation plan:
 
@@ -1803,7 +1862,7 @@ self-training, not runtime leakage.
 completed live trace
 -> post-action teacher signal
 -> structural alignment and grouping
--> L1/L2 relation-wave representation
+-> W1/W2 relation-wave representation
 -> positive phase center
 -> counterexamples
 -> anti-center, applicability subcenter, or repaired law
@@ -1900,15 +1959,16 @@ live counterexample
 If no action-neutral pre-decision distinction exists, the correct result is
 `ABSTAIN`. Never invent a discriminator from the future action.
 
-### Three complementary intelligence levels
+### Three complementary intelligence routes
 
 These are distinct responsibilities, not competing implementations:
 
 ```text
-JEPA-inspired latent consequence model
-  encodes state z_t and predicts z_t+1 under a candidate action
+K2 grounded-meaning candidate model
+  encodes a transition-conditioned representation and predicts a heldout
+  consequence under a source-neutral K1 action contract
 
-self-correcting Wave operator
+self-correcting K1 Wave operator
   binds a known law to an actor and learns when it is applicable
 
 external causal law discovery (for example, MICRO-12 research)
@@ -1918,20 +1978,20 @@ external causal law discovery (for example, MICRO-12 research)
 Their loop is:
 
 ```text
-latent predictor ranks candidate consequences
+K2 candidate model ranks explicit relations and safe probes
 -> external discovery probes and proposes a new verified law
 -> Wave compresses repeated experience into centers
 -> actor executes the law
 -> verifier classifies the consequence
--> prediction error updates latent dynamics
+-> prediction error updates only the frozen K2 research lineage
 -> applicability evidence updates Wave boundaries
 -> unexplained hard contradiction returns to causal discovery
 ```
 
 The external researcher is not part of the hot runtime and has no execution
-authority. The latent predictor does not authorize actions. Wave phase centers
-remain a separate compact memory for recognition and applicability; they are
-not the JEPA latent state.
+authority. The K2 candidate model does not authorize actions, certify laws, or
+mutate K1 phase memory. Wave phase centers remain a separate compact memory for
+recognition and applicability; they are not the K2 hidden representation.
 
 ## 6. Runtime Boundary
 
@@ -2010,8 +2070,8 @@ core. Never turn discovery into selection among a few pre-named programs.
 13. Serving and learning remain streaming, event-driven Rust with low idle CPU.
 14. One algorithmic mechanism changes at a time; refactoring and scoring changes
     are separate commits.
-15. JEPA-like latent predictions, Wave applicability evidence, and verifier
-    truth are three different signals. They must have separate state and update
+15. K2 hidden predictions, K1 Wave applicability evidence, and verifier truth
+    are three different signals. They must have separate state and update
     rules; none may masquerade as another.
 16. ACTIVE generations are immutable. Verified feedback can only construct a
     separately proven candidate generation.
@@ -2115,7 +2175,7 @@ These mistakes have already damaged coverage and must not be repeated:
 - Improving dashboards, gates, or infrastructure while ordinary CPU coverage
   remains unchanged, then reporting the technical PASS as product progress.
 - Performing a broad academically motivated rewrite before understanding and
-  reproducing the original L1/L2/L3 behavior.
+  reproducing the original W1/W2/W3 behavior.
 - Mixing a move-only refactor with a learning/scoring change, making regressions
   impossible to attribute.
 - Mutating an ACTIVE center in place from live feedback. Result: destroyed proof
