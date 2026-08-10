@@ -4,6 +4,8 @@ use super::projection::projection_for;
 use super::selection_authority::validate_queue_derivation;
 use super::*;
 
+const K1_SCHEDULER_AUTHORITY_READ_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub(crate) fn handle_authority_line(
     config: &CertificationAuthorityConfigV1,
     signing_key: &SigningKey,
@@ -434,7 +436,7 @@ pub(super) fn send_authority_request<T: Serialize>(
         let mut stream = UnixStream::connect(&config.authority_socket_path)
             .map_err(|error| format!("k1_scheduler_authority_connect:{error}"))?;
         stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
+            .set_read_timeout(Some(K1_SCHEDULER_AUTHORITY_READ_TIMEOUT))
             .map_err(|error| format!("k1_scheduler_authority_read_timeout:{error}"))?;
         stream
             .set_write_timeout(Some(Duration::from_secs(5)))
