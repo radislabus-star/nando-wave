@@ -1620,6 +1620,14 @@ async fn control_dashboard_snapshot(
             "available": true,
             "dashboard_build": live_dashboard::build_id(),
             "generated_at_unix": metric_u64(economics, "generated_at_unix"),
+            "ingress": {
+                "scope": "ordinary_gateway_traffic_since_watermark",
+                "started_at_unix": metric_u64(miner, "window_started_at_unix"),
+                "input_tokens": metric_u64(miner, "ordinary_tokens"),
+                "requests": metric_u64(miner, "ordinary_intents"),
+                "historical_prefix": "unknown",
+                "complete_since_watermark": true,
+            },
             "product": {
                 "current_epoch": {
                     "scope": "current_v4_accounting_epoch",

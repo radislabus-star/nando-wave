@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v7";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v8";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -382,16 +382,22 @@ const TEMPLATE: &str = r#"
           <span role="columnheader">Контур</span><span role="columnheader">Вход</span><span role="columnheader">Результат</span><span role="columnheader">Доля</span>
         </div>
         <div class="ledger-row" role="row">
-          <div class="ledger-title" role="rowheader"><strong>Вся история сервера</strong><span>весь записанный ordinary traffic</span></div>
-          <div class="ledger-cell" data-label="Вход" role="cell"><strong id="lifetime-total">__LIFETIME_TOTAL__</strong><span>входных токенов</span></div>
-          <div class="ledger-cell" data-label="CPU" role="cell"><strong id="lifetime-cpu" class="good">__LIFETIME_CPU__</strong><span>воспроизведено на CPU</span></div>
-          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="lifetime-share">__LIFETIME_SHARE__</strong><span>CPU / весь сервер · допуск <b id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</b></span></div>
+          <div class="ledger-title" role="rowheader"><strong>Весь ingress сервера</strong><span>все ordinary-запросы, дошедшие до gateway</span></div>
+          <div class="ledger-cell" data-label="Токены" role="cell"><strong id="ingress-total">__MINER_SEEN__</strong><span>входных токенов</span></div>
+          <div class="ledger-cell" data-label="Запросы" role="cell"><strong id="ingress-requests">__MINER_SEEN_INTENTS__</strong><span>ordinary-запросов</span></div>
+          <div class="ledger-cell ledger-share" data-label="Граница" role="cell"><strong id="ingress-since">С WATERMARK</strong><span>непрерывный счётчик · до watermark: <b class="nd-status bad">UNKNOWN</b></span></div>
         </div>
         <div class="ledger-row" role="row">
-          <div class="ledger-title" role="rowheader"><strong>Окно майнера</strong><span id="miner-window-start">отдельный watermark</span></div>
+          <div class="ledger-title" role="rowheader"><strong>Распознавание майнера</strong><span id="miner-window-start">тот же ingress watermark</span></div>
           <div class="ledger-cell" data-label="Увидел" role="cell"><strong id="miner-seen">__MINER_SEEN__</strong><span><b id="miner-seen-intents">__MINER_SEEN_INTENTS__</b> запросов</span></div>
           <div class="ledger-cell" data-label="Распознал" role="cell"><strong id="miner-recognized" class="good">__MINER_RECOGNIZED__</strong><span><b id="miner-recognized-intents">__MINER_RECOGNIZED_INTENTS__</b> запросов</span></div>
-          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="miner-share">__MINER_RECOGNIZED_SHARE__</strong><span>распознано / увидено · не смешивать с историей сервера</span></div>
+          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="miner-share">__MINER_RECOGNIZED_SHARE__</strong><span>распознано / весь измеряемый ingress</span></div>
+        </div>
+        <div class="ledger-row" role="row">
+          <div class="ledger-title" role="rowheader"><strong>CPU economics ledger</strong><span>отдельный учётный знаменатель · это не весь ingress</span></div>
+          <div class="ledger-cell" data-label="Учтено" role="cell"><strong id="economics-total">__LIFETIME_TOTAL__</strong><span>токенов в accounting partitions</span></div>
+          <div class="ledger-cell" data-label="CPU" role="cell"><strong id="economics-cpu" class="good">__LIFETIME_CPU__</strong><span>воспроизведено на CPU</span></div>
+          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="economics-share">__LIFETIME_SHARE__</strong><span>CPU / economics ledger · допуск <b id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</b></span></div>
         </div>
       </div>
     </section>
@@ -458,6 +464,7 @@ const TEMPLATE: &str = r#"
       window.location.reload();
       return;
     }
+    const ingress = snapshot.ingress || {};
     const lifetime = snapshot.product?.lifetime || {};
     const miner = snapshot.miner || {};
     const discovery = snapshot.discovery || {};
@@ -465,9 +472,12 @@ const TEMPLATE: &str = r#"
     const k1 = snapshot.k1 || {};
     sourceGeneratedAt = snapshot.generated_at_unix || 0;
 
-    text("lifetime-total", number.format(lifetime.input_tokens || 0));
-    text("lifetime-cpu", number.format(lifetime.cpu_tokens || 0));
-    text("lifetime-share", percent(lifetime.cpu_tokens || 0, lifetime.input_tokens || 0));
+    text("ingress-total", number.format(ingress.input_tokens || 0));
+    text("ingress-requests", number.format(ingress.requests || 0));
+    text("ingress-since", ingress.started_at_unix > 0 ? `С ${localTime(ingress.started_at_unix)}` : "WATERMARK UNKNOWN");
+    text("economics-total", number.format(lifetime.input_tokens || 0));
+    text("economics-cpu", number.format(lifetime.cpu_tokens || 0));
+    text("economics-share", percent(lifetime.cpu_tokens || 0, lifetime.input_tokens || 0));
     text("cpu-gate", safety.cpu_allowed ? "ОТКРЫТ" : "ЗАКРЫТ");
     className("cpu-gate", `nd-status ${safety.cpu_allowed ? "good" : "bad"}`);
 
@@ -555,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn dashboard_shows_only_the_two_comparable_traffic_pairs_and_law_two() {
+    fn dashboard_separates_ingress_miner_and_economics_denominators() {
         let html = render(InitialMetrics {
             server_total_tokens: 7_694_807_361,
             server_cpu_tokens: 207_619_587,
@@ -570,13 +580,17 @@ mod tests {
             cpu_allowed: true,
         });
         assert!(html.contains("Трафик и CPU"));
-        assert!(html.contains("Вся история сервера"));
+        assert!(html.contains("Весь ingress сервера"));
+        assert!(html.contains("все ordinary-запросы, дошедшие до gateway"));
+        assert!(html.contains("до watermark: <b class=\"nd-status bad\">UNKNOWN</b>"));
         assert!(html.contains("7 694 807 361"));
         assert!(html.contains("207 619 587"));
         assert!(html.contains("2,70%"));
         assert!(html.contains("10 882 437 482"));
         assert!(html.contains("1 613 584 240"));
-        assert!(html.contains("не смешивать с историей сервера"));
+        assert!(html.contains("Распознавание майнера"));
+        assert!(html.contains("CPU economics ledger"));
+        assert!(html.contains("это не весь ingress"));
         assert!(html.contains("Law #2"));
         assert!(html.contains("id=\"catalog-cohorts\""));
         assert!(html.contains("readiness-PASS сейчас"));
@@ -587,7 +601,7 @@ mod tests {
         assert!(html.contains("verified ordinary CPU"));
         assert!(!html.contains("повторяемых <b"));
         assert!(!html.contains("все доступные epistemic modes уже доказаны"));
-        assert_eq!(html.matches("class=\"ledger-row\"").count(), 2);
+        assert_eq!(html.matches("class=\"ledger-row\"").count(), 3);
         assert!(!html.contains("class=\"flow-index\""));
         assert!(html.contains("/api/v1/dashboard"));
         assert!(!html.contains("Диагностика"));
