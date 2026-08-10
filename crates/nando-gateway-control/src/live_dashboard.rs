@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v9";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v10";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -346,6 +346,8 @@ const TEMPLATE: &str = r#"
 .control-v6 .law-counts { display:flex; flex-wrap:wrap; gap:7px 24px; margin:0; color:#c9cfd2; font-size:12px; line-height:1.5; }
 .control-v6 .law-counts span { white-space:nowrap; }
 .control-v6 .law-counts b { color:#f0f3f4; font-size:15px; font-weight:720; }
+.control-v6 .vocabulary-slots { padding-bottom:16px; border-bottom:1px solid var(--line); }
+.control-v6 .discovery-label { margin:16px 0 8px; color:#e5e9eb; font-size:12px; font-weight:720; }
 .control-v6 .law-blocker { margin:14px 0 0; color:#b7bec1; font-size:12px; line-height:1.55; }
 .control-v6 .law-blocker span,.control-v6 .law-next { color:var(--muted); }
 .control-v6 .law-blocker b { color:#e4e8ea; font-weight:680; }
@@ -422,12 +424,18 @@ const TEMPLATE: &str = r#"
       </div>
     </section>
 
-    <section class="law" aria-labelledby="law2-title">
+    <section class="law" aria-labelledby="l1-title">
       <div class="law-head">
-        <div class="law-title"><h2 id="law2-title">Law #2</h2><span>следующий естественный закон K1 · K1 <b id="k1-laws-main">—</b> · источник <b id="k1-source">—</b></span></div>
-        <strong id="law2-state" class="law-verdict">ЗАГРУЗКА</strong>
+        <div class="law-title"><h2 id="l1-title">Алфавит L1</h2><span>K1 Vocabulary · источник <b id="k1-source">—</b></span></div>
+        <strong id="k1-progress" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
       <div class="law-body">
+        <p class="law-counts vocabulary-slots">
+          <span>Law #1 <b id="law1-state">—</b></span>
+          <span>Law #2 <b id="law2-state">—</b></span>
+          <span>Law #3 <b id="law3-state">—</b></span>
+        </p>
+        <p class="discovery-label">Поиск Law #2</p>
         <p class="law-counts">
           <span>live-когорт <b id="catalog-cohorts">—</b></span>
           <span>readiness-PASS сейчас <b id="ready-now">—</b></span>
@@ -521,10 +529,20 @@ const TEMPLATE: &str = r#"
 
     const k1Available = k1.available === true && Number.isFinite(k1.law_certificates);
     const lawCount = k1Available ? k1.law_certificates : null;
-    const law2Proved = k1Available && lawCount >= 2;
     const law2Active = discovery.active_candidate === true;
-    text("law2-state", k1Available ? (law2Proved ? "ДОКАЗАН" : "НЕ ДОКАЗАН") : "UNKNOWN");
-    className("law2-state", `law-verdict ${law2Proved ? "good" : ""}`);
+    const minimumLaws = k1.min_law_certificates || 3;
+    const slotState = threshold => !k1Available
+      ? "UNKNOWN"
+      : lawCount >= threshold
+        ? "PASS"
+        : lawCount + 1 === threshold
+          ? "ПОИСК"
+          : "WAIT";
+    text("k1-progress", k1Available ? `${number.format(lawCount)} / ${number.format(minimumLaws)} ДОКАЗАНО` : "UNKNOWN");
+    className("k1-progress", `law-verdict ${k1Available && lawCount >= minimumLaws ? "good" : ""}`);
+    text("law1-state", slotState(1));
+    text("law2-state", slotState(2));
+    text("law3-state", slotState(3));
     text("catalog-cohorts", number.format(discovery.catalog_cohorts || 0));
     text("generations-checked", number.format(discovery.completed_generations || 0));
     text("ready-now", number.format(discovery.ready_now || 0));
@@ -546,7 +564,6 @@ const TEMPLATE: &str = r#"
     text("parity-failures", number.format(safety.parity_failures || 0));
     text("transport-failures", number.format(safety.transport_failures || 0));
     text("pending-work", `${number.format(safety.structural_pending || 0)} / ${number.format(safety.opportunity_pending || 0)}`);
-    text("k1-laws-main", k1Available ? `${number.format(lawCount)} / ${number.format(k1.min_law_certificates || 3)}` : "UNKNOWN");
     text("k1-source", readable(k1.source || "unavailable"));
 
     const current = {
@@ -646,7 +663,11 @@ mod tests {
         assert!(html.contains("677</b> upstream не вызван"));
         assert!(html.contains("это не весь ingress"));
         assert!(html.contains("С момента открытия страницы"));
+        assert!(html.contains("Алфавит L1"));
+        assert!(html.contains("Law #1"));
         assert!(html.contains("Law #2"));
+        assert!(html.contains("Law #3"));
+        assert!(html.contains("id=\"k1-progress\""));
         assert!(html.contains("id=\"k1-source\""));
         assert!(html.contains("id=\"catalog-cohorts\""));
         assert!(html.contains("readiness-PASS сейчас"));
