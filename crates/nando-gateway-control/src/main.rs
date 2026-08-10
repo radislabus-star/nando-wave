@@ -2332,19 +2332,14 @@ mod tests {
     fn dashboard_k1_gate_uses_validated_durable_ledger_and_never_invents_zero() {
         let ledger = OperatorCertificationLedgerV1::empty().expect("empty ledger");
         let durable = serde_json::to_value(&ledger).expect("ledger json");
-        let snapshot = k1_gate_snapshot_from_values(
-            &json!({"k1_vocabulary_gate": null}),
-            durable.clone(),
-        );
+        let snapshot =
+            k1_gate_snapshot_from_values(&json!({"k1_vocabulary_gate": null}), durable.clone());
         assert_eq!(snapshot["available"], true);
         assert_eq!(snapshot["source"], "durable_operator_certification_ledger");
         assert_eq!(snapshot["law_certificates"], 0);
 
         let gate = ledger.k1_vocabulary_gate().expect("empty gate");
-        let live = k1_gate_snapshot_from_values(
-            &json!({"k1_vocabulary_gate": gate}),
-            Value::Null,
-        );
+        let live = k1_gate_snapshot_from_values(&json!({"k1_vocabulary_gate": gate}), Value::Null);
         assert_eq!(live["available"], true);
         assert_eq!(live["source"], "live_ms4_projection");
 
