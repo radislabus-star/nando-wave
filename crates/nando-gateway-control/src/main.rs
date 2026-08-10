@@ -138,8 +138,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         .unwrap_or(&fallback_economics);
     let (epoch_total_tokens, epoch_cpu_tokens) =
         exact_current_epoch_token_totals(economics).unwrap_or((0, 0));
-    let (server_total_tokens, server_cpu_tokens) =
-        exact_token_totals(economics).unwrap_or((0, 0));
+    let (server_total_tokens, server_cpu_tokens) = exact_token_totals(economics).unwrap_or((0, 0));
     let miner = exact_miner_opportunity(&live_miner, &persisted_miner).unwrap_or(&Value::Null);
     let admission = admission_status(&state.config);
     let dashboard = live_dashboard::render(live_dashboard::InitialMetrics {
