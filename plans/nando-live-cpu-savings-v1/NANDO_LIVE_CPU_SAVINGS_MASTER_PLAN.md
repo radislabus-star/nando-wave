@@ -677,7 +677,7 @@ As of the verified baseline:
 | Raw Phase as sole natural synthesis path | `PARTIAL`; production causal route not proved |
 | Natural Law #2 | `NOT PROVED` |
 | K1 minimum basis | `NO`, 1/3 |
-| K2 grounded meaning | `BLOCKED` by K1 basis and missing transition/baseline contracts |
+| K2 grounded meaning | `BLOCKED` by K1 basis and missing goal-bound decision/baseline contracts |
 | Provider-billed money savings | `UNKNOWN` |
 
 ## 14. Ordered Delivery
@@ -706,14 +706,20 @@ As of the verified baseline:
    false bad apply. This is a minimum K2 seed, not a completed alphabet or a
    limit on further K1 CPU laws.
 9. Build `GroundedTransitionEpisodeV1` as a read-only cold projection of
-   durable K1 actor/verifier receipts. Freeze ID, surface, retrieval, and typed
-   effect-algebra baselines before training any hidden representation.
-10. Open the K2 grounded-meaning experiment over the frozen K1 basis. The
+   durable K1 actor/verifier receipts, then run the no-model S1B census. Only
+   episodes with a pre-action `TypedGoalContractV1`, applicable K1 alternatives,
+   frozen outcome horizon, and exact goal-satisfaction receipt may become
+   `GroundedDecisionEpisodeV1`; the rest remain `DYNAMICS_ONLY`.
+10. Freeze ID, surface, retrieval, typed effect-algebra, and bounded typed-search
+   baselines before training any hidden representation. If a required goal,
+   action-alternative, intervention, horizon, or lineage-disjoint surface is
+   empty, stop the model route and repair capture or grow K1 instead.
+11. Open the K2 grounded-meaning experiment over the frozen K1 basis. The
    hidden model may propose relations and probes but may not supply authority.
-   MS7 is only the bounded executor; an explicit meta-law must survive
-   substitution, intervention, novel composition, independent natural future,
-   and the existing certificate/admission route.
-11. Continue product portfolio optimization independently, with the next target
+   MS7 is only the bounded executor; an explicit meta-law must survive goal and
+   action intervention, substitution, delayed horizon, novel composition,
+   independent natural future, and the existing certificate/admission route.
+12. Continue product portfolio optimization independently, with the next target
    being stable >=10% global current-epoch token savings and then progressively
    higher verified coverage.
 
@@ -748,9 +754,10 @@ M4 K1 MINIMUM BASIS
   status: CLOSED
 
 M5 K2 GROUNDED MEANING
-  hidden representation beats frozen typed-algebra baseline
-  implementation substitution + causal/nuisance intervention PASS
-  explicit composition/equivalence law discovered from K1 transitions
+  pre-action goal + alternatives + frozen horizon are independently bound
+  hidden representation beats frozen bounded typed-search baseline
+  goal/action + substitution + causal/nuisance + horizon intervention PASS
+  explicit composition/equivalence law discovered from K1 decision episodes
   no supplied DAG, family mapping, episode IDs, or latent authority
   independent natural future and MetaSkillPackage
   status: BLOCKED

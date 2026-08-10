@@ -376,7 +376,7 @@ W3  transferable action-induction representation
 
 K0  source-neutral relation and execution primitives
 K1  certified operational action laws
-K2  grounded meanings and composition laws over verified transitions
+K2  grounded meanings and composition laws over verified decisions
 K3  verified strategies over K2 meanings
 K4  methods that improve strategy and law discovery
 ```
@@ -458,7 +458,7 @@ crates/nando-response-actor/src/online_subcenter.rs
 crates/nando-response-actor/src/cegis.rs
 ```
 
-### K2: grounded meanings over verified transitions
+### K2: grounded meanings over verified decisions
 
 A K1 law has real operational semantics:
 
@@ -470,39 +470,56 @@ pre-action structural state
 -> independently verified consequence
 ```
 
-K2 asks a different question: can Nando discover a compact invariant that
-preserves this meaning across different implementations, causal interventions,
-and novel action compositions? Composition is one scored surface; a supplied
-or merely executable DAG is not K2 understanding.
+K2 asks a different question: can Nando discover a compact goal-conditioned
+invariant that predicts which bounded action or composition reaches a typed
+goal across implementations, causal interventions, and novel action
+compositions? Composition is one scored surface; a supplied or merely
+executable DAG is not K2 understanding.
 
-The unit of K2 evidence is a verified transition, not a permanent vector stored
-inside one operator:
-
-```text
-state + constraints + roles + K1 action + VerifiedDeltaReceipt + next state
--> GroundedTransitionEpisodeV1
-```
-
-The first candidate mechanism is JEPA-inspired:
+A verified transition is an atomic fact, not yet meaning. Transition-only
+prediction may prove dynamics while remaining blind to why an action was
+selected and which alternatives existed. The K2 unit is a verified decision
+episode:
 
 ```text
-pre-action context -> context encoder -> h_t
-source-neutral K1 action contract -> action encoder -> a_t
-h_t + a_t + u_t -> predictor -> predicted target representation
-verified post-action transition -> target encoder -> observed representation
+pre-action observation + typed goal + constraints + observation mask
++ applicable K1 actions including ABSTAIN + frozen outcome horizon
++ selected action or sequence + verified transitions + goal satisfaction
+-> GroundedDecisionEpisodeV1
 ```
 
-`h_t` is a candidate meaning representation. `u_t` is uncertainty or missing
-information and must remain distinct. Neither is truth, a law identity, or
-execution authority. The representation belongs to a versioned model snapshot
-and transition episode; it is never serialized into BundleV4.
+`GroundedTransitionEpisodeV1` remains the read-only atomic receipt projection.
+An episode without a pre-action goal or meaningful alternative is
+`DYNAMICS_ONLY` and cannot support a K2 meaning claim. Law Lab may supply exact
+counterfactual alternatives, but never natural future or authority.
+The goal-binding receipt freezes before action selection and cannot inspect the
+selected action, package identity, actor output, or post-action state.
 
-The hidden model must compete against ID, surface, retrieval, and the strongest
-explicit typed-effect-algebra baseline. It earns a scoped representation claim
-only through frozen lineage-disjoint tests of implementation substitution,
-causal intervention, nuisance invariance, novel composition, and natural
-post-freeze future. If explicit algebra performs as well, the result is
-`EXPLICIT_ALGEBRA_SUFFICIENT`, not semantic grokking.
+The first candidate mechanism is action-conditioned and JEPA-inspired:
+
+```text
+pre-action observation -> context encoder -> z_s
+typed goal + constraints + horizon -> goal encoder -> z_g
+source-neutral K1 action contract -> action encoder -> z_a
+z_s + z_g + z_a + u_t -> predicted delta, satisfaction, target representation
+verified transition sequence + satisfaction -> observed target representation
+```
+
+The induced relation `m(state, goal, action, horizon)` is only a candidate
+meaning equivalence. `z_s`, `z_g`, and `z_a` are coordinates; `u_t` is
+uncertainty. None is truth, a law identity, or execution authority. The
+representation belongs to a versioned model snapshot and decision episode; it
+is never serialized into BundleV4.
+
+The hidden model must compete against ID, surface, retrieval, typed-effect
+algebra, and bounded typed planning over the same K1 contracts. Matching the
+planner with less compute proves search compression only. It earns a scoped
+meaning claim only by beating the planner at matched information and compute
+through frozen lineage-disjoint tests of goal and
+action intervention, implementation substitution, causal intervention,
+nuisance invariance, delayed horizon, novel composition, and natural
+post-freeze future. If explicit planning is sufficient, the result is
+`EXPLICIT_PLANNER_SUFFICIENT`, not semantic grokking.
 
 The hidden model may rank candidates and safe probes. It cannot execute, issue
 a certificate, mutate Wave phase memory, or enter runtime authority. A useful
@@ -1965,8 +1982,8 @@ These are distinct responsibilities, not competing implementations:
 
 ```text
 K2 grounded-meaning candidate model
-  encodes a transition-conditioned representation and predicts a heldout
-  consequence under a source-neutral K1 action contract
+  encodes a goal-conditioned decision representation and predicts heldout
+  consequences and satisfaction across bounded K1 action alternatives
 
 self-correcting K1 Wave operator
   binds a known law to an actor and learns when it is applicable
@@ -2072,7 +2089,8 @@ core. Never turn discovery into selection among a few pre-named programs.
     are separate commits.
 15. K2 hidden predictions, K1 Wave applicability evidence, and verifier truth
     are three different signals. They must have separate state and update
-    rules; none may masquerade as another.
+    rules; none may masquerade as another. A K2 goal and outcome horizon must
+    be captured before action; post-action success cannot invent purpose.
 16. ACTIVE generations are immutable. Verified feedback can only construct a
     separately proven candidate generation.
 17. BackwardWave updates require a typed `VerifiedDeltaReceipt` whose observed

@@ -10,7 +10,9 @@ Forward recursive-meaning architecture:
 
 The forward contract keeps K1 operational laws, K2 grounded meanings, and the
 historical W1/W2/W3 Wave representation layers in separate namespaces. It does
-not rewrite or promote any frozen evidence receipt in this directory.
+not rewrite or promote any frozen evidence receipt in this directory. K2 meaning
+is goal-conditioned decision evidence, not a latent alias for one verified
+transition.
 
 This directory contains one migration ladder and its immutable checkpoint
 evidence. Read the ladder in order; do not infer current authority from the

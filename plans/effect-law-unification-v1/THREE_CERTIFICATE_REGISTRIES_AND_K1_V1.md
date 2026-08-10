@@ -114,12 +114,16 @@ Wave was the necessary discovery mechanism.
 
 This `3 / 3` gate is a minimum experimental seed, not a completed alphabet and
 not a cap on K1. Every additional independently certified K1 law can increase
-CPU coverage and provide more diverse grounded transitions for K2.
+CPU coverage and provide more diverse verified transitions for K2.
 
 K2 receives frozen source-neutral K1 action contracts plus independently
-verified transition views. It does not receive a prepared composition DAG,
-family mapping, meta-skill name, correct ordering, exact episode identity, tool
-name, field name, or latent vector as law identity.
+verified decision episodes. Every meaning-eligible episode binds a pre-action
+typed goal, constraints, observation mask, applicable K1 action alternatives,
+frozen outcome horizon, transition sequence, and independently verified goal
+satisfaction. A transition without an honest goal or alternative remains
+`DYNAMICS_ONLY`. K2 does not receive a prepared composition DAG, family mapping,
+meta-skill name, correct ordering, exact episode identity, tool name, field
+name, or latent vector as law identity.
 
 A hidden representation may rank an explicit equivalence or composition
 candidate only under

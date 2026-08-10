@@ -443,49 +443,39 @@ LLM внутри hot operator           != CPU-native learned skill</pre></div>
 <section class="page">
   <header>
     <div class="brand">02B / GROUNDED MEANING</div>
-    <div class="meta">Скрытая гипотеза · явная проверка · нулевая самоавторизация</div>
+    <div class="meta">Цель до действия · альтернативы · явная проверка</div>
   </header>
 
-  <h1>Смысл принадлежит переходу,<br>а не имени оператора</h1>
+  <h1>Смысл принадлежит решению,<br>а не вектору оператора</h1>
   <p class="lead">
     K1 уже несёт операционный смысл: когда действие применимо и какой точный
-    эффект оно создаёт. K2 должен обнаружить общий инвариант разных реализаций
-    этого эффекта. Вектор внутри <code>COUNT</code> ничего не доказывает;
-    доказательство появляется только при переносе на новые реализации,
+    эффект оно создаёт. Но <code>state + action -> next state</code> доказывает
+    только динамику. K2 должен связать состояние, цель, допустимые альтернативы
+    и проверенный исход, а затем перенести эту связь на новые реализации,
     вмешательства и композиции.
   </p>
 
-  <div class="tree"><pre>durable K1 actor + independent verifier receipts
+  <div class="tree"><pre>durable actor + independent verifier receipts
+-> GroundedTransitionEpisodeV1             ATOMIC FACT / DYNAMICS
+
+pre-action TypedGoalContractV1
++ constraints + observation mask + frozen horizon
++ applicable K1 actions including ABSTAIN
++ selected action/sequence + verified goal satisfaction
+-> GroundedDecisionEpisodeV1               UNIT OF K2 EVIDENCE
           |
           v
-GroundedTransitionEpisodeV1                         COLD / READ-ONLY
-├─ pre-action structural state
-├─ observed constraints + grounded roles
-├─ source-neutral K1 action contract
-├─ VerifiedDeltaReceipt + post-action state
-└─ lineage / natural-or-lab provenance
-          |
-          v
-context encoder -> h_t            action encoder -> a_t
-          \                         /
-           + action-conditioned predictor + u_t
-                          |
-                          v
-                 predicted target representation
-                          |
-                independent scored consequence
-                          |
-                          v
-explicit equivalence / composition candidate
--> version space -> semantic quotient -> natural future
+state z_s + goal z_g + action z_a + uncertainty u_t
+-> predicted delta / satisfaction / target representation
+-> model-induced equivalence m(state, goal, action, horizon)
+-> explicit candidate -> identifier -> natural future
 -> MetaSkillPackage -> verifier -> External Admission</pre></div>
 
   <div class="band">
     <strong>Критическая граница:</strong>
-    <code>h_t</code> — кандидат representation; <code>u_t</code> — неизвестные
-    факторы. Ни один из них не является truth, <code>law_id</code> или runtime
-    authority. Model snapshot живёт в cold research plane и не сериализуется
-    в BundleV4.
+    цель фиксируется до действия. Нет цели или значимой альтернативы — эпизод
+    <code>DYNAMICS_ONLY</code>. Latent-координаты не являются meaning,
+    <code>law_id</code> или runtime authority и не входят в BundleV4.
   </div>
 
   <h2>Чем смысл обязан победить</h2>
@@ -494,46 +484,54 @@ explicit equivalence / composition candidate
       <tr><th>Контроль</th><th>Что он объясняет без «понимания»</th><th>Требование</th></tr>
     </thead>
     <tbody>
-      <tr><td>ID / hash</td><td>Запоминание episode, package, cohort или source</td><td class="held">Исключить features и lineage leak</td></tr>
-      <tr><td>Surface</td><td>Формат, длина, лексика, частота topology</td><td class="held">Новая форма не должна ломать смысл</td></tr>
+      <tr><td>ID + surface</td><td>Запоминание identity, формы и частоты</td><td class="held">Исключить features и leakage</td></tr>
       <tr><td>Retrieval</td><td>Ближайший известный verified transition</td><td class="held">Новая реализация и композиция</td></tr>
       <tr><td>Typed algebra</td><td>Явные роли, effects, guards и composition rules</td><td class="held">Сильнейший обязательный baseline</td></tr>
-      <tr><td>Hidden model</td><td>Общий predictive invariant</td><td class="watch">Должен превзойти сильнейший baseline</td></tr>
+      <tr><td>Typed search</td><td>Bounded exhaustive planning над теми же K1</td><td class="held">Сильнейший научный baseline</td></tr>
+      <tr><td>Hidden model</td><td>Goal-conditioned predictive invariant</td><td class="watch">Meaning: победить baseline</td></tr>
     </tbody>
   </table>
 
-  <h2>Пять замороженных экзаменов</h2>
+  <h2>Замороженные экзамены</h2>
   <div class="cols">
-    <div class="avoid"><pre>IMPLEMENTATION SUBSTITUTION
-разные K1 programs -> тот же effect
+    <div class="avoid"><pre>GOAL INTERVENTION
+та же action, другая goal
+
+ACTION ALTERNATIVE
+та же goal, другая available action
 
 CAUSAL INTERVENTION
 важная relation меняется -> prediction меняется
 
 NUISANCE INTERVENTION
 поверхность меняется -> prediction сохраняется</pre></div>
-    <div class="avoid"><pre>NOVEL COMPOSITION
+    <div class="avoid"><pre>IMPLEMENTATION SUBSTITUTION
+разные K1 programs -> тот же verified effect
+
+HORIZON CHALLENGE
+один immediate delta, разные delayed effects
+
+NOVEL COMPOSITION
 новый набор / порядок K1 actions
 
 NATURAL FUTURE
-post-freeze ordinary transition
-
-EMPTY SURFACE
-WATCH, никогда не zero-error PASS</pre></div>
+post-freeze ordinary decision episode</pre></div>
   </div>
 
-  <h2>Четыре независимых verdict</h2>
-  <div class="tree"><pre>K2_REPRESENTATION_PASS  hidden model переносит лучше baselines
-K2_LAW_PASS             явный meta-law прошёл natural future
-K2_MECHANISM_PASS       hidden representation причинно необходим
-K2_PRODUCT_PASS         MetaSkill исполнил ordinary traffic на CPU
+  <h2>Шесть независимых verdict</h2>
+  <div class="tree"><pre>K2_DYNAMICS_PASS   unseen transition prediction; ещё не meaning
+K2_COMPRESSION_PASS exact planner quality при меньшем compute; ещё не meaning
+K2_MEANING_PASS    goal/action/intervention transfer лучше baselines
+K2_LAW_PASS        явный meta-law прошёл natural future
+K2_MECHANISM_PASS  hidden representation причинно необходим
+K2_PRODUCT_PASS    MetaSkill исполнил ordinary traffic на CPU
 
 Ни один verdict не наследует другой.</pre></div>
 
   <div class="footer">
     Полный контракт: <code>GROUNDED_MEANING_ARCHITECTURE_V1.md</code>.
-    Первый implementation slice — read-only episode projection, затем B0–B3;
-    обучение модели до этих двух границ запрещено.
+    Сначала transition projection и decision census, затем B0–B4. Если хотя бы
+    один required surface пуст, обучение модели не начинается.
   </div>
 </section>
 
@@ -1120,12 +1118,14 @@ BundleV4 + verifier + admission
 новые transition receipts</pre>
     </div>
     <div class="avoid">
-      <h3>K2 · смысл над переходами</h3>
-      <pre>разные K1 transitions
+      <h3>K2 · смысл над решениями</h3>
+      <pre>pre-action goals + K1 alternatives
   ↓
-explicit baselines + hidden model
+verified decision episodes
   ↓
-substitution / interventions / composition
+typed-search baseline + hidden model
+  ↓
+goal/action/horizon interventions
   ↓
 explicit meta-law + natural future
   ↓
@@ -1141,30 +1141,28 @@ MetaSkillPackage</pre>
   </div>
 
   <h2>Следующий научный эксперимент</h2>
-  <div class="tree"><pre>durable K1 receipts
+  <div class="tree"><pre>durable K1 receipts + pre-action goal contracts
   |
   v
-S1  GroundedTransitionEpisodeV1          READ-ONLY / NO AUTHORITY
+S1A  GroundedTransitionEpisodeV1           FACT / NO AUTHORITY
   |
   v
-S2  ID + surface + retrieval + typed-algebra baselines
+S1B  GroundedDecisionEpisodeV1 census      NO MODEL
   |
   v
-S3  frozen MeaningModelSnapshotV1
+S2   ID + surface + retrieval + typed algebra/search baselines
   |
   v
-S4  implementation substitution
-    + causal intervention
-    + nuisance invariance
-    + novel composition
-    + independent natural future
+S3   frozen MeaningModelSnapshotV1
   |
-  +-> hidden <= typed algebra
-  |      EXPLICIT_ALGEBRA_SUFFICIENT
+  +-> required surface empty               STOP / GROW K1 OR CAPTURE
   |
-  `-> hidden beats baselines
-         K2_REPRESENTATION_PASS only
-         -> explicit law -> MetaSkill -> verifier -> admission</pre></div>
+  `-> goal/action/substitution/horizon/composition holdouts
+       + independent natural future
+       -> hidden = planner, cheaper          K2_COMPRESSION_PASS only
+       -> hidden <= typed search             EXPLICIT_PLANNER_SUFFICIENT
+       -> hidden beats baseline             K2_MEANING_PASS only
+       -> explicit law -> MetaSkill -> verifier -> admission</pre></div>
 
   <h2>Три раздельных научных вопроса</h2>
   <table>
@@ -1174,15 +1172,15 @@ S4  implementation substitution
     <tbody>
       <tr><td>Работает ли K1 law на CPU?</td><td>ExecutionCertificate + ordinary receipt</td><td class="ok">PASS для Law #1</td></tr>
       <tr><td>Нужен ли Wave для рождения exact law?</td><td>MechanismCertificate + causal ablations</td><td class="watch">COLLECTING / отдельно</td></tr>
-      <tr><td>Возник ли K2 grounded meaning?</td><td>Baselines + interventions + transfer + explicit meta-law</td><td class="held">NOT EVALUATED</td></tr>
+      <tr><td>Возник ли K2 grounded meaning?</td><td>Goal-bound decisions + alternatives + baselines + transfer</td><td class="held">NOT EVALUATED</td></tr>
     </tbody>
   </table>
 
   <div class="band">
     <strong>Жёсткие запреты:</strong>
-    latent vector не становится <code>law_id</code>; Law Lab не становится
-    natural future; готовый DAG не считается discovery; hidden predictor не
-    выполняет hot accept; пустой holdout остаётся WATCH.
+    outcome не придумывает цель задним числом; transition prediction не
+    называется meaning; latent vector не становится <code>law_id</code>; Law Lab
+    не становится natural future; hidden predictor не выполняет hot accept.
   </div>
 
   <p class="rule small">
@@ -1195,8 +1193,8 @@ S4  implementation substitution
   <div class="footer">
     Canonical detail:
     <code>plans/effect-law-unification-v1/GROUNDED_MEANING_ARCHITECTURE_V1.md</code>.
-    Первая допустимая реализация: S1 episode projection; model training до
-    leakage audit и B0-B3 baseline freeze запрещён.
+    Первая допустимая реализация: S1A transition projection и S1B decision
+    census; model training до leakage audit и B0-B4 baseline freeze запрещён.
   </div>
 </section>
 
