@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v8";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v9";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -11,6 +11,7 @@ pub(crate) struct InitialMetrics {
     pub(crate) epoch_total_events: u64,
     pub(crate) epoch_cpu_tokens: u64,
     pub(crate) epoch_cpu_accepts: u64,
+    pub(crate) epoch_avoided_calls: u64,
     pub(crate) miner_window_total_tokens: u64,
     pub(crate) miner_window_total_intents: u64,
     pub(crate) miner_window_cpu_tokens: u64,
@@ -200,6 +201,10 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
             &format_number(initial.epoch_cpu_accepts),
         )
         .replace(
+            "__EPOCH_AVOIDED__",
+            &format_number(initial.epoch_avoided_calls),
+        )
+        .replace(
             "__LIFETIME_TOTAL__",
             &format_number(initial.server_total_tokens),
         )
@@ -326,6 +331,9 @@ const TEMPLATE: &str = r#"
 .control-v6 .ledger-cell strong { display:block; color:#f2f4f5; font-size:22px; font-weight:720; line-height:1.15; overflow-wrap:anywhere; }
 .control-v6 .ledger-cell strong.good,.control-v6 .ledger-share strong { color:var(--green); }
 .control-v6 .ledger-cell span { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.35; }
+.control-v6 .ledger-cell span b { color:#cbd1d4; font-weight:680; }
+.control-v6 .live-window { display:flex; flex-wrap:wrap; gap:6px 22px; padding:12px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; line-height:1.45; }
+.control-v6 .live-window strong { color:#e5e9eb; font-weight:700; }
 .control-v6 .law { margin-top:34px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .control-v6 .law-head { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:64px; border-bottom:1px solid var(--line); }
 .control-v6 .law-title { display:flex; align-items:baseline; gap:12px; min-width:0; }
@@ -394,17 +402,29 @@ const TEMPLATE: &str = r#"
           <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="miner-share">__MINER_RECOGNIZED_SHARE__</strong><span>распознано / весь измеряемый ingress</span></div>
         </div>
         <div class="ledger-row" role="row">
-          <div class="ledger-title" role="rowheader"><strong>CPU economics ledger</strong><span>отдельный учётный знаменатель · это не весь ingress</span></div>
+          <div class="ledger-title" role="rowheader"><strong>CPU savings · текущая V4-эпоха</strong><span>только запросы текущего accounting epoch</span></div>
+          <div class="ledger-cell" data-label="Вход" role="cell"><strong id="epoch-total">__EPOCH_TOTAL__</strong><span><b id="epoch-requests">__EPOCH_REQUESTS__</b> учтённых запросов</span></div>
+          <div class="ledger-cell" data-label="CPU" role="cell"><strong id="epoch-cpu" class="good">__EPOCH_CPU__</strong><span><b id="epoch-accepts">__EPOCH_ACCEPTS__</b> CPU accepts · <b id="epoch-avoided">__EPOCH_AVOIDED__</b> upstream не вызван</span></div>
+          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="epoch-share">__EPOCH_SHARE__</strong><span>CPU / текущая V4-эпоха · допуск <b id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</b></span></div>
+        </div>
+        <div class="ledger-row" role="row">
+          <div class="ledger-title" role="rowheader"><strong>CPU economics · вся история</strong><span>отдельный учётный знаменатель · это не весь ingress</span></div>
           <div class="ledger-cell" data-label="Учтено" role="cell"><strong id="economics-total">__LIFETIME_TOTAL__</strong><span>токенов в accounting partitions</span></div>
           <div class="ledger-cell" data-label="CPU" role="cell"><strong id="economics-cpu" class="good">__LIFETIME_CPU__</strong><span>воспроизведено на CPU</span></div>
-          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="economics-share">__LIFETIME_SHARE__</strong><span>CPU / economics ledger · допуск <b id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</b></span></div>
+          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="economics-share">__LIFETIME_SHARE__</strong><span>CPU / вся учтённая история</span></div>
         </div>
+      </div>
+      <div class="live-window" aria-label="Изменения с момента открытия страницы">
+        <strong>С момента открытия страницы</strong>
+        <span>ingress: <b id="live-ingress-tokens">+0</b> токенов · <b id="live-ingress-requests">+0</b> запросов</span>
+        <span>CPU: <b id="live-cpu-tokens">+0</b> токенов · <b id="live-cpu-accepts">+0</b> accepts</span>
+        <span>upstream не вызван: <b id="live-avoided">+0</b></span>
       </div>
     </section>
 
     <section class="law" aria-labelledby="law2-title">
       <div class="law-head">
-        <div class="law-title"><h2 id="law2-title">Law #2</h2><span>следующий естественный закон K1 · K1 <b id="k1-laws-main">—</b></span></div>
+        <div class="law-title"><h2 id="law2-title">Law #2</h2><span>следующий естественный закон K1 · K1 <b id="k1-laws-main">—</b> · источник <b id="k1-source">—</b></span></div>
         <strong id="law2-state" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
       <div class="law-body">
@@ -421,7 +441,7 @@ const TEMPLATE: &str = r#"
     </section>
   </div>
 
-  <footer class="nd-foot"><div class="nd-inner"><div class="safety-line"><span>false accepts <b id="false-accepts">—</b></span><span>parity failures <b id="parity-failures">—</b></span></div><span>build __DASHBOARD_BUILD__</span></div></footer>
+  <footer class="nd-foot"><div class="nd-inner"><div class="safety-line"><span>false accepts <b id="false-accepts">—</b></span><span>parity failures <b id="parity-failures">—</b></span><span>transport failures cumulative <b id="transport-failures">—</b></span><span>pending structural/opportunity <b id="pending-work">—</b></span></div><span>build __DASHBOARD_BUILD__</span></div></footer>
 </main>
 <script>
 (() => {
@@ -431,6 +451,7 @@ const TEMPLATE: &str = r#"
   let lastSuccess = Date.now();
   let sourceGeneratedAt = 0;
   let refreshing = false;
+  let liveBaseline = null;
   const node = id => document.getElementById(id);
   const text = (id, value) => { const target = node(id); if (target) target.textContent = value; };
   const className = (id, value) => { const target = node(id); if (target) target.className = value; };
@@ -456,6 +477,9 @@ const TEMPLATE: &str = r#"
     probe_exhausted:"PROBE EXHAUSTED",
     abstain:"ABSTAIN",
     pass:"PASS",
+    live_ms4_projection:"LIVE MS4",
+    durable_operator_certification_ledger:"DURABLE LEDGER",
+    unavailable:"UNKNOWN",
   }[value] || String(value || "—").replaceAll("_", " "));
 
   const renderDashboard = snapshot => {
@@ -465,6 +489,7 @@ const TEMPLATE: &str = r#"
       return;
     }
     const ingress = snapshot.ingress || {};
+    const epoch = snapshot.product?.current_epoch || {};
     const lifetime = snapshot.product?.lifetime || {};
     const miner = snapshot.miner || {};
     const discovery = snapshot.discovery || {};
@@ -478,6 +503,12 @@ const TEMPLATE: &str = r#"
     text("economics-total", number.format(lifetime.input_tokens || 0));
     text("economics-cpu", number.format(lifetime.cpu_tokens || 0));
     text("economics-share", percent(lifetime.cpu_tokens || 0, lifetime.input_tokens || 0));
+    text("epoch-total", number.format(epoch.input_tokens || 0));
+    text("epoch-requests", number.format(epoch.requests || 0));
+    text("epoch-cpu", number.format(epoch.cpu_tokens || 0));
+    text("epoch-accepts", number.format(epoch.cpu_accepts || 0));
+    text("epoch-avoided", number.format(epoch.avoided_upstream_calls || 0));
+    text("epoch-share", percent(epoch.cpu_tokens || 0, epoch.input_tokens || 0));
     text("cpu-gate", safety.cpu_allowed ? "ОТКРЫТ" : "ЗАКРЫТ");
     className("cpu-gate", `nd-status ${safety.cpu_allowed ? "good" : "bad"}`);
 
@@ -488,10 +519,11 @@ const TEMPLATE: &str = r#"
     text("miner-share", percent(miner.recognized_tokens || 0, miner.seen_tokens || 0));
     text("miner-window-start", `окно с ${localTime(miner.started_at_unix || 0)} · отдельный watermark`);
 
-    const lawCount = k1.law_certificates || 0;
-    const law2Proved = lawCount >= 2;
+    const k1Available = k1.available === true && Number.isFinite(k1.law_certificates);
+    const lawCount = k1Available ? k1.law_certificates : null;
+    const law2Proved = k1Available && lawCount >= 2;
     const law2Active = discovery.active_candidate === true;
-    text("law2-state", law2Proved ? "ДОКАЗАН" : "НЕ ДОКАЗАН");
+    text("law2-state", k1Available ? (law2Proved ? "ДОКАЗАН" : "НЕ ДОКАЗАН") : "UNKNOWN");
     className("law2-state", `law-verdict ${law2Proved ? "good" : ""}`);
     text("catalog-cohorts", number.format(discovery.catalog_cohorts || 0));
     text("generations-checked", number.format(discovery.completed_generations || 0));
@@ -512,7 +544,25 @@ const TEMPLATE: &str = r#"
 
     text("false-accepts", number.format(safety.false_accepts || 0));
     text("parity-failures", number.format(safety.parity_failures || 0));
-    text("k1-laws-main", `${number.format(k1.law_certificates || 0)} / ${number.format(k1.min_law_certificates || 3)}`);
+    text("transport-failures", number.format(safety.transport_failures || 0));
+    text("pending-work", `${number.format(safety.structural_pending || 0)} / ${number.format(safety.opportunity_pending || 0)}`);
+    text("k1-laws-main", k1Available ? `${number.format(lawCount)} / ${number.format(k1.min_law_certificates || 3)}` : "UNKNOWN");
+    text("k1-source", readable(k1.source || "unavailable"));
+
+    const current = {
+      ingressTokens: ingress.input_tokens || 0,
+      ingressRequests: ingress.requests || 0,
+      cpuTokens: epoch.cpu_tokens || 0,
+      cpuAccepts: epoch.cpu_accepts || 0,
+      avoided: epoch.avoided_upstream_calls || 0,
+    };
+    if (!liveBaseline) liveBaseline = current;
+    const delta = (value, baseline) => Math.max(0, value - baseline);
+    text("live-ingress-tokens", `+${number.format(delta(current.ingressTokens, liveBaseline.ingressTokens))}`);
+    text("live-ingress-requests", `+${number.format(delta(current.ingressRequests, liveBaseline.ingressRequests))}`);
+    text("live-cpu-tokens", `+${number.format(delta(current.cpuTokens, liveBaseline.cpuTokens))}`);
+    text("live-cpu-accepts", `+${number.format(delta(current.cpuAccepts, liveBaseline.cpuAccepts))}`);
+    text("live-avoided", `+${number.format(delta(current.avoided, liveBaseline.avoided))}`);
 
     text("services", `${number.format(safety.services_active || 0)}/${number.format(safety.services_expected || 3)}`);
     lastSuccess = Date.now();
@@ -573,6 +623,7 @@ mod tests {
             epoch_total_events: 5_704,
             epoch_cpu_tokens: 165_104_290,
             epoch_cpu_accepts: 677,
+            epoch_avoided_calls: 677,
             miner_window_total_tokens: 10_882_437_482,
             miner_window_total_intents: 49_122,
             miner_window_cpu_tokens: 1_613_584_240,
@@ -589,9 +640,14 @@ mod tests {
         assert!(html.contains("10 882 437 482"));
         assert!(html.contains("1 613 584 240"));
         assert!(html.contains("Распознавание майнера"));
-        assert!(html.contains("CPU economics ledger"));
+        assert!(html.contains("CPU savings · текущая V4-эпоха"));
+        assert!(html.contains("CPU economics · вся история"));
+        assert!(html.contains("677</b> CPU accepts"));
+        assert!(html.contains("677</b> upstream не вызван"));
         assert!(html.contains("это не весь ingress"));
+        assert!(html.contains("С момента открытия страницы"));
         assert!(html.contains("Law #2"));
+        assert!(html.contains("id=\"k1-source\""));
         assert!(html.contains("id=\"catalog-cohorts\""));
         assert!(html.contains("readiness-PASS сейчас"));
         assert!(html.contains("id=\"generations-checked\""));
@@ -601,7 +657,7 @@ mod tests {
         assert!(html.contains("verified ordinary CPU"));
         assert!(!html.contains("повторяемых <b"));
         assert!(!html.contains("все доступные epistemic modes уже доказаны"));
-        assert_eq!(html.matches("class=\"ledger-row\"").count(), 3);
+        assert_eq!(html.matches("class=\"ledger-row\"").count(), 4);
         assert!(!html.contains("class=\"flow-index\""));
         assert!(html.contains("/api/v1/dashboard"));
         assert!(!html.contains("Диагностика"));
@@ -622,6 +678,7 @@ mod tests {
             epoch_total_events: 2,
             epoch_cpu_tokens: 0,
             epoch_cpu_accepts: 0,
+            epoch_avoided_calls: 0,
             miner_window_total_tokens: 40,
             miner_window_total_intents: 2,
             miner_window_cpu_tokens: 0,

@@ -670,6 +670,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "nando-operator-admission",
  "serde",
  "serde_json",
  "sha2",

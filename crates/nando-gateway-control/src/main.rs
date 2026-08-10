@@ -19,6 +19,7 @@ use nando_gateway_control::{
     ControlConfig, GatewayMode, admission_status, apply_mode, read_state, reconcile_startup,
     service_statuses,
 };
+use nando_operator_admission::{K1VocabularyGateV1, OperatorCertificationLedgerV1};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -49,6 +50,8 @@ const STRUCTURAL_FRONTIER_CENSUS_PATH: &str =
     "/var/lib/nando-wave/transition/multi-source-live-v2/structural-frontier-census-v2/latest.json";
 const NATURAL_VOCABULARY_CENSUS_PATH: &str =
     "/var/lib/nando-wave/proofs/natural-vocabulary-census/latest.json";
+const OPERATOR_CERTIFICATION_LEDGER_PATH: &str = "/var/lib/nando-wave/transition/\
+multi-source-live-v2/ms4-closed-loop-v1/operator-certification-ledger-v1.json";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -148,6 +151,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         epoch_total_events: metric_u64(economics, "terminal_request_events"),
         epoch_cpu_tokens,
         epoch_cpu_accepts: metric_u64(economics, "actual_local_accepts"),
+        epoch_avoided_calls: metric_u64(economics, "avoided_calls"),
         miner_window_total_tokens: metric_u64(miner, "ordinary_tokens"),
         miner_window_total_intents: metric_u64(miner, "ordinary_intents"),
         miner_window_cpu_tokens: metric_u64(miner, "verified_tokens"),
@@ -669,6 +673,7 @@ async fn legacy_control_page(Path(key): Path<String>, State(state): State<AppSta
         epoch_total_events: metric_u64(&economics, "terminal_request_events"),
         epoch_cpu_tokens: current_epoch_cpu_tokens,
         epoch_cpu_accepts: metric_u64(&economics, "actual_local_accepts"),
+        epoch_avoided_calls: metric_u64(&economics, "avoided_calls"),
         miner_window_total_tokens: visible_miner_tokens,
         miner_window_total_intents: metric_u64(online_opportunity, "ordinary_intents"),
         miner_window_cpu_tokens: metric_u64(online_opportunity, "verified_tokens"),
@@ -1605,10 +1610,7 @@ async fn control_dashboard_snapshot(
         metric_u64(&natural_vocabulary_census, "cohorts_total")
     };
     let queue_rows = metric_u64(&k1_scheduler, "queue_rows");
-    let k1_gate = ms4_closed_loop
-        .get("k1_vocabulary_gate")
-        .cloned()
-        .unwrap_or_else(|| json!({}));
+    let k1_gate = k1_gate_snapshot(&ms4_closed_loop);
     let economics_false_accepts = metric_u64(economics, "false_accepts");
     let economics_parity = metric_u64(economics, "runtime_parity_mismatches");
     let admission = admission_status(&state.config);
@@ -1619,7 +1621,7 @@ async fn control_dashboard_snapshot(
             "schema": "nando.control-dashboard-snapshot.v1",
             "available": true,
             "dashboard_build": live_dashboard::build_id(),
-            "generated_at_unix": metric_u64(economics, "generated_at_unix"),
+            "generated_at_unix": unix_now(),
             "ingress": {
                 "scope": "ordinary_gateway_traffic_since_watermark",
                 "started_at_unix": metric_u64(miner, "window_started_at_unix"),
@@ -1822,6 +1824,47 @@ fn collection_blockers_text(status: &Value) -> String {
 
 fn metric_u64(metrics: &Value, key: &str) -> u64 {
     metrics.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn k1_gate_snapshot(ms4: &Value) -> Value {
+    k1_gate_snapshot_from_values(
+        ms4,
+        read_json(std::path::Path::new(OPERATOR_CERTIFICATION_LEDGER_PATH)),
+    )
+}
+
+fn k1_gate_snapshot_from_values(ms4: &Value, durable: Value) -> Value {
+    if let Some(gate) = ms4
+        .get("k1_vocabulary_gate")
+        .filter(|value| value.is_object())
+        .and_then(|value| serde_json::from_value::<K1VocabularyGateV1>(value.clone()).ok())
+        .filter(|gate| gate.validate().is_ok())
+    {
+        return sourced_k1_gate(gate, "live_ms4_projection");
+    }
+
+    if let Ok(ledger) = serde_json::from_value::<OperatorCertificationLedgerV1>(durable)
+        && let Ok(gate) = ledger.k1_vocabulary_gate()
+    {
+        return sourced_k1_gate(gate, "durable_operator_certification_ledger");
+    }
+
+    json!({
+        "available": false,
+        "source": "unavailable",
+        "law_certificates": null,
+        "min_law_certificates": 3,
+        "open": false,
+    })
+}
+
+fn sourced_k1_gate(gate: K1VocabularyGateV1, source: &str) -> Value {
+    let mut value = serde_json::to_value(gate).unwrap_or_else(|_| json!({}));
+    if let Some(object) = value.as_object_mut() {
+        object.insert("available".to_owned(), Value::Bool(true));
+        object.insert("source".to_owned(), Value::String(source.to_owned()));
+    }
+    value
 }
 
 fn active_response_package_count(registry: &Value) -> u64 {
@@ -2283,6 +2326,32 @@ mod tests {
             ]
         });
         assert_eq!(active_response_package_count(&registry), 1);
+    }
+
+    #[test]
+    fn dashboard_k1_gate_uses_validated_durable_ledger_and_never_invents_zero() {
+        let ledger = OperatorCertificationLedgerV1::empty().expect("empty ledger");
+        let durable = serde_json::to_value(&ledger).expect("ledger json");
+        let snapshot = k1_gate_snapshot_from_values(
+            &json!({"k1_vocabulary_gate": null}),
+            durable.clone(),
+        );
+        assert_eq!(snapshot["available"], true);
+        assert_eq!(snapshot["source"], "durable_operator_certification_ledger");
+        assert_eq!(snapshot["law_certificates"], 0);
+
+        let gate = ledger.k1_vocabulary_gate().expect("empty gate");
+        let live = k1_gate_snapshot_from_values(
+            &json!({"k1_vocabulary_gate": gate}),
+            Value::Null,
+        );
+        assert_eq!(live["available"], true);
+        assert_eq!(live["source"], "live_ms4_projection");
+
+        let unavailable =
+            k1_gate_snapshot_from_values(&json!({"k1_vocabulary_gate": null}), Value::Null);
+        assert_eq!(unavailable["available"], false);
+        assert!(unavailable["law_certificates"].is_null());
     }
 
     #[test]
