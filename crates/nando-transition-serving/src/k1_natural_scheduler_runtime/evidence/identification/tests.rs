@@ -9,8 +9,10 @@ use super::{
 };
 use nando_operator_learning::multi_source::{
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2, natural_t1_discovery_basis_root_v1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3, natural_t1_discovery_basis_root_v1,
+    natural_t1_discovery_basis_root_v2,
 };
 
 fn root(value: u64) -> String {
@@ -99,12 +101,24 @@ fn capture_generation_compatibility_is_exact_and_versioned() {
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
         &generation,
     ));
+    assert!(capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3,
+        &generation,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
+        &generation,
+    ));
+    assert!(!capture_generation_matches(
+        K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+        &generation,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
+        &generation,
+    ));
 }
 
 #[test]
-fn v3_identification_rejects_an_uninstalled_discovery_basis() {
-    let installed = natural_t1_discovery_basis_root_v1().expect("installed basis");
-    validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, &installed)
+fn versioned_identification_rejects_an_uninstalled_discovery_basis() {
+    let installed_v1 = natural_t1_discovery_basis_root_v1().expect("installed v1 basis");
+    validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, &installed_v1)
         .expect("supported basis");
     assert_eq!(
         validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, &root(99),),
@@ -112,6 +126,16 @@ fn v3_identification_rejects_an_uninstalled_discovery_basis() {
     );
     validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, "")
         .expect("legacy basis compatibility");
+    let installed_v2 = natural_t1_discovery_basis_root_v2().expect("installed v2 basis");
+    validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4, &installed_v2)
+        .expect("supported quotient basis");
+    assert_eq!(
+        validate_installed_discovery_basis_fields(
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
+            &installed_v1,
+        ),
+        Err("k1_runtime_discovery_basis_unsupported".to_owned())
+    );
 }
 
 #[test]

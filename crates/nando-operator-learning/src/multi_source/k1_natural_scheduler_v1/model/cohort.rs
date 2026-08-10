@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use super::evidence::K1ConsequenceTypeV1;
 use super::{
-    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
-    K1CandidateReadinessV1, strict_roots,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3,
+    K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, K1CandidateReadinessV1, strict_roots,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -51,7 +51,7 @@ pub struct K1NaturalCohortCatalogV1 {
 
 #[derive(Serialize)]
 struct CandidateDigestV1<'a> {
-    schema: &'static str,
+    schema: &'a str,
     candidate_structural_root_sha256: &'a str,
     capture_generation_root_sha256: &'a str,
     source_neutral_topology_root_sha256: &'a str,
@@ -83,8 +83,10 @@ impl K1NaturalCohortCandidateV1 {
             self.semantic_novelty_signature_root_sha256.as_str(),
             self.evidence_manifest_root_sha256.as_str(),
         ];
-        if self.schema != K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2
-            || !roots.into_iter().all(valid_nonzero_sha256)
+        if !matches!(
+            self.schema.as_str(),
+            K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2 | K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3
+        ) || !roots.into_iter().all(valid_nonzero_sha256)
             || self.generator_schema.is_empty()
             || self.evidence_rows == 0
             || self.settled_rows > self.evidence_rows
@@ -102,7 +104,7 @@ impl K1NaturalCohortCandidateV1 {
 
     pub(in super::super) fn expected_root(&self) -> Result<String, &'static str> {
         canonical_json_sha256(&CandidateDigestV1 {
-            schema: K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2,
+            schema: self.schema.as_str(),
             capture_generation_root_sha256: &self.capture_generation_root_sha256,
             candidate_structural_root_sha256: &self.candidate_structural_root_sha256,
             source_neutral_topology_root_sha256: &self.source_neutral_topology_root_sha256,

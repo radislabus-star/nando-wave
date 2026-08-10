@@ -420,54 +420,165 @@ pub(super) fn continuation_handle_scalar(
 ) -> Result<ExtractedScalar, &'static str> {
     if !matches!(
         value_type,
-        AtomValueType::Identifier | AtomValueType::String
+        AtomValueType::Identifier | AtomValueType::String | AtomValueType::Integer
     ) {
         return Err("continuation_handle_type");
     }
-    let output =
-        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
-    continuation_handle_scalar_from_output(output, value_type)
+    let mut candidates = BTreeMap::new();
+    for output_ordinal in 1_u16..=64 {
+        let Ok(output) = active_turn_output_value(provider_payload, Some(output_ordinal)) else {
+            break;
+        };
+        for scalar in continuation_handle_candidates_from_output(output)? {
+            if continuation_type_compatible(scalar.value_type, value_type) {
+                let key =
+                    serde_json::to_vec(&scalar.value).map_err(|_| "continuation_handle_encode")?;
+                candidates.insert(
+                    key,
+                    ExtractedScalar {
+                        value: scalar.value,
+                        value_type,
+                    },
+                );
+            }
+        }
+    }
+    if let Ok(output) = active_turn_output_value(provider_payload, None) {
+        for scalar in continuation_handle_candidates_from_output(output)? {
+            if continuation_type_compatible(scalar.value_type, value_type) {
+                let key =
+                    serde_json::to_vec(&scalar.value).map_err(|_| "continuation_handle_encode")?;
+                candidates.insert(
+                    key,
+                    ExtractedScalar {
+                        value: scalar.value,
+                        value_type,
+                    },
+                );
+            }
+        }
+    }
+    unique_continuation_handle(candidates)
 }
 
-pub(super) fn continuation_handle_scalar_from_output(
+pub(super) fn continuation_handle_scalar_from_output_any(
     output: &Value,
-    value_type: AtomValueType,
 ) -> Result<ExtractedScalar, &'static str> {
-    if !matches!(
-        value_type,
-        AtomValueType::Identifier | AtomValueType::String
-    ) {
-        return Err("continuation_handle_type");
-    }
-    let mut matches = output_text_parts(output)?
+    let candidates = continuation_handle_candidates_from_output(output)?
         .into_iter()
-        .flat_map(str::lines)
-        .filter_map(|line| {
-            let line = line.trim();
-            [
-                "Script running with cell ID ",
-                "Process running with session ID ",
-            ]
-            .into_iter()
-            .find_map(|prefix| line.strip_prefix(prefix))
+        .map(|scalar| {
+            serde_json::to_vec(&(scalar.value_type, &scalar.value))
+                .map(|key| (key, scalar))
+                .map_err(|_| "continuation_handle_encode")
         })
-        .filter_map(|tail| tail.split_whitespace().next())
-        .filter(|value| {
-            !value.is_empty()
-                && value
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
-        })
-        .collect::<Vec<_>>();
-    matches.sort_unstable();
-    matches.dedup();
-    if matches.len() != 1 {
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    unique_continuation_handle(candidates)
+}
+
+fn continuation_handle_candidates_from_output(
+    output: &Value,
+) -> Result<Vec<ExtractedScalar>, &'static str> {
+    let mut candidates = Vec::new();
+    if matches!(output, Value::Object(_)) {
+        collect_structured_continuation_handles(output, 0, &mut candidates)?;
+    }
+    if matches!(output, Value::String(_) | Value::Array(_)) {
+        for text in output_text_parts(output)? {
+            for line in text.lines() {
+                let line = line.trim();
+                let Some(value) = [
+                    "Script running with cell ID ",
+                    "Process running with session ID ",
+                ]
+                .into_iter()
+                .find_map(|prefix| line.strip_prefix(prefix))
+                .and_then(|tail| tail.split_whitespace().next())
+                .filter(|value| identifier_like(value)) else {
+                    continue;
+                };
+                candidates.push(ExtractedScalar {
+                    value: Value::String(value.to_owned()),
+                    value_type: AtomValueType::Identifier,
+                });
+            }
+            for object in runtime_embedded_json_objects(text) {
+                collect_structured_continuation_handles(
+                    &Value::Object(object),
+                    0,
+                    &mut candidates,
+                )?;
+            }
+        }
+    }
+    let mut unique = BTreeMap::new();
+    for candidate in candidates {
+        let key = serde_json::to_vec(&(candidate.value_type, &candidate.value))
+            .map_err(|_| "continuation_handle_encode")?;
+        unique.insert(key, candidate);
+    }
+    Ok(unique.into_values().collect())
+}
+
+fn collect_structured_continuation_handles(
+    value: &Value,
+    depth: usize,
+    output: &mut Vec<ExtractedScalar>,
+) -> Result<(), &'static str> {
+    if depth > 8 || output.len() >= 64 {
+        return Err("continuation_handle_budget");
+    }
+    match value {
+        Value::Object(object) => {
+            for (field, value) in object {
+                if matches!(field.as_str(), "session_id" | "cell_id") {
+                    let scalar = match value {
+                        Value::Number(number) if number.is_i64() || number.is_u64() => {
+                            Some(ExtractedScalar {
+                                value: value.clone(),
+                                value_type: AtomValueType::Integer,
+                            })
+                        }
+                        Value::String(text) if identifier_like(text) => Some(ExtractedScalar {
+                            value: value.clone(),
+                            value_type: AtomValueType::Identifier,
+                        }),
+                        _ => None,
+                    };
+                    if let Some(scalar) = scalar {
+                        output.push(scalar);
+                    }
+                }
+                collect_structured_continuation_handles(value, depth + 1, output)?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_structured_continuation_handles(value, depth + 1, output)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn continuation_type_compatible(actual: AtomValueType, expected: AtomValueType) -> bool {
+    actual == expected
+        || matches!(
+            (actual, expected),
+            (AtomValueType::Identifier, AtomValueType::String)
+        )
+}
+
+fn unique_continuation_handle(
+    mut candidates: BTreeMap<Vec<u8>, ExtractedScalar>,
+) -> Result<ExtractedScalar, &'static str> {
+    if candidates.len() != 1 {
         return Err("continuation_handle_ambiguous");
     }
-    Ok(ExtractedScalar {
-        value: Value::String(matches[0].to_owned()),
-        value_type,
-    })
+    candidates
+        .pop_first()
+        .map(|(_, scalar)| scalar)
+        .ok_or("continuation_handle_ambiguous")
 }
 
 #[doc(hidden)]
@@ -1617,4 +1728,89 @@ fn identifier_like(value: &str) -> bool {
         && value.bytes().all(|byte| {
             byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b':' | b'/')
         })
+}
+
+#[cfg(test)]
+mod continuation_handle_tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn structured_integer_handle_is_selected_across_the_active_turn() {
+        let payload = json!({"input":[
+            {
+                "type":"custom_tool_call_output",
+                "output":"{\"session_id\":60906,\"output\":\"running\"}"
+            },
+            {
+                "type":"custom_tool_call_output",
+                "output":"ordinary later output"
+            }
+        ]});
+
+        assert_eq!(
+            continuation_handle_scalar(&payload, AtomValueType::Integer)
+                .expect("integer continuation"),
+            ExtractedScalar {
+                value: json!(60906),
+                value_type: AtomValueType::Integer,
+            }
+        );
+    }
+
+    #[test]
+    fn two_distinct_structured_handles_fail_closed() {
+        let payload = json!({"input":[
+            {"type":"function_call_output","output":"{\"session_id\":41}"},
+            {"type":"function_call_output","output":"{\"session_id\":42}"}
+        ]});
+
+        assert_eq!(
+            continuation_handle_scalar(&payload, AtomValueType::Integer),
+            Err("continuation_handle_ambiguous")
+        );
+    }
+
+    #[test]
+    fn latest_handle_remains_visible_beyond_addressable_output_ordinals() {
+        let mut input = (0..64)
+            .map(|index| {
+                json!({
+                    "type":"function_call_output",
+                    "output":format!("ordinary output {index}")
+                })
+            })
+            .collect::<Vec<_>>();
+        input.push(json!({
+            "type":"custom_tool_call_output",
+            "output":"{\"session_id\":60906,\"output\":\"running\"}"
+        }));
+        let payload = json!({"input": input});
+
+        assert_eq!(
+            continuation_handle_scalar(&payload, AtomValueType::Integer)
+                .expect("latest continuation"),
+            ExtractedScalar {
+                value: json!(60906),
+                value_type: AtomValueType::Integer,
+            }
+        );
+    }
+
+    #[test]
+    fn malformed_text_parts_fail_closed_instead_of_hiding_a_handle() {
+        let payload = json!({"input":[
+            {
+                "type":"function_call_output",
+                "output":[{"type":"unsupported","text":"{\"session_id\":41}"}]
+            },
+            {"type":"function_call_output","output":"{\"session_id\":42}"}
+        ]});
+
+        assert_eq!(
+            continuation_handle_scalar(&payload, AtomValueType::Integer),
+            Err("unsupported_output_part_type")
+        );
+    }
 }

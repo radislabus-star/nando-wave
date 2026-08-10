@@ -426,42 +426,153 @@ fn independently_continuation_handle(
 ) -> Result<VerifierScalar, ResponseVerificationError> {
     if !matches!(
         value_type,
-        AtomValueType::Identifier | AtomValueType::String
+        AtomValueType::Identifier | AtomValueType::String | AtomValueType::Integer
     ) {
         return Err(ResponseVerificationError("continuation_handle_type"));
     }
-    let output = independently_latest_tool_output(provider_payload)?;
-    let mut matches = Vec::new();
-    for text in independently_bounded_output_text_parts(output)? {
-        for line in text.lines() {
-            let line = line.trim();
-            let tail = [
-                "Script running with cell ID ",
-                "Process running with session ID ",
-            ]
-            .into_iter()
-            .find_map(|prefix| line.strip_prefix(prefix));
-            let Some(value) = tail.and_then(|tail| tail.split_whitespace().next()) else {
-                continue;
-            };
-            if !value.is_empty()
-                && value
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
-            {
-                matches.push(value.to_owned());
+    let mut candidates = BTreeMap::new();
+    for output_ordinal in 1_u16..=64 {
+        let Ok(output) =
+            independently_active_turn_output_value(provider_payload, Some(output_ordinal))
+        else {
+            break;
+        };
+        independently_collect_continuation_candidates(output, value_type, &mut candidates)?;
+    }
+    if let Ok(output) = independently_active_turn_output_value(provider_payload, None) {
+        independently_collect_continuation_candidates(output, value_type, &mut candidates)?;
+    }
+    if candidates.len() != 1 {
+        return Err(ResponseVerificationError("continuation_handle_cardinality"));
+    }
+    candidates
+        .pop_first()
+        .map(|(_, scalar)| scalar)
+        .ok_or(ResponseVerificationError("continuation_handle_cardinality"))
+}
+
+fn independently_collect_continuation_candidates(
+    output: &Value,
+    expected_type: AtomValueType,
+    candidates: &mut BTreeMap<Vec<u8>, VerifierScalar>,
+) -> Result<(), ResponseVerificationError> {
+    for scalar in independently_continuation_candidates_from_output(output)? {
+        if scalar.value_type == expected_type
+            || matches!(
+                (scalar.value_type, expected_type),
+                (AtomValueType::Identifier, AtomValueType::String)
+            )
+        {
+            let key = serde_json::to_vec(&scalar.value)
+                .map_err(|_| ResponseVerificationError("continuation_handle_serialization"))?;
+            candidates.insert(
+                key,
+                VerifierScalar {
+                    value: scalar.value,
+                    value_type: expected_type,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn independently_continuation_candidates_from_output(
+    output: &Value,
+) -> Result<Vec<VerifierScalar>, ResponseVerificationError> {
+    let mut candidates = Vec::new();
+    if matches!(output, Value::Object(_)) {
+        independently_collect_structured_continuation_handles(output, 0, &mut candidates)?;
+    }
+    if matches!(output, Value::String(_) | Value::Array(_)) {
+        for text in independently_bounded_output_text_parts(output)? {
+            for line in text.lines() {
+                let line = line.trim();
+                let Some(value) = [
+                    "Script running with cell ID ",
+                    "Process running with session ID ",
+                ]
+                .into_iter()
+                .find_map(|prefix| line.strip_prefix(prefix))
+                .and_then(|tail| tail.split_whitespace().next())
+                .filter(|value| independently_continuation_identifier_like(value)) else {
+                    continue;
+                };
+                candidates.push(VerifierScalar {
+                    value: Value::String(value.to_owned()),
+                    value_type: AtomValueType::Identifier,
+                });
+            }
+            for object in independently_embedded_json_objects(text) {
+                independently_collect_structured_continuation_handles(
+                    &Value::Object(object),
+                    0,
+                    &mut candidates,
+                )?;
             }
         }
     }
-    matches.sort();
-    matches.dedup();
-    if matches.len() != 1 {
-        return Err(ResponseVerificationError("continuation_handle_cardinality"));
+    let mut unique = BTreeMap::new();
+    for candidate in candidates {
+        let key = serde_json::to_vec(&(candidate.value_type, &candidate.value))
+            .map_err(|_| ResponseVerificationError("continuation_handle_serialization"))?;
+        unique.insert(key, candidate);
     }
-    Ok(VerifierScalar {
-        value: Value::String(matches.remove(0)),
-        value_type,
-    })
+    Ok(unique.into_values().collect())
+}
+
+fn independently_collect_structured_continuation_handles(
+    value: &Value,
+    depth: usize,
+    output: &mut Vec<VerifierScalar>,
+) -> Result<(), ResponseVerificationError> {
+    if depth > MAX_VERIFIER_DEPTH || output.len() >= MAX_VERIFIER_SCALARS {
+        return Err(ResponseVerificationError(
+            "continuation_handle_structure_budget",
+        ));
+    }
+    match value {
+        Value::Object(object) => {
+            for (field, value) in object {
+                if matches!(field.as_str(), "session_id" | "cell_id") {
+                    let scalar = match value {
+                        Value::Number(number) if number.is_i64() || number.is_u64() => {
+                            Some(VerifierScalar {
+                                value: value.clone(),
+                                value_type: AtomValueType::Integer,
+                            })
+                        }
+                        Value::String(text) if independently_continuation_identifier_like(text) => {
+                            Some(VerifierScalar {
+                                value: value.clone(),
+                                value_type: AtomValueType::Identifier,
+                            })
+                        }
+                        _ => None,
+                    };
+                    if let Some(scalar) = scalar {
+                        output.push(scalar);
+                    }
+                }
+                independently_collect_structured_continuation_handles(value, depth + 1, output)?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                independently_collect_structured_continuation_handles(value, depth + 1, output)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn independently_continuation_identifier_like(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b':' | b'/')
+        })
 }
 
 fn independently_unique_turn_scalar(
@@ -1505,4 +1616,193 @@ pub(super) fn sha256_scalar(value: &Value) -> Result<String, ResponseVerificatio
     let canonical = serde_json::to_vec(value)
         .map_err(|_| ResponseVerificationError("projection_serialization"))?;
     Ok(format!("{:x}", Sha256::digest(canonical)))
+}
+
+#[cfg(test)]
+mod continuation_handle_tests {
+    use nando_operator_kernel::{ResponseArgument, SemanticRole};
+    use nando_operator_kernel::{ResponseProgram, ResponseValueSelector, ValueProjectionFormat};
+    use nando_operator_runtime::{ResponseExecutionStatus, execute_response_unverified};
+    use serde_json::json;
+
+    use super::*;
+
+    fn integer_continuation_program() -> ResponseProgram {
+        ResponseProgram::project_selected_value(
+            ResponseValueSelector::ContinuationHandle {
+                value_type: AtomValueType::Integer,
+            },
+            ValueProjectionFormat::PlainText,
+            "pending",
+        )
+    }
+
+    fn actor_response(program: &ResponseProgram, payload: &Value) -> String {
+        let execution = execute_response_unverified(program, "", payload);
+        assert_eq!(execution.status, ResponseExecutionStatus::Executed);
+        execution.response.expect("actor response")
+    }
+
+    fn verify(
+        program: &ResponseProgram,
+        payload: &Value,
+        candidate: &str,
+    ) -> Result<(), ResponseVerificationError> {
+        let verifier = crate::verifier_program::source_neutral_verifier_for_program(program)
+            .expect("source-neutral verifier");
+        crate::verify_response_independently(&verifier, payload, candidate)
+    }
+
+    #[test]
+    fn actor_and_independent_verifier_select_the_same_integer_handle() {
+        let payload = json!({"input":[
+            {
+                "type":"custom_tool_call_output",
+                "output":"{\"chunk_id\":\"first\",\"session_id\":60906,\"output\":\"running\"}"
+            },
+            {"type":"custom_tool_call_output","output":"ordinary later output"}
+        ]});
+        let program = integer_continuation_program();
+
+        let candidate = actor_response(&program, &payload);
+        assert_eq!(candidate, "60906");
+        assert_eq!(verify(&program, &payload, &candidate), Ok(()));
+    }
+
+    #[test]
+    fn numeric_handle_executes_and_verifies_as_a_typed_function_argument() {
+        let payload = json!({"input":[{
+            "type":"custom_tool_call_output",
+            "output":"{\"session_id\":60906,\"output\":\"running\"}"
+        }]});
+        let program = ResponseProgram::function_call_from_roles(
+            "write_stdin",
+            ResponseValueSelector::ContinuationHandle {
+                value_type: AtomValueType::Integer,
+            },
+            vec![
+                ResponseArgument::Role {
+                    name: "session_id".to_owned(),
+                    role: SemanticRole::ContinuationHandle,
+                    value_type: Some(AtomValueType::Integer),
+                },
+                ResponseArgument::String {
+                    name: "chars".to_owned(),
+                    value: String::new(),
+                },
+                ResponseArgument::Integer {
+                    name: "yield_time_ms".to_owned(),
+                    value: 10_000,
+                },
+            ],
+        );
+
+        let candidate = actor_response(&program, &payload);
+        let decoded: Value = serde_json::from_str(&candidate).expect("function call json");
+        assert_eq!(decoded["arguments"]["session_id"], json!(60906));
+        assert_eq!(verify(&program, &payload, &candidate), Ok(()));
+    }
+
+    #[test]
+    fn two_distinct_handles_make_actor_and_verifier_fail_closed() {
+        let payload = json!({"input":[
+            {"type":"function_call_output","output":"{\"session_id\":41}"},
+            {"type":"function_call_output","output":"{\"cell_id\":42}"}
+        ]});
+        let program = integer_continuation_program();
+
+        let execution = execute_response_unverified(&program, "", &payload);
+        assert_eq!(execution.status, ResponseExecutionStatus::Abstain);
+        assert_eq!(
+            verify(&program, &payload, "41"),
+            Err(ResponseVerificationError("continuation_handle_cardinality"))
+        );
+    }
+
+    #[test]
+    fn latest_handle_after_sixty_four_outputs_is_visible_to_both_paths() {
+        let mut input = (0..64)
+            .map(|index| {
+                json!({
+                    "type":"function_call_output",
+                    "output":format!("ordinary output {index}")
+                })
+            })
+            .collect::<Vec<_>>();
+        input.push(json!({
+            "type":"custom_tool_call_output",
+            "output":"{\"session_id\":60906,\"output\":\"running\"}"
+        }));
+        let payload = json!({"input":input});
+        let program = integer_continuation_program();
+
+        let candidate = actor_response(&program, &payload);
+        assert_eq!(candidate, "60906");
+        assert_eq!(verify(&program, &payload, &candidate), Ok(()));
+    }
+
+    #[test]
+    fn verifier_rejects_mutated_or_missing_integer_handles() {
+        let program = integer_continuation_program();
+        let observed = json!({"input":[{
+            "type":"custom_tool_call_output",
+            "output":"{\"session_id\":60906}"
+        }]});
+        let mutated = json!({"input":[{
+            "type":"custom_tool_call_output",
+            "output":"{\"session_id\":60907}"
+        }]});
+        let missing = json!({"input":[{
+            "type":"custom_tool_call_output",
+            "output":"{\"output\":\"completed\"}"
+        }]});
+        let candidate = actor_response(&program, &observed);
+
+        assert_eq!(
+            verify(&program, &mutated, &candidate),
+            Err(ResponseVerificationError("response_mismatch"))
+        );
+        assert_eq!(
+            verify(&program, &missing, &candidate),
+            Err(ResponseVerificationError("continuation_handle_cardinality"))
+        );
+    }
+
+    #[test]
+    fn legacy_textual_handle_remains_identifier_compatible() {
+        let payload = json!({"input":[{
+            "type":"function_call_output",
+            "output":"Script running with cell ID cell-abc_1"
+        }]});
+        let selector = ResponseValueSelector::ContinuationHandle {
+            value_type: AtomValueType::Identifier,
+        };
+
+        assert_eq!(
+            independently_select_scalar(&payload, &selector),
+            Ok(VerifierScalar {
+                value: json!("cell-abc_1"),
+                value_type: AtomValueType::Identifier,
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_text_parts_make_actor_and_verifier_fail_closed() {
+        let payload = json!({"input":[
+            {
+                "type":"function_call_output",
+                "output":[{"type":"unsupported","text":"{\"session_id\":41}"}]
+            },
+            {"type":"function_call_output","output":"{\"session_id\":42}"}
+        ]});
+        let program = integer_continuation_program();
+
+        let execution = execute_response_unverified(&program, "", &payload);
+        assert_eq!(execution.status, ResponseExecutionStatus::Abstain);
+        assert_eq!(
+            verify(&program, &payload, "42"),
+            Err(ResponseVerificationError("unsupported_output_part_type"))
+        );
+    }
 }

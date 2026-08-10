@@ -4,23 +4,21 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
     bindings: &'a [EvidenceBinding],
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<Vec<&'a EvidenceBinding>, String> {
-    let support = bindings
-        .iter()
-        .filter(|binding| {
-            binding_matches_freeze(binding, freeze)
-                && frozen_row_is_eligible(&binding.row, freeze)
-                && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
-        })
-        .collect::<Vec<_>>();
-    let manifest = if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1 {
-        let historical_rows = support
-            .iter()
-            .map(|binding| historical_v1_evidence_row(&binding.row))
-            .collect::<Result<Vec<_>, _>>()?;
-        frozen_support_manifest(historical_rows.iter())?
-    } else {
-        frozen_support_manifest(support.iter().map(|binding| &binding.row))?
-    };
+    let mut support = Vec::new();
+    let mut projected_rows = Vec::new();
+    for binding in bindings {
+        let Some(row) = evidence_row_for_freeze(binding, freeze)? else {
+            continue;
+        };
+        if row_identity_matches_freeze(&row, freeze)
+            && frozen_row_is_eligible(&row, freeze)
+            && frozen_support_contains(row.capture_sequence, freeze.support_watermark)
+        {
+            support.push(binding);
+            projected_rows.push(row);
+        }
+    }
+    let manifest = frozen_support_manifest(projected_rows.iter())?;
     if support.is_empty()
         || support.len() > K1_MAX_SUPPORT_ROWS_V1
         || manifest != freeze.evidence_manifest_root_sha256
@@ -32,17 +30,22 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
         let generation_rows = bindings
             .iter()
             .filter(|binding| {
-                capture_generation_matches(
-                    &binding.row.schema,
-                    &binding.row.capture_generation_root_sha256,
-                    &freeze.schema,
-                    &freeze.capture_generation_root_sha256,
-                )
+                evidence_row_for_freeze(binding, freeze)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|row| {
+                        capture_generation_matches(
+                            &row.schema,
+                            &row.capture_generation_root_sha256,
+                            &freeze.schema,
+                            &freeze.capture_generation_root_sha256,
+                        )
+                    })
             })
             .count();
         let identity_rows = bindings
             .iter()
-            .filter(|binding| binding_identity_matches(binding, freeze))
+            .filter(|binding| binding_matches_freeze(binding, freeze))
             .count();
         return Err(format!(
             "k1_runtime_frozen_support_manifest_mismatch:generation={}:rows={}:bindings={}:legacy={}:generation_match={}:identity_match={}:actual={}:expected={}",
@@ -63,24 +66,38 @@ pub(in crate::k1_natural_scheduler_runtime) fn binding_matches_freeze(
     binding: &EvidenceBinding,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> bool {
-    capture_generation_matches(
-        &binding.row.schema,
-        &binding.row.capture_generation_root_sha256,
-        &freeze.schema,
-        &freeze.capture_generation_root_sha256,
-    ) && binding_identity_matches(binding, freeze)
+    evidence_row_for_freeze(binding, freeze)
+        .ok()
+        .flatten()
+        .is_some_and(|row| row_identity_matches_freeze(&row, freeze))
 }
 
-fn binding_identity_matches(
+fn binding_is_eligible_for_freeze(
     binding: &EvidenceBinding,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> bool {
-    binding.row.candidate_structural_root_sha256 == freeze.candidate_structural_root_sha256
-        && binding.row.source_neutral_topology_root_sha256
-            == freeze.source_neutral_topology_root_sha256
-        && binding.row.semantic_novelty_signature_root_sha256
+    evidence_row_for_freeze(binding, freeze)
+        .ok()
+        .flatten()
+        .is_some_and(|row| {
+            row_identity_matches_freeze(&row, freeze) && frozen_row_is_eligible(&row, freeze)
+        })
+}
+
+fn row_identity_matches_freeze(
+    row: &K1NaturalEvidenceRowV1,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> bool {
+    capture_generation_matches(
+        &row.schema,
+        &row.capture_generation_root_sha256,
+        &freeze.schema,
+        &freeze.capture_generation_root_sha256,
+    ) && row.candidate_structural_root_sha256 == freeze.candidate_structural_root_sha256
+        && row.source_neutral_topology_root_sha256 == freeze.source_neutral_topology_root_sha256
+        && row.semantic_novelty_signature_root_sha256
             == freeze.semantic_novelty_signature_root_sha256
-        && binding.row.consequence_type == freeze.consequence_type
+        && row.consequence_type == freeze.consequence_type
 }
 
 fn frozen_row_is_eligible(
@@ -90,6 +107,7 @@ fn frozen_row_is_eligible(
     !row.safety_veto || freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1
 }
 
+#[cfg(test)]
 fn historical_v1_evidence_row(
     row: &K1NaturalEvidenceRowV1,
 ) -> Result<K1NaturalEvidenceRowV1, String> {
@@ -111,6 +129,60 @@ fn historical_v1_evidence_row(
     .map_err(str::to_owned)
 }
 
+fn evidence_row_for_freeze(
+    binding: &EvidenceBinding,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> Result<Option<K1NaturalEvidenceRowV1>, String> {
+    if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 {
+        return Ok(
+            (binding.row.schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3).then(|| binding.row.clone())
+        );
+    }
+    let Some(joined) = binding.joined.as_deref() else {
+        return Ok(None);
+    };
+    let topology_root = candidate_topology_root(freeze, &joined.topology)?;
+    let row = &binding.row;
+    let projected = match freeze.schema.as_str() {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1 => K1NaturalEvidenceRowV1::seal_legacy_v1(
+            row.evidence_root_sha256.clone(),
+            row.candidate_structural_root_sha256.clone(),
+            topology_root,
+            row.semantic_novelty_signature_root_sha256.clone(),
+            row.lineage_root_sha256.clone(),
+            row.consequence_type,
+            row.evidence_class,
+            row.capture_sequence,
+            row.contract_sequence,
+            row.input_tokens,
+            row.settled,
+            row.verified,
+            false,
+        ),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 => {
+            K1NaturalEvidenceRowV1::seal_legacy_v2(
+                row.evidence_root_sha256.clone(),
+                row.capture_generation_root_sha256.clone(),
+                row.candidate_structural_root_sha256.clone(),
+                topology_root,
+                row.semantic_novelty_signature_root_sha256.clone(),
+                row.lineage_root_sha256.clone(),
+                row.consequence_type,
+                row.evidence_class,
+                row.capture_sequence,
+                row.contract_sequence,
+                row.input_tokens,
+                row.settled,
+                row.verified,
+                row.safety_veto,
+            )
+        }
+        _ => return Ok(None),
+    }
+    .map_err(str::to_owned)?;
+    Ok(Some(projected))
+}
+
 pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     bindings: &[EvidenceBinding],
     frames: &[RelationFrame],
@@ -124,8 +196,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     let mut selected = bindings
         .iter()
         .filter(|binding| {
-            binding_matches_freeze(binding, freeze)
-                && frozen_row_is_eligible(&binding.row, freeze)
+            binding_is_eligible_for_freeze(binding, freeze)
                 && (frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
                     || applied_roots.contains(binding.join_root_sha256())
                     || trial_roots.contains(binding.join_root_sha256()))
@@ -165,6 +236,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &freeze.freeze_root_sha256,
             support_watermark: freeze.support_watermark,
+            candidate_generator_schema: &freeze.generator_schema,
         },
         epoch,
     );
@@ -196,6 +268,11 @@ fn capture_generation_matches(
                 && !row_generation.is_empty()
                 && row_generation == freeze_generation
         }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
+            row_schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3
+                && !row_generation.is_empty()
+                && row_generation == freeze_generation
+        }
         _ => false,
     }
 }
@@ -208,10 +285,15 @@ fn validate_installed_discovery_basis_fields(
     freeze_schema: &str,
     discovery_basis_root_sha256: &str,
 ) -> Result<(), String> {
-    if freeze_schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 {
-        return Ok(());
-    }
-    let installed = natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?;
+    let installed = match freeze_schema {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 => {
+            natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?
+        }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
+            natural_t1_discovery_basis_root_v2().map_err(str::to_owned)?
+        }
+        _ => return Ok(()),
+    };
     if discovery_basis_root_sha256 != installed {
         return Err("k1_runtime_discovery_basis_unsupported".to_owned());
     }
@@ -288,7 +370,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn seal_identification_freeze(
             .support_manifest_root_sha256
             .clone()
             .ok_or_else(|| "k1_runtime_support_manifest_missing".to_owned())?,
-        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2.to_owned(),
+        candidate.generator_schema.clone(),
         report.remaining_semantic_class_roots_sha256.clone(),
         quotient,
         probe_policy,

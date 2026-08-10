@@ -10,7 +10,8 @@ use nando_operator_kernel::{
     ResponseValueSelector, ValueProjectionFormat, canonical_json_sha256, sha256_bytes,
 };
 use nando_operator_learning::multi_source::{
-    BlindThenRevealJoinedTransitionV1, FrozenRawPhaseT1ContractV1, MultiSourceJoinLedgerV1,
+    BlindThenRevealJoinedTransitionV1, FrozenRawPhaseT1ContractV1,
+    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MultiSourceJoinLedgerV1,
     MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, PreActionTopologyAuditRowV1,
     identify_multi_source_t1_operator_v1,
     identify_multi_source_t1_operator_with_frozen_raw_phase_v1,
@@ -238,6 +239,7 @@ fn raw_phase_fixture() -> (MultiSourceT1IdentificationV3, Vec<TeacherTransition>
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &root("raw phase response actor domain"),
             support_watermark: 2,
+            candidate_generator_schema: MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
         },
         root("raw phase response actor epoch"),
     );

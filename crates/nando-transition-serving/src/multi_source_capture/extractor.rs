@@ -10,6 +10,13 @@ use nando_operator_runtime::{
 use serde_json::Value;
 
 const MAX_RELEVANT_OUTPUTS_V1: usize = 8;
+const MAX_TURN_OUTPUTS_V2: usize = 64;
+
+type ContainerSignature = (
+    MultiSourceTypeClassV1,
+    MultiSourceContainerClassV1,
+    MultiSourceCardinalityClassV1,
+);
 
 struct CollectedRole {
     node: MultiSourceRoleNodeV1,
@@ -25,6 +32,35 @@ struct SelectedOutput {
     source_ordinal: u16,
     value: Value,
     scalar_roles: Vec<ObservedJsonScalarRole>,
+}
+
+struct ProviderOutput {
+    ordinal: usize,
+    raw: Value,
+    structural: Value,
+}
+
+struct OutputMetadata {
+    ordinal: usize,
+    value: Value,
+    roles: Vec<ObservedJsonScalarRole>,
+    request_referenced: bool,
+    container_signature: Option<ContainerSignature>,
+}
+
+impl OutputMetadata {
+    fn role_cost(&self) -> usize {
+        self.roles
+            .len()
+            .saturating_add(usize::from(self.container_signature.is_some()))
+    }
+
+    fn continuation_roots(&self) -> impl Iterator<Item = &str> {
+        self.roles
+            .iter()
+            .filter(|role| role.role_class == ObservedScalarRoleClass::ContinuationHandle)
+            .map(|role| role.value_sha256.as_str())
+    }
 }
 
 pub(crate) fn extract_pre_action_multi_source_topology_v2(
@@ -187,7 +223,7 @@ fn assign_request_reference_ordinals(collected: &mut [CollectedRole]) -> Result<
     Ok(())
 }
 
-fn provider_outputs(payload: &Value) -> Vec<Value> {
+fn provider_outputs(payload: &Value) -> Vec<ProviderOutput> {
     let Some(items) = payload.get("input").and_then(Value::as_array) else {
         return Vec::new();
     };
@@ -198,7 +234,7 @@ fn provider_outputs(payload: &Value) -> Vec<Value> {
                 && item.get("role").and_then(Value::as_str) == Some("user")
         })
         .map_or(0, |index| index.saturating_add(1));
-    items[turn_start..]
+    let outputs = items[turn_start..]
         .iter()
         .filter(|item| {
             matches!(
@@ -207,39 +243,67 @@ fn provider_outputs(payload: &Value) -> Vec<Value> {
             )
         })
         .filter_map(|item| item.get("output").or_else(|| item.get("content")))
-        .map(|value| {
-            crate::session_stream::canonical_embedded_session_output(value).unwrap_or_else(|| {
-                value
-                    .as_str()
-                    .and_then(|text| serde_json::from_str(text).ok())
-                    .unwrap_or_else(|| value.clone())
-            })
+        .collect::<Vec<_>>();
+    let latest_ordinal = outputs.len().saturating_sub(1);
+    outputs
+        .into_iter()
+        .enumerate()
+        .filter(|(ordinal, _)| *ordinal < MAX_TURN_OUTPUTS_V2 || *ordinal == latest_ordinal)
+        .map(|(ordinal, value)| ProviderOutput {
+            ordinal,
+            raw: value.clone(),
+            structural: crate::session_stream::canonical_embedded_session_output(value)
+                .unwrap_or_else(|| {
+                    value
+                        .as_str()
+                        .and_then(|text| serde_json::from_str(text).ok())
+                        .unwrap_or_else(|| value.clone())
+                }),
         })
         .collect()
 }
 
 fn select_relevant_outputs(
-    outputs: Vec<Value>,
+    outputs: Vec<ProviderOutput>,
     request_text: &str,
 ) -> Result<Vec<SelectedOutput>, &'static str> {
     let mut metadata = outputs
         .into_iter()
-        .enumerate()
-        .map(|(ordinal, output)| {
-            let mut roles = observed_json_scalar_roles(request_text, &output)?;
-            if let Ok(continuation) = observed_continuation_handle_role(&output) {
+        .map(|output| {
+            let mut roles = observed_json_scalar_roles(request_text, &output.structural)?;
+            if let Ok(continuation) = observed_continuation_handle_role(&output.raw) {
                 roles.push(continuation);
             }
-            Ok::<_, &'static str>((ordinal, output, roles))
+            let container_signature = canonical_collection_from_provider_output(&output.structural)
+                .ok()
+                .and_then(|canonical| {
+                    super::container_role::from_output(&canonical)
+                        .ok()
+                        .flatten()
+                })
+                .map(|container| {
+                    (
+                        container.type_class,
+                        container.container_class,
+                        container.cardinality_class,
+                    )
+                });
+            Ok::<_, &'static str>(OutputMetadata {
+                ordinal: output.ordinal,
+                value: output.structural,
+                roles,
+                request_referenced: false,
+                container_signature,
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
     if metadata.is_empty() {
         return Ok(Vec::new());
     }
-    let latest_ordinal = metadata.last().map_or(0, |row| row.0);
+    let latest_ordinal = metadata.last().map_or(0, |row| row.ordinal);
     let mut references = std::collections::BTreeMap::<u16, Vec<(usize, usize)>>::new();
-    for (output_index, (_, _, roles)) in metadata.iter().enumerate() {
-        for (role_index, role) in roles.iter().enumerate() {
+    for (output_index, output) in metadata.iter().enumerate() {
+        for (role_index, role) in output.roles.iter().enumerate() {
             for position in &role.request_position_candidates {
                 references
                     .entry(*position)
@@ -255,72 +319,153 @@ fn select_relevant_outputs(
         let latest = matches
             .iter()
             .copied()
-            .filter(|(output_index, _)| metadata[*output_index].0 == latest_ordinal)
+            .filter(|(output_index, _)| metadata[*output_index].ordinal == latest_ordinal)
             .collect::<Vec<_>>();
         for (output_index, role_index) in matches {
             if !latest.contains(&(*output_index, *role_index)) {
-                metadata[*output_index].2[*role_index]
+                metadata[*output_index].roles[*role_index]
                     .request_position_candidates
                     .retain(|candidate| candidate != position);
                 let candidates =
-                    &metadata[*output_index].2[*role_index].request_position_candidates;
-                metadata[*output_index].2[*role_index].request_position =
+                    &metadata[*output_index].roles[*role_index].request_position_candidates;
+                metadata[*output_index].roles[*role_index].request_position =
                     (candidates.len() == 1).then(|| candidates[0]);
             }
         }
     }
-    let mut metadata = metadata
-        .into_iter()
-        .map(|(ordinal, output, roles)| {
-            let request_referenced = roles
-                .iter()
-                .any(|role| !role.request_position_candidates.is_empty());
-            (ordinal, output, roles, request_referenced)
-        })
-        .collect::<Vec<_>>();
-    if metadata.iter().any(|(_, _, roles, referenced)| {
-        *referenced && roles.len() > MULTI_SOURCE_MAX_ROLE_NODES_V1
+    for output in &mut metadata {
+        output.request_referenced = output
+            .roles
+            .iter()
+            .any(|role| !role.request_position_candidates.is_empty());
+    }
+    if metadata.iter().any(|output| {
+        output.request_referenced && output.role_cost() > MULTI_SOURCE_MAX_ROLE_NODES_V1
     }) {
         return Err("referenced_output_role_budget_exceeded");
     }
     let mut selected = metadata
         .iter()
-        .filter(|(ordinal, _, _, referenced)| *referenced || *ordinal == latest_ordinal)
-        .map(|row| row.0)
+        .filter(|output| output.request_referenced || output.ordinal == latest_ordinal)
+        .map(|output| output.ordinal)
         .collect::<std::collections::BTreeSet<_>>();
     let mut selected_roles = metadata
         .iter()
-        .filter(|row| selected.contains(&row.0))
-        .map(|row| row.2.len())
+        .filter(|output| selected.contains(&output.ordinal))
+        .map(OutputMetadata::role_cost)
         .sum::<usize>();
-    if selected_roles > MULTI_SOURCE_MAX_ROLE_NODES_V1 {
+    if selected.len() > MAX_RELEVANT_OUTPUTS_V1 || selected_roles > MULTI_SOURCE_MAX_ROLE_NODES_V1 {
         return Err("relevant_output_role_budget_exceeded");
     }
-    for (ordinal, _, roles, _) in metadata.iter().rev() {
-        if selected.len() >= MAX_RELEVANT_OUTPUTS_V1 {
-            break;
+    let mut represented_types = metadata
+        .iter()
+        .filter(|output| selected.contains(&output.ordinal))
+        .flat_map(|output| output.roles.iter().map(|role| role.value_type))
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut represented_continuations = metadata
+        .iter()
+        .filter(|output| selected.contains(&output.ordinal))
+        .flat_map(OutputMetadata::continuation_roots)
+        .map(str::to_owned)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut represented_containers = metadata
+        .iter()
+        .filter(|output| selected.contains(&output.ordinal))
+        .filter_map(|output| output.container_signature)
+        .collect::<std::collections::BTreeSet<_>>();
+    for output in metadata.iter().rev() {
+        let adds_continuation = output
+            .continuation_roots()
+            .any(|root| !represented_continuations.contains(root));
+        if adds_continuation {
+            add_output_to_reservoir(
+                output,
+                &mut selected,
+                &mut selected_roles,
+                &mut represented_types,
+                &mut represented_continuations,
+                &mut represented_containers,
+            );
         }
-        if selected.contains(ordinal) {
-            continue;
-        }
-        if selected_roles.saturating_add(roles.len()) > MULTI_SOURCE_MAX_ROLE_NODES_V1 {
-            continue;
-        }
-        selected.insert(*ordinal);
-        selected_roles = selected_roles.saturating_add(roles.len());
     }
-    metadata.retain(|row| selected.contains(&row.0));
-    metadata.sort_by_key(|row| row.0);
+    for output in metadata.iter().rev() {
+        let adds_type = output
+            .roles
+            .iter()
+            .any(|role| !represented_types.contains(&role.value_type));
+        if adds_type {
+            add_output_to_reservoir(
+                output,
+                &mut selected,
+                &mut selected_roles,
+                &mut represented_types,
+                &mut represented_continuations,
+                &mut represented_containers,
+            );
+        }
+    }
+    for output in metadata.iter().rev() {
+        let adds_container = output
+            .container_signature
+            .is_some_and(|signature| !represented_containers.contains(&signature));
+        if adds_container {
+            add_output_to_reservoir(
+                output,
+                &mut selected,
+                &mut selected_roles,
+                &mut represented_types,
+                &mut represented_continuations,
+                &mut represented_containers,
+            );
+        }
+    }
+    for output in metadata.iter().rev() {
+        add_output_to_reservoir(
+            output,
+            &mut selected,
+            &mut selected_roles,
+            &mut represented_types,
+            &mut represented_continuations,
+            &mut represented_containers,
+        );
+    }
+    metadata.retain(|output| selected.contains(&output.ordinal));
+    metadata.sort_by_key(|output| output.ordinal);
     metadata
         .into_iter()
-        .map(|(ordinal, value, scalar_roles, _)| {
+        .map(|output| {
             Ok(SelectedOutput {
-                source_ordinal: u16::try_from(ordinal).map_err(|_| "source_ordinal_budget")?,
-                value,
-                scalar_roles,
+                source_ordinal: u16::try_from(output.ordinal)
+                    .map_err(|_| "source_ordinal_budget")?,
+                value: output.value,
+                scalar_roles: output.roles,
             })
         })
         .collect()
+}
+
+fn add_output_to_reservoir(
+    output: &OutputMetadata,
+    selected: &mut std::collections::BTreeSet<usize>,
+    selected_roles: &mut usize,
+    represented_types: &mut std::collections::BTreeSet<nando_operator_kernel::AtomValueType>,
+    represented_continuations: &mut std::collections::BTreeSet<String>,
+    represented_containers: &mut std::collections::BTreeSet<ContainerSignature>,
+) -> bool {
+    if selected.len() >= MAX_RELEVANT_OUTPUTS_V1
+        || selected.contains(&output.ordinal)
+        || selected_roles.saturating_add(output.role_cost()) > MULTI_SOURCE_MAX_ROLE_NODES_V1
+    {
+        return false;
+    }
+    selected.insert(output.ordinal);
+    *selected_roles = selected_roles.saturating_add(output.role_cost());
+    represented_types.extend(output.roles.iter().map(|role| role.value_type));
+    represented_continuations.extend(output.continuation_roots().map(str::to_owned));
+    if let Some(signature) = output.container_signature {
+        represented_containers.insert(signature);
+    }
+    true
 }
 
 fn role_node(
@@ -454,6 +599,51 @@ mod tests {
         assert!(!encoded.contains("session_id"));
         assert!(!encoded.contains("60906"));
         assert!(!encoded.contains("Compiling"));
+    }
+
+    #[test]
+    fn semantic_handle_survives_the_bounded_output_reservoir() {
+        let mut input = vec![json!({
+            "type": "custom_tool_call_output",
+            "output": "{\"chunk_id\":\"first\",\"session_id\":60906,\"output\":\"running\",\"wall_time_seconds\":1}"
+        })];
+        input.extend((0..8).map(|index| {
+            json!({
+                "type": "custom_tool_call_output",
+                "output": format!(
+                    "{{\"chunk_id\":\"later-{index}\",\"exit_code\":0,\"output\":\"ordinary output {index}\",\"wall_time_seconds\":1}}"
+                )
+            })
+        }));
+        let topology = extract_pre_action_multi_source_topology_v2(
+            &json!({"input": input}),
+            "continue the active command",
+        );
+
+        topology.validate().expect("valid topology");
+        assert!(topology.grounded_output_count <= MAX_RELEVANT_OUTPUTS_V1 as u16);
+        assert!(topology.roles.len() <= MULTI_SOURCE_MAX_ROLE_NODES_V1);
+        let continuation = topology
+            .relations
+            .iter()
+            .find(|edge| edge.relation == MultiSourceRelationKindV1::ContinuationHandle)
+            .expect("semantic continuation relation");
+        let role = topology
+            .roles
+            .iter()
+            .find(|role| role.local_role_id == continuation.source_role_id)
+            .expect("semantic continuation role");
+        assert_eq!(role.source_ordinal, 0);
+        assert_eq!(role.type_class, MultiSourceTypeClassV1::Number);
+        let witness = topology
+            .role_witnesses
+            .iter()
+            .find(|witness| witness.local_role_id == role.local_role_id)
+            .expect("semantic continuation witness");
+        assert_eq!(
+            witness.value_sha256,
+            nando_operator_kernel::canonical_json_sha256(&json!(60906)).expect("hash")
+        );
     }
 
     #[test]
@@ -628,7 +818,7 @@ mod tests {
 
     #[test]
     fn long_history_keeps_referenced_and_recent_outputs_inside_budget() {
-        let mut input = (0..64)
+        let mut input = (0..80)
             .map(|index| {
                 let field = if index == 7 {
                     "history_target"
@@ -659,6 +849,7 @@ mod tests {
         ));
         assert!(topology.roles.len() <= MULTI_SOURCE_MAX_ROLE_NODES_V1);
         assert!(topology.grounded_output_count <= MAX_RELEVANT_OUTPUTS_V1 as u16);
+        assert!(topology.roles.iter().any(|role| role.source_ordinal == 80));
         assert!(
             topology
                 .roles

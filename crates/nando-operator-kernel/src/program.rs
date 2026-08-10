@@ -1256,7 +1256,9 @@ fn validate_selector(selector: &ResponseValueSelector) -> Result<(), &'static st
         ResponseValueSelector::ContinuationHandle { value_type } => {
             if matches!(
                 value_type,
-                crate::AtomValueType::Identifier | crate::AtomValueType::String
+                crate::AtomValueType::Identifier
+                    | crate::AtomValueType::String
+                    | crate::AtomValueType::Integer
             ) {
                 Ok(())
             } else {
@@ -1541,6 +1543,35 @@ mod tests {
         assert!(response_program_requires_semantic_applicability_guard(
             &mutating_literal
         ));
+    }
+
+    #[test]
+    fn continuation_handle_accepts_numeric_protocol_ids_only() {
+        for value_type in [
+            AtomValueType::Identifier,
+            AtomValueType::String,
+            AtomValueType::Integer,
+        ] {
+            let program = ResponseProgram::project_selected_value(
+                ResponseValueSelector::ContinuationHandle { value_type },
+                ValueProjectionFormat::PlainText,
+                "pending",
+            );
+            assert_eq!(program.validate(), Ok(()), "{value_type:?}");
+        }
+
+        for value_type in [AtomValueType::Boolean, AtomValueType::Collection] {
+            let program = ResponseProgram::project_selected_value(
+                ResponseValueSelector::ContinuationHandle { value_type },
+                ValueProjectionFormat::PlainText,
+                "pending",
+            );
+            assert_eq!(
+                program.validate(),
+                Err("invalid_continuation_handle_type"),
+                "{value_type:?}"
+            );
+        }
     }
 
     #[test]

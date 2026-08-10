@@ -8,7 +8,7 @@ use nando_operator_kernel::{
 use nando_operator_learning::multi_source::{
     K1PreActionExecutionReceiptV1, PreActionT1ConsumedInputV1, PreActionTopologyAuditRowV1,
     pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
-    pre_action_t1_input_binding_manifest_v1, source_neutral_topology_root_v1,
+    pre_action_t1_input_binding_manifest_v1,
 };
 use nando_operator_runtime::{
     collection_implicit_request_values_for_program, collection_source_value_for_program,
@@ -22,7 +22,8 @@ use crate::k1_natural_scheduler::{
     K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1,
     K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1, K1FuturePredictionAuthorityRequestV1,
     K1PreActionEvidenceAuthorityRequestV1, K1SchedulerLaneV1, K1SchedulerProjectionV1,
-    append_future_prediction, archive_pre_action_evidence, restore_projection,
+    append_future_prediction, archive_pre_action_evidence, candidate_topology_root,
+    restore_projection,
 };
 use crate::operator_certification::CertificationAuthorityConfigV1;
 
@@ -44,7 +45,7 @@ pub(crate) fn candidate_match_requires_fence(
         && commit.evidence_origin == MultiSourceEvidenceOriginV1::FreshLive
         && pre_action_applicability_shape_root_v1(&structure.topology).map_err(str::to_owned)?
             == candidate.candidate_structural_root_sha256
-        && source_neutral_topology_root_v1(&structure.topology).map_err(str::to_owned)?
+        && candidate_topology_root(candidate, &structure.topology)?
             == candidate.source_neutral_topology_root_sha256
         && pre_action_t1_binding_root(&contract.canonical_program, &structure.topology).is_ok()
         && !projection.future_predictions.iter().any(|prediction| {
@@ -78,7 +79,7 @@ pub(crate) fn precommit_candidate_match(
         || pre_action_applicability_shape_root_v1(&topology.structure.topology)
             .map_err(str::to_owned)?
             != candidate.candidate_structural_root_sha256
-        || source_neutral_topology_root_v1(&topology.structure.topology).map_err(str::to_owned)?
+        || candidate_topology_root(candidate, &topology.structure.topology)?
             != candidate.source_neutral_topology_root_sha256
         || pre_action_t1_binding_root(&contract.canonical_program, &topology.structure.topology)
             .is_err()

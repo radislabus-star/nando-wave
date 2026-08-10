@@ -3688,6 +3688,7 @@ fn frozen_raw_phase_requires_two_independent_support_lineages_for_executable_hyp
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &root("raw phase single-lineage domain"),
             support_watermark: 1,
+            candidate_generator_schema: MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
         },
         root("raw phase single-lineage epoch"),
     );
@@ -3791,6 +3792,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &frozen_domain_root,
             support_watermark: 2,
+            candidate_generator_schema: MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
         },
         evidence_epoch.clone(),
     );
@@ -3803,6 +3805,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &frozen_domain_root,
             support_watermark: 2,
+            candidate_generator_schema: MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
         },
         evidence_epoch.clone(),
     );
@@ -3819,6 +3822,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
         FrozenRawPhaseT1ContractV1 {
             frozen_domain_root_sha256: &frozen_domain_root,
             support_watermark: 2,
+            candidate_generator_schema: MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
         },
         evidence_epoch,
     );
@@ -3859,6 +3863,7 @@ fn frozen_raw_phase_watermark_excludes_future_from_hypothesis_collapse() {
             FrozenRawPhaseT1ContractV1 {
                 frozen_domain_root_sha256: &frozen_domain_root,
                 support_watermark: 3,
+                candidate_generator_schema: MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
             },
             root("raw phase collapse evidence epoch"),
         );

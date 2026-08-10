@@ -3,8 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use nando_operator_kernel::MultiSourceEvidenceOriginV1;
 use nando_operator_learning::multi_source::{
     K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, MultiSourceJoinLedgerV1,
-    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
-    source_neutral_topology_root_v1, t1_program_is_consistent,
+    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root, t1_program_is_consistent,
     validate_pre_action_topology_join_eligibility_v1,
 };
 
@@ -114,7 +113,7 @@ pub(super) fn append_future_prediction_authoritative(
         || pre_action_applicability_shape_root_v1(&topology.structure.topology)
             .map_err(str::to_owned)?
             != candidate.candidate_structural_root_sha256
-        || source_neutral_topology_root_v1(&topology.structure.topology).map_err(str::to_owned)?
+        || candidate_topology_root(candidate, &topology.structure.topology)?
             != candidate.source_neutral_topology_root_sha256
     {
         return Err("k1_future_prediction_candidate_mismatch".to_owned());
@@ -361,7 +360,7 @@ pub(super) fn archive_pre_action_evidence_authoritative(
         || pre_action_applicability_shape_root_v1(&topology.structure.topology)
             .map_err(str::to_owned)?
             != candidate.candidate_structural_root_sha256
-        || source_neutral_topology_root_v1(&topology.structure.topology).map_err(str::to_owned)?
+        || candidate_topology_root(candidate, &topology.structure.topology)?
             != candidate.source_neutral_topology_root_sha256
     {
         return Err("k1_pre_action_evidence_candidate_mismatch".to_owned());

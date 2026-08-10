@@ -19,7 +19,8 @@ use crate::{
 
 use super::{
     BlindThenRevealJoinedTransitionV1, CompletedEffectFormV1, FactorizedMultiSourceRowV1,
-    NaturalT1ProgramArtifactV1, PreActionShapeClassV1, factor_multi_source_row_v1,
+    NaturalT1ProgramArtifactV1, PreActionShapeClassV1, SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+    factor_multi_source_row_v1,
 };
 
 mod natural_artifacts;
@@ -54,7 +55,10 @@ const MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS: usize = 64;
 const MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS: usize = 12;
 pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
     "nando.multi-source-t1.source-neutral-role-version-space.v2";
+pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3: &str =
+    "nando.multi-source-t1.source-neutral-role-version-space.v3";
 pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V1: &str = "nando.natural-t1-discovery-basis.v1";
+pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V2: &str = "nando.natural-t1-discovery-basis.v2";
 pub const NATURAL_T1_K0_CURRICULUM_SCHEMA_V1: &str = "nando.natural-t1-k0-typed-curriculum.v1";
 pub const NATURAL_T1_VERIFIER_SEMANTICS_SCHEMA_V1: &str =
     "nando.natural-t1-independent-verifier-semantics.v1";
@@ -84,10 +88,28 @@ pub fn natural_t1_discovery_basis_root_v1() -> Result<String, &'static str> {
     .map_err(|_| "natural_t1_discovery_basis_root_failed")
 }
 
+pub fn natural_t1_discovery_basis_root_v2() -> Result<String, &'static str> {
+    canonical_json_sha256(&(
+        NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V2,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3,
+        SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+        RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1,
+        RAW_PHASE_EXECUTABLE_BLUEPRINT_BUILDER_V1,
+        NATURAL_T1_K0_CURRICULUM_SCHEMA_V1,
+        NATURAL_T1_K0_PRIMITIVES_V1,
+        NATURAL_T1_VERIFIER_SEMANTICS_SCHEMA_V1,
+        MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
+        MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS,
+        MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS,
+    ))
+    .map_err(|_| "natural_t1_discovery_basis_root_failed")
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FrozenRawPhaseT1ContractV1<'a> {
     pub frozen_domain_root_sha256: &'a str,
     pub support_watermark: u64,
+    pub candidate_generator_schema: &'a str,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -349,6 +371,20 @@ fn identify_multi_source_t1_operator_internal_v1(
     raw_phase_contract: Option<FrozenRawPhaseT1ContractV1<'_>>,
     evidence_epoch_sha256: String,
 ) -> MultiSourceT1IdentificationV3 {
+    let candidate_generator_schema = raw_phase_contract
+        .map_or(MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, |contract| {
+            contract.candidate_generator_schema
+        });
+    if !matches!(
+        candidate_generator_schema,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2 | MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3
+    ) {
+        return terminal_report(
+            evidence_epoch_sha256,
+            MultiSourceT1IdentificationStateV1::InvalidEvidence,
+            "candidate_generator_schema_unsupported",
+        );
+    }
     let frame_by_root = frames
         .iter()
         .filter_map(|frame| {
@@ -694,6 +730,7 @@ fn identify_multi_source_t1_operator_internal_v1(
         &shape_root,
         &protocol_mode_root,
         &candidate_programs,
+        candidate_generator_schema,
         raw_phase_envelope
             .as_ref()
             .map(|envelope| envelope.envelope_root_sha256.as_str()),
@@ -1334,13 +1371,21 @@ pub(super) fn generation_manifest(
     protocol_mode_root: &str,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<nando_operator_kernel::OperatorGenerationManifestV3, String> {
-    generation_manifest_with_raw_phase_roots(shape_root, protocol_mode_root, programs, None, None)
+    generation_manifest_with_raw_phase_roots(
+        shape_root,
+        protocol_mode_root,
+        programs,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+        None,
+        None,
+    )
 }
 
 fn generation_manifest_with_raw_phase_roots(
     shape_root: &str,
     protocol_mode_root: &str,
     programs: &BTreeMap<String, ResponseProgram>,
+    candidate_generator_schema: &str,
     raw_phase_hypothesis_root_sha256: Option<&str>,
     raw_phase_executable_blueprint_root_sha256: Option<&str>,
 ) -> Result<nando_operator_kernel::OperatorGenerationManifestV3, String> {
@@ -1371,14 +1416,14 @@ fn generation_manifest_with_raw_phase_roots(
     let artifact_set_sha256 = match raw_phase_roots {
         Some((hypothesis, executable)) => canonical_json_sha256(&(
             "nando.multi-source-t1-candidate-set.v4",
-            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            candidate_generator_schema,
             hypothesis,
             executable,
             &candidate_roots,
         )),
         None => canonical_json_sha256(&(
             "nando.multi-source-t1-candidate-set.v2",
-            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            candidate_generator_schema,
             &candidate_roots,
         )),
     }
@@ -1386,7 +1431,7 @@ fn generation_manifest_with_raw_phase_roots(
     let dispatch_index_sha256 = match raw_phase_roots {
         Some((hypothesis, executable)) => canonical_json_sha256(&(
             "nando.multi-source-t1-dispatch.v4",
-            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            candidate_generator_schema,
             hypothesis,
             executable,
             shape_root,
@@ -1394,7 +1439,7 @@ fn generation_manifest_with_raw_phase_roots(
         )),
         None => canonical_json_sha256(&(
             "nando.multi-source-t1-dispatch.v2",
-            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            candidate_generator_schema,
             shape_root,
             protocol_mode_root,
         )),
@@ -1403,7 +1448,7 @@ fn generation_manifest_with_raw_phase_roots(
     let resource_budget_sha256 = match raw_phase_roots {
         Some((hypothesis, executable)) => canonical_json_sha256(&(
             "nando.multi-source-t1-budget.v4",
-            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            candidate_generator_schema,
             hypothesis,
             executable,
             programs.len(),
@@ -1411,7 +1456,7 @@ fn generation_manifest_with_raw_phase_roots(
         )),
         None => canonical_json_sha256(&(
             "nando.multi-source-t1-budget.v2",
-            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
+            candidate_generator_schema,
             programs.len(),
             VersionSpaceConfig::default(),
         )),

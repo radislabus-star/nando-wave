@@ -59,7 +59,7 @@ fn test_context() -> (PathBuf, CertificationAuthorityConfigV1, SigningKey) {
 }
 
 fn candidate_freeze() -> K1NaturalCandidateFreezeV1 {
-    candidate_freeze_with_basis(natural_t1_discovery_basis_root_v1().expect("discovery basis"))
+    candidate_freeze_with_basis(natural_t1_discovery_basis_root_v2().expect("discovery basis"))
 }
 
 fn candidate_freeze_with_basis(discovery_basis_root_sha256: String) -> K1NaturalCandidateFreezeV1 {
@@ -88,7 +88,7 @@ fn candidate_freeze_with_basis(discovery_basis_root_sha256: String) -> K1Natural
         &rows,
         root(400),
         root(401),
-        "nando.operator-blind-version-space-generator.v1".to_owned(),
+        nando_operator_learning::multi_source::MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3.to_owned(),
     )
     .expect("catalog");
     let deficit = K1DeficitSnapshotV1::seal(

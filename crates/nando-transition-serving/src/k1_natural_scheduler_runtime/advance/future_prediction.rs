@@ -303,7 +303,8 @@ fn next_pre_action_topology<'a>(
         .filter_map(|topology| {
             let shape =
                 pre_action_applicability_shape_root_v1(&topology.structure.topology).ok()?;
-            let role_graph = source_neutral_topology_root_v1(&topology.structure.topology).ok()?;
+            let role_graph =
+                candidate_topology_root(candidate, &topology.structure.topology).ok()?;
             (shape == candidate.candidate_structural_root_sha256
                 && role_graph == candidate.source_neutral_topology_root_sha256
                 && pre_action_t1_binding_root(program, &topology.structure.topology).is_ok())

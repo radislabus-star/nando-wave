@@ -189,6 +189,29 @@ fn legacy_v2_candidate_freeze_remains_decodable_and_root_stable() {
     );
 }
 
+#[test]
+fn legacy_v3_candidate_freeze_remains_decodable_and_root_stable() {
+    let mut freeze = candidate_freeze(3);
+    freeze.schema = K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3.to_owned();
+    freeze.freeze_root_sha256 = freeze.expected_root().expect("v3 freeze root");
+    let bytes = serde_json::to_vec(&freeze).expect("encode v3 freeze");
+    let restored: K1NaturalCandidateFreezeV1 =
+        serde_json::from_slice(&bytes).expect("decode v3 freeze");
+    restored.validate().expect("validate v3 freeze");
+    assert_eq!(restored.freeze_root_sha256, freeze.freeze_root_sha256);
+    assert_eq!(
+        serde_json::to_vec(&restored).expect("re-encode v3 freeze"),
+        bytes
+    );
+}
+
+#[test]
+fn current_candidate_freeze_uses_v4_schema() {
+    let freeze = candidate_freeze(4);
+    assert_eq!(freeze.schema, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4);
+    freeze.validate().expect("validate v4 freeze");
+}
+
 fn frozen_generation() -> (
     K1NaturalCandidateFreezeV1,
     K1IdentificationFreezeV1,

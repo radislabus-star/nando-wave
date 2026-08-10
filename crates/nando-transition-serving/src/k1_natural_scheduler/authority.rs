@@ -199,10 +199,16 @@ fn append_candidate_freeze_authoritative(
 pub(super) fn validate_discovery_basis_cas(
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<String, String> {
-    let current = natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?;
-    if freeze.schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3
-        || freeze.discovery_basis_root_sha256 != current
-    {
+    let current = match freeze.schema.as_str() {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 => {
+            natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?
+        }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
+            natural_t1_discovery_basis_root_v2().map_err(str::to_owned)?
+        }
+        _ => return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned()),
+    };
+    if freeze.discovery_basis_root_sha256 != current {
         return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned());
     }
     Ok(current)

@@ -12,7 +12,7 @@ fn ledger_with_terminal(
     ledger_with_terminal_for_basis(
         blocker,
         evidence_roots_sha256,
-        natural_t1_discovery_basis_root_v1().expect("discovery basis"),
+        natural_t1_discovery_basis_root_v2().expect("discovery basis"),
     )
 }
 
@@ -71,7 +71,7 @@ fn catalog_with_additional_evidence() -> K1NaturalCohortCatalogV1 {
         &rows,
         root(910),
         root(401),
-        "nando.operator-blind-version-space-generator.v1".to_owned(),
+        nando_operator_learning::multi_source::MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3.to_owned(),
     )
     .expect("catalog")
 }
@@ -115,7 +115,7 @@ fn active_protocol_mode_set_change_reopens_duplicate_cohort() {
         &ledger,
         &catalog,
         &root(999),
-        &natural_t1_discovery_basis_root_v1().expect("discovery basis"),
+        &natural_t1_discovery_basis_root_v2().expect("discovery basis"),
     )
     .expect("exclusions");
     assert!(excluded.is_empty());
@@ -149,7 +149,7 @@ fn legacy_duplicate_terminal_without_active_set_root_is_re_evaluated() {
         &ledger,
         &catalog_with_additional_evidence(),
         &root(900),
-        &natural_t1_discovery_basis_root_v1().expect("discovery basis"),
+        &natural_t1_discovery_basis_root_v2().expect("discovery basis"),
     )
     .expect("exclusions");
     assert!(excluded.is_empty());
@@ -164,7 +164,7 @@ fn repairable_acquisition_failure_does_not_suppress_cohort() {
         &ledger,
         &catalog,
         &root(900),
-        &natural_t1_discovery_basis_root_v1().expect("discovery basis"),
+        &natural_t1_discovery_basis_root_v2().expect("discovery basis"),
     )
     .expect("exclusions");
     assert!(excluded.is_empty());

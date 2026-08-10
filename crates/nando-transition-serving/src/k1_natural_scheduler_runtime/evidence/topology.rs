@@ -283,8 +283,10 @@ fn candidate_identity(
     Ok(CandidateIdentity {
         capture_generation_root_sha256: joined.capture_generation_root_sha256.clone(),
         candidate_structural_root_sha256: factorized.applicability_shape_root_sha256.clone(),
-        source_neutral_topology_root_sha256: source_neutral_topology_root_v1(&joined.topology)
-            .map_err(str::to_owned)?,
+        source_neutral_topology_root_sha256: source_neutral_topology_quotient_root_v2(
+            &joined.topology,
+        )
+        .map_err(str::to_owned)?,
         semantic_novelty_signature_root_sha256: canonical_json_sha256(&(
             K1_SEMANTIC_NOVELTY_SCHEMA_V1,
             consequence_type,
@@ -312,6 +314,10 @@ fn capture_generation_v2_roots(extractor: &str, config: &str, generation: &str) 
         (
             sha256_bytes(b"nando.multi-source-extractor.v3"),
             sha256_bytes(b"nando.multi-source-extractor-config.v3"),
+        ),
+        (
+            sha256_bytes(b"nando.multi-source-extractor.v4"),
+            sha256_bytes(b"nando.multi-source-extractor-config.v4"),
         ),
     ]
     .into_iter()
@@ -430,9 +436,9 @@ mod tests {
     use super::*;
     use crate::k1_natural_scheduler_runtime::K1_MAX_SUPPORT_ROWS_V1;
     use nando_operator_kernel::{
-        MultiSourceCardinalityClassV1, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
-        MultiSourceTemporalClassV1, PreActionMultiSourceTopologyV1, canonical_json_sha256,
-        sha256_bytes,
+        MultiSourceCardinalityClassV1, MultiSourceRelationEdgeV1, MultiSourceRelationKindV1,
+        MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1,
+        PreActionMultiSourceTopologyV1, canonical_json_sha256, sha256_bytes,
     };
     use nando_operator_learning::multi_source::CompletedEffectAtomV1;
 
@@ -499,6 +505,59 @@ mod tests {
         }
     }
 
+    fn role_permuted_chain(sequence: u64, reverse: bool) -> BlindThenRevealJoinedTransitionV1 {
+        let mut joined = joined(sequence, sequence);
+        joined.effect_atoms = vec![
+            CompletedEffectAtomV1::RoleInputSlot {
+                slot_id: 0,
+                value_type: None,
+            },
+            CompletedEffectAtomV1::RoleInputSlot {
+                slot_id: 1,
+                value_type: None,
+            },
+            CompletedEffectAtomV1::ValueProjection,
+        ];
+        joined.topology.roles = (0..3)
+            .map(|local_role_id| MultiSourceRoleNodeV1 {
+                local_role_id,
+                source_ordinal: local_role_id,
+                value_ordinal: 0,
+                type_class: MultiSourceTypeClassV1::Number,
+                container_class: MultiSourceContainerClassV1::Scalar,
+                cardinality_class: MultiSourceCardinalityClassV1::One,
+                temporal_class: MultiSourceTemporalClassV1::Latest,
+                depth_bucket: 1,
+                structural_flags: 1,
+            })
+            .collect();
+        joined.topology.role_witnesses = (0..3)
+            .map(|local_role_id| MultiSourceRoleWitnessV1 {
+                local_role_id,
+                value_sha256: root(2_000 + sequence * 10 + u64::from(local_role_id)),
+                request_reference_ordinal: None,
+                request_reference_ordinal_candidates: Vec::new(),
+            })
+            .collect();
+        let endpoints = if reverse {
+            [(2, 1), (1, 0)]
+        } else {
+            [(0, 1), (1, 2)]
+        };
+        joined.topology.relations = endpoints
+            .into_iter()
+            .map(
+                |(source_role_id, target_role_id)| MultiSourceRelationEdgeV1 {
+                    relation: MultiSourceRelationKindV1::Precedes,
+                    source_role_id,
+                    target_role_id,
+                },
+            )
+            .collect();
+        joined.topology.relations.sort();
+        joined
+    }
+
     #[test]
     fn support_reservoir_preserves_a_slot_for_an_independent_lineage() {
         let mut reservoir = CohortSupportReservoir::default();
@@ -530,6 +589,44 @@ mod tests {
     }
 
     #[test]
+    fn role_id_permutations_form_one_v3_scheduler_cohort() {
+        let first = role_permuted_chain(1, false);
+        let second = role_permuted_chain(2, true);
+        assert_ne!(
+            nando_operator_learning::multi_source::source_neutral_topology_root_v1(&first.topology)
+                .expect("first exact root"),
+            nando_operator_learning::multi_source::source_neutral_topology_root_v1(
+                &second.topology
+            )
+            .expect("second exact root")
+        );
+
+        let bindings = build_evidence_bindings(vec![first, second]).expect("bindings");
+        assert_eq!(bindings.len(), 2);
+        assert!(
+            bindings
+                .iter()
+                .all(|binding| binding.row.schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3)
+        );
+        assert_eq!(
+            bindings[0].row.source_neutral_topology_root_sha256,
+            bindings[1].row.source_neutral_topology_root_sha256
+        );
+        let catalog = build_k1_natural_cohort_catalog_v1(
+            &bindings
+                .iter()
+                .map(|binding| binding.row.clone())
+                .collect::<Vec<_>>(),
+            root(3_001),
+            root(3_002),
+            MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3.to_owned(),
+        )
+        .expect("catalog");
+        assert_eq!(catalog.candidates.len(), 1);
+        assert_eq!(catalog.candidates[0].evidence_rows, 2);
+    }
+
+    #[test]
     fn legacy_capture_roots_are_diagnostic_only() {
         let extractor_v2 = sha256_bytes(b"nando.multi-source-extractor.v2");
         let config_v2 = sha256_bytes(b"nando.multi-source-extractor-config.v2");
@@ -556,6 +653,19 @@ mod tests {
             &extractor_v3,
             &config_v3,
             &generation_v3
+        ));
+        let extractor_v4 = sha256_bytes(b"nando.multi-source-extractor.v4");
+        let config_v4 = sha256_bytes(b"nando.multi-source-extractor-config.v4");
+        let generation_v4 = canonical_json_sha256(&(
+            nando_operator_learning::multi_source::MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
+            extractor_v4.as_str(),
+            config_v4.as_str(),
+        ))
+        .expect("repaired generation root");
+        assert!(capture_generation_v2_roots(
+            &extractor_v4,
+            &config_v4,
+            &generation_v4
         ));
         assert!(!capture_generation_v2_roots(
             &sha256_bytes(b"nando.multi-source-extractor.v1"),

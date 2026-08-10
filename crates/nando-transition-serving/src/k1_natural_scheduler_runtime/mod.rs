@@ -11,23 +11,25 @@ use nando_operator_learning::multi_source::{
     FrozenRawPhaseT1ContractV1, K1_CANDIDATE_READINESS_MIN_LINEAGES_V1,
     K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1_MISSING_COMPLETED_FRAME_BLOCKER_V1,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2, K1ConsequenceTypeV1, K1GenerationBudgetV1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3, K1ConsequenceTypeV1, K1GenerationBudgetV1,
     K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
     K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1, K1NaturalCohortCatalogV1,
     K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1, K1ProbeBudgetRemainingV1,
     K1ProbeClassPredictionV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
     K1SchedulerEventPayloadV1, MULTI_SOURCE_JOIN_MAX_ROWS_V1,
-    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MultiSourceJoinCensoredReasonV1,
+    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3, MultiSourceJoinCensoredReasonV1,
     MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
     MultiSourceT1IdentificationV3, NaturalT1ProgramArtifactV1, PassiveT1ProbeContractV1,
     PreActionShapeClassV1, PreActionTopologyAuditRowV1, TransportTerminalReceiptV1,
     build_k1_natural_candidate_queue_with_exclusions_v1, build_k1_natural_cohort_catalog_v1,
     factor_multi_source_row_v1, identify_multi_source_t1_operator_with_frozen_raw_phase_v1,
     join_prepared_multi_source_frame_v1, natural_t1_discovery_basis_root_v1,
-    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
-    prepare_multi_source_join_frame_v1, source_neutral_topology_root_v1,
-    stream_multi_source_joins_from_iter, validate_pre_action_topology_join_eligibility_v1,
+    natural_t1_discovery_basis_root_v2, pre_action_applicability_shape_root_v1,
+    pre_action_t1_binding_root, prepare_multi_source_join_frame_v1,
+    source_neutral_topology_quotient_root_v2, stream_multi_source_joins_from_iter,
+    validate_pre_action_topology_join_eligibility_v1,
 };
 use serde::{Deserialize, Serialize};
 
@@ -41,7 +43,8 @@ use crate::k1_natural_scheduler::{
     K1SchedulerLaneV1, K1SchedulerProjectionV1, append_candidate_freeze_for,
     append_future_contract, append_future_outcome, append_future_prediction,
     append_future_prediction_censor, append_scheduler_payload_for, candidate_exclusions_for,
-    current_deficit_snapshot, duplicate_candidate_exclusions_for, restore_projection_for,
+    candidate_topology_root, current_deficit_snapshot, duplicate_candidate_exclusions_for,
+    restore_projection_for,
 };
 use crate::k1_transfer_lifecycle::K1TransferLifecycleReportV1;
 use crate::operator_certification::CertificationAuthorityConfigV1;

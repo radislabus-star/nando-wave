@@ -4904,8 +4904,8 @@ fn handle_openai(
                     let commit = nando_operator_kernel::PreActionTopologyCommitV1::seal(
                         &structure_v2,
                         nando_operator_kernel::MultiSourceEvidenceOriginV1::FreshLive,
-                        sha256_bytes(b"nando.multi-source-extractor.v3"),
-                        sha256_bytes(b"nando.multi-source-extractor-config.v3"),
+                        sha256_bytes(b"nando.multi-source-extractor.v4"),
+                        sha256_bytes(b"nando.multi-source-extractor-config.v4"),
                         capture_receipt.capture_sequence(),
                     );
                     match commit {

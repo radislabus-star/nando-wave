@@ -2,7 +2,7 @@ use nando_operator_kernel::AtomValueType;
 use serde_json::Value;
 
 use super::selection::{
-    continuation_handle_scalar_from_output, identifier_tokens, observed_json_path_digest,
+    continuation_handle_scalar_from_output_any, identifier_tokens, observed_json_path_digest,
     request_identifier_positions,
 };
 
@@ -48,13 +48,13 @@ pub fn observed_json_scalar_roles(
 pub fn observed_continuation_handle_role(
     output: &Value,
 ) -> Result<ObservedJsonScalarRole, &'static str> {
-    let scalar = continuation_handle_scalar_from_output(output, AtomValueType::Identifier)?;
+    let scalar = continuation_handle_scalar_from_output_any(output)?;
     Ok(ObservedJsonScalarRole {
         request_position: None,
         request_position_candidates: Vec::new(),
         json_path_sha256: observed_json_path_digest(&["semantic:continuation_handle".to_owned()]),
         value_sha256: nando_operator_kernel::canonical_json_sha256(&scalar.value)?,
-        value_type: AtomValueType::Identifier,
+        value_type: scalar.value_type,
         depth_bucket: 1,
         role_class: ObservedScalarRoleClass::ContinuationHandle,
     })

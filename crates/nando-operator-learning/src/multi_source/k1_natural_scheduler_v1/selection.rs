@@ -5,8 +5,8 @@ use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
 use super::model::{
     K1_NATURAL_CANDIDATE_MAX_ROWS_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1,
-    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2, K1CandidateReadinessV1, K1CandidateScoreV1,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3, K1CandidateReadinessV1, K1CandidateScoreV1,
     K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1NaturalCandidateQueueRowV1,
     K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
     K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
@@ -45,7 +45,7 @@ pub fn build_k1_natural_cohort_catalog_v1(
         if !seen_rows.insert(row.row_root_sha256.as_str()) {
             return Err("k1_natural_catalog_evidence_reused");
         }
-        if row.schema != K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2 || row.safety_veto {
+        if row.schema != K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3 || row.safety_veto {
             safety_veto_rows_excluded = safety_veto_rows_excluded.saturating_add(1);
             continue;
         }
@@ -287,7 +287,7 @@ fn build_candidate(
         .map(|row| row.capture_sequence)
         .ok_or("k1_natural_candidate_empty")?;
     let mut candidate = K1NaturalCohortCandidateV1 {
-        schema: K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2.to_owned(),
+        schema: K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3.to_owned(),
         candidate_root_sha256: String::new(),
         capture_generation_root_sha256: key.capture_generation_root_sha256,
         candidate_structural_root_sha256: key.candidate_structural_root_sha256,

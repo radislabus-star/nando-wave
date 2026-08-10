@@ -1077,6 +1077,53 @@ target output hidden from actor
 Recovered rows may participate in support, but the candidate freeze records
 them separately and no recovered row can satisfy this future requirement.
 
+### 10.1 K1 natural cohort identity
+
+K1 scheduling must not confuse capture-local role numbering with structural
+identity. Evidence V3 therefore uses a bounded permutation quotient only for
+forming natural cohorts:
+
+```text
+complete source-neutral topology bytes
+-> typed role classes + directed relation graph
+-> bounded exact canonicalization under role-ID permutation
+-> K1 cohort topology quotient V2
+```
+
+The quotient may remove only a permutation of structurally equivalent local
+role IDs. It must preserve role type, container, cardinality, temporal class,
+depth, structural flags, directed relation kind, grounded-output count and
+output-part count. Non-isomorphic graphs must remain different. If exact
+canonicalization exceeds its bounded search budget, the row falls back to its
+exact role-order identity. Budget exhaustion may reduce grouping power; it may
+never merge two unproved topologies.
+
+This is an evidence-grouping boundary, not a relaxed execution boundary:
+
+```text
+cohort grouping                 topology quotient V2
+frozen candidate shape         immutable
+provider topology bytes        preserved
+role witnesses                 preserved
+pre-action binding manifest    authority-owned and exact
+program applicability          unchanged
+package executor               unchanged
+independent verifier           unchanged
+```
+
+Schema compatibility is explicit:
+
+```text
+freeze V1     -> evidence V1 -> exact topology V1
+freeze V2/V3  -> evidence V2 -> exact topology V1
+freeze V4     -> evidence V3 -> topology quotient V2
+```
+
+Freeze V4 also binds candidate generator V3 and discovery basis V2. Historical
+freezes retain their original identity semantics and roots. The scheduler may
+freeze a quotient cohort only after the existing readiness minima remain true:
+8 settled rows, 2 verified rows and 2 independent lineages.
+
 `STOP-MS3`:
 
 ```text

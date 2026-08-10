@@ -29,6 +29,10 @@ fn supported_capture_generation_roots(extractor: &str, config: &str) -> bool {
             sha256_bytes(b"nando.multi-source-extractor.v3"),
             sha256_bytes(b"nando.multi-source-extractor-config.v3"),
         ),
+        (
+            sha256_bytes(b"nando.multi-source-extractor.v4"),
+            sha256_bytes(b"nando.multi-source-extractor-config.v4"),
+        ),
     ]
     .into_iter()
     .any(|roots| roots.0 == extractor && roots.1 == config)
@@ -859,6 +863,10 @@ mod compatibility_tests {
         assert!(supported_capture_generation_roots(
             &sha256_bytes(b"nando.multi-source-extractor.v3"),
             &sha256_bytes(b"nando.multi-source-extractor-config.v3"),
+        ));
+        assert!(supported_capture_generation_roots(
+            &sha256_bytes(b"nando.multi-source-extractor.v4"),
+            &sha256_bytes(b"nando.multi-source-extractor-config.v4"),
         ));
         assert!(!supported_capture_generation_roots(
             &sha256_bytes(b"nando.multi-source-extractor.v3"),

@@ -7,7 +7,8 @@ use super::queue::{K1CandidateScoreV1, K1DeficitSnapshotV1, K1NaturalCandidateQu
 use super::{
     K1_IDENTIFICATION_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
-    K1_VERSION_SPACE_MAX_CLASSES_V1, canonical_root_slice, canonical_roots, version_space_root,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4, K1_VERSION_SPACE_MAX_CLASSES_V1, canonical_root_slice,
+    canonical_roots, version_space_root,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -218,7 +219,7 @@ impl K1NaturalCandidateFreezeV1 {
             return Err("k1_candidate_freeze_binding_invalid");
         }
         let mut freeze = Self {
-            schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3.to_owned(),
+            schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4.to_owned(),
             freeze_root_sha256: String::new(),
             generation_sequence,
             catalog_root_sha256: catalog.catalog_root_sha256.clone(),
@@ -283,7 +284,7 @@ impl K1NaturalCandidateFreezeV1 {
                 valid_nonzero_sha256(&self.capture_generation_root_sha256)
                     && self.discovery_basis_root_sha256.is_empty()
             }
-            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 => {
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
                 valid_nonzero_sha256(&self.capture_generation_root_sha256)
                     && valid_nonzero_sha256(&self.discovery_basis_root_sha256)
             }
@@ -307,9 +308,17 @@ impl K1NaturalCandidateFreezeV1 {
     }
 
     pub(crate) fn expected_root(&self) -> Result<String, &'static str> {
-        if self.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 {
+        if matches!(
+            self.schema.as_str(),
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4
+        ) {
+            let schema = if self.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 {
+                K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4
+            } else {
+                K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3
+            };
             return canonical_json_sha256(&CandidateFreezeDigestV3 {
-                schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
+                schema,
                 generation_sequence: self.generation_sequence,
                 catalog_root_sha256: &self.catalog_root_sha256,
                 k1_deficit_snapshot_root_sha256: &self.k1_deficit_snapshot_root_sha256,

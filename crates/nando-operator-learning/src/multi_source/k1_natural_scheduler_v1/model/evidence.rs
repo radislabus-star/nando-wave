@@ -1,7 +1,10 @@
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
-use super::{K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2};
+use super::{
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3,
+};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -63,8 +66,81 @@ impl K1NaturalEvidenceRowV1 {
         verified: bool,
         safety_veto: bool,
     ) -> Result<Self, &'static str> {
+        Self::seal_with_schema(
+            K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3,
+            evidence_root_sha256,
+            capture_generation_root_sha256,
+            candidate_structural_root_sha256,
+            source_neutral_topology_root_sha256,
+            semantic_novelty_signature_root_sha256,
+            lineage_root_sha256,
+            consequence_type,
+            evidence_class,
+            capture_sequence,
+            contract_sequence,
+            input_tokens,
+            settled,
+            verified,
+            safety_veto,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal_legacy_v2(
+        evidence_root_sha256: String,
+        capture_generation_root_sha256: String,
+        candidate_structural_root_sha256: String,
+        source_neutral_topology_root_sha256: String,
+        semantic_novelty_signature_root_sha256: String,
+        lineage_root_sha256: String,
+        consequence_type: K1ConsequenceTypeV1,
+        evidence_class: K1NaturalEvidenceClassV1,
+        capture_sequence: u64,
+        contract_sequence: u64,
+        input_tokens: u64,
+        settled: bool,
+        verified: bool,
+        safety_veto: bool,
+    ) -> Result<Self, &'static str> {
+        Self::seal_with_schema(
+            K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+            evidence_root_sha256,
+            capture_generation_root_sha256,
+            candidate_structural_root_sha256,
+            source_neutral_topology_root_sha256,
+            semantic_novelty_signature_root_sha256,
+            lineage_root_sha256,
+            consequence_type,
+            evidence_class,
+            capture_sequence,
+            contract_sequence,
+            input_tokens,
+            settled,
+            verified,
+            safety_veto,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn seal_with_schema(
+        schema: &'static str,
+        evidence_root_sha256: String,
+        capture_generation_root_sha256: String,
+        candidate_structural_root_sha256: String,
+        source_neutral_topology_root_sha256: String,
+        semantic_novelty_signature_root_sha256: String,
+        lineage_root_sha256: String,
+        consequence_type: K1ConsequenceTypeV1,
+        evidence_class: K1NaturalEvidenceClassV1,
+        capture_sequence: u64,
+        contract_sequence: u64,
+        input_tokens: u64,
+        settled: bool,
+        verified: bool,
+        safety_veto: bool,
+    ) -> Result<Self, &'static str> {
         let mut row = Self {
-            schema: K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2.to_owned(),
+            schema: schema.to_owned(),
             row_root_sha256: String::new(),
             evidence_root_sha256,
             capture_generation_root_sha256,
@@ -136,7 +212,7 @@ impl K1NaturalEvidenceRowV1 {
         ];
         let schema_valid = match self.schema.as_str() {
             K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1 => self.capture_generation_root_sha256.is_empty(),
-            K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2 => {
+            K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2 | K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3 => {
                 valid_nonzero_sha256(&self.capture_generation_root_sha256)
             }
             _ => false,
@@ -174,7 +250,7 @@ impl K1NaturalEvidenceRowV1 {
             ));
         }
         canonical_json_sha256(&(
-            K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
+            self.schema.as_str(),
             self.evidence_root_sha256.as_str(),
             self.capture_generation_root_sha256.as_str(),
             self.candidate_structural_root_sha256.as_str(),
@@ -233,5 +309,32 @@ mod tests {
             serde_json::from_value(encoded).expect("decode historical row");
         decoded.validate().expect("validate historical row");
         assert_eq!(decoded.row_root_sha256, row.row_root_sha256);
+    }
+
+    #[test]
+    fn historical_v2_root_remains_decodable_and_stable() {
+        let row = K1NaturalEvidenceRowV1::seal_legacy_v2(
+            root(1),
+            root(2),
+            root(3),
+            root(4),
+            root(5),
+            root(6),
+            K1ConsequenceTypeV1::Scalar,
+            K1NaturalEvidenceClassV1::NaturalLive,
+            7,
+            9,
+            11,
+            true,
+            true,
+            false,
+        )
+        .expect("v2 row");
+        row.validate().expect("valid v2 row");
+        let bytes = serde_json::to_vec(&row).expect("encode v2 row");
+        let restored: K1NaturalEvidenceRowV1 =
+            serde_json::from_slice(&bytes).expect("decode v2 row");
+        restored.validate().expect("validate v2 row");
+        assert_eq!(serde_json::to_vec(&restored).expect("re-encode v2"), bytes);
     }
 }

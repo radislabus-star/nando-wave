@@ -59,7 +59,7 @@ pub(super) fn prepare_tick_context_from_bindings(
             .collect::<Vec<_>>(),
         evidence_epoch_root_sha256.clone(),
         fixture_exclusion_root()?,
-        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2.to_owned(),
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3.to_owned(),
     )
     .map_err(str::to_owned)?;
     let active_protocol_mode_set_root_sha256 =
@@ -103,7 +103,7 @@ pub(super) fn extend_prepared_tick_context(
             .collect::<Vec<_>>(),
         evidence_epoch_root_sha256.clone(),
         fixture_exclusion_root()?,
-        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2.to_owned(),
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3.to_owned(),
     )
     .map_err(str::to_owned)?;
     let active_protocol_mode_set_root_sha256 =
@@ -246,7 +246,7 @@ pub(super) fn advance(
             &candidate,
             queue_row.score.clone(),
             K1_SCHEDULER_SCHEMA_V2.to_owned(),
-            natural_t1_discovery_basis_root_v1().map_err(str::to_owned)?,
+            natural_t1_discovery_basis_root_v2().map_err(str::to_owned)?,
             generation_budget(),
             candidate.last_capture_sequence,
             contract_watermark,
