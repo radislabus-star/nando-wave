@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v2";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v3";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -175,9 +175,9 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         .miner_window_total_tokens
         .saturating_sub(initial.miner_window_cpu_tokens);
     let cpu_gate = if initial.cpu_allowed {
-        "OPEN"
+        "ОТКРЫТ"
     } else {
-        "LOCKED"
+        "ЗАКРЫТ"
     };
     let cpu_gate_tone = if initial.cpu_allowed { "good" } else { "bad" };
     TEMPLATE
@@ -293,58 +293,55 @@ const TEMPLATE: &str = r#"
   background:var(--bg); color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:0;
 }
 .nando-live * { box-sizing:border-box; letter-spacing:0; }
-.nd-inner { width:min(1180px,100%); margin:0 auto; padding:26px 28px; }
+.nd-inner { width:min(1040px,100%); margin:0 auto; padding:24px 28px; }
 .nd-head { border-bottom:1px solid var(--line); background:#090b0c; }
-.nd-head .nd-inner { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:70px; padding-top:16px; padding-bottom:16px; }
+.nd-head .nd-inner { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:64px; padding-top:14px; padding-bottom:14px; }
 .nd-brand { display:flex; align-items:baseline; gap:10px; min-width:0; }
 .nd-brand strong { color:#fff; font-size:21px; font-weight:760; }
-.nd-brand span { color:var(--muted); font-size:12px; font-weight:650; }
+.nd-brand span { color:var(--muted); font-size:12px; font-weight:600; }
 .nd-live { color:var(--muted); font-size:12px; font-weight:600; text-align:right; }
 .nd-live b { color:var(--green); }
 .nd-band { border-bottom:1px solid var(--line); }
-.nd-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:18px; margin-bottom:20px; }
-.nd-section-head h1,.nd-section-head h2 { margin:0; color:#dfe3e5; font-size:15px; font-weight:700; text-transform:none; }
-.nd-scope { color:var(--muted); font-size:11px; font-weight:600; text-align:right; }
 .nd-status { color:var(--amber); font-weight:700; }
 .nd-status.good { color:var(--green); }
 .nd-status.bad { color:var(--red); }
-.primary-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(180px,.65fr); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.primary-cell { min-width:0; padding:24px 24px 24px 0; }
-.primary-cell + .primary-cell { padding-left:24px; border-left:1px solid var(--line); }
-.metric-label { color:var(--muted); font-size:12px; font-weight:650; }
-.metric-value { display:block; max-width:100%; margin-top:10px; color:#f4f6f7; font-size:34px; font-weight:760; overflow-wrap:anywhere; }
-.primary-cell.cpu .metric-value,.primary-cell.share .metric-value { color:var(--green); }
-.metric-note { margin-top:8px; color:#b7bec2; font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
-.metric-sub { margin-top:5px; color:var(--muted); font-size:11px; line-height:1.45; overflow-wrap:anywhere; }
-.ratio-rail { height:6px; margin-top:13px; background:#282d30; overflow:hidden; }
+.result-kicker { color:var(--muted); font-size:12px; font-weight:650; }
+.coverage-title { max-width:820px; margin:12px 0 0; color:#f4f6f7; font-size:42px; font-weight:720; line-height:1.12; }
+.coverage-title output { color:var(--green); font:inherit; }
+.coverage-fraction { margin:18px 0 0; color:#b7bec2; font-size:15px; line-height:1.5; }
+.coverage-fraction strong { color:#f0f3f4; font-weight:680; }
+.ratio-rail { height:7px; margin-top:18px; background:#282d30; overflow:hidden; }
 .ratio-fill { width:0; height:100%; background:var(--green); transition:width .2s ease; }
-.epoch-line { display:flex; align-items:center; justify-content:space-between; gap:18px; padding-top:14px; color:var(--muted); font-size:12px; line-height:1.5; }
-.epoch-line strong { color:#dfe3e5; font-size:13px; font-weight:680; }
-.epoch-line .epoch-result { color:var(--green); }
-.miner-line { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.miner-cell { min-width:0; padding:20px 24px 20px 0; }
-.miner-cell + .miner-cell { padding-left:24px; border-left:1px solid var(--line); }
-.miner-cell.recognized .metric-value,.miner-share { color:var(--green); }
-.miner-progress { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; margin-top:13px; }
-.miner-share { font-size:18px; font-weight:700; }
-.scope-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
-.law-line { display:grid; grid-template-columns:minmax(220px,.75fr) minmax(0,1.5fr); gap:28px; align-items:start; padding:22px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.law-state strong { display:block; margin-top:8px; color:var(--amber); font-size:25px; font-weight:720; }
-.law-counts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
-.law-count { min-width:0; }
-.law-count span { display:block; color:var(--muted); font-size:11px; }
-.law-count b { display:block; margin-top:6px; color:#e3e7e9; font-size:20px; font-weight:700; }
-.next-transition { margin-top:15px; color:#cfd4d6; font-size:13px; line-height:1.5; }
+.result-meta { display:flex; flex-wrap:wrap; gap:8px 24px; margin-top:14px; color:var(--muted); font-size:12px; line-height:1.5; }
+.result-meta strong { color:#dfe3e5; font-weight:680; }
+.result-meta .epoch-result { color:var(--green); }
+.status-row { display:grid; grid-template-columns:180px minmax(0,1fr); gap:34px; padding:25px 0; border-bottom:1px solid var(--line); }
+.status-row:last-child { border-bottom:0; }
+.status-name h2 { margin:0; color:#e1e5e7; font-size:15px; font-weight:700; }
+.status-scope { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.45; }
+.status-content { min-width:0; }
+.miner-sentence { display:flex; flex-wrap:wrap; gap:10px 34px; color:#bdc4c7; font-size:15px; line-height:1.45; }
+.miner-sentence strong { display:block; margin-top:4px; color:#f1f3f4; font-size:24px; font-weight:700; overflow-wrap:anywhere; }
+.miner-sentence .recognized strong,.miner-share { color:var(--green); }
+.miner-progress { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; margin-top:14px; }
+.miner-progress .ratio-rail { margin-top:0; }
+.miner-share { font-size:16px; font-weight:700; }
+.scope-note { margin-top:10px; color:var(--muted); font-size:11px; line-height:1.5; }
+.law-state strong { display:block; color:var(--amber); font-size:24px; font-weight:700; line-height:1.25; }
+.law-summary { margin-top:9px; color:#c7cdd0; font-size:14px; line-height:1.5; }
+.law-summary b { color:#edf0f1; font-weight:700; }
+.next-transition { margin-top:10px; color:#aeb7bb; font-size:12px; line-height:1.5; }
 .next-transition strong { color:var(--muted); font-weight:650; }
-.blocker-list { display:flex; flex-wrap:wrap; gap:7px 16px; margin-top:9px; color:var(--muted); font-size:11px; }
+.blocker-list { display:flex; flex-wrap:wrap; gap:5px 15px; margin-top:7px; color:var(--muted); font-size:11px; }
 .blocker-list b { color:#bdc4c7; }
-.technical-details { border-bottom:1px solid var(--line); }
-.technical-details > summary { display:flex; justify-content:space-between; gap:20px; padding:17px 0; color:#c8ced1; cursor:pointer; font-size:13px; font-weight:650; list-style:none; }
+.technical-details > summary { display:flex; justify-content:space-between; gap:20px; padding:16px 0; color:#aeb7bb; cursor:pointer; font-size:12px; font-weight:650; list-style:none; }
 .technical-details > summary::-webkit-details-marker { display:none; }
 .technical-details > summary::before { content:"+"; flex:0 0 18px; color:var(--muted); }
 .technical-details[open] > summary::before { content:"−"; }
-.technical-details > summary .summary-meta { margin-left:auto; color:var(--muted); font-size:11px; font-weight:550; text-align:right; }
+.technical-details > summary .summary-meta { margin-left:auto; color:var(--muted); font-size:10px; font-weight:550; text-align:right; }
 .technical-body { padding:4px 0 22px; }
+.diagnostic-summary { display:flex; flex-wrap:wrap; gap:6px 18px; color:var(--muted); font-size:11px; }
+.diagnostic-summary b { color:#d7dcde; font-weight:680; }
 .technical-section { margin-top:20px; }
 .technical-title { margin:0 0 10px; color:var(--muted); font-size:11px; font-weight:650; }
 .package-table { border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
@@ -386,11 +383,8 @@ const TEMPLATE: &str = r#"
 .window-route.mixed { color:var(--amber); }
 .window-route.outside_nando { color:var(--red); }
 .window-route.idle { color:var(--muted); }
-.nd-foot .nd-inner { display:flex; justify-content:space-between; gap:20px; padding-top:16px; padding-bottom:16px; color:var(--muted); font-size:10px; }
+.nd-foot .nd-inner { display:flex; justify-content:space-between; gap:20px; padding-top:12px; padding-bottom:12px; color:#667075; font-size:9px; }
 @media (max-width:900px) {
-  .primary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .primary-cell.share { grid-column:1 / -1; padding-left:0; border-left:0; border-top:1px solid var(--line); }
-  .law-line { grid-template-columns:1fr; }
   .safety-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .safety-cell { border-bottom:1px solid var(--line); }
   .safety-cell:nth-child(2n) { border-right:0; }
@@ -398,18 +392,14 @@ const TEMPLATE: &str = r#"
 }
 @media (max-width:680px) {
   .nd-inner { padding:20px 16px; }
-  .nd-head .nd-inner,.nd-section-head,.nd-foot .nd-inner { align-items:flex-start; flex-direction:column; gap:7px; }
-  .nd-live,.nd-scope { text-align:left; }
-  .primary-grid,.miner-line,.law-counts,.k1-line,.safety-grid,.discovery-detail { grid-template-columns:1fr; }
-  .primary-cell,.primary-cell.share,.miner-cell { grid-column:auto; padding:16px 0; border-left:0; border-top:0; border-bottom:1px solid var(--line); }
-  .primary-cell + .primary-cell { padding-left:0; border-left:0; }
-  .primary-cell:last-child,.miner-cell:last-child { border-bottom:0; }
-  .metric-value { font-size:28px; }
-  .epoch-line { align-items:flex-start; flex-direction:column; gap:4px; }
-  .miner-cell + .miner-cell { padding-left:0; border-left:0; }
-  .law-counts { gap:12px; }
-  .law-count { padding-bottom:10px; border-bottom:1px solid #252a2d; }
-  .law-count:last-child { border-bottom:0; }
+  .nd-head .nd-inner,.nd-foot .nd-inner { align-items:flex-start; flex-direction:column; gap:7px; }
+  .nd-live { text-align:left; }
+  .coverage-title { font-size:32px; }
+  .coverage-fraction { font-size:14px; }
+  .result-meta { flex-direction:column; gap:4px; }
+  .status-row { grid-template-columns:1fr; gap:14px; padding:22px 0; }
+  .miner-sentence { display:grid; grid-template-columns:1fr; gap:13px; }
+  .miner-sentence strong { font-size:22px; }
   .technical-details > summary { align-items:flex-start; }
   .technical-details > summary .summary-meta { display:none; }
   .package-row { grid-template-columns:minmax(0,1fr); gap:3px; padding:11px 0; }
@@ -419,6 +409,7 @@ const TEMPLATE: &str = r#"
   .certificate.law::before { content:"LAW "; }
   .certificate.mechanism::before { content:"MECHANISM "; }
   .certificate.k1::before { content:"K1 "; }
+  .k1-line,.safety-grid,.discovery-detail { grid-template-columns:1fr; }
   .k1-cell,.safety-cell,.safety-cell:last-child,.discovery-detail > div { grid-column:auto; padding:12px 0; border-right:0; border-bottom:1px solid var(--line); }
   .k1-cell:last-child,.safety-cell:last-child,.discovery-detail > div:last-child { border-bottom:0; }
   .window-row { grid-template-columns:1fr; gap:2px; padding:8px 0; }
@@ -427,84 +418,57 @@ const TEMPLATE: &str = r#"
 </style>
 <main class="nando-live" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live control">
   <header class="nd-head"><div class="nd-inner">
-    <div class="nd-brand"><strong>Nando</strong><span>рабочая панель</span></div>
+    <div class="nd-brand"><strong>Nando</strong><span>результат</span></div>
     <div class="nd-live"><b>Live</b> · обновлено <span id="snapshot-age">0</span> с назад · источник <span id="source-age">—</span> с · сервисы <span id="services">—/3</span></div>
   </div></header>
 
   <section class="nd-band"><div class="nd-inner">
-    <div class="nd-section-head">
-      <h1>Что сервер сделал за всё время</h1>
-      <div class="nd-scope">вся записанная история</div>
+    <div class="result-kicker">Доказанный результат за всю записанную историю</div>
+    <h1 class="coverage-title"><output id="lifetime-share">__LIFETIME_SHARE__</output> трафика воспроизведено на CPU</h1>
+    <p class="coverage-fraction"><strong id="lifetime-cpu">__LIFETIME_CPU__</strong> из <strong id="lifetime-total">__LIFETIME_TOTAL__</strong> входных токенов</p>
+    <div class="ratio-rail"><div id="lifetime-bar" class="ratio-fill"></div></div>
+    <div class="result-meta">
+      <span>Допуск CPU <strong id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</strong></span>
+      <span>Текущая эпоха: <strong id="epoch-cpu" class="epoch-result">__EPOCH_CPU__</strong> из <span id="epoch-total">__EPOCH_TOTAL__</span>, <strong id="epoch-share">__EPOCH_SHARE__</strong></span>
+      <span><span id="epoch-accepts">__EPOCH_ACCEPTS__</span> ответов без upstream из <span id="epoch-requests">__EPOCH_REQUESTS__</span></span>
+      <span id="epoch-start">текущая accounting epoch</span>
     </div>
-    <div class="primary-grid">
-      <div class="primary-cell">
-        <div class="metric-label">Весь трафик сервера</div>
-        <output id="lifetime-total" class="metric-value">__LIFETIME_TOTAL__</output>
-        <div class="metric-note">входных токенов записано</div>
-      </div>
-      <div class="primary-cell cpu">
-        <div class="metric-label">Воспроизведено на CPU</div>
-        <output id="lifetime-cpu" class="metric-value">__LIFETIME_CPU__</output>
-        <div class="metric-note">по проверенным квитанциям исполнения</div>
-      </div>
-      <div class="primary-cell share">
-        <div class="metric-label">Итоговый CPU-охват</div>
-        <output id="lifetime-share" class="metric-value">__LIFETIME_SHARE__</output>
-        <div class="ratio-rail"><div id="lifetime-bar" class="ratio-fill"></div></div>
-        <div class="metric-note">допуск CPU <strong id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</strong></div>
-      </div>
-    </div>
-    <div class="epoch-line">
-      <span><strong>Текущая эпоха:</strong> <span id="epoch-total">__EPOCH_TOTAL__</span> токенов → <strong id="epoch-cpu" class="epoch-result">__EPOCH_CPU__ на CPU</strong> · <strong id="epoch-share">__EPOCH_SHARE__</strong></span>
-      <span><span id="epoch-accepts">__EPOCH_ACCEPTS__</span> ответов без upstream · <span id="epoch-requests">__EPOCH_REQUESTS__</span> всего</span>
-    </div>
-    <div id="epoch-start" class="metric-sub">текущая accounting epoch</div>
     <span id="avoided-calls" hidden>__EPOCH_ACCEPTS__</span>
     <span id="epoch-bar" hidden></span>
   </div></section>
 
   <section class="nd-band"><div class="nd-inner">
-    <div class="nd-section-head">
-      <h2>Что видит майнер</h2>
-      <div id="miner-window-start" class="nd-scope">отдельная начальная точка</div>
-    </div>
-    <div class="miner-line">
-      <div class="miner-cell">
-        <div class="metric-label">Увидел</div>
-        <output id="miner-seen" class="metric-value">__MINER_SEEN__</output>
-        <div class="metric-note"><span id="miner-seen-intents">__MINER_SEEN_INTENTS__</span> intents</div>
+    <div class="status-row">
+      <div class="status-name">
+        <h2>Майнер</h2>
+        <div id="miner-window-start" class="status-scope">отдельная начальная точка</div>
       </div>
-      <div class="miner-cell recognized">
-        <div class="metric-label">Распознал CPU-класс</div>
-        <output id="miner-recognized" class="metric-value">__MINER_RECOGNIZED__</output>
+      <div class="status-content">
+        <div class="miner-sentence">
+          <span>Увидел<strong id="miner-seen">__MINER_SEEN__</strong></span>
+          <span class="recognized">Распознал CPU-класс<strong id="miner-recognized">__MINER_RECOGNIZED__</strong></span>
+        </div>
         <div class="miner-progress"><div class="ratio-rail"><div id="miner-bar" class="ratio-fill"></div></div><output id="miner-share" class="miner-share">__MINER_RECOGNIZED_SHARE__</output></div>
-        <div class="metric-note"><span id="miner-recognized-intents">__MINER_RECOGNIZED_INTENTS__</span> verified intents</div>
+        <div class="scope-note"><span id="miner-seen-intents">__MINER_SEEN_INTENTS__</span> запросов, из них <span id="miner-recognized-intents">__MINER_RECOGNIZED_INTENTS__</span> распознано. Не распознано <strong id="miner-unrecognized">__MINER_UNRECOGNIZED__</strong>; <span id="miner-unresolved">unresolved —</span>.</div>
+        <div class="scope-note">У майнера своё более раннее окно учёта, поэтому его нельзя напрямую сравнивать с общей историей сервера.</div>
       </div>
     </div>
-    <div class="scope-note">Не распознано: <strong id="miner-unrecognized">__MINER_UNRECOGNIZED__</strong>; <span id="miner-unresolved">unresolved —</span>. Это окно началось раньше lifetime accounting, поэтому его нельзя делить на трафик сервера выше.</div>
-  </div></section>
-
-  <section class="nd-band"><div class="nd-inner">
-    <div class="nd-section-head">
-      <h2>Следующий естественный закон</h2>
-      <div class="nd-scope">Law #2</div>
-    </div>
-    <div class="law-line">
-      <div class="law-state"><span class="metric-label">Состояние</span><strong id="scheduler-state">Загрузка</strong></div>
-      <div class="law-counts">
-        <div class="law-count"><span>Готово сейчас</span><b id="ready-now">—</b></div>
-        <div class="law-count"><span>Найдено когорт</span><b id="catalog-cohorts">—</b></div>
-        <div class="law-count"><span>Законов K1</span><b id="k1-laws-main">—</b></div>
+    <div class="status-row">
+      <div class="status-name"><h2>Закон №2</h2><div class="status-scope">следующий естественный закон</div></div>
+      <div class="status-content">
+        <div class="law-state"><strong id="scheduler-state">Загрузка</strong></div>
+        <div class="law-summary"><b id="ready-now">—</b> когорт готово сейчас из <b id="catalog-cohorts">—</b> найденных. K1: <b id="k1-laws-main">—</b>.</div>
+        <div class="next-transition"><strong>Следующий переход:</strong> <span id="next-transition">новые обычные данные → готовая когорта → Law №2</span></div>
+        <div id="readiness-blockers" class="blocker-list"></div>
       </div>
     </div>
-    <div class="next-transition"><strong>Дальше:</strong> <span id="next-transition">новое ordinary evidence → readiness PASS → frozen generation → Law #2</span></div>
-    <div id="readiness-blockers" class="blocker-list"></div>
   </div></section>
 
   <section class="nd-band"><div class="nd-inner">
     <details class="technical-details">
-      <summary><span>Технические детали</span><span class="summary-meta"><span id="active-packages">—</span> active packages · safety <span id="safety-services">—/3</span> · false accepts <span id="false-accepts">—</span> · parity <span id="parity-failures">—</span></span></summary>
+      <summary><span>Диагностика</span></summary>
       <div class="technical-body">
+        <div class="diagnostic-summary"><span>Пакеты <b id="active-packages">—</b></span><span>Сервисы <b id="safety-services">—/3</b></span><span>Ложные допуски <b id="false-accepts">—</b></span><span>Ошибки parity <b id="parity-failures">—</b></span></div>
         <div class="technical-section">
           <h3 class="technical-title">Discovery</h3>
           <div class="discovery-detail">
@@ -556,10 +520,9 @@ const TEMPLATE: &str = r#"
   const percent = (part, total, digits = 2) => total > 0 ? `${(part * 100 / total).toFixed(digits).replace(".", ",")}%` : `0,${"0".repeat(digits)}%`;
   const bar = (id, part, total) => { const target = node(id); if (target) target.style.width = total > 0 ? `${Math.min(100, part * 100 / total)}%` : "0"; };
   const localTime = unix => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short", timeStyle:"medium"}) : "—";
-  const shortRoot = value => value ? `${value.slice(0, 8)}…${value.slice(-8)}` : "—";
   const readable = value => ({
-    waiting_for_evidence:"Ждёт новые данные",
-    no_readiness_pass_candidate:"нет новой готовой когорты",
+    waiting_for_evidence:"Ждёт повторяемую когорту",
+    no_readiness_pass_candidate:"нет готовой повторяемой когорты",
     settled_evidence_below_freeze_minimum:"мало завершённых наблюдений",
     independent_lineages_below_freeze_minimum:"мало независимых lineage",
     selected_role_witness_missing:"capture не сохранил типизированную роль",
@@ -635,7 +598,7 @@ const TEMPLATE: &str = r#"
     text("lifetime-cpu", number.format(lifetime.cpu_tokens || 0));
     text("lifetime-share", percent(lifetime.cpu_tokens || 0, lifetime.input_tokens || 0));
     bar("lifetime-bar", lifetime.cpu_tokens || 0, lifetime.input_tokens || 0);
-    text("cpu-gate", safety.cpu_allowed ? "OPEN" : "LOCKED");
+    text("cpu-gate", safety.cpu_allowed ? "ОТКРЫТ" : "ЗАКРЫТ");
     className("cpu-gate", `nd-status ${safety.cpu_allowed ? "good" : "bad"}`);
 
     const unrecognized = Math.max(0, (miner.seen_tokens || 0) - (miner.recognized_tokens || 0));
@@ -656,8 +619,8 @@ const TEMPLATE: &str = r#"
     text("completed-ready", `${number.format(discovery.completed_ready_excluded || 0)} / ${number.format(discovery.historical_readiness_pass || 0)}`);
     text("retained-queue", number.format(discovery.retained_queue || 0));
     const next = discovery.ready_now > 0
-      ? `${number.format(discovery.ready_now)} готовых когорт → заморозка generation ${number.format(discovery.next_generation_sequence || 0)} → identifier → Law #2`
-      : `${readable(discovery.blocker)} → новый обычный трафик → готовая когорта → generation ${number.format(discovery.next_generation_sequence || 0)} → Law #2`;
+      ? `автоматика заморозит поколение ${number.format(discovery.next_generation_sequence || 0)} и проверит Закон №2`
+      : `${readable(discovery.blocker)}. Автоматика продолжит с поколения ${number.format(discovery.next_generation_sequence || 0)}, когда появится готовая когорта`;
     text("next-transition", next);
     const blockers = node("readiness-blockers");
     if (blockers) {
@@ -670,11 +633,6 @@ const TEMPLATE: &str = r#"
         item.append(total, ` ${readable(name)}`);
         blockers.appendChild(item);
       }
-      const root = document.createElement("span");
-      const label = document.createElement("b");
-      label.textContent = "LEAD";
-      root.append(label, ` ${shortRoot(discovery.leading_candidate_root_sha256)}`);
-      blockers.appendChild(root);
     }
 
     text("active-packages", number.format(snapshot.packages?.active || 0));
@@ -787,14 +745,14 @@ mod tests {
             miner_window_cpu_intents: 9_832,
             cpu_allowed: true,
         });
-        assert!(html.contains("Что сервер сделал за всё время"));
+        assert!(html.contains("трафика воспроизведено на CPU"));
         assert!(html.contains("1 733 026 637"));
         assert!(html.contains("165 104 290"));
         assert!(html.contains("9,53%"));
         assert!(html.contains("7 694 807 361"));
         assert!(html.contains("10 882 437 482"));
         assert!(html.contains("1 613 584 240"));
-        assert!(html.contains("его нельзя делить на трафик сервера выше"));
+        assert!(html.contains("нельзя напрямую сравнивать с общей историей сервера"));
         assert!(html.contains("<details class=\"technical-details\">"));
         assert!(html.contains("/api/v1/dashboard"));
         assert!(!html.contains("CANDIDATE INPUT"));
@@ -818,7 +776,7 @@ mod tests {
             miner_window_cpu_intents: 0,
             cpu_allowed: false,
         });
-        assert!(html.contains("class=\"nd-status bad\">LOCKED"));
+        assert!(html.contains("class=\"nd-status bad\">ЗАКРЫТ"));
         assert!(!html.contains("__CPU_GATE__"));
     }
 }
