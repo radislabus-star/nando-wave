@@ -30,6 +30,7 @@ const BRIDGE_META_SCHEMA_V2: &str = "nando.learning-structure-bridge-meta.v2";
 const MAX_PENDING_BYTES_V2: u64 = 64 * 1024 * 1024;
 const RECORD_SUFFIX: &str = ".cbor";
 const PRODUCER_DURABILITY_INTERVAL: Duration = Duration::from_millis(10);
+const CONSUMER_BATCH_RECORDS: usize = 64;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
 pub(crate) struct LearningStructureEndpointStatusV2 {
@@ -475,35 +476,57 @@ fn drain_pending_with_archive(
     topology_archive: Option<&Arc<Mutex<MultiSourceTopologyArchive>>>,
     ms3_frozen_version_space: Option<&Arc<Mutex<Ms3FrozenVersionSpaceRuntime>>>,
 ) -> Result<(), String> {
-    for path in pending_paths(&inner.pending_dir)? {
-        let started = Instant::now();
-        let (sequence, expected_digest) = pending_identity(&path)?;
-        let record = read_record(&path, &expected_digest)?;
+    let paths = pending_paths(&inner.pending_dir)?;
+    for batch in paths.chunks(CONSUMER_BATCH_RECORDS) {
+        drain_pending_batch(
+            inner,
+            index,
+            topology_archive,
+            ms3_frozen_version_space,
+            batch,
+        )?;
+    }
+    Ok(())
+}
+
+fn drain_pending_batch(
+    inner: &BridgeInner,
+    index: &RequestLearningIndex,
+    topology_archive: Option<&Arc<Mutex<MultiSourceTopologyArchive>>>,
+    ms3_frozen_version_space: Option<&Arc<Mutex<Ms3FrozenVersionSpaceRuntime>>>,
+    paths: &[PathBuf],
+) -> Result<(), String> {
+    let started = Instant::now();
+    let watermark = inner
+        .watermark
+        .lock()
+        .map_err(|_| "learning_structure_bridge_watermark_lock_poisoned".to_owned())?
+        .clone();
+    let mut next_watermark = watermark.clone();
+    let mut acknowledged = Vec::with_capacity(paths.len());
+    let mut accepted_sequences = Vec::with_capacity(paths.len());
+    let mut duplicate_count = 0_u64;
+    let mut topology_rows = Vec::new();
+
+    for path in paths {
+        let (sequence, expected_digest) = pending_identity(path)?;
+        let record = read_record(path, &expected_digest)?;
         if record.bridge_epoch_sha256() != inner.epoch_sha256 {
-            quarantine(inner, &path, "learning_structure_bridge_epoch_mismatch")?;
+            quarantine(inner, path, "learning_structure_bridge_epoch_mismatch")?;
             continue;
         }
-        let watermark = inner
-            .watermark
-            .lock()
-            .map_err(|_| "learning_structure_bridge_watermark_lock_poisoned".to_owned())?
-            .clone();
         if sequence <= watermark.last_sequence {
             if sequence == watermark.last_sequence
                 && record.record_sha256() != watermark.last_record_sha256
             {
-                quarantine(
-                    inner,
-                    &path,
-                    "learning_structure_bridge_ack_digest_mismatch",
-                )?;
+                quarantine(inner, path, "learning_structure_bridge_ack_digest_mismatch")?;
                 continue;
             }
-            acknowledge_path(&path, &inner.pending_dir)?;
-            inner.consumer.duplicates.fetch_add(1, Ordering::Relaxed);
+            acknowledged.push(path.clone());
+            duplicate_count = duplicate_count.saturating_add(1);
             continue;
         }
-        let expected_sequence = watermark.last_sequence.saturating_add(1);
+        let expected_sequence = next_watermark.last_sequence.saturating_add(1);
         if sequence != expected_sequence {
             inner.sequence_gaps.fetch_add(1, Ordering::Relaxed);
             return Err(format!(
@@ -516,57 +539,58 @@ fn drain_pending_with_archive(
                 .map_err(str::to_owned)?,
             LearningStructureRecord::V3(record) => {
                 index.observe_structure_v3(record).map_err(str::to_owned)?;
-                let topology_row = (topology_archive.is_some()
-                    || ms3_frozen_version_space.is_some())
-                .then(|| pre_action_topology_audit_row_v1(record).map_err(str::to_owned))
-                .transpose()?;
-                if let Some(archive) = topology_archive {
-                    archive
-                        .lock()
-                        .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
-                        .append(
-                            topology_row
-                                .as_ref()
-                                .ok_or_else(|| "multi_source_topology_row_missing".to_owned())?,
-                        )?;
-                }
-                if let Some(runtime) = ms3_frozen_version_space {
-                    // Persist the law prediction while only pre-action topology is visible.
-                    // Terminal and completed-frame evidence are joined by the later evaluator.
-                    let predicted_at_unix_nanos =
-                        u64::try_from(unix_now_nanos()).unwrap_or(u64::MAX);
-                    runtime
-                        .lock()
-                        .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?
-                        .observe_topology(
-                            topology_row
-                                .as_ref()
-                                .ok_or_else(|| "multi_source_topology_row_missing".to_owned())?,
-                            predicted_at_unix_nanos,
-                        )?;
+                if topology_archive.is_some() || ms3_frozen_version_space.is_some() {
+                    topology_rows
+                        .push(pre_action_topology_audit_row_v1(record).map_err(str::to_owned)?);
                 }
             }
         }
-        let next_watermark = RequestLearningWatermarkV2 {
+        next_watermark = RequestLearningWatermarkV2 {
             bridge_epoch_sha256: inner.epoch_sha256.clone(),
             last_sequence: sequence,
             last_record_sha256: record.record_sha256().to_owned(),
         };
+        acknowledged.push(path.clone());
+        accepted_sequences.push(sequence);
+    }
+
+    if let Some(archive) = topology_archive {
+        archive
+            .lock()
+            .map_err(|_| "multi_source_topology_archive_lock_poisoned".to_owned())?
+            .append_batch(&topology_rows)?;
+    }
+    if let Some(runtime) = ms3_frozen_version_space {
+        let predicted_at_unix_nanos = u64::try_from(unix_now_nanos()).unwrap_or(u64::MAX);
+        let mut runtime = runtime
+            .lock()
+            .map_err(|_| "ms3_frozen_version_space_lock_poisoned".to_owned())?;
+        for topology_row in &topology_rows {
+            runtime.observe_topology(topology_row, predicted_at_unix_nanos)?;
+        }
+    }
+    if next_watermark.last_sequence > watermark.last_sequence {
         let checkpoint = index.checkpoint_cbor(&next_watermark)?;
         write_private_file_atomic(&inner.checkpoint_path, &checkpoint)?;
         *inner
             .watermark
             .lock()
             .map_err(|_| "learning_structure_bridge_watermark_lock_poisoned".to_owned())? =
-            next_watermark;
-        acknowledge_path(&path, &inner.pending_dir)?;
-        record_success(&inner.consumer, sequence);
-        inner
-            .consumer
-            .durable_sequence
-            .store(sequence, Ordering::Release);
-        record_timing(&inner.consumer, started);
+            next_watermark.clone();
     }
+    acknowledge_paths(&acknowledged, &inner.pending_dir)?;
+    inner
+        .consumer
+        .duplicates
+        .fetch_add(duplicate_count, Ordering::Relaxed);
+    for sequence in accepted_sequences {
+        record_success(&inner.consumer, sequence);
+    }
+    inner
+        .consumer
+        .durable_sequence
+        .store(next_watermark.last_sequence, Ordering::Release);
+    record_timing(&inner.consumer, started);
     Ok(())
 }
 
@@ -791,9 +815,15 @@ fn quarantine(inner: &BridgeInner, path: &Path, reason: &str) -> Result<(), Stri
     sync_directory(&inner.rejected_dir)
 }
 
-fn acknowledge_path(path: &Path, pending_dir: &Path) -> Result<(), String> {
-    fs::remove_file(path).map_err(|error| format!("learning_structure_bridge_ack:{error}"))?;
-    sync_directory(pending_dir)
+fn acknowledge_paths(paths: &[PathBuf], pending_dir: &Path) -> Result<(), String> {
+    for path in paths {
+        fs::remove_file(path).map_err(|error| format!("learning_structure_bridge_ack:{error}"))?;
+    }
+    if paths.is_empty() {
+        Ok(())
+    } else {
+        sync_directory(pending_dir)
+    }
 }
 
 fn record_file_name(sequence: u64, digest: &str) -> String {
@@ -1095,6 +1125,57 @@ mod tests {
                 .len(),
             1
         );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn batch_boundary_restores_checkpoint_and_topology_archive() {
+        let root = test_root("batch-restart");
+        let records = u64::try_from(CONSUMER_BATCH_RECORDS).expect("batch records") + 1;
+        let (producer, _) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), true, false, Duration::ZERO)
+                .expect("producer");
+        for sequence in 1..=records {
+            let (receipt, v1) = evidence(sequence);
+            let (v2, commit) = topology(&receipt, &v1);
+            producer
+                .submit_v3(receipt, v1, v2, commit)
+                .expect("submit v3");
+        }
+
+        let (consumer, index) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), false, true, Duration::ZERO)
+                .expect("consumer");
+        let archive_root = root.join("topology-archive");
+        let archive = Arc::new(Mutex::new(
+            MultiSourceTopologyArchive::open(&archive_root).expect("archive"),
+        ));
+        drain_pending_with_archive(&consumer.inner, &index, Some(&archive), None).expect("drain");
+        assert_eq!(consumer.status().pending_records, 0);
+        assert_eq!(consumer.status().consumer.last_sequence, records);
+        assert_eq!(index.status().structures_applied, records);
+        assert_eq!(
+            archive.lock().expect("archive lock").rows().len(),
+            usize::try_from(records).expect("records usize")
+        );
+
+        drop(archive);
+        drop(consumer);
+        drop(producer);
+        let (restarted, restored_index) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), false, true, Duration::ZERO)
+                .expect("restart");
+        let restored_archive =
+            MultiSourceTopologyArchive::open(&archive_root).expect("restart archive");
+        assert!(restarted.status().checkpoint_restored);
+        assert_eq!(restarted.status().consumer.last_sequence, records);
+        assert_eq!(restarted.status().pending_records, 0);
+        assert_eq!(restored_index.status().structures_applied, records);
+        assert_eq!(
+            restored_archive.rows().len(),
+            usize::try_from(records).expect("records usize")
+        );
+        assert_eq!(restored_archive.max_bridge_sequence(), records);
         fs::remove_dir_all(root).expect("cleanup");
     }
 

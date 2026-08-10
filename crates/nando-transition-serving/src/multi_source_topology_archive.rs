@@ -54,6 +54,7 @@ impl MultiSourceTopologyArchive {
         })
     }
 
+    #[cfg(test)]
     pub(super) fn append(&mut self, row: &PreActionTopologyAuditRowV1) -> Result<(), String> {
         self.append_unsynced(row)?;
         self.ledger.sync()
