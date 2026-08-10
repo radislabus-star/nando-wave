@@ -19,6 +19,21 @@ pub const MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V1: &str =
 pub const MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2: &str =
     "nando.multi-source-capture-generation.v2";
 
+fn supported_capture_generation_roots(extractor: &str, config: &str) -> bool {
+    [
+        (
+            sha256_bytes(b"nando.multi-source-extractor.v2"),
+            sha256_bytes(b"nando.multi-source-extractor-config.v2"),
+        ),
+        (
+            sha256_bytes(b"nando.multi-source-extractor.v3"),
+            sha256_bytes(b"nando.multi-source-extractor-config.v3"),
+        ),
+    ]
+    .into_iter()
+    .any(|roots| roots.0 == extractor && roots.1 == config)
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MultiSourceJoinCensoredReasonV1 {
@@ -475,15 +490,15 @@ impl BlindThenRevealJoinedTransitionV1 {
     }
 
     fn capture_v2_roots_valid(&self) -> Result<bool, &'static str> {
-        let extractor = sha256_bytes(b"nando.multi-source-extractor.v2");
-        let config = sha256_bytes(b"nando.multi-source-extractor-config.v2");
-        Ok(self.extractor_root_sha256 == extractor
-            && self.extractor_config_root_sha256 == config
+        Ok(supported_capture_generation_roots(
+            &self.extractor_root_sha256,
+            &self.extractor_config_root_sha256,
+        )
             && self.capture_generation_root_sha256
                 == canonical_json_sha256(&(
                     MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
-                    extractor.as_str(),
-                    config.as_str(),
+                    self.extractor_root_sha256.as_str(),
+                    self.extractor_config_root_sha256.as_str(),
                 ))?)
     }
 }
@@ -651,13 +666,11 @@ fn joined_row(
     } else {
         topology.structure.estimated_input_tokens
     };
-    let extractor_v2 = sha256_bytes(b"nando.multi-source-extractor.v2");
-    let config_v2 = sha256_bytes(b"nando.multi-source-extractor-config.v2");
     let capture_schema = match (
         topology.commit.extractor_root_sha256.as_str(),
         topology.commit.config_root_sha256.as_str(),
     ) {
-        (extractor, config) if extractor == extractor_v2 && config == config_v2 => (
+        (extractor, config) if supported_capture_generation_roots(extractor, config) => (
             BLIND_THEN_REVEAL_JOIN_SCHEMA_V2,
             MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
         ),
@@ -836,6 +849,22 @@ mod compatibility_tests {
 
     fn root(value: u64) -> String {
         format!("{value:064x}")
+    }
+
+    #[test]
+    fn current_and_prior_capture_generations_are_explicitly_supported() {
+        assert!(supported_capture_generation_roots(
+            &sha256_bytes(b"nando.multi-source-extractor.v2"),
+            &sha256_bytes(b"nando.multi-source-extractor-config.v2"),
+        ));
+        assert!(supported_capture_generation_roots(
+            &sha256_bytes(b"nando.multi-source-extractor.v3"),
+            &sha256_bytes(b"nando.multi-source-extractor-config.v3"),
+        ));
+        assert!(!supported_capture_generation_roots(
+            &sha256_bytes(b"nando.multi-source-extractor.v3"),
+            &sha256_bytes(b"nando.multi-source-extractor-config.v2"),
+        ));
     }
 
     #[test]

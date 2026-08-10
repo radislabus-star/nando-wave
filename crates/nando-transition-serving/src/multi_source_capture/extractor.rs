@@ -208,10 +208,12 @@ fn provider_outputs(payload: &Value) -> Vec<Value> {
         })
         .filter_map(|item| item.get("output").or_else(|| item.get("content")))
         .map(|value| {
-            value
-                .as_str()
-                .and_then(|text| serde_json::from_str(text).ok())
-                .unwrap_or_else(|| value.clone())
+            crate::session_stream::canonical_embedded_session_output(value).unwrap_or_else(|| {
+                value
+                    .as_str()
+                    .and_then(|text| serde_json::from_str(text).ok())
+                    .unwrap_or_else(|| value.clone())
+            })
         })
         .collect()
 }
@@ -420,6 +422,38 @@ mod tests {
         let encoded = serde_json::to_string(&topology).expect("encode");
         assert!(!encoded.contains("abc-123"));
         assert!(!encoded.contains("Script running"));
+    }
+
+    #[test]
+    fn embedded_custom_output_exposes_typed_scalar_without_retaining_payload() {
+        let payload = json!({"input":[{
+            "type":"custom_tool_call_output",
+            "output":[
+                {"type":"input_text","text":""},
+                {"type":"input_text","text":"{\"chunk_id\":\"abc\",\"session_id\":60906,\"output\":\"Compiling\"}"}
+            ]
+        }]});
+        let topology = extract_pre_action_multi_source_topology_v2(&payload, "continue");
+
+        topology.validate().expect("valid topology");
+        let number = topology
+            .roles
+            .iter()
+            .find(|role| role.type_class == MultiSourceTypeClassV1::Number)
+            .expect("typed integer role");
+        let witness = topology
+            .role_witnesses
+            .iter()
+            .find(|witness| witness.local_role_id == number.local_role_id)
+            .expect("integer witness");
+        assert_eq!(
+            witness.value_sha256,
+            nando_operator_kernel::canonical_json_sha256(&json!(60906)).expect("hash")
+        );
+        let encoded = serde_json::to_string(&topology).expect("encode");
+        assert!(!encoded.contains("session_id"));
+        assert!(!encoded.contains("60906"));
+        assert!(!encoded.contains("Compiling"));
     }
 
     #[test]

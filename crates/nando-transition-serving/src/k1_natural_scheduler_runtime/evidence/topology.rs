@@ -304,8 +304,19 @@ fn capture_generation_v2(joined: &BlindThenRevealJoinedTransitionV1) -> bool {
 }
 
 fn capture_generation_v2_roots(extractor: &str, config: &str, generation: &str) -> bool {
-    extractor == sha256_bytes(b"nando.multi-source-extractor.v2")
-        && config == sha256_bytes(b"nando.multi-source-extractor-config.v2")
+    let supported = [
+        (
+            sha256_bytes(b"nando.multi-source-extractor.v2"),
+            sha256_bytes(b"nando.multi-source-extractor-config.v2"),
+        ),
+        (
+            sha256_bytes(b"nando.multi-source-extractor.v3"),
+            sha256_bytes(b"nando.multi-source-extractor-config.v3"),
+        ),
+    ]
+    .into_iter()
+    .any(|roots| roots.0 == extractor && roots.1 == config);
+    supported
         && generation
             == canonical_json_sha256(&(
                 nando_operator_learning::multi_source::MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
@@ -532,6 +543,19 @@ mod tests {
             &extractor_v2,
             &config_v2,
             &generation_v2
+        ));
+        let extractor_v3 = sha256_bytes(b"nando.multi-source-extractor.v3");
+        let config_v3 = sha256_bytes(b"nando.multi-source-extractor-config.v3");
+        let generation_v3 = canonical_json_sha256(&(
+            nando_operator_learning::multi_source::MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
+            extractor_v3.as_str(),
+            config_v3.as_str(),
+        ))
+        .expect("current generation root");
+        assert!(capture_generation_v2_roots(
+            &extractor_v3,
+            &config_v3,
+            &generation_v3
         ));
         assert!(!capture_generation_v2_roots(
             &sha256_bytes(b"nando.multi-source-extractor.v1"),

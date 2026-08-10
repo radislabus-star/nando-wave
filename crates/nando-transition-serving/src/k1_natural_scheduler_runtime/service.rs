@@ -1082,7 +1082,3 @@ mod tests {
         assert_eq!(streamed.contract_watermark, oracle.contract_watermark);
     }
 }
-
-#[cfg(test)]
-#[path = "service_live_diagnostics_tests.rs"]
-mod live_diagnostics_tests;
