@@ -493,13 +493,12 @@ impl BlindThenRevealJoinedTransitionV1 {
         Ok(supported_capture_generation_roots(
             &self.extractor_root_sha256,
             &self.extractor_config_root_sha256,
-        )
-            && self.capture_generation_root_sha256
-                == canonical_json_sha256(&(
-                    MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
-                    self.extractor_root_sha256.as_str(),
-                    self.extractor_config_root_sha256.as_str(),
-                ))?)
+        ) && self.capture_generation_root_sha256
+            == canonical_json_sha256(&(
+                MULTI_SOURCE_CAPTURE_GENERATION_SCHEMA_V2,
+                self.extractor_root_sha256.as_str(),
+                self.extractor_config_root_sha256.as_str(),
+            ))?)
     }
 }
 
