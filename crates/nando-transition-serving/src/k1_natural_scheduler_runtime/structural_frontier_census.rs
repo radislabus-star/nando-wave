@@ -95,11 +95,12 @@ pub(super) fn source_root(
     prepared: &PreparedK1TickContextV1,
     runtime: &K1NaturalSchedulerRuntimeReportV1,
 ) -> Result<String, String> {
+    let catalog = validated_runtime_catalog(prepared, runtime)?;
     canonical_json_sha256(&StructuralFrontierSourceDigestV2 {
         schema: STRUCTURAL_FRONTIER_SOURCE_SCHEMA_V2,
         join: &prepared.join_report,
-        evidence_epoch_root_sha256: &prepared.evidence_epoch_root_sha256,
-        catalog_root_sha256: &prepared.catalog.catalog_root_sha256,
+        evidence_epoch_root_sha256: &catalog.evidence_epoch_root_sha256,
+        catalog_root_sha256: &catalog.catalog_root_sha256,
         queue_root_sha256: &runtime.queue.queue_root_sha256,
         active_protocol_mode_set_root_sha256: &prepared.active_protocol_mode_set_root_sha256,
         contract_watermark: prepared.contract_watermark,
@@ -122,16 +123,11 @@ pub(super) fn build_report(
     prepared: &PreparedK1TickContextV1,
     runtime: &K1NaturalSchedulerRuntimeReportV1,
 ) -> Result<StructuralFrontierCensusV2, String> {
-    if runtime.catalog.catalog_root_sha256 != prepared.catalog.catalog_root_sha256
-        || runtime.join != prepared.join_report
-    {
-        return Err("structural_frontier_runtime_context_mismatch".to_owned());
-    }
+    let catalog = validated_runtime_catalog(prepared, runtime)?;
     let source_root_sha256 = source_root(prepared, runtime)?;
-    let consequence_type_counts = consequence_counts(&prepared.catalog.candidates);
-    let readiness_pass_cohorts = count_candidates(&prepared.catalog.candidates, |candidate| {
-        candidate.readiness.pass
-    })?;
+    let consequence_type_counts = consequence_counts(&catalog.candidates);
+    let readiness_pass_cohorts =
+        count_candidates(&catalog.candidates, |candidate| candidate.readiness.pass)?;
     let schedulable_ready_cohorts = u64::try_from(
         runtime
             .queue
@@ -143,10 +139,10 @@ pub(super) fn build_report(
     .map_err(|_| "structural_frontier_count".to_owned())?;
     let retained_cohorts = u64::try_from(runtime.queue.rows.len())
         .map_err(|_| "structural_frontier_count".to_owned())?;
-    let cohorts_total = u64::try_from(prepared.catalog.candidates.len())
+    let cohorts_total = u64::try_from(catalog.candidates.len())
         .map_err(|_| "structural_frontier_count".to_owned())?;
     let leading_candidate_root_sha256 = leading_candidate_root(&runtime.queue);
-    let (verdict, blocker) = verdict_and_blocker(&prepared.catalog, &runtime.queue)?;
+    let (verdict, blocker) = verdict_and_blocker(catalog, &runtime.queue)?;
     let active_candidate_freeze_root_sha256 = runtime
         .projection
         .active_candidate_freeze
@@ -156,8 +152,8 @@ pub(super) fn build_report(
         schema: STRUCTURAL_FRONTIER_CENSUS_SCHEMA_V2.to_owned(),
         report_root_sha256: String::new(),
         source_root_sha256,
-        evidence_epoch_root_sha256: prepared.evidence_epoch_root_sha256.clone(),
-        fixture_exclusion_root_sha256: prepared.catalog.fixture_exclusion_root_sha256.clone(),
+        evidence_epoch_root_sha256: catalog.evidence_epoch_root_sha256.clone(),
+        fixture_exclusion_root_sha256: catalog.fixture_exclusion_root_sha256.clone(),
         active_protocol_mode_set_root_sha256: prepared.active_protocol_mode_set_root_sha256.clone(),
         contract_watermark: prepared.contract_watermark,
         scheduler_state: runtime.state,
@@ -171,7 +167,7 @@ pub(super) fn build_report(
         frame_rows: prepared.join_report.completed_frames,
         joined_rows: prepared.join_report.joined_rows,
         accepted_rows: prepared.join_report.accepted_rows,
-        natural_rows: prepared.catalog.natural_rows,
+        natural_rows: catalog.natural_rows,
         cohorts_total,
         readiness_pass_cohorts,
         schedulable_ready_cohorts,
@@ -180,7 +176,7 @@ pub(super) fn build_report(
         capacity_excluded_cohorts: runtime.queue.capacity_excluded_candidates,
         consequence_type_counts,
         leading_candidate_root_sha256,
-        catalog: prepared.catalog.clone(),
+        catalog: catalog.clone(),
         queue: runtime.queue.clone(),
         authority_ready: false,
         phase_mutation_allowed: false,
@@ -188,6 +184,26 @@ pub(super) fn build_report(
     report.report_root_sha256 = report.expected_root()?;
     report.validate()?;
     Ok(report)
+}
+
+fn validated_runtime_catalog<'a>(
+    prepared: &PreparedK1TickContextV1,
+    runtime: &'a K1NaturalSchedulerRuntimeReportV1,
+) -> Result<&'a K1NaturalCohortCatalogV1, String> {
+    if runtime.join != prepared.join_report {
+        return Err("structural_frontier_runtime_context_mismatch".to_owned());
+    }
+    validated_catalog(prepared, &runtime.catalog)
+}
+
+fn validated_catalog<'a>(
+    prepared: &PreparedK1TickContextV1,
+    catalog: &'a K1NaturalCohortCatalogV1,
+) -> Result<&'a K1NaturalCohortCatalogV1, String> {
+    if catalog != &prepared.catalog && catalog != &prepared.motif_catalog {
+        return Err("structural_frontier_runtime_context_mismatch".to_owned());
+    }
+    Ok(catalog)
 }
 
 pub(super) fn publish_report(
@@ -406,6 +422,31 @@ fn publish_report_bytes(root: &Path, report_root: &str, bytes: &[u8]) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_context_accepts_ambient_and_exact_motif_catalogs() {
+        let prepared = super::super::lifecycle::prepare_tick_context(&[], &[], &BTreeSet::new())
+            .expect("prepared context");
+        assert_ne!(
+            prepared.catalog.catalog_root_sha256,
+            prepared.motif_catalog.catalog_root_sha256
+        );
+
+        for catalog in [&prepared.catalog, &prepared.motif_catalog] {
+            assert_eq!(
+                validated_catalog(&prepared, catalog).expect("catalog"),
+                catalog
+            );
+        }
+
+        let mut unrelated = prepared.motif_catalog.clone();
+        unrelated.catalog_root_sha256 =
+            canonical_json_sha256(&("unrelated-catalog", 1u64)).expect("unrelated root");
+        assert_eq!(
+            validated_catalog(&prepared, &unrelated),
+            Err("structural_frontier_runtime_context_mismatch".to_owned())
+        );
+    }
 
     #[test]
     fn immutable_report_and_latest_pointer_are_byte_identical() {
