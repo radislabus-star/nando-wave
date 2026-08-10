@@ -303,7 +303,7 @@ const TEMPLATE: &str = r#"
 .nd-live b { color:var(--green); }
 .nd-band { border-bottom:1px solid var(--line); }
 .nd-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:18px; margin-bottom:20px; }
-.nd-section-head h1,.nd-section-head h2 { margin:0; color:#dfe3e5; font-size:15px; font-weight:700; }
+.nd-section-head h1,.nd-section-head h2 { margin:0; color:#dfe3e5; font-size:15px; font-weight:700; text-transform:none; }
 .nd-scope { color:var(--muted); font-size:11px; font-weight:600; text-align:right; }
 .nd-status { color:var(--amber); font-weight:700; }
 .nd-status.good { color:var(--green); }
@@ -402,6 +402,7 @@ const TEMPLATE: &str = r#"
   .nd-live,.nd-scope { text-align:left; }
   .primary-grid,.miner-line,.law-counts,.k1-line,.safety-grid,.discovery-detail { grid-template-columns:1fr; }
   .primary-cell,.primary-cell.share,.miner-cell { grid-column:auto; padding:16px 0; border-left:0; border-top:0; border-bottom:1px solid var(--line); }
+  .primary-cell + .primary-cell { padding-left:0; border-left:0; }
   .primary-cell:last-child,.miner-cell:last-child { border-bottom:0; }
   .metric-value { font-size:28px; }
   .epoch-line { align-items:flex-start; flex-direction:column; gap:4px; }
@@ -410,6 +411,7 @@ const TEMPLATE: &str = r#"
   .law-count { padding-bottom:10px; border-bottom:1px solid #252a2d; }
   .law-count:last-child { border-bottom:0; }
   .technical-details > summary { align-items:flex-start; }
+  .technical-details > summary .summary-meta { display:none; }
   .package-row { grid-template-columns:minmax(0,1fr); gap:3px; padding:11px 0; }
   .package-row.header { display:none; }
   .certificate::before { color:var(--muted); }
@@ -432,7 +434,7 @@ const TEMPLATE: &str = r#"
   <section class="nd-band"><div class="nd-inner">
     <div class="nd-section-head">
       <h1>Что сервер сделал за всё время</h1>
-      <div class="nd-scope">единый lifetime denominator</div>
+      <div class="nd-scope">вся записанная история</div>
     </div>
     <div class="primary-grid">
       <div class="primary-cell">
@@ -443,13 +445,13 @@ const TEMPLATE: &str = r#"
       <div class="primary-cell cpu">
         <div class="metric-label">Воспроизведено на CPU</div>
         <output id="lifetime-cpu" class="metric-value">__LIFETIME_CPU__</output>
-        <div class="metric-note">только verified execution receipts</div>
+        <div class="metric-note">по проверенным квитанциям исполнения</div>
       </div>
       <div class="primary-cell share">
         <div class="metric-label">Итоговый CPU-охват</div>
         <output id="lifetime-share" class="metric-value">__LIFETIME_SHARE__</output>
         <div class="ratio-rail"><div id="lifetime-bar" class="ratio-fill"></div></div>
-        <div class="metric-note">authority <strong id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</strong></div>
+        <div class="metric-note">допуск CPU <strong id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</strong></div>
       </div>
     </div>
     <div class="epoch-line">
@@ -464,7 +466,7 @@ const TEMPLATE: &str = r#"
   <section class="nd-band"><div class="nd-inner">
     <div class="nd-section-head">
       <h2>Что видит майнер</h2>
-      <div id="miner-window-start" class="nd-scope">отдельное окно</div>
+      <div id="miner-window-start" class="nd-scope">отдельная начальная точка</div>
     </div>
     <div class="miner-line">
       <div class="miner-cell">
@@ -627,7 +629,7 @@ const TEMPLATE: &str = r#"
     text("epoch-requests", number.format(epoch.requests || 0));
     text("epoch-accepts", number.format(epoch.cpu_accepts || 0));
     text("avoided-calls", number.format(epoch.avoided_upstream_calls || 0));
-    text("epoch-start", `EPOCH С ${localTime(epoch.started_at_unix || 0)}`);
+    text("epoch-start", `эпоха с ${localTime(epoch.started_at_unix || 0)}`);
     bar("epoch-bar", epoch.cpu_tokens || 0, epoch.input_tokens || 0);
     text("lifetime-total", number.format(lifetime.input_tokens || 0));
     text("lifetime-cpu", number.format(lifetime.cpu_tokens || 0));
@@ -644,7 +646,7 @@ const TEMPLATE: &str = r#"
     text("miner-share", percent(miner.recognized_tokens || 0, miner.seen_tokens || 0));
     text("miner-unrecognized", number.format(unrecognized));
     text("miner-unresolved", `из них unresolved ${number.format(miner.unresolved_tokens || 0)}`);
-    text("miner-window-start", `окно с ${localTime(miner.started_at_unix || 0)} · свой watermark`);
+    text("miner-window-start", `окно с ${localTime(miner.started_at_unix || 0)} · отдельная начальная точка`);
     bar("miner-bar", miner.recognized_tokens || 0, miner.seen_tokens || 0);
 
     text("scheduler-state", readable(discovery.state));
@@ -654,8 +656,8 @@ const TEMPLATE: &str = r#"
     text("completed-ready", `${number.format(discovery.completed_ready_excluded || 0)} / ${number.format(discovery.historical_readiness_pass || 0)}`);
     text("retained-queue", number.format(discovery.retained_queue || 0));
     const next = discovery.ready_now > 0
-      ? `READY ${number.format(discovery.ready_now)} → freeze generation ${number.format(discovery.next_generation_sequence || 0)} → identifier → Law #2`
-      : `${readable(discovery.blocker)} → fresh ordinary evidence → readiness PASS → generation ${number.format(discovery.next_generation_sequence || 0)} → Law #2`;
+      ? `${number.format(discovery.ready_now)} готовых когорт → заморозка generation ${number.format(discovery.next_generation_sequence || 0)} → identifier → Law #2`
+      : `${readable(discovery.blocker)} → новый обычный трафик → готовая когорта → generation ${number.format(discovery.next_generation_sequence || 0)} → Law #2`;
     text("next-transition", next);
     const blockers = node("readiness-blockers");
     if (blockers) {
