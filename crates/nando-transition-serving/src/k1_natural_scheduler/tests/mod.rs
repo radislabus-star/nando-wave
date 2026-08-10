@@ -63,6 +63,13 @@ fn candidate_freeze() -> K1NaturalCandidateFreezeV1 {
 }
 
 fn candidate_freeze_with_basis(discovery_basis_root_sha256: String) -> K1NaturalCandidateFreezeV1 {
+    candidate_freeze_for_generation_and_basis(1, discovery_basis_root_sha256)
+}
+
+fn candidate_freeze_for_generation_and_basis(
+    generation_sequence: u64,
+    discovery_basis_root_sha256: String,
+) -> K1NaturalCandidateFreezeV1 {
     let rows = (1..=8)
         .map(|index| {
             K1NaturalEvidenceRowV1::seal(
@@ -119,7 +126,7 @@ fn candidate_freeze_with_basis(discovery_basis_root_sha256: String) -> K1Natural
         .find(|candidate| candidate.candidate_root_sha256 == row.candidate_root_sha256)
         .expect("candidate");
     K1NaturalCandidateFreezeV1::seal(
-        1,
+        generation_sequence,
         &catalog,
         &deficit,
         &queue,

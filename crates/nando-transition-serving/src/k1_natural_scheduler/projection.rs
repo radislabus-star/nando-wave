@@ -123,12 +123,6 @@ pub(super) fn projection_for(
         return Err("k1_scheduler_projection_applied_outcome_reused".to_owned());
     }
     completed_candidate_roots_sha256.sort();
-    if completed_candidate_roots_sha256
-        .windows(2)
-        .any(|pair| pair[0] == pair[1])
-    {
-        return Err("k1_scheduler_projection_candidate_reused".to_owned());
-    }
     future_predictions.sort_by(|left, right| {
         left.prediction_root_sha256
             .cmp(&right.prediction_root_sha256)
@@ -258,7 +252,6 @@ impl K1SchedulerProjectionV1 {
             || self.completed_generations
                 != u64::try_from(self.completed_candidate_roots_sha256.len())
                     .map_err(|_| "k1_scheduler_projection_generation_count".to_owned())?
-            || !strict_unique_roots(&self.completed_candidate_roots_sha256)
             || !strict_unique_roots(
                 &self
                     .future_predictions

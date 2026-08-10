@@ -6,6 +6,7 @@ use super::super::model::{canonical_root_slice, canonical_roots, version_space_r
 
 const K1_GENERATION_TERMINAL_VERDICT_SCHEMA_V1: &str = "nando.k1-generation-terminal-verdict.v1";
 const K1_TRANSFER_SETTLEMENT_SCHEMA_V1: &str = "nando.k1-transfer-settlement.v1";
+pub const K1_DUPLICATE_PROTOCOL_BLOCKER_V1: &str = "all_supported_t1_protocol_modes_already_active";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -360,28 +360,47 @@ pub(crate) fn restore_projection_for(
 pub(crate) fn candidate_exclusions_for(
     config: &CertificationAuthorityConfigV1,
     lane: K1SchedulerLaneV1,
-) -> Result<BTreeSet<String>, String> {
-    match lane {
-        K1SchedulerLaneV1::Mechanism => Ok(BTreeSet::new()),
-        K1SchedulerLaneV1::Epistemic => fork::epistemic_exclusions(config),
-    }
-}
-
-pub(crate) fn duplicate_candidate_exclusions_for(
-    config: &CertificationAuthorityConfigV1,
-    lane: K1SchedulerLaneV1,
     catalog: &K1NaturalCohortCatalogV1,
     active_protocol_mode_set_root_sha256: &str,
+    current_candidate_freeze_schema: &str,
+    current_discovery_basis_root_sha256: &str,
 ) -> Result<BTreeSet<String>, String> {
-    if lane == K1SchedulerLaneV1::Mechanism {
-        return Ok(BTreeSet::new());
-    }
-    duplicate_cohorts::duplicate_candidate_exclusions(
-        &restore_anchored_scheduler_for(config, lane)?,
+    let ledger = restore_anchored_scheduler_for(config, lane)?;
+    candidate_exclusions_for_ledger(
+        config,
+        lane,
+        &ledger,
         catalog,
         active_protocol_mode_set_root_sha256,
-        &natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
+        current_candidate_freeze_schema,
+        current_discovery_basis_root_sha256,
     )
+}
+
+fn candidate_exclusions_for_ledger(
+    config: &CertificationAuthorityConfigV1,
+    lane: K1SchedulerLaneV1,
+    ledger: &K1SchedulerLedgerV1,
+    catalog: &K1NaturalCohortCatalogV1,
+    active_protocol_mode_set_root_sha256: &str,
+    current_candidate_freeze_schema: &str,
+    current_discovery_basis_root_sha256: &str,
+) -> Result<BTreeSet<String>, String> {
+    if lane == K1SchedulerLaneV1::Mechanism {
+        return Ok(projection_for(ledger)?
+            .completed_candidate_roots_sha256
+            .into_iter()
+            .collect());
+    }
+    let mut exclusions = duplicate_cohorts::effective_candidate_exclusions(
+        ledger,
+        catalog,
+        active_protocol_mode_set_root_sha256,
+        current_candidate_freeze_schema,
+        current_discovery_basis_root_sha256,
+    )?;
+    exclusions.extend(fork::epistemic_exclusions(config)?);
+    Ok(exclusions)
 }
 
 pub(crate) fn candidate_topology_root(

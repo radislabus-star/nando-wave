@@ -6,7 +6,8 @@ use sha2::{Digest, Sha256};
 
 use super::model::K1_SCHEDULER_SCHEMA_V1;
 use super::{
-    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, K1FutureOutcomeReceiptV1,
+    K1_DUPLICATE_PROTOCOL_BLOCKER_V1, K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1FutureOutcomeReceiptV1,
     K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
     K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
     K1NaturalCandidateFreezeV1, K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1,
@@ -51,7 +52,7 @@ pub struct K1SchedulerLedgerV1 {
 #[derive(Default)]
 struct ReplayState {
     completed_generations: u64,
-    completed_candidates: BTreeSet<String>,
+    completed_candidates: BTreeMap<String, CompletedCandidateHistory>,
     candidate: Option<K1NaturalCandidateFreezeV1>,
     identification: Option<K1IdentificationFreezeV1>,
     future_contract: Option<K1FuturePredictionContractV1>,
@@ -61,6 +62,22 @@ struct ReplayState {
     pending: Option<K1ProbeRoundReceiptV1>,
     latest_outcome: Option<K1ProbeRoundReceiptV1>,
     pending_transfer: Option<K1GenerationTerminalVerdictV1>,
+}
+
+#[derive(Default)]
+struct CompletedCandidateHistory {
+    attempted_discovery_basis_roots: BTreeSet<String>,
+    latest_duplicate_terminal: bool,
+}
+
+impl CompletedCandidateHistory {
+    fn blocks(&self, freeze: &K1NaturalCandidateFreezeV1) -> bool {
+        freeze.schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5
+            || !self.latest_duplicate_terminal
+            || self
+                .attempted_discovery_basis_roots
+                .contains(&freeze.discovery_basis_root_sha256)
+    }
 }
 
 impl K1SchedulerEventPayloadV1 {
@@ -239,7 +256,8 @@ impl ReplayState {
                     || self.pending_transfer.is_some()
                     || self
                         .completed_candidates
-                        .contains(&freeze.candidate_root_sha256)
+                        .get(&freeze.candidate_root_sha256)
+                        .is_some_and(|history| history.blocks(freeze))
                     || freeze.generation_sequence != self.completed_generations.saturating_add(1)
                 {
                     return Err("k1_scheduler_candidate_replacement_forbidden");
@@ -537,7 +555,23 @@ impl ReplayState {
         }
         self.completed_generations = self.completed_generations.saturating_add(1);
         self.completed_candidates
-            .insert(candidate.candidate_root_sha256.clone());
+            .entry(candidate.candidate_root_sha256.clone())
+            .and_modify(|history| {
+                history
+                    .attempted_discovery_basis_roots
+                    .insert(candidate.discovery_basis_root_sha256.clone());
+                history.latest_duplicate_terminal = verdict.verdict
+                    == K1GenerationVerdictClassV1::AcquisitionFail
+                    && verdict.blocker == K1_DUPLICATE_PROTOCOL_BLOCKER_V1;
+            })
+            .or_insert_with(|| CompletedCandidateHistory {
+                attempted_discovery_basis_roots: BTreeSet::from([candidate
+                    .discovery_basis_root_sha256
+                    .clone()]),
+                latest_duplicate_terminal: verdict.verdict
+                    == K1GenerationVerdictClassV1::AcquisitionFail
+                    && verdict.blocker == K1_DUPLICATE_PROTOCOL_BLOCKER_V1,
+            });
         if verdict.verdict == K1GenerationVerdictClassV1::Pass {
             self.pending_transfer = Some(verdict.clone());
         }

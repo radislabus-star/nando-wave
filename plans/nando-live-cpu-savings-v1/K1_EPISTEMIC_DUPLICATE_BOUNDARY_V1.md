@@ -71,6 +71,39 @@ new law could be evaluated. This is an authority error, not missing evidence.
 - Historical duplicate verdicts may reopen only under the new discovery basis;
   no historical verdict or root is rewritten.
 
+The append-only scheduler also keys a completed attempt by candidate root and
+discovery basis for this one migration. Reusing the same candidate bytes is
+permitted only when all of the following hold:
+
+- the new freeze is V5;
+- the latest terminal for those candidate bytes was
+  `all_supported_t1_protocol_modes_already_active`;
+- the V5 discovery basis has never evaluated those candidate bytes.
+
+A PASS, ABSTAIN, safety failure, witness failure, or a second attempt under the
+same basis remains terminal. Learner queue construction, authority queue
+reconstruction, and ledger replay enforce this same boundary.
+
+## Pre-deployment Exhaustion Finding
+
+The first implementation changed the identity-aware duplicate filter but still
+unioned it after the projection's unconditional completed-candidate set. Live
+state then reached `122` completed generations and excluded all `37` exact
+catalog candidates before the new basis could evaluate them. Of the terminal
+generations, `103` carried the duplicate blocker and `17` carried
+`selected_role_witness_missing`.
+
+The corrected exclusion route is:
+
+```text
+append-only terminal history
+-> preserve every non-duplicate terminal exclusion
+-> reopen old-basis duplicate attempts for V5 exactly once
+-> apply current-basis epistemic duplicate identities
+-> apply lane-fork exclusions
+-> derive the queue identically in learner and authority
+```
+
 ## Authority Boundary
 
 The certification authority reconstructs the known set from both durable

@@ -1,13 +1,21 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
-use nando_operator_learning::multi_source::NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1;
+use nando_operator_learning::multi_source::{
+    K1_DUPLICATE_PROTOCOL_BLOCKER_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
+    K1GenerationVerdictClassV1, NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1,
+};
 
 use super::*;
 
-const DUPLICATE_PROTOCOL_BLOCKER: &str = "all_supported_t1_protocol_modes_already_active";
 const COHORT_IDENTITY_SCHEMA: &str = "nando.k1-natural-cohort-identity.v2";
 const LEGACY_DISCOVERY_BASIS_SCHEMA: &str = "nando.k1-legacy-unversioned-discovery-basis.v1";
+
+#[derive(Default)]
+struct CompletedCandidateHistory {
+    attempted_discovery_basis_roots: BTreeSet<String>,
+    latest_duplicate_terminal: bool,
+}
 
 pub(crate) fn known_epistemic_protocol_mode_set_root(
     known_protocol_mode_roots_sha256: &BTreeSet<String>,
@@ -42,7 +50,8 @@ pub(super) fn duplicate_candidate_exclusions(
                 let freeze = active_freeze
                     .take()
                     .ok_or_else(|| "k1_duplicate_cohort_candidate_missing".to_owned())?;
-                if verdict.blocker == DUPLICATE_PROTOCOL_BLOCKER
+                if verdict.verdict == K1GenerationVerdictClassV1::AcquisitionFail
+                    && verdict.blocker == K1_DUPLICATE_PROTOCOL_BLOCKER_V1
                     && verdict
                         .evidence_roots_sha256
                         .iter()
@@ -65,6 +74,75 @@ pub(super) fn duplicate_candidate_exclusions(
         }
     }
     Ok(exclusions)
+}
+
+pub(super) fn effective_candidate_exclusions(
+    ledger: &K1SchedulerLedgerV1,
+    catalog: &K1NaturalCohortCatalogV1,
+    active_protocol_mode_set_root_sha256: &str,
+    current_candidate_freeze_schema: &str,
+    current_discovery_basis_root_sha256: &str,
+) -> Result<BTreeSet<String>, String> {
+    let mut exclusions = completed_candidate_exclusions(
+        ledger,
+        current_candidate_freeze_schema,
+        current_discovery_basis_root_sha256,
+    )?;
+    exclusions.extend(duplicate_candidate_exclusions(
+        ledger,
+        catalog,
+        active_protocol_mode_set_root_sha256,
+        current_discovery_basis_root_sha256,
+    )?);
+    Ok(exclusions)
+}
+
+fn completed_candidate_exclusions(
+    ledger: &K1SchedulerLedgerV1,
+    current_candidate_freeze_schema: &str,
+    current_discovery_basis_root_sha256: &str,
+) -> Result<BTreeSet<String>, String> {
+    ledger.validate().map_err(str::to_owned)?;
+    if !valid_nonzero_sha256(current_discovery_basis_root_sha256) {
+        return Err("k1_completed_cohort_discovery_basis_invalid".to_owned());
+    }
+
+    let mut active_freeze = None;
+    let mut histories = BTreeMap::<String, CompletedCandidateHistory>::new();
+    for event in &ledger.events {
+        match &event.payload {
+            K1SchedulerEventPayloadV1::CandidateFreeze(freeze) => {
+                active_freeze = Some(freeze);
+            }
+            K1SchedulerEventPayloadV1::TerminalVerdict(verdict) => {
+                let freeze = active_freeze
+                    .take()
+                    .ok_or_else(|| "k1_completed_cohort_candidate_missing".to_owned())?;
+                let history = histories
+                    .entry(freeze.candidate_root_sha256.clone())
+                    .or_default();
+                history
+                    .attempted_discovery_basis_roots
+                    .insert(freeze.discovery_basis_root_sha256.clone());
+                history.latest_duplicate_terminal = verdict.verdict
+                    == K1GenerationVerdictClassV1::AcquisitionFail
+                    && verdict.blocker == K1_DUPLICATE_PROTOCOL_BLOCKER_V1;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(histories
+        .into_iter()
+        .filter_map(|(candidate_root, history)| {
+            (current_candidate_freeze_schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5
+                || !history.latest_duplicate_terminal
+                || history
+                    .attempted_discovery_basis_roots
+                    .contains(current_discovery_basis_root_sha256))
+            .then_some(candidate_root)
+        })
+        .collect())
 }
 
 fn freeze_identity_root(freeze: &K1NaturalCandidateFreezeV1) -> Result<String, String> {

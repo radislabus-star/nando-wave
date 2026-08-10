@@ -149,18 +149,14 @@ pub(super) fn advance(
     let deficit = current_deficit_snapshot(certification)?;
     let active_protocol_mode_set_root_sha256 = &prepared.active_protocol_mode_set_root_sha256;
     let mut projection = restore_projection_for(certification, lane)?;
-    let mut completed = projection
-        .completed_candidate_roots_sha256
-        .iter()
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    completed.extend(candidate_exclusions_for(certification, lane)?);
-    completed.extend(duplicate_candidate_exclusions_for(
+    let completed = candidate_exclusions_for(
         certification,
         lane,
         &catalog,
         active_protocol_mode_set_root_sha256,
-    )?);
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
+        &natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
+    )?;
     let contract_watermark = prepared.contract_watermark;
     let queue = build_k1_natural_candidate_queue_with_exclusions_v1(
         &catalog,
@@ -359,7 +355,7 @@ pub(super) fn advance(
                 candidate_freeze.evidence_manifest_root_sha256.clone(),
                 base_identification.report_root_sha256.clone(),
             ];
-            if blocker == "all_supported_t1_protocol_modes_already_active" {
+            if blocker == K1_DUPLICATE_PROTOCOL_BLOCKER_V1 {
                 terminal_evidence.push(active_protocol_mode_set_root_sha256.clone());
             }
             let verdict = terminal_verdict(

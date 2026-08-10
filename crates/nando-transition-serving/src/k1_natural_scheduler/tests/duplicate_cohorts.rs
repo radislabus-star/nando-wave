@@ -1,9 +1,11 @@
 use nando_operator_learning::multi_source::{
-    K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
+    K1_DUPLICATE_PROTOCOL_BLOCKER_V1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
 };
 
 use super::*;
-use crate::k1_natural_scheduler::duplicate_cohorts::duplicate_candidate_exclusions;
+use crate::k1_natural_scheduler::duplicate_cohorts::{
+    duplicate_candidate_exclusions, effective_candidate_exclusions,
+};
 
 fn ledger_with_terminal(
     blocker: &str,
@@ -197,5 +199,98 @@ fn discovery_basis_change_reopens_once_then_new_terminal_excludes() {
         duplicate_candidate_exclusions(&new_ledger, &catalog, &active_set_root, &new_basis,)
             .expect("new basis exclusions"),
         BTreeSet::from([catalog.candidates[0].candidate_root_sha256.clone()])
+    );
+}
+
+#[test]
+fn effective_exclusions_reopen_only_old_basis_duplicate_terminal() {
+    let active_set_root = root(900);
+    let old_basis = root(950);
+    let new_basis = root(951);
+    let catalog = catalog_with_additional_evidence();
+    let (old_duplicate, old_freeze) = ledger_with_terminal_for_basis(
+        K1_DUPLICATE_PROTOCOL_BLOCKER_V1,
+        vec![active_set_root.clone()],
+        old_basis,
+    );
+    let reopened = effective_candidate_exclusions(
+        &old_duplicate,
+        &catalog,
+        &active_set_root,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
+        &new_basis,
+    )
+    .expect("old basis exclusions");
+    assert!(!reopened.contains(&old_freeze.candidate_root_sha256));
+
+    let same_basis = effective_candidate_exclusions(
+        &old_duplicate,
+        &catalog,
+        &active_set_root,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
+        &old_freeze.discovery_basis_root_sha256,
+    )
+    .expect("same basis exclusions");
+    assert!(same_basis.contains(&old_freeze.candidate_root_sha256));
+
+    let (non_duplicate, non_duplicate_freeze) = ledger_with_terminal_for_basis(
+        "selected_role_witness_missing",
+        vec![active_set_root.clone()],
+        root(952),
+    );
+    let non_duplicate_exclusions = effective_candidate_exclusions(
+        &non_duplicate,
+        &catalog,
+        &active_set_root,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
+        &new_basis,
+    )
+    .expect("non-duplicate exclusions");
+    assert!(non_duplicate_exclusions.contains(&non_duplicate_freeze.candidate_root_sha256));
+
+    let legacy_schema_exclusions = effective_candidate_exclusions(
+        &old_duplicate,
+        &catalog,
+        &active_set_root,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
+        &new_basis,
+    )
+    .expect("legacy schema exclusions");
+    assert!(legacy_schema_exclusions.contains(&old_freeze.candidate_root_sha256));
+}
+
+#[test]
+fn projection_preserves_two_basis_attempts_for_the_same_candidate_bytes() {
+    let old = candidate_freeze_for_generation_and_basis(1, root(950));
+    let current = candidate_freeze_for_generation_and_basis(2, root(951));
+    assert_eq!(old.candidate_root_sha256, current.candidate_root_sha256);
+    let mut ledger = K1SchedulerLedgerV1::empty().expect("ledger");
+    for freeze in [old, current] {
+        ledger
+            .append(K1SchedulerEventPayloadV1::CandidateFreeze(freeze.clone()))
+            .expect("basis candidate");
+        ledger
+            .append(K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(
+                K1GenerationTerminalVerdictV1::seal(
+                    freeze.freeze_root_sha256,
+                    None,
+                    Vec::new(),
+                    vec![root(900)],
+                    K1GenerationVerdictClassV1::AcquisitionFail,
+                    K1_DUPLICATE_PROTOCOL_BLOCKER_V1.to_owned(),
+                    1_700_000_000 + freeze.generation_sequence,
+                    None,
+                )
+                .expect("terminal"),
+            )))
+            .expect("terminal append");
+    }
+
+    let projection = super::super::projection::projection_for(&ledger).expect("projection");
+    assert_eq!(projection.completed_generations, 2);
+    assert_eq!(projection.completed_candidate_roots_sha256.len(), 2);
+    assert_eq!(
+        projection.completed_candidate_roots_sha256[0],
+        projection.completed_candidate_roots_sha256[1]
     );
 }

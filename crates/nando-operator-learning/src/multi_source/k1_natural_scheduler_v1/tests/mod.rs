@@ -120,6 +120,13 @@ fn ready_rows() -> Vec<K1NaturalEvidenceRowV1> {
 }
 
 fn candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV1 {
+    candidate_freeze_for_basis(generation_sequence, root(706))
+}
+
+fn candidate_freeze_for_basis(
+    generation_sequence: u64,
+    discovery_basis_root_sha256: String,
+) -> K1NaturalCandidateFreezeV1 {
     let rows = ready_rows();
     let catalog = catalog(&rows);
     let deficit = deficit(Vec::new());
@@ -140,7 +147,7 @@ fn candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV1 {
         candidate,
         queue_row.score.clone(),
         "nando.k1-operator-blind-scheduler.v1".to_owned(),
-        root(706),
+        discovery_basis_root_sha256,
         K1GenerationBudgetV1 {
             maximum_support_rows: 64,
             maximum_probe_rounds: 4,

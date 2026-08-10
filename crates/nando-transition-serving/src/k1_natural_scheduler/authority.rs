@@ -141,19 +141,15 @@ fn append_candidate_freeze_authoritative(
     let discovery_basis_root_sha256 = validate_discovery_basis_cas(&request.freeze)?;
 
     let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
-    let mut completed_candidate_roots_sha256 = projection_for(&scheduler)?
-        .completed_candidate_roots_sha256
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-    if request.lane == K1SchedulerLaneV1::Epistemic {
-        completed_candidate_roots_sha256.extend(fork::epistemic_exclusions(config)?);
-        completed_candidate_roots_sha256.extend(duplicate_cohorts::duplicate_candidate_exclusions(
-            &scheduler,
-            &request.catalog,
-            &request.active_protocol_mode_set_root_sha256,
-            &discovery_basis_root_sha256,
-        )?);
-    }
+    let completed_candidate_roots_sha256 = candidate_exclusions_for_ledger(
+        config,
+        request.lane,
+        &scheduler,
+        &request.catalog,
+        &request.active_protocol_mode_set_root_sha256,
+        &request.freeze.schema,
+        &discovery_basis_root_sha256,
+    )?;
     validate_queue_derivation(
         &request.catalog,
         &request.deficit_snapshot,

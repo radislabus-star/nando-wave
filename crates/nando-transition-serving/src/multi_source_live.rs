@@ -275,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn product_only_package_is_not_an_epistemically_known_protocol_mode() {
+    fn law_certificate_promotion_makes_product_package_an_epistemic_duplicate() {
         let root_dir =
             std::env::temp_dir().join(format!("nando-k1-product-only-{}", std::process::id()));
         std::fs::create_dir_all(&root_dir).expect("root");
