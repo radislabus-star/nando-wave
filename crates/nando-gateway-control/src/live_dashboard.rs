@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v5";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v6";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -301,212 +301,118 @@ const TEMPLATE: &str = r#"
 .nd-brand span { color:var(--muted); font-size:12px; font-weight:600; }
 .nd-live { color:var(--muted); font-size:12px; font-weight:600; text-align:right; }
 .nd-live b { color:var(--green); }
-.nd-band { border-bottom:1px solid var(--line); }
 .nd-status { color:var(--amber); font-weight:700; }
 .nd-status.good { color:var(--green); }
 .nd-status.bad { color:var(--red); }
-.result-kicker { color:var(--muted); font-size:12px; font-weight:650; }
-.coverage-title { max-width:820px; margin:12px 0 0; color:#f4f6f7; font-size:42px; font-weight:720; line-height:1.12; }
-.coverage-title output { color:var(--green); font:inherit; }
-.coverage-fraction { margin:18px 0 0; color:#b7bec2; font-size:15px; line-height:1.5; }
-.coverage-fraction strong { color:#f0f3f4; font-weight:680; }
-.ratio-rail { height:7px; margin-top:18px; background:#282d30; overflow:hidden; }
-.ratio-fill { width:0; height:100%; background:var(--green); transition:width .2s ease; }
-.result-meta { display:flex; flex-wrap:wrap; gap:8px 24px; margin-top:14px; color:var(--muted); font-size:12px; line-height:1.5; }
-.result-meta strong { color:#dfe3e5; font-weight:680; }
-.result-meta .epoch-result { color:var(--green); }
-.status-row { display:grid; grid-template-columns:180px minmax(0,1fr); gap:34px; padding:25px 0; border-bottom:1px solid var(--line); }
-.status-row:last-child { border-bottom:0; }
-.status-name h2 { margin:0; color:#e1e5e7; font-size:15px; font-weight:700; }
-.status-scope { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.45; }
-.status-content { min-width:0; }
-.miner-sentence { display:flex; flex-wrap:wrap; gap:10px 34px; color:#bdc4c7; font-size:15px; line-height:1.45; }
-.miner-sentence strong { display:block; margin-top:4px; color:#f1f3f4; font-size:24px; font-weight:700; overflow-wrap:anywhere; }
-.miner-sentence .recognized strong,.miner-share { color:var(--green); }
-.miner-progress { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; margin-top:14px; }
-.miner-progress .ratio-rail { margin-top:0; }
-.miner-share { font-size:16px; font-weight:700; }
-.scope-note { margin-top:10px; color:var(--muted); font-size:11px; line-height:1.5; }
-.law-state strong { display:block; color:var(--amber); font-size:24px; font-weight:700; line-height:1.25; }
-.law-summary { margin-top:9px; color:#c7cdd0; font-size:14px; line-height:1.5; }
-.law-summary b { color:#edf0f1; font-weight:700; }
-.next-transition { margin-top:10px; color:#aeb7bb; font-size:12px; line-height:1.5; }
-.next-transition strong { color:var(--muted); font-weight:650; }
-.blocker-list { display:flex; flex-wrap:wrap; gap:5px 15px; margin-top:7px; color:var(--muted); font-size:11px; }
-.blocker-list b { color:#bdc4c7; }
-.technical-details > summary { display:flex; justify-content:space-between; gap:20px; padding:16px 0; color:#aeb7bb; cursor:pointer; font-size:12px; font-weight:650; list-style:none; }
-.technical-details > summary::-webkit-details-marker { display:none; }
-.technical-details > summary::before { content:"+"; flex:0 0 18px; color:var(--muted); }
-.technical-details[open] > summary::before { content:"−"; }
-.technical-details > summary .summary-meta { margin-left:auto; color:var(--muted); font-size:10px; font-weight:550; text-align:right; }
-.technical-body { padding:4px 0 22px; }
-.diagnostic-summary { display:flex; flex-wrap:wrap; gap:6px 18px; color:var(--muted); font-size:11px; }
-.diagnostic-summary b { color:#d7dcde; font-weight:680; }
-.technical-section { margin-top:20px; }
-.technical-title { margin:0 0 10px; color:var(--muted); font-size:11px; font-weight:650; }
-.package-table { border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.package-row { display:grid; grid-template-columns:minmax(260px,2fr) repeat(4,minmax(105px,.7fr)); gap:12px; align-items:center; min-height:50px; border-bottom:1px solid var(--line); }
-.package-row:last-child { border-bottom:0; }
-.package-row.header { min-height:30px; color:var(--muted); font-size:10px; font-weight:650; }
-.package-id { min-width:0; color:#dce2e5; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; overflow-wrap:anywhere; }
-.certificate { color:var(--muted); font-size:11px; font-weight:650; }
-.certificate.good { color:var(--green); }
-.certificate.watch { color:var(--amber); }
-.certificate.bad { color:var(--red); }
-.k1-line { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); }
-.k1-cell { min-width:0; padding:13px 18px; border-right:1px solid var(--line); }
-.k1-cell:last-child { border-right:0; }
-.k1-cell span { display:block; color:var(--muted); font-size:10px; font-weight:650; }
-.k1-cell strong { display:block; margin-top:5px; color:#dce2e5; font-size:16px; font-weight:680; }
-.k1-cell.closed strong { color:var(--amber); }
-.discovery-detail { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.discovery-detail > div { padding:12px 16px; border-right:1px solid var(--line); }
-.discovery-detail > div:last-child { border-right:0; }
-.discovery-detail span { display:block; color:var(--muted); font-size:10px; }
-.discovery-detail strong { display:block; margin-top:5px; color:#dce2e5; font-size:15px; }
-.safety-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.safety-cell { min-width:0; padding:14px 16px; border-right:1px solid var(--line); }
-.safety-cell:last-child { border-right:0; }
-.safety-cell span { display:block; color:var(--muted); font-size:10px; font-weight:650; }
-.safety-cell strong { display:block; margin-top:6px; color:var(--green); font-size:15px; font-weight:680; overflow-wrap:anywhere; }
-.safety-cell strong.watch { color:var(--amber); }
-.safety-cell strong.bad { color:var(--red); }
-.quiet-details { margin-top:12px; border-top:1px solid var(--line); }
-.quiet-details summary { padding:12px 0; color:#aeb7bc; cursor:pointer; font-size:12px; font-weight:800; list-style:none; }
-.quiet-details summary::-webkit-details-marker { display:none; }
-.quiet-details summary::before { content:"+"; display:inline-block; width:18px; color:var(--muted); }
-.quiet-details[open] summary::before { content:"-"; }
-.window-table { padding-bottom:8px; }
-.window-row { display:grid; grid-template-columns:minmax(170px,1.2fr) minmax(90px,.6fr) minmax(110px,.7fr) minmax(0,1.5fr); gap:14px; align-items:center; min-height:38px; border-top:1px solid #252b2f; font-size:11px; }
-.window-row.header { color:var(--muted); font-size:10px; font-weight:800; }
-.window-route { color:var(--green); font-weight:800; }
-.window-route.mixed { color:var(--amber); }
-.window-route.outside_nando { color:var(--red); }
-.window-route.idle { color:var(--muted); }
 .nd-foot .nd-inner { display:flex; justify-content:space-between; gap:20px; padding-top:12px; padding-bottom:12px; color:#667075; font-size:9px; }
-.flow-intro { padding-top:34px; padding-bottom:18px; }
-.flow-eyebrow { margin:0; color:var(--muted); font-size:11px; font-weight:700; }
-.flow-title { margin:7px 0 0; color:#f4f6f7; font-size:30px; font-weight:730; line-height:1.2; }
-.flow-subtitle { margin:8px 0 0; color:#9ea7ab; font-size:13px; line-height:1.5; }
-.traffic-flow { margin:0; padding:0; list-style:none; border-top:1px solid var(--line); }
-.flow-step { display:grid; grid-template-columns:34px minmax(190px,.7fr) minmax(0,1.3fr); gap:22px; align-items:center; min-height:126px; padding:24px 0; border-bottom:1px solid var(--line); }
-.flow-index { align-self:start; padding-top:3px; color:#687277; font:650 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
-.flow-label { min-width:0; }
-.flow-label h2 { margin:0; color:#dfe4e6; font-size:15px; font-weight:720; line-height:1.3; }
-.flow-scope { margin:8px 0 0; color:var(--muted); font-size:11px; line-height:1.45; }
-.flow-value { min-width:0; }
-.flow-value strong { display:block; color:#f5f7f8; font-size:34px; font-weight:730; line-height:1.05; overflow-wrap:anywhere; }
-.flow-value strong.good { color:var(--green); }
-.flow-value > span { display:block; margin-top:9px; color:#aeb6ba; font-size:12px; line-height:1.45; }
-.flow-value output { color:var(--green); font:700 15px/1.2 inherit; }
-.flow-value .scope-warning { color:var(--amber); }
-.law-panel { display:grid; grid-template-columns:34px minmax(190px,.7fr) minmax(0,1.3fr); gap:22px; padding-top:30px; padding-bottom:32px; }
-.law-label h2 { margin:0; color:#e4e8ea; font-size:15px; font-weight:720; }
-.law-label p { margin:8px 0 0; color:var(--muted); font-size:11px; line-height:1.45; }
-.law-verdict { display:block; color:var(--amber); font-size:28px; font-weight:740; line-height:1.15; }
-.law-verdict.good { color:var(--green); }
-.law-verdict.bad { color:var(--red); }
-.law-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:18px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.law-fact { min-width:0; padding:13px 14px; border-right:1px solid var(--line); }
-.law-fact:first-child { padding-left:0; }
-.law-fact:last-child { padding-right:0; border-right:0; }
-.law-fact span { display:block; color:var(--muted); font-size:10px; line-height:1.35; }
-.law-fact strong { display:block; margin-top:5px; color:#e2e6e8; font-size:17px; font-weight:700; overflow-wrap:anywhere; }
-.law-exit { margin:14px 0 0; color:#b9c0c3; font-size:12px; line-height:1.55; }
-.law-exit b { color:#e2e6e8; font-weight:680; }
 .safety-line { display:flex; flex-wrap:wrap; gap:6px 22px; color:#7f898e; font-size:10px; }
 .safety-line b { color:#bfc6c9; font-weight:680; }
-@media (max-width:900px) {
-  .safety-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .safety-cell { border-bottom:1px solid var(--line); }
-  .safety-cell:nth-child(2n) { border-right:0; }
-  .safety-cell:last-child { grid-column:1 / -1; border-bottom:0; }
-}
-@media (max-width:680px) {
-  .nd-inner { padding:20px 16px; }
-  .nd-head .nd-inner,.nd-foot .nd-inner { align-items:flex-start; flex-direction:column; gap:7px; }
-  .nd-live { text-align:left; }
-  .coverage-title { font-size:32px; }
-  .coverage-fraction { font-size:14px; }
-  .result-meta { flex-direction:column; gap:4px; }
-  .status-row { grid-template-columns:1fr; gap:14px; padding:22px 0; }
-  .miner-sentence { display:grid; grid-template-columns:1fr; gap:13px; }
-  .miner-sentence strong { font-size:22px; }
-  .technical-details > summary { align-items:flex-start; }
-  .technical-details > summary .summary-meta { display:none; }
-  .package-row { grid-template-columns:minmax(0,1fr); gap:3px; padding:11px 0; }
-  .package-row.header { display:none; }
-  .certificate::before { color:var(--muted); }
-  .certificate.execution::before { content:"CPU "; }
-  .certificate.law::before { content:"LAW "; }
-  .certificate.mechanism::before { content:"MECHANISM "; }
-  .certificate.k1::before { content:"K1 "; }
-  .k1-line,.safety-grid,.discovery-detail { grid-template-columns:1fr; }
-  .k1-cell,.safety-cell,.safety-cell:last-child,.discovery-detail > div { grid-column:auto; padding:12px 0; border-right:0; border-bottom:1px solid var(--line); }
-  .k1-cell:last-child,.safety-cell:last-child,.discovery-detail > div:last-child { border-bottom:0; }
-  .window-row { grid-template-columns:1fr; gap:2px; padding:8px 0; }
-  .window-row.header { display:none; }
-  .flow-intro { padding-top:26px; padding-bottom:14px; }
-  .flow-title { font-size:26px; }
-  .flow-step,.law-panel { grid-template-columns:26px minmax(0,1fr); gap:10px 12px; min-height:0; padding:21px 0; }
-  .flow-value,.law-content { grid-column:2; }
-  .flow-value strong { font-size:28px; }
-  .law-verdict { font-size:24px; }
-  .law-facts { grid-template-columns:1fr; }
-  .law-fact,.law-fact:first-child,.law-fact:last-child { padding:11px 0; border-right:0; border-bottom:1px solid var(--line); }
-  .law-fact:last-child { border-bottom:0; }
+/* control-v6 is a single operator ledger: no staged flow or dashboard cards. */
+.control-v6 .nd-inner { width:min(1080px,100%); margin:0 auto; padding-left:28px; padding-right:28px; }
+.control-v6 .nd-head .nd-inner { min-height:58px; padding-top:0; padding-bottom:0; }
+.control-v6 .nd-brand strong { font-size:19px; }
+.control-v6 .nd-brand span,.control-v6 .nd-live { font-size:11px; }
+.control-v6 .nd-main { padding-top:34px; padding-bottom:38px; }
+.control-v6 .section-head { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:14px; }
+.control-v6 .section-head h1 { margin:0; color:#f4f6f7; font-size:20px; font-weight:730; line-height:1.25; }
+.control-v6 .section-head p { margin:0; color:var(--muted); font-size:11px; line-height:1.45; text-align:right; }
+.control-v6 .ledger { border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.control-v6 .ledger-row { display:grid; grid-template-columns:minmax(220px,1.25fr) repeat(3,minmax(150px,1fr)); gap:20px; align-items:center; min-height:92px; border-bottom:1px solid var(--line); }
+.control-v6 .ledger-row:last-child { border-bottom:0; }
+.control-v6 .ledger-head { min-height:32px; color:var(--muted); font-size:10px; font-weight:700; }
+.control-v6 .ledger-title,.control-v6 .ledger-cell { min-width:0; }
+.control-v6 .ledger-title strong { display:block; color:#e3e7e9; font-size:14px; font-weight:720; }
+.control-v6 .ledger-title span { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.4; }
+.control-v6 .ledger-cell strong { display:block; color:#f2f4f5; font-size:22px; font-weight:720; line-height:1.15; overflow-wrap:anywhere; }
+.control-v6 .ledger-cell strong.good,.control-v6 .ledger-share strong { color:var(--green); }
+.control-v6 .ledger-cell span { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.35; }
+.control-v6 .law { margin-top:34px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.control-v6 .law-head { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:64px; border-bottom:1px solid var(--line); }
+.control-v6 .law-title { display:flex; align-items:baseline; gap:12px; min-width:0; }
+.control-v6 .law-title h2 { margin:0; color:#f4f6f7; font-size:18px; font-weight:730; }
+.control-v6 .law-title span { color:var(--muted); font-size:11px; }
+.control-v6 .law-verdict { color:var(--amber); font-size:13px; font-weight:760; line-height:1.25; text-align:right; }
+.control-v6 .law-verdict.good { color:var(--green); }
+.control-v6 .law-verdict.bad { color:var(--red); }
+.control-v6 .law-body { padding:18px 0 20px; }
+.control-v6 .law-counts { display:flex; flex-wrap:wrap; gap:7px 24px; margin:0; color:#c9cfd2; font-size:12px; line-height:1.5; }
+.control-v6 .law-counts span { white-space:nowrap; }
+.control-v6 .law-counts b { color:#f0f3f4; font-size:15px; font-weight:720; }
+.control-v6 .law-blocker { margin:14px 0 0; color:#b7bec1; font-size:12px; line-height:1.55; }
+.control-v6 .law-blocker span,.control-v6 .law-next { color:var(--muted); }
+.control-v6 .law-blocker b { color:#e4e8ea; font-weight:680; }
+.control-v6 .law-next { margin:7px 0 0; font-size:11px; line-height:1.5; }
+.control-v6 .law-next b { color:#cbd1d4; font-weight:650; }
+.control-v6 .nd-foot { border-top:1px solid var(--line); }
+.control-v6 .nd-foot .nd-inner { padding-top:12px; padding-bottom:12px; }
+@media (max-width:760px) {
+  .control-v6 .nd-inner { padding-left:16px; padding-right:16px; }
+  .control-v6 .nd-head .nd-inner { align-items:flex-start; flex-direction:column; justify-content:center; gap:4px; min-height:68px; }
+  .control-v6 .nd-live { text-align:left; }
+  .control-v6 .nd-main { padding-top:24px; padding-bottom:28px; }
+  .control-v6 .section-head { align-items:flex-start; flex-direction:column; gap:5px; }
+  .control-v6 .section-head p { text-align:left; }
+  .control-v6 .ledger-head { display:none; }
+  .control-v6 .ledger-row { grid-template-columns:1fr; gap:12px; min-height:0; padding:18px 0; }
+  .control-v6 .ledger-cell { display:grid; grid-template-columns:112px minmax(0,1fr); align-items:baseline; gap:12px; }
+  .control-v6 .ledger-cell::before { content:attr(data-label); color:var(--muted); font-size:10px; font-weight:700; }
+  .control-v6 .ledger-cell strong { font-size:20px; }
+  .control-v6 .ledger-cell span { grid-column:2; margin-top:-7px; }
+  .control-v6 .law-head { align-items:flex-start; padding:15px 0; }
+  .control-v6 .law-title { align-items:flex-start; flex-direction:column; gap:3px; }
+  .control-v6 .law-verdict { max-width:44%; }
+  .control-v6 .law-counts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 14px; }
+  .control-v6 .law-counts span { white-space:normal; }
 }
 </style>
-<main class="nando-live" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live control">
+<main class="nando-live control-v6" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live control">
   <header class="nd-head"><div class="nd-inner">
-    <div class="nd-brand"><strong>Nando</strong><span>live control</span></div>
-    <div class="nd-live"><b>Live</b> · <span id="snapshot-age">0</span> с · источник <span id="source-age">—</span> с · сервисы <span id="services">—/3</span></div>
+    <div class="nd-brand"><strong>NANDO LIVE</strong><span>факты, не прогнозы</span></div>
+    <div class="nd-live"><b>LIVE</b> · снимок <span id="snapshot-age">0</span> с · источник <span id="source-age">—</span> с · сервисы <span id="services">—/3</span></div>
   </div></header>
 
-  <section class="nd-band"><div class="nd-inner flow-intro">
-    <p class="flow-eyebrow">Фактические токены · без прогнозов</p>
-    <h1 class="flow-title">Трафик → CPU</h1>
-    <p class="flow-subtitle">Сервер и майнер имеют разные начальные точки. Доли считаются только внутри своего окна.</p>
-  </div></section>
-
-  <section class="nd-band"><div class="nd-inner">
-    <ol class="traffic-flow">
-      <li class="flow-step">
-        <span class="flow-index">01</span>
-        <div class="flow-label"><h2>Весь трафик сервера</h2><p class="flow-scope">вся записанная accounting history</p></div>
-        <div class="flow-value"><strong id="lifetime-total">__LIFETIME_TOTAL__</strong><span>входных токенов</span></div>
-      </li>
-      <li class="flow-step">
-        <span class="flow-index">02</span>
-        <div class="flow-label"><h2>Майнер увидел</h2><p id="miner-window-start" class="flow-scope">отдельное окно майнера</p></div>
-        <div class="flow-value"><strong id="miner-seen">__MINER_SEEN__</strong><span><b id="miner-seen-intents">__MINER_SEEN_INTENTS__</b> запросов · <span class="scope-warning">не делить на строку 01</span></span></div>
-      </li>
-      <li class="flow-step">
-        <span class="flow-index">03</span>
-        <div class="flow-label"><h2>Майнер распознал</h2><p class="flow-scope">внутри того же окна майнера</p></div>
-        <div class="flow-value"><strong id="miner-recognized" class="good">__MINER_RECOGNIZED__</strong><span><output id="miner-share">__MINER_RECOGNIZED_SHARE__</output> от увиденного · <b id="miner-recognized-intents">__MINER_RECOGNIZED_INTENTS__</b> запросов</span></div>
-      </li>
-      <li class="flow-step">
-        <span class="flow-index">04</span>
-        <div class="flow-label"><h2>Воспроизведено на CPU</h2><p class="flow-scope">доказанный результат по всей истории сервера</p></div>
-        <div class="flow-value"><strong id="lifetime-cpu" class="good">__LIFETIME_CPU__</strong><span><output id="lifetime-share">__LIFETIME_SHARE__</output> от строки 01 · допуск CPU <b id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</b></span></div>
-      </li>
-    </ol>
-  </div></section>
-
-  <section class="nd-band"><div class="nd-inner law-panel">
-    <span class="flow-index">05</span>
-    <div class="law-label"><h2>Закон №2</h2><p>следующий естественный закон K1</p></div>
-    <div class="law-content">
-      <strong id="law2-state" class="law-verdict">ЗАГРУЗКА</strong>
-      <div class="law-facts">
-        <div class="law-fact"><span>Readiness достигли</span><strong id="historical-ready">—</strong></div>
-        <div class="law-fact"><span>Доступно сейчас</span><strong id="ready-now">—</strong></div>
-        <div class="law-fact"><span>K1 laws</span><strong id="k1-laws-main">—</strong></div>
+  <div class="nd-inner nd-main">
+    <section aria-labelledby="traffic-title">
+      <div class="section-head">
+        <h1 id="traffic-title">Трафик и CPU</h1>
+        <p>Каждая доля считается только внутри своей строки.</p>
       </div>
-      <p class="law-exit">Последний исход: <b id="latest-verdict">—</b>. Причина: <b id="law2-blocker">—</b>. Следующая generation: <b id="next-generation">—</b>.</p>
-    </div>
-  </div></section>
+      <div class="ledger" role="table" aria-label="Фактический трафик и результат">
+        <div class="ledger-row ledger-head" role="row">
+          <span role="columnheader">Контур</span><span role="columnheader">Вход</span><span role="columnheader">Результат</span><span role="columnheader">Доля</span>
+        </div>
+        <div class="ledger-row" role="row">
+          <div class="ledger-title" role="rowheader"><strong>Вся история сервера</strong><span>весь записанный ordinary traffic</span></div>
+          <div class="ledger-cell" data-label="Вход" role="cell"><strong id="lifetime-total">__LIFETIME_TOTAL__</strong><span>входных токенов</span></div>
+          <div class="ledger-cell" data-label="CPU" role="cell"><strong id="lifetime-cpu" class="good">__LIFETIME_CPU__</strong><span>воспроизведено на CPU</span></div>
+          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="lifetime-share">__LIFETIME_SHARE__</strong><span>CPU / весь сервер · допуск <b id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</b></span></div>
+        </div>
+        <div class="ledger-row" role="row">
+          <div class="ledger-title" role="rowheader"><strong>Окно майнера</strong><span id="miner-window-start">отдельный watermark</span></div>
+          <div class="ledger-cell" data-label="Увидел" role="cell"><strong id="miner-seen">__MINER_SEEN__</strong><span><b id="miner-seen-intents">__MINER_SEEN_INTENTS__</b> запросов</span></div>
+          <div class="ledger-cell" data-label="Распознал" role="cell"><strong id="miner-recognized" class="good">__MINER_RECOGNIZED__</strong><span><b id="miner-recognized-intents">__MINER_RECOGNIZED_INTENTS__</b> запросов</span></div>
+          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="miner-share">__MINER_RECOGNIZED_SHARE__</strong><span>распознано / увидено · не смешивать с историей сервера</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="law" aria-labelledby="law2-title">
+      <div class="law-head">
+        <div class="law-title"><h2 id="law2-title">Law #2</h2><span>следующий естественный закон K1 · K1 <b id="k1-laws-main">—</b></span></div>
+        <strong id="law2-state" class="law-verdict">ЗАГРУЗКА</strong>
+      </div>
+      <div class="law-body">
+        <p class="law-counts">
+          <span>когорт <b id="catalog-cohorts">—</b></span>
+          <span>повторяемых <b id="historical-ready">—</b></span>
+          <span>проверено <b id="generations-checked">—</b></span>
+          <span>доступно сейчас <b id="ready-now">—</b></span>
+        </p>
+        <p class="law-blocker"><span>Сейчас:</span> <b id="law2-blocker">—</b>. <span>Последний исход:</span> <b id="latest-verdict">—</b>.</p>
+        <p class="law-next"><b>Следующий переход:</b> готовая когорта → immutable freeze → identifier → independent future → LawCertificate. Generation <span id="next-generation">—</span>.</p>
+      </div>
+    </section>
+  </div>
 
   <footer class="nd-foot"><div class="nd-inner"><div class="safety-line"><span>false accepts <b id="false-accepts">—</b></span><span>parity failures <b id="parity-failures">—</b></span></div><span>build __DASHBOARD_BUILD__</span></div></footer>
 </main>
@@ -522,14 +428,19 @@ const TEMPLATE: &str = r#"
   const text = (id, value) => { const target = node(id); if (target) target.textContent = value; };
   const className = (id, value) => { const target = node(id); if (target) target.className = value; };
   const percent = (part, total, digits = 2) => total > 0 ? `${(part * 100 / total).toFixed(digits).replace(".", ",")}%` : `0,${"0".repeat(digits)}%`;
-  const bar = (id, part, total) => { const target = node(id); if (target) target.style.width = total > 0 ? `${Math.min(100, part * 100 / total)}%` : "0"; };
   const localTime = unix => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short", timeStyle:"medium"}) : "—";
   const readable = value => ({
     waiting_for_evidence:"Ждёт повторяемую когорту",
     no_readiness_pass_candidate:"нет готовой повторяемой когорты",
     settled_evidence_below_freeze_minimum:"мало завершённых наблюдений",
+    verified_evidence_below_freeze_minimum:"мало независимо проверенных наблюдений",
     independent_lineages_below_freeze_minimum:"мало независимых lineage",
     selected_role_witness_missing:"capture не сохранил типизированную роль",
+    all_supported_t1_protocol_modes_already_active:"все доступные epistemic modes уже доказаны",
+    durable_future_prediction_pending_outcome:"prediction записана, ожидается настоящий outcome",
+    independent_post_identification_future_pending:"ожидается independent future после identification",
+    independent_future_not_observed:"independent future не появился в bounded window",
+    generation_deadline_exhausted:"bounded window завершён без доказательства",
     acquisition_fail:"ACQUISITION FAIL",
     probe_pending:"PROBE PENDING",
     probe_exhausted:"PROBE EXHAUSTED",
@@ -568,7 +479,9 @@ const TEMPLATE: &str = r#"
     const law2Active = discovery.active_candidate === true;
     text("law2-state", law2Proved ? "ДОКАЗАН" : law2Active ? "ПРОВЕРЯЕТСЯ" : "НЕ ДОКАЗАН");
     className("law2-state", `law-verdict ${law2Proved ? "good" : ""}`);
+    text("catalog-cohorts", number.format(discovery.catalog_cohorts || 0));
     text("historical-ready", number.format(discovery.historical_readiness_pass || 0));
+    text("generations-checked", number.format(discovery.completed_generations || 0));
     text("ready-now", number.format(discovery.ready_now || 0));
     text("latest-verdict", readable(discovery.latest_verdict));
     text("law2-blocker", readable(discovery.latest_verdict_blocker || discovery.blocker));
@@ -643,17 +556,20 @@ mod tests {
             miner_window_cpu_intents: 9_832,
             cpu_allowed: true,
         });
-        assert!(html.contains("Трафик → CPU"));
-        assert!(html.contains("Весь трафик сервера"));
+        assert!(html.contains("Трафик и CPU"));
+        assert!(html.contains("Вся история сервера"));
         assert!(html.contains("7 694 807 361"));
         assert!(html.contains("207 619 587"));
         assert!(html.contains("2,70%"));
         assert!(html.contains("10 882 437 482"));
         assert!(html.contains("1 613 584 240"));
-        assert!(html.contains("не делить на строку 01"));
-        assert!(html.contains("Закон №2"));
+        assert!(html.contains("не смешивать с историей сервера"));
+        assert!(html.contains("Law #2"));
+        assert!(html.contains("id=\"catalog-cohorts\""));
+        assert!(html.contains("id=\"generations-checked\""));
         assert!(html.contains("id=\"latest-verdict\""));
-        assert_eq!(html.matches("class=\"flow-step\"").count(), 4);
+        assert_eq!(html.matches("class=\"ledger-row\"").count(), 2);
+        assert!(!html.contains("class=\"flow-index\""));
         assert!(html.contains("/api/v1/dashboard"));
         assert!(!html.contains("Диагностика"));
         assert!(!html.contains("Доказанные пакеты"));
