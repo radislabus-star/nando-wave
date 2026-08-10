@@ -20,6 +20,7 @@ use nando_gateway_control::{
     service_statuses,
 };
 use nando_operator_admission::{K1VocabularyGateV1, OperatorCertificationLedgerV1};
+use nando_operator_learning::GroundedDecisionCensusV1;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -1561,6 +1562,7 @@ async fn control_dashboard_snapshot(
     let fallback = read_json(&state.config.economics_path);
     let persisted_miner = read_json(&state.config.response_online_miner_report_path);
     let response_registry = read_json(&state.config.response_registry_path);
+    let grounded_decision_census = read_json(&state.config.grounded_decision_census_path);
     let structural_frontier_census =
         read_json(std::path::Path::new(STRUCTURAL_FRONTIER_CENSUS_PATH));
     let natural_vocabulary_census = if structural_frontier_census
@@ -1685,6 +1687,7 @@ async fn control_dashboard_snapshot(
                 "certificates": operator_certificates,
             },
             "k1": k1_gate,
+            "k2_decision_evidence": grounded_decision_snapshot(&grounded_decision_census),
             "safety": {
                 "cpu_allowed": admission.cpu_allowed,
                 "services_active": bridge.services_active,
@@ -1824,6 +1827,45 @@ fn collection_blockers_text(status: &Value) -> String {
 
 fn metric_u64(metrics: &Value, key: &str) -> u64 {
     metrics.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn grounded_decision_snapshot(report: &Value) -> Value {
+    let Ok(census) = serde_json::from_value::<GroundedDecisionCensusV1>(report.clone()) else {
+        return json!({
+            "available": false,
+            "verdict": "REPORT_UNAVAILABLE",
+            "blocker": "grounded_decision_census_missing_or_invalid",
+        });
+    };
+    if census.validate().is_err() {
+        return json!({
+            "available": false,
+            "verdict": "REPORT_UNAVAILABLE",
+            "blocker": "grounded_decision_census_missing_or_invalid",
+        });
+    }
+
+    json!({
+        "available": true,
+        "report_root_sha256": census.report_root_sha256,
+        "transition_rows_scanned": census.transition_rows_scanned,
+        "transition_rows_projected": census.transition_rows_projected,
+        "transition_rows_censored": census.transition_rows_censored,
+        "transition_censor_counts": census.transition_censor_counts,
+        "distinct_transition_lineages": census.distinct_transition_lineages,
+        "goal_bound": census.goal_bound,
+        "alternative_bearing": census.alternative_bearing,
+        "horizon_bound": census.horizon_bound,
+        "satisfaction_verifiable": census.satisfaction_verifiable,
+        "dynamics_only": census.dynamics_only,
+        "decision_episodes": census.decision_episodes,
+        "distinct_decision_lineages": census.distinct_decision_lineages,
+        "verdict": census.verdict,
+        "blocker": census.blocker,
+        "model_training_allowed": census.model_training_allowed,
+        "authority_ready": census.authority_ready,
+        "phase_mutation_allowed": census.phase_mutation_allowed,
+    })
 }
 
 fn k1_gate_snapshot(ms4: &Value) -> Value {
@@ -2347,6 +2389,95 @@ mod tests {
             k1_gate_snapshot_from_values(&json!({"k1_vocabulary_gate": null}), Value::Null);
         assert_eq!(unavailable["available"], false);
         assert!(unavailable["law_certificates"].is_null());
+    }
+
+    #[test]
+    fn dashboard_decision_census_preserves_exact_denominators() {
+        let report = json!({
+            "schema": "nando.grounded-decision-census.v1",
+            "report_root_sha256": "4a4bef8ec334676495851510a0ef6d5ed74039991f3b16b38e63c5893876e984",
+            "transition_projection_root_sha256": "17ee90f188d5ea445d84007218713876b4abb6aecdd7fd1f53b4005715b4d52a",
+            "transition_rows_scanned": 12_854,
+            "transition_rows_projected": 1_866,
+            "transition_rows_censored": 10_988,
+            "transition_censor_counts": {
+                "missing_pre_action_topology": 1_358,
+                "missing_transport_binding": 9_407,
+                "ambiguous_transport_binding": 209,
+                "identity_mismatch": 14,
+            },
+            "distinct_transition_lineages": 19,
+            "goal_bound": 0,
+            "alternative_bearing": 0,
+            "horizon_bound": 0,
+            "satisfaction_verifiable": 0,
+            "dynamics_only": 1_866,
+            "decision_episodes": 0,
+            "distinct_decision_lineages": 0,
+            "lineage_independent_episodes": 0,
+            "blocker_counts": {
+                "missing_goal": 1_866,
+                "missing_alternative": 1_866,
+                "missing_horizon": 1_866,
+                "missing_satisfaction": 1_866,
+            },
+            "decision_episode_set_root_sha256": "f869a76401bb5319604dafd0315941b6759f94b419b06d71e0ec0ca746e676b4",
+            "decision_episode_roots_sha256": [],
+            "verdict": "EMPTY_DECISION_SURFACE",
+            "blocker": "missing_pre_action_goal",
+            "model_training_allowed": false,
+            "authority_ready": false,
+            "phase_mutation_allowed": false,
+        });
+
+        let snapshot = grounded_decision_snapshot(&report);
+        assert_eq!(snapshot["available"], true);
+        assert_eq!(snapshot["transition_rows_scanned"], 12_854);
+        assert_eq!(snapshot["transition_rows_projected"], 1_866);
+        assert_eq!(snapshot["transition_rows_censored"], 10_988);
+        assert_eq!(snapshot["distinct_transition_lineages"], 19);
+        assert_eq!(snapshot["decision_episodes"], 0);
+        assert_eq!(snapshot["blocker"], "missing_pre_action_goal");
+        assert_eq!(snapshot["authority_ready"], false);
+    }
+
+    #[test]
+    fn dashboard_decision_census_fails_closed_on_denominator_mismatch() {
+        let report = json!({
+            "schema": "nando.grounded-decision-census.v1",
+            "report_root_sha256": "4a4bef8ec334676495851510a0ef6d5ed74039991f3b16b38e63c5893876e984",
+            "transition_projection_root_sha256": "17ee90f188d5ea445d84007218713876b4abb6aecdd7fd1f53b4005715b4d52a",
+            "transition_rows_scanned": 10,
+            "transition_rows_projected": 4,
+            "transition_rows_censored": 5,
+            "transition_censor_counts": {"missing_transport_binding": 5},
+            "goal_bound": 0,
+            "alternative_bearing": 0,
+            "horizon_bound": 0,
+            "satisfaction_verifiable": 0,
+            "dynamics_only": 4,
+            "decision_episodes": 0,
+            "distinct_transition_lineages": 1,
+            "distinct_decision_lineages": 0,
+            "lineage_independent_episodes": 0,
+            "blocker_counts": {
+                "missing_goal": 4,
+                "missing_alternative": 4,
+                "missing_horizon": 4,
+                "missing_satisfaction": 4,
+            },
+            "decision_episode_set_root_sha256": "f869a76401bb5319604dafd0315941b6759f94b419b06d71e0ec0ca746e676b4",
+            "decision_episode_roots_sha256": [],
+            "verdict": "EMPTY_DECISION_SURFACE",
+            "blocker": "missing_pre_action_goal",
+            "model_training_allowed": false,
+            "authority_ready": false,
+            "phase_mutation_allowed": false,
+        });
+
+        let snapshot = grounded_decision_snapshot(&report);
+        assert_eq!(snapshot["available"], false);
+        assert_eq!(snapshot["verdict"], "REPORT_UNAVAILABLE");
     }
 
     #[test]

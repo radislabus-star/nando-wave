@@ -478,21 +478,31 @@ revoke valid K1 CPU laws.
 K1 certified operational laws       1 / 3 minimum seed
 K1 product execution                LIVE
 Law Lab exact-outcome substrate     CAPABILITY PASS / RUNTIME OFF
-GroundedTransitionEpisodeV1         NOT IMPLEMENTED
-TypedGoalContractV1                 NOT IMPLEMENTED
-GroundedDecisionEpisodeV1           NOT IMPLEMENTED
+S1A transition projection           PASS · 1,866 / 12,854 · 19 lineages
+TypedGoalContractV1 schema           PASS · live pre-action receipts 0
+S1B decision census                 PASS · EMPTY_DECISION_SURFACE
+GroundedDecisionEpisodeV1           0 · missing_pre_action_goal
 B0-B4 frozen baseline packet        NOT IMPLEMENTED
 MeaningModelSnapshotV1              NOT IMPLEMENTED
-K2 dynamics claim                   NOT EVALUATED
-K2 grounded-meaning claim           NOT EVALUATED
+K2 dynamics evidence                1,866 DYNAMICS_ONLY transitions
+K2 grounded-meaning claim           NOT EVALUATED · decision surface empty
 K2 natural law                      BLOCKED BY BASIS AND EVIDENCE
 K2 execution authority              false
 ```
 
-The next architectural implementation is S1A and S1B, not model training:
-derive leakage-audited transition facts, then prove whether pre-action goals,
-available alternatives, frozen horizons, actor truth, verifier truth, evidence
-class, and lineage roots can form honest decision episodes. No denominator, no
+The S1A projection and S1B census are implemented as a read-only cold route.
+The first production census scanned 12,854 durable CPU completions, projected
+1,866 verified transition episodes across 19 lineages, and censored 10,988
+rows with an exact reason ledger. It found zero pre-action goals, alternatives,
+frozen horizons, satisfaction receipts, and decision episodes. Its verdict is
+therefore `EMPTY_DECISION_SURFACE`, not a failed model and not K2 evidence.
+
+The next architectural implementation is the pre-action decision-contract
+owner route: freeze a typed goal, applicable K1 alternatives, constraints, and
+outcome horizon before action; then bind the selected action and independently
+verified satisfaction without allowing the outcome to invent the goal. Rerun
+S1B after natural receipts exist. S2 remains blocked until the census contains
+decision episodes from at least two independent lineages. No denominator, no
 model.
 
 Structural review packet:

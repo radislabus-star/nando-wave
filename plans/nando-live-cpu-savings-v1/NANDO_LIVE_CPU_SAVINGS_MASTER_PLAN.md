@@ -710,6 +710,10 @@ As of the verified baseline:
    episodes with a pre-action `TypedGoalContractV1`, applicable K1 alternatives,
    frozen outcome horizon, and exact goal-satisfaction receipt may become
    `GroundedDecisionEpisodeV1`; the rest remain `DYNAMICS_ONLY`.
+   **S1A/S1B checkpoint:** implementation PASS. The first live census projected
+   1,866 of 12,854 durable CPU completions across 19 transition lineages and
+   found 0 decision episodes. Verdict: `EMPTY_DECISION_SURFACE`; blocker:
+   `missing_pre_action_goal`. Model training and authority remain false.
 10. Freeze ID, surface, retrieval, typed effect-algebra, and bounded typed-search
    baselines before training any hidden representation. If a required goal,
    action-alternative, intervention, horizon, or lineage-disjoint surface is

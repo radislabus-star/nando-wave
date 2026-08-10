@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v11";
+const DASHBOARD_BUILD: &str = "2026.08.11-control-v12";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -447,6 +447,32 @@ const TEMPLATE: &str = r#"
         <p class="law-next"><b>Law #2 появится только после:</b> unique semantic class → independent post-freeze future → BundleV4 → verified ordinary CPU → exact economics → cleanup → LawCertificate.</p>
       </div>
     </section>
+
+    <section class="law" aria-labelledby="k2-title">
+      <div class="law-head">
+        <div class="law-title"><h2 id="k2-title">K2 · decision evidence</h2><span>S1A transition projection → S1B decision census</span></div>
+        <strong id="decision-status" class="law-verdict">ЗАГРУЗКА</strong>
+      </div>
+      <div class="law-body">
+        <p class="law-counts vocabulary-slots">
+          <span>durable CPU completions <b id="decision-scanned">—</b></span>
+          <span>S1A transitions <b id="decision-projected">—</b></span>
+          <span>transition lineages <b id="transition-lineages">—</b></span>
+          <span>censored <b id="decision-censored">—</b></span>
+        </p>
+        <p class="law-blocker"><span>Transition censors:</span> <b id="transition-censors">—</b>.</p>
+        <p class="discovery-label">Условия настоящего решения</p>
+        <p class="law-counts">
+          <span>goal до action <b id="decision-goals">—</b></span>
+          <span>K1 alternatives <b id="decision-alternatives">—</b></span>
+          <span>frozen horizon <b id="decision-horizons">—</b></span>
+          <span>verified satisfaction <b id="decision-satisfaction">—</b></span>
+          <span>decision episodes <b id="decision-episodes">—</b></span>
+        </p>
+        <p class="law-blocker"><span>Научная граница:</span> <b id="decision-stage">—</b>. <span>Blocker:</span> <b id="decision-blocker">—</b>.</p>
+        <p class="law-next">Переход показывает динамику. Смысл начинается только там, где цель зафиксирована до действия, существует проверяемая альтернатива и исход независимо подтверждает достижение цели.</p>
+      </div>
+    </section>
   </div>
 
   <footer class="nd-foot"><div class="nd-inner"><div class="safety-line"><span>false accepts <b id="false-accepts">—</b></span><span>parity failures <b id="parity-failures">—</b></span><span>transport failures cumulative <b id="transport-failures">—</b></span><span>pending structural/opportunity <b id="pending-work">—</b></span></div><span>build __DASHBOARD_BUILD__</span></div></footer>
@@ -487,6 +513,22 @@ const TEMPLATE: &str = r#"
     pass:"PASS",
     live_ms4_projection:"LIVE MS4",
     durable_operator_certification_ledger:"DURABLE LEDGER",
+    missing_pre_action_topology:"нет pre-action topology",
+    ambiguous_pre_action_topology:"неоднозначная pre-action topology",
+    missing_transport_binding:"нет transport binding",
+    ambiguous_transport_binding:"неоднозначный transport binding",
+    missing_certified_k1_binding:"нет certified K1 binding",
+    missing_verified_outcome:"нет verified outcome",
+    identity_mismatch:"identity mismatch",
+    invalid_source_receipt:"invalid source receipt",
+    provenance_failure:"provenance failure",
+    capacity_exhausted:"capacity exhausted",
+    missing_pre_action_goal:"нет pre-action goal receipt",
+    grounded_decision_census_missing_or_invalid:"decision census отсутствует или невалиден",
+    EMPTY_DECISION_SURFACE:"EMPTY DECISION SURFACE",
+    DECISION_SURFACE_LINEAGE_BLOCKED:"DECISION LINEAGE BLOCKED",
+    READY_FOR_BASELINES:"READY FOR BASELINES",
+    REPORT_UNAVAILABLE:"REPORT UNAVAILABLE",
     unavailable:"UNKNOWN",
   }[value] || String(value || "—").replaceAll("_", " "));
 
@@ -503,6 +545,7 @@ const TEMPLATE: &str = r#"
     const discovery = snapshot.discovery || {};
     const safety = snapshot.safety || {};
     const k1 = snapshot.k1 || {};
+    const decision = snapshot.k2_decision_evidence || {};
     sourceGeneratedAt = snapshot.generated_at_unix || 0;
 
     text("ingress-total", number.format(ingress.input_tokens || 0));
@@ -565,6 +608,28 @@ const TEMPLATE: &str = r#"
     text("transport-failures", number.format(safety.transport_failures || 0));
     text("pending-work", `${number.format(safety.structural_pending || 0)} / ${number.format(safety.opportunity_pending || 0)}`);
     text("k1-source", readable(k1.source || "unavailable"));
+
+    const decisionAvailable = decision.available === true;
+    const decisionReady = decision.verdict === "READY_FOR_BASELINES";
+    text("decision-status", !decisionAvailable ? "REPORT UNAVAILABLE" : decisionReady ? "READY FOR BASELINES" : "DYNAMICS ONLY");
+    className("decision-status", `law-verdict ${!decisionAvailable ? "bad" : decisionReady ? "good" : ""}`);
+    text("decision-scanned", decisionAvailable ? number.format(decision.transition_rows_scanned || 0) : "—");
+    text("decision-projected", decisionAvailable ? number.format(decision.transition_rows_projected || 0) : "—");
+    text("transition-lineages", decisionAvailable ? number.format(decision.distinct_transition_lineages || 0) : "—");
+    text("decision-censored", decisionAvailable ? number.format(decision.transition_rows_censored || 0) : "—");
+    const transitionCensors = Object.entries(decision.transition_censor_counts || {})
+      .filter(([, count]) => Number(count) > 0)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([reason, count]) => `${readable(reason)} ${number.format(count)}`)
+      .join(" · ");
+    text("transition-censors", decisionAvailable ? transitionCensors || "нет" : "—");
+    text("decision-goals", decisionAvailable ? number.format(decision.goal_bound || 0) : "—");
+    text("decision-alternatives", decisionAvailable ? number.format(decision.alternative_bearing || 0) : "—");
+    text("decision-horizons", decisionAvailable ? number.format(decision.horizon_bound || 0) : "—");
+    text("decision-satisfaction", decisionAvailable ? number.format(decision.satisfaction_verifiable || 0) : "—");
+    text("decision-episodes", decisionAvailable ? number.format(decision.decision_episodes || 0) : "—");
+    text("decision-stage", !decisionAvailable ? "UNKNOWN" : `S1A PASS · S1B ${readable(decision.verdict)}`);
+    text("decision-blocker", readable(decision.blocker));
 
     const current = {
       ingressTokens: ingress.input_tokens || 0,
@@ -677,6 +742,18 @@ mod tests {
         assert!(html.contains("id=\"current-blocker\""));
         assert!(html.contains("id=\"latest-verdict\""));
         assert!(html.contains("verified ordinary CPU"));
+        assert!(html.contains("K2 · decision evidence"));
+        assert!(html.contains("S1A transition projection → S1B decision census"));
+        assert!(html.contains("id=\"decision-scanned\""));
+        assert!(html.contains("id=\"decision-projected\""));
+        assert!(html.contains("id=\"transition-censors\""));
+        assert!(html.contains("id=\"decision-goals\""));
+        assert!(html.contains("id=\"decision-alternatives\""));
+        assert!(html.contains("id=\"decision-horizons\""));
+        assert!(html.contains("id=\"decision-satisfaction\""));
+        assert!(html.contains("id=\"decision-episodes\""));
+        assert!(html.contains("DYNAMICS ONLY"));
+        assert!(html.contains("нет pre-action goal receipt"));
         assert!(!html.contains("повторяемых <b"));
         assert!(!html.contains("все доступные epistemic modes уже доказаны"));
         assert_eq!(html.matches("class=\"ledger-row\"").count(), 4);

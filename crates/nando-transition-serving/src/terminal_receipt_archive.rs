@@ -208,6 +208,24 @@ pub(crate) fn read_terminal_receipt_for_request(
     Ok(validate_chain(&mut file, &checkpoint)?.remove(request_event_id_sha256))
 }
 
+pub(crate) fn read_terminal_receipts_for_requests(
+    directory: &Path,
+    request_event_ids_sha256: &BTreeSet<String>,
+) -> Result<Vec<TransportTerminalReceiptV1>, String> {
+    let checkpoint: ArchiveCheckpoint = serde_cbor::from_slice(
+        &std::fs::read(directory.join(CHECKPOINT_FILE))
+            .map_err(|error| format!("terminal_archive_checkpoint_read:{error}"))?,
+    )
+    .map_err(|error| format!("terminal_archive_checkpoint_decode:{error}"))?;
+    let mut file = File::open(directory.join(DATA_FILE))
+        .map_err(|error| format!("terminal_archive_open:{error}"))?;
+    let by_request = validate_chain(&mut file, &checkpoint)?;
+    Ok(request_event_ids_sha256
+        .iter()
+        .filter_map(|request| by_request.get(request).cloned())
+        .collect())
+}
+
 fn validate_chain(
     file: &mut File,
     checkpoint: &ArchiveCheckpoint,

@@ -1144,12 +1144,15 @@ MetaSkillPackage</pre>
   <div class="tree"><pre>durable K1 receipts + pre-action goal contracts
   |
   v
-S1A  GroundedTransitionEpisodeV1           FACT / NO AUTHORITY
+S1A  GroundedTransitionEpisodeV1           PASS · 1 866 / 12 854 · 19 LINEAGES
   |
   v
-S1B  GroundedDecisionEpisodeV1 census      NO MODEL
+S1B  GroundedDecisionEpisodeV1 census      PASS · EMPTY DECISION SURFACE
   |
-  v
+  +-> goal / alternative / horizon / satisfaction  0 / 0 / 0 / 0
+  +-> blocker                              MISSING PRE-ACTION GOAL
+  |
+  v  only after natural decision episodes from 2+ lineages
 S2   ID + surface + retrieval + typed algebra/search baselines
   |
   v
@@ -1172,7 +1175,7 @@ S3   frozen MeaningModelSnapshotV1
     <tbody>
       <tr><td>Работает ли K1 law на CPU?</td><td>ExecutionCertificate + ordinary receipt</td><td class="ok">PASS для Law #1</td></tr>
       <tr><td>Нужен ли Wave для рождения exact law?</td><td>MechanismCertificate + causal ablations</td><td class="watch">COLLECTING / отдельно</td></tr>
-      <tr><td>Возник ли K2 grounded meaning?</td><td>Goal-bound decisions + alternatives + baselines + transfer</td><td class="held">NOT EVALUATED</td></tr>
+      <tr><td>Возник ли K2 grounded meaning?</td><td>Goal-bound decisions + alternatives + baselines + transfer</td><td class="held">S1B EMPTY · DYNAMICS ONLY</td></tr>
     </tbody>
   </table>
 
@@ -1193,8 +1196,9 @@ S3   frozen MeaningModelSnapshotV1
   <div class="footer">
     Canonical detail:
     <code>plans/effect-law-unification-v1/GROUNDED_MEANING_ARCHITECTURE_V1.md</code>.
-    Первая допустимая реализация: S1A transition projection и S1B decision
-    census; model training до leakage audit и B0-B4 baseline freeze запрещён.
+    S1A transition projection и S1B decision census реализованы. Следующий
+    допустимый срез — pre-action goal/alternative/horizon receipts; S2 и model
+    training запрещены, пока decision surface пуста.
   </div>
 </section>
 

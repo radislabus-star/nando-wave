@@ -65,6 +65,7 @@ pub struct ControlConfig {
     pub response_admission_controller_report_path: PathBuf,
     pub response_miner_status_path: PathBuf,
     pub response_online_miner_report_path: PathBuf,
+    pub grounded_decision_census_path: PathBuf,
     pub build_manifest_path: PathBuf,
     pub admission_max_age_seconds: u64,
     pub response_controller_report_max_age_seconds: u64,
@@ -139,6 +140,12 @@ impl ControlConfig {
             response_online_miner_report_path: PathBuf::from(
                 env::var("NANDO_RESPONSE_ONLINE_MINER_REPORT").unwrap_or_else(|_| {
                     "/var/lib/nando-wave/transition/response-online-miner-report.json".into()
+                }),
+            ),
+            grounded_decision_census_path: PathBuf::from(
+                env::var("NANDO_GROUNDED_DECISION_CENSUS_JSON").unwrap_or_else(|_| {
+                    "/var/lib/nando-wave/transition/grounded-meaning-v1/grounded-decision-census-v1.json"
+                        .into()
                 }),
             ),
             build_manifest_path: PathBuf::from(
@@ -520,6 +527,7 @@ mod tests {
                 .join("response-admission-controller-report.json"),
             response_miner_status_path: root.join("response-miner-status.json"),
             response_online_miner_report_path: root.join("response-online-miner-report.json"),
+            grounded_decision_census_path: root.join("grounded-decision-census-v1.json"),
             build_manifest_path: root.join("build-manifest.json"),
             admission_max_age_seconds: 900,
             response_controller_report_max_age_seconds: 90,

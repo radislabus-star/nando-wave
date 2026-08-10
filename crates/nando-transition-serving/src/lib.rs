@@ -9,6 +9,7 @@ mod capture_transition_binding_archive;
 mod custom_tool_projection;
 mod economics_worker;
 pub mod generation_shadow;
+pub mod grounded_decision_census;
 mod k1_natural_scheduler;
 mod k1_natural_scheduler_runtime;
 mod k1_pre_action_prediction;
