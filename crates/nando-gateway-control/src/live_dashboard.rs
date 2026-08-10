@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v3";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v4";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -508,7 +508,7 @@ const TEMPLATE: &str = r#"
 </main>
 <script>
 (() => {
-  const base = window.location.pathname.replace(/\/$/, "");
+  const base = window.location.pathname.replace(/\/legacy$/, "").replace(/\/$/, "");
   const expectedBuild = document.querySelector(".nando-live")?.dataset.dashboardBuild || "";
   const number = new Intl.NumberFormat("ru-RU");
   let lastSuccess = Date.now();

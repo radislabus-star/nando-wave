@@ -81,6 +81,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/control/:key", get(control_page))
+        .route("/control/:key/legacy", get(legacy_control_page))
         .route(
             "/control/:key/api/v1/signal-path",
             get(signal_path_api::control_signal_path),
@@ -125,6 +126,51 @@ async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
 }
 
 async fn control_page(Path(key): Path<String>, State(state): State<AppState>) -> Response {
+    if !authorized(&state, &key) {
+        return not_found().await;
+    }
+    let fallback_economics = read_json(&state.config.economics_path);
+    let persisted_miner = read_json(&state.config.response_online_miner_report_path);
+    let live_miner = read_live_miner_report().await;
+    let economics = live_miner
+        .get("economics")
+        .filter(|value| value.is_object())
+        .unwrap_or(&fallback_economics);
+    let (epoch_total_tokens, epoch_cpu_tokens) =
+        exact_current_epoch_token_totals(economics).unwrap_or((0, 0));
+    let (server_total_tokens, server_cpu_tokens) =
+        exact_token_totals(economics).unwrap_or((0, 0));
+    let miner = exact_miner_opportunity(&live_miner, &persisted_miner).unwrap_or(&Value::Null);
+    let admission = admission_status(&state.config);
+    let dashboard = live_dashboard::render(live_dashboard::InitialMetrics {
+        server_total_tokens,
+        server_cpu_tokens,
+        epoch_total_tokens,
+        epoch_total_events: metric_u64(economics, "terminal_request_events"),
+        epoch_cpu_tokens,
+        epoch_cpu_accepts: metric_u64(economics, "actual_local_accepts"),
+        miner_window_total_tokens: metric_u64(miner, "ordinary_tokens"),
+        miner_window_total_intents: metric_u64(miner, "ordinary_intents"),
+        miner_window_cpu_tokens: metric_u64(miner, "verified_tokens"),
+        miner_window_cpu_intents: metric_u64(miner, "verified_intents"),
+        cpu_allowed: admission.cpu_allowed,
+    });
+    let body = format!(
+        r#"<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nando · Результат</title>
+<style>html,body {{ margin:0; min-height:100%; background:#0d1012; }}</style>
+</head>
+<body>{dashboard}</body>
+</html>"#
+    );
+    ([(header::CACHE_CONTROL, "no-store")], Html(body)).into_response()
+}
+
+async fn legacy_control_page(Path(key): Path<String>, State(state): State<AppState>) -> Response {
     if !authorized(&state, &key) {
         return not_found().await;
     }
