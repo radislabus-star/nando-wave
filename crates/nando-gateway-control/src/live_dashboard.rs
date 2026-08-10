@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.10-control-v6";
+const DASHBOARD_BUILD: &str = "2026.08.10-control-v7";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -307,7 +307,7 @@ const TEMPLATE: &str = r#"
 .nd-foot .nd-inner { display:flex; justify-content:space-between; gap:20px; padding-top:12px; padding-bottom:12px; color:#667075; font-size:9px; }
 .safety-line { display:flex; flex-wrap:wrap; gap:6px 22px; color:#7f898e; font-size:10px; }
 .safety-line b { color:#bfc6c9; font-weight:680; }
-/* control-v6 is a single operator ledger: no staged flow or dashboard cards. */
+/* control-v7 is a single operator ledger: no staged flow or dashboard cards. */
 .control-v6 .nd-inner { width:min(1080px,100%); margin:0 auto; padding-left:28px; padding-right:28px; }
 .control-v6 .nd-head .nd-inner { min-height:58px; padding-top:0; padding-bottom:0; }
 .control-v6 .nd-brand strong { font-size:19px; }
@@ -403,13 +403,14 @@ const TEMPLATE: &str = r#"
       </div>
       <div class="law-body">
         <p class="law-counts">
-          <span>когорт <b id="catalog-cohorts">—</b></span>
-          <span>повторяемых <b id="historical-ready">—</b></span>
-          <span>проверено <b id="generations-checked">—</b></span>
-          <span>доступно сейчас <b id="ready-now">—</b></span>
+          <span>live-когорт <b id="catalog-cohorts">—</b></span>
+          <span>readiness-PASS сейчас <b id="ready-now">—</b></span>
+          <span>terminal generations <b id="generations-checked">—</b></span>
+          <span id="generation-label">следующая generation <b id="next-generation">—</b></span>
         </p>
-        <p class="law-blocker"><span>Сейчас:</span> <b id="law2-blocker">—</b>. <span>Последний исход:</span> <b id="latest-verdict">—</b>.</p>
-        <p class="law-next"><b>Следующий переход:</b> готовая когорта → immutable freeze → identifier → independent future → LawCertificate. Generation <span id="next-generation">—</span>.</p>
+        <p class="law-blocker"><span>Discovery сейчас:</span> <b id="discovery-state">—</b>. <span>Текущий blocker:</span> <b id="current-blocker">—</b>.</p>
+        <p class="law-blocker"><span>Последний terminal:</span> <b id="latest-verdict">—</b> · <b id="latest-verdict-blocker">—</b>.</p>
+        <p class="law-next"><b>Law #2 появится только после:</b> unique semantic class → independent post-freeze future → BundleV4 → verified ordinary CPU → exact economics → cleanup → LawCertificate.</p>
       </div>
     </section>
   </div>
@@ -430,13 +431,16 @@ const TEMPLATE: &str = r#"
   const percent = (part, total, digits = 2) => total > 0 ? `${(part * 100 / total).toFixed(digits).replace(".", ",")}%` : `0,${"0".repeat(digits)}%`;
   const localTime = unix => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short", timeStyle:"medium"}) : "—";
   const readable = value => ({
-    waiting_for_evidence:"Ждёт повторяемую когорту",
-    no_readiness_pass_candidate:"нет готовой повторяемой когорты",
+    waiting_for_evidence:"WAITING FOR EVIDENCE",
+    candidate_frozen:"CANDIDATE FROZEN",
+    identifying:"IDENTIFYING",
+    future_pending:"FUTURE PENDING",
+    no_readiness_pass_candidate:"нет readiness-PASS кандидата",
     settled_evidence_below_freeze_minimum:"мало завершённых наблюдений",
     verified_evidence_below_freeze_minimum:"мало независимо проверенных наблюдений",
     independent_lineages_below_freeze_minimum:"мало независимых lineage",
     selected_role_witness_missing:"capture не сохранил типизированную роль",
-    all_supported_t1_protocol_modes_already_active:"все доступные epistemic modes уже доказаны",
+    all_supported_t1_protocol_modes_already_active:"кандидат дублирует уже активный T1 protocol mode",
     durable_future_prediction_pending_outcome:"prediction записана, ожидается настоящий outcome",
     independent_post_identification_future_pending:"ожидается independent future после identification",
     independent_future_not_observed:"independent future не появился в bounded window",
@@ -477,14 +481,23 @@ const TEMPLATE: &str = r#"
     const lawCount = k1.law_certificates || 0;
     const law2Proved = lawCount >= 2;
     const law2Active = discovery.active_candidate === true;
-    text("law2-state", law2Proved ? "ДОКАЗАН" : law2Active ? "ПРОВЕРЯЕТСЯ" : "НЕ ДОКАЗАН");
+    text("law2-state", law2Proved ? "ДОКАЗАН" : "НЕ ДОКАЗАН");
     className("law2-state", `law-verdict ${law2Proved ? "good" : ""}`);
     text("catalog-cohorts", number.format(discovery.catalog_cohorts || 0));
-    text("historical-ready", number.format(discovery.historical_readiness_pass || 0));
     text("generations-checked", number.format(discovery.completed_generations || 0));
     text("ready-now", number.format(discovery.ready_now || 0));
+    text("discovery-state", readable(discovery.state));
+    text("current-blocker", readable(discovery.blocker || "нет"));
     text("latest-verdict", readable(discovery.latest_verdict));
-    text("law2-blocker", readable(discovery.latest_verdict_blocker || discovery.blocker));
+    text("latest-verdict-blocker", readable(discovery.latest_verdict_blocker || "нет"));
+    text("generation-label", law2Active ? "active generation " : "следующая generation ");
+    const generationLabel = node("generation-label");
+    if (generationLabel) {
+      const generation = document.createElement("b");
+      generation.id = "next-generation";
+      generation.textContent = number.format(discovery.next_generation_sequence || 0);
+      generationLabel.appendChild(generation);
+    }
     text("next-generation", number.format(discovery.next_generation_sequence || 0));
 
     text("false-accepts", number.format(safety.false_accepts || 0));
@@ -566,8 +579,14 @@ mod tests {
         assert!(html.contains("не смешивать с историей сервера"));
         assert!(html.contains("Law #2"));
         assert!(html.contains("id=\"catalog-cohorts\""));
+        assert!(html.contains("readiness-PASS сейчас"));
         assert!(html.contains("id=\"generations-checked\""));
+        assert!(html.contains("id=\"discovery-state\""));
+        assert!(html.contains("id=\"current-blocker\""));
         assert!(html.contains("id=\"latest-verdict\""));
+        assert!(html.contains("verified ordinary CPU"));
+        assert!(!html.contains("повторяемых <b"));
+        assert!(!html.contains("все доступные epistemic modes уже доказаны"));
         assert_eq!(html.matches("class=\"ledger-row\"").count(), 2);
         assert!(!html.contains("class=\"flow-index\""));
         assert!(html.contains("/api/v1/dashboard"));
