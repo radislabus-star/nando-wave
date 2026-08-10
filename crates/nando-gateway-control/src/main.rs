@@ -41,6 +41,8 @@ const COLD_MS3_CAPTURE_HEALTH_URL: &str =
 const COLD_MS4_CLOSED_LOOP_URL: &str = "http://127.0.0.1:18790/v2/multi-source/ms4-closed-loop";
 const COLD_K1_NATURAL_SCHEDULER_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/k1-natural-scheduler";
+const COLD_K1_NATURAL_SCHEDULER_SUMMARY_URL: &str =
+    "http://127.0.0.1:18790/v2/multi-source/k1-natural-scheduler-summary";
 const COLD_K1_LAW_LAB_ELIGIBILITY_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/k1-law-lab-eligibility";
 const STRUCTURAL_FRONTIER_CENSUS_PATH: &str =
@@ -82,6 +84,10 @@ async fn main() {
         .route(
             "/control/:key/api/v1/signal-path",
             get(signal_path_api::control_signal_path),
+        )
+        .route(
+            "/control/:key/api/v1/dashboard",
+            get(control_dashboard_snapshot),
         )
         .route("/control/:key/tokens", get(control_token_stats))
         .route("/control/:key/connections", get(control_client_connections))
@@ -144,8 +150,6 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         exact_current_epoch_token_totals(live_economics).unwrap_or((0, 0));
     let (server_total_tokens, server_cpu_tokens) =
         exact_token_totals(live_economics).unwrap_or((0, 0));
-    let (legacy_total_tokens, legacy_cpu_tokens) =
-        legacy_prior_epoch_token_totals(live_economics).unwrap_or((0, 0));
     let build_manifest = read_json(&state.config.build_manifest_path);
     let admission_receipt = read_json(&state.config.admission_path);
     let runtime_admission = admission_receipt
@@ -624,13 +628,6 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         miner_window_total_intents: metric_u64(online_opportunity, "ordinary_intents"),
         miner_window_cpu_tokens: metric_u64(online_opportunity, "verified_tokens"),
         miner_window_cpu_intents: metric_u64(online_opportunity, "verified_intents"),
-        miner_window_unresolved_tokens: metric_u64(online_opportunity, "unresolved_tokens"),
-        optimistic_upper_bound_tokens: metric_u64(
-            online_opportunity,
-            "optimistic_executable_upper_bound_tokens",
-        ),
-        legacy_total_tokens,
-        legacy_cpu_tokens,
         cpu_allowed: admission.cpu_allowed,
     });
     let body = format!(
@@ -1500,6 +1497,162 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "response_package_count": response_package_count,
             "cpu_allowed": admission.cpu_allowed,
         })),
+    )
+        .into_response()
+}
+
+async fn control_dashboard_snapshot(
+    Path(key): Path<String>,
+    State(state): State<AppState>,
+) -> Response {
+    if !authorized(&state, &key) {
+        return not_found().await;
+    }
+    let fallback = read_json(&state.config.economics_path);
+    let persisted_miner = read_json(&state.config.response_online_miner_report_path);
+    let response_registry = read_json(&state.config.response_registry_path);
+    let structural_frontier_census =
+        read_json(std::path::Path::new(STRUCTURAL_FRONTIER_CENSUS_PATH));
+    let natural_vocabulary_census = if structural_frontier_census
+        .get("schema")
+        .and_then(Value::as_str)
+        == Some("nando.structural-frontier-census.v2")
+    {
+        structural_frontier_census
+    } else {
+        read_json(std::path::Path::new(NATURAL_VOCABULARY_CENSUS_PATH))
+    };
+    let (live, hot_health, cold_health, ms4_closed_loop, k1_scheduler) = tokio::join!(
+        read_live_miner_report(),
+        read_live_json(HOT_SERVING_HEALTH_URL),
+        read_live_json(COLD_LEARNING_HEALTH_URL),
+        read_live_json(COLD_MS4_CLOSED_LOOP_URL),
+        read_live_json(COLD_K1_NATURAL_SCHEDULER_SUMMARY_URL),
+    );
+    let economics = live
+        .get("economics")
+        .filter(|value| value.is_object())
+        .unwrap_or(&fallback);
+    let Some((lifetime_input_tokens, lifetime_cpu_tokens)) = exact_token_totals(economics) else {
+        return dashboard_unavailable();
+    };
+    let Some((epoch_input_tokens, epoch_cpu_tokens)) = exact_current_epoch_token_totals(economics)
+    else {
+        return dashboard_unavailable();
+    };
+    let Some(miner) = exact_miner_opportunity(&live, &persisted_miner) else {
+        return dashboard_unavailable();
+    };
+
+    let bridge = live_dashboard::bridge_view(&hot_health, &cold_health);
+    let response_packages = response_registry
+        .get("packages")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let operator_certificates =
+        build_operator_certificate_matrix(response_packages, &ms4_closed_loop);
+    let scheduler_summary_available = k1_scheduler.get("schema").and_then(Value::as_str)
+        == Some("nando.k1-natural-scheduler-summary.v1");
+    let catalog_cohorts = if scheduler_summary_available {
+        metric_u64(&k1_scheduler, "catalog_cohorts")
+    } else {
+        metric_u64(&natural_vocabulary_census, "cohorts_total")
+    };
+    let queue_rows = metric_u64(&k1_scheduler, "queue_rows");
+    let k1_gate = ms4_closed_loop
+        .get("k1_vocabulary_gate")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let economics_false_accepts = metric_u64(economics, "false_accepts");
+    let economics_parity = metric_u64(economics, "runtime_parity_mismatches");
+    let admission = admission_status(&state.config);
+
+    (
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({
+            "schema": "nando.control-dashboard-snapshot.v1",
+            "available": true,
+            "dashboard_build": live_dashboard::build_id(),
+            "generated_at_unix": metric_u64(economics, "generated_at_unix"),
+            "product": {
+                "current_epoch": {
+                    "scope": "current_v4_accounting_epoch",
+                    "started_at_unix": metric_u64(economics, "accounting_epoch_started_at_unix"),
+                    "input_tokens": epoch_input_tokens,
+                    "cpu_tokens": epoch_cpu_tokens,
+                    "requests": metric_u64(economics, "terminal_request_events"),
+                    "cpu_accepts": metric_u64(economics, "actual_local_accepts"),
+                    "avoided_upstream_calls": metric_u64(economics, "avoided_calls"),
+                },
+                "lifetime": {
+                    "scope": "all_recorded_accounting_partitions",
+                    "input_tokens": lifetime_input_tokens,
+                    "cpu_tokens": lifetime_cpu_tokens,
+                },
+            },
+            "miner": {
+                "scope": "miner_opportunity_window",
+                "started_at_unix": metric_u64(miner, "window_started_at_unix"),
+                "seen_tokens": metric_u64(miner, "ordinary_tokens"),
+                "seen_intents": metric_u64(miner, "ordinary_intents"),
+                "recognized_tokens": metric_u64(miner, "verified_tokens"),
+                "recognized_intents": metric_u64(miner, "verified_intents"),
+                "unresolved_tokens": metric_u64(miner, "unresolved_tokens"),
+            },
+            "discovery": {
+                "state": k1_scheduler.get("state").and_then(Value::as_str).unwrap_or("unavailable"),
+                "blocker": k1_scheduler.get("blocker").and_then(Value::as_str).unwrap_or("scheduler_report_missing"),
+                "catalog_cohorts": catalog_cohorts,
+                "historical_readiness_pass": metric_u64(&natural_vocabulary_census, "readiness_pass_cohorts"),
+                "completed_ready_excluded": metric_u64(&natural_vocabulary_census, "completed_cohorts_excluded"),
+                "retained_queue": queue_rows,
+                "capacity_excluded": metric_u64(&natural_vocabulary_census, "capacity_excluded_cohorts"),
+                "ready_now": metric_u64(&k1_scheduler, "ready_now"),
+                "readiness_blockers": k1_scheduler
+                    .get("readiness_blockers")
+                    .cloned()
+                    .unwrap_or_else(|| json!({})),
+                "leading_candidate_root_sha256": natural_vocabulary_census
+                    .get("leading_candidate_root_sha256")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                "completed_generations": metric_u64(&k1_scheduler, "completed_generations"),
+                "next_generation_sequence": metric_u64(&k1_scheduler, "next_generation_sequence"),
+                "active_candidate": k1_scheduler.get("active_candidate").and_then(Value::as_bool).unwrap_or(false),
+                "latest_verdict": k1_scheduler.get("latest_verdict").and_then(Value::as_str).unwrap_or(""),
+                "latest_verdict_blocker": k1_scheduler.get("latest_verdict_blocker").and_then(Value::as_str).unwrap_or(""),
+                "authority_ready": k1_scheduler.get("authority_ready").and_then(Value::as_bool).unwrap_or(false),
+                "phase_mutation_allowed": k1_scheduler.get("phase_mutation_allowed").and_then(Value::as_bool).unwrap_or(false),
+            },
+            "packages": {
+                "active": active_response_package_count(&response_registry),
+                "certificates": operator_certificates,
+            },
+            "k1": k1_gate,
+            "safety": {
+                "cpu_allowed": admission.cpu_allowed,
+                "services_active": bridge.services_active,
+                "services_expected": 3,
+                "false_accepts": economics_false_accepts.max(bridge.false_accepts),
+                "parity_failures": economics_parity.max(bridge.parity_mismatches),
+                "transport_failures": bridge.failures,
+                "structural_pending": bridge.structural_pending,
+                "opportunity_pending": bridge.opportunity_pending,
+                "counter_epoch_match": bridge.opportunity_counter_epoch_match,
+                "hot_available": bridge.hot_available,
+                "cold_available": bridge.cold_available,
+            },
+        })),
+    )
+        .into_response()
+}
+
+fn dashboard_unavailable() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({"available":false})),
     )
         .into_response()
 }

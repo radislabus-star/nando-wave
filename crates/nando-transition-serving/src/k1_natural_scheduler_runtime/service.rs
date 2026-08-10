@@ -30,6 +30,10 @@ pub(crate) async fn report_handler(State(state): State<AppState>) -> Response {
     report_response(&state.k1_natural_scheduler_report)
 }
 
+pub(crate) async fn summary_handler(State(state): State<AppState>) -> Response {
+    summary_response(&state.k1_natural_scheduler_report)
+}
+
 pub(crate) async fn mechanism_report_handler(State(state): State<AppState>) -> Response {
     report_response(&state.k1_mechanism_watch_report)
 }
@@ -66,6 +70,72 @@ pub(crate) async fn law_lab_eligibility_report_handler(State(state): State<AppSt
             }),
         ),
     }
+}
+
+fn summary_response(
+    slot: &std::sync::RwLock<Option<K1NaturalSchedulerRuntimeReportV1>>,
+) -> Response {
+    match slot.read() {
+        Ok(report) => match report.as_ref() {
+            Some(report) => {
+                let (ready_now, readiness_blockers) = summarize_readiness(
+                    report
+                        .catalog
+                        .candidates
+                        .iter()
+                        .map(|candidate| candidate.readiness.blocker.as_str()),
+                    report.queue.rows.iter().map(|row| row.score.readiness_rank),
+                );
+                let latest = report.projection.latest_terminal_verdict.as_ref();
+                json_response(
+                    StatusCode::OK,
+                    json!({
+                        "schema": "nando.k1-natural-scheduler-summary.v1",
+                        "report_schema": report.schema,
+                        "report_root_sha256": report.report_root_sha256,
+                        "generated_at_unix": report.generated_at_unix,
+                        "state": report.state,
+                        "blocker": report.blocker,
+                        "catalog_cohorts": report.catalog.candidates.len(),
+                        "queue_rows": report.queue.rows.len(),
+                        "ready_now": ready_now,
+                        "readiness_blockers": readiness_blockers,
+                        "completed_generations": report.projection.completed_generations,
+                        "next_generation_sequence": report.projection.next_generation_sequence,
+                        "active_candidate": report.projection.active_candidate_freeze.is_some(),
+                        "latest_verdict": latest.map(|verdict| verdict.verdict),
+                        "latest_verdict_blocker": latest.map(|verdict| verdict.blocker.as_str()),
+                        "authority_ready": report.authority_ready,
+                        "phase_mutation_allowed": report.phase_mutation_allowed,
+                    }),
+                )
+            }
+            None => scheduler_report_error("runtime_pending"),
+        },
+        Err(_) => scheduler_report_error("report_lock_poisoned"),
+    }
+}
+
+fn summarize_readiness<'a>(
+    blockers: impl Iterator<Item = &'a str>,
+    readiness_ranks: impl Iterator<Item = u8>,
+) -> (u64, BTreeMap<String, u64>) {
+    let ready_now = readiness_ranks.filter(|rank| *rank == 1).count() as u64;
+    let mut counts = BTreeMap::new();
+    for blocker in blockers.filter(|blocker| !blocker.is_empty()) {
+        *counts.entry(blocker.to_owned()).or_default() += 1;
+    }
+    (ready_now, counts)
+}
+
+fn scheduler_report_error(error: &str) -> Response {
+    json_response(
+        StatusCode::SERVICE_UNAVAILABLE,
+        json!({
+            "schema": "nando.k1-natural-scheduler-error.v1",
+            "error": error
+        }),
+    )
 }
 
 fn report_response(
@@ -848,6 +918,24 @@ mod tests {
         RelationAtom, sha256_bytes,
     };
     use nando_operator_learning::SOURCE_NEUTRAL_EXTRACTOR_VERSION;
+
+    #[test]
+    fn compact_summary_counts_only_current_queue_readiness() {
+        let (ready_now, blockers) = summarize_readiness(
+            [
+                "",
+                "settled_evidence_below_freeze_minimum",
+                "settled_evidence_below_freeze_minimum",
+                "independent_lineages_below_freeze_minimum",
+            ]
+            .into_iter(),
+            [0, 1, 0].into_iter(),
+        );
+        assert_eq!(ready_now, 1);
+        assert_eq!(blockers["settled_evidence_below_freeze_minimum"], 2);
+        assert_eq!(blockers["independent_lineages_below_freeze_minimum"], 1);
+        assert!(!blockers.contains_key(""));
+    }
 
     fn root(label: &str) -> String {
         sha256_bytes(label.as_bytes())

@@ -1133,6 +1133,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
             get(k1_natural_scheduler_runtime::report_handler),
         )
         .route(
+            "/v2/multi-source/k1-natural-scheduler-summary",
+            get(k1_natural_scheduler_runtime::summary_handler),
+        )
+        .route(
             "/v2/multi-source/k1-mechanism-watch",
             get(k1_natural_scheduler_runtime::mechanism_report_handler),
         )
@@ -4900,8 +4904,8 @@ fn handle_openai(
                     let commit = nando_operator_kernel::PreActionTopologyCommitV1::seal(
                         &structure_v2,
                         nando_operator_kernel::MultiSourceEvidenceOriginV1::FreshLive,
-                        sha256_bytes(b"nando.multi-source-extractor.v2"),
-                        sha256_bytes(b"nando.multi-source-extractor-config.v2"),
+                        sha256_bytes(b"nando.multi-source-extractor.v3"),
+                        sha256_bytes(b"nando.multi-source-extractor-config.v3"),
                         capture_receipt.capture_sequence(),
                     );
                     match commit {

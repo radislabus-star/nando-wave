@@ -57,7 +57,7 @@ mod structural_frontier_census;
 
 pub(crate) use service::{
     K1EvidenceCursorV1, advance_state, law_lab_eligibility_report_handler,
-    mechanism_report_handler, report_handler,
+    mechanism_report_handler, report_handler, summary_handler,
 };
 
 use advance::*;

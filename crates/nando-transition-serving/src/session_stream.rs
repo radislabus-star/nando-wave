@@ -2072,6 +2072,24 @@ fn bounded_session_output_text_parts(output: &Value) -> Option<Vec<&str>> {
     (total_bytes > 0 && total_bytes <= 65_536).then_some(texts)
 }
 
+pub(crate) fn canonical_embedded_session_output(output: &Value) -> Option<Value> {
+    let parts = bounded_session_output_text_parts(output)?;
+    let mut objects = BTreeMap::<Vec<u8>, serde_json::Map<String, Value>>::new();
+    for part in parts {
+        for object in session_embedded_json_objects(part) {
+            let key = serde_json::to_vec(&object).ok()?;
+            objects.insert(key, object);
+        }
+    }
+    match objects.len() {
+        0 => None,
+        1 => objects.into_values().next().map(Value::Object),
+        _ => Some(Value::Array(
+            objects.into_values().map(Value::Object).collect(),
+        )),
+    }
+}
+
 fn append_runtime_provider_output(
     current: Option<&Value>,
     request: Option<&Value>,
