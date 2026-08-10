@@ -2,7 +2,8 @@
 
 Status: canonical execution plan.
 
-Revision: 2026-08-10, exact connected-motif live route plus Grounded Meaning V1.
+Revision: 2026-08-11, exact connected-motif live route plus preregistered
+Grounded Meaning S1C plan.
 
 ```text
 PLAN_STRUCTURE_PASS        PASS
@@ -12,6 +13,9 @@ MOTIF V4/V6 LIVE           IMPLEMENTATION PASS
 AUTONOMOUS LAW #2          NOT PROVED
 NATURAL RAW PHASE CAUSAL   NOT PROVED
 K2 GROUNDED MEANING        NOT EVALUATED
+S1A TRANSITION PROJECTION  IMPLEMENTATION PASS
+S1B DECISION CENSUS        PASS / EMPTY_DECISION_SURFACE
+S1C PRE-ACTION OWNER       NOT IMPLEMENTED / NEXT
 ```
 
 Architectural authority remains `ARCHITECTURE_CANON.md`. This document owns
@@ -667,65 +671,81 @@ As of the verified baseline:
 | Exact intent-level token accounting | `IMPLEMENTATION_PASS` |
 | Verified CPU before upstream | `PRODUCT_PASS` for admitted packages |
 | Product M1: >=100 calls, >=1%, 100% verification | `PASS` in current epoch |
-| Full observed frontier disposition coverage | `PARTIAL`; motif budget/overflow dispositions not deployed |
-| Exact connected-motif discovery lane | `IMPLEMENTATION_PASS` in branch; live deployment pending |
-| V1-V5 compatibility and V6 authority dispatch | `IMPLEMENTATION_PASS` in branch |
+| Full observed frontier disposition coverage | `IMPLEMENTATION_PASS` for the deployed bounded motif route; every scanned row receives an exact disposition |
+| Exact connected-motif discovery lane | `IMPLEMENTATION_PASS`, deployed |
+| V1-V5 compatibility and V6 authority dispatch | `IMPLEMENTATION_PASS`, deployed |
 | Exact program-to-embedding binding | `IMPLEMENTATION_PASS` for the existing motif identity; this is not K2 latent meaning |
 | V6 transfer -> BundleV4 -> admission -> CPU | `CAPABILITY_PASS`; controlled regression only |
 | Exact package CPU completion accounting | `IMPLEMENTATION_PASS`; ingress token denominator and verifier root bound |
-| Autonomous natural V6 generation | `NOT PROVED`; branch not deployed |
+| Autonomous natural V6 generation | `IMPLEMENTATION_PASS` for scheduling and terminalization; Natural Law #2 remains `NOT PROVED` |
 | Raw Phase as sole natural synthesis path | `PARTIAL`; production causal route not proved |
 | Natural Law #2 | `NOT PROVED` |
 | K1 minimum basis | `NO`, 1/3 |
-| K2 grounded meaning | `BLOCKED` by K1 basis and missing goal-bound decision/baseline contracts |
+| S1A transition projection | `IMPLEMENTATION_PASS`; 1,866 / 12,854 across 19 lineages |
+| S1B decision census | `PASS / EMPTY_DECISION_SURFACE`; 0 decision episodes |
+| S1C pre-action decision-contract owner | `NOT IMPLEMENTED / NEXT` |
+| K2 grounded meaning | `BLOCKED` by K1 basis and missing pre-action decision evidence |
 | Provider-billed money savings | `UNKNOWN` |
 
 ## 14. Ordered Delivery
 
-1. Commit the verified Evidence V4 / Candidate V4 / Freeze V6 implementation
-   with its exact connected-motif contract and controlled downstream regression.
-2. Build release artifacts on the mini-PC, verify installed hashes, and deploy
-   transactionally with an explicit rollback receipt. Preserve Nginx and
-   connector PIDs; restart only binaries that own changed runtime code.
-3. Prove live restart parity, cold resource budgets, archive cursor continuity,
-   zero active false accepts, zero parity failures, and zero missing receipts.
-4. Let ordinary natural archive advance produce one autonomous V6 freeze. If it
-   cannot, give every readiness-PASS motif an exact durable terminal disposition;
-   no aggregate `candidate input = 1` may hide the denominator.
-5. Let the selected motif traverse the existing identifier, prediction-before-
-   outcome future gate, transfer-ready terminal, BundleV4 publication, external
-   admission, ordinary verified CPU execution, cleanup, and LawCertificate
-   without a manual program or profile.
-6. Measure Law #2's incremental global token coverage, not its package-conditional
-   match rate. Preserve zero active false accepts and full verification.
+Completed foundation:
+
+1. Evidence V4 / Candidate V4 / Freeze V6 exact connected-motif discovery was
+   committed, remotely verified, and transactionally deployed.
+2. Live restart parity, bounded terminalization, cold resource budgets, exact
+   denominators, zero active false accepts, and zero parity failures were
+   checked for the deployed route.
+3. S1A projected 1,866 verified transitions from 12,854 durable CPU
+   completions across 19 lineages with 10,988 exact censors.
+4. S1B proved `EMPTY_DECISION_SURFACE`: goal, alternative, horizon,
+   satisfaction, and decision episode counts are all zero. Model training and
+   authority remain false.
+
+Next product route, independent of K2:
+
+5. Let a selected natural motif traverse the existing identifier,
+   prediction-before-outcome future gate, transfer-ready terminal, BundleV4
+   publication, external admission, ordinary verified CPU execution, cleanup,
+   and LawCertificate without a manual program or profile.
+6. Measure Law #2's incremental global token coverage, not its
+   package-conditional match rate. Preserve zero active false accepts and full
+   verification.
 7. Continue incremental motif-frontier updates for every consequence type,
-   including the currently absent natural boolean surface, without source hints.
-8. Repeat the same autonomous route for Law #3. Freeze
-   `K1VocabularySnapshotV1` only at 3 distinct laws,
-   3 semantic consequences, 2 topology roots, complete cleanup, and zero active
-   false bad apply. This is a minimum K2 seed, not a completed alphabet or a
-   limit on further K1 CPU laws.
-9. Build `GroundedTransitionEpisodeV1` as a read-only cold projection of
-   durable K1 actor/verifier receipts, then run the no-model S1B census. Only
-   episodes with a pre-action `TypedGoalContractV1`, applicable K1 alternatives,
-   frozen outcome horizon, and exact goal-satisfaction receipt may become
-   `GroundedDecisionEpisodeV1`; the rest remain `DYNAMICS_ONLY`.
-   **S1A/S1B checkpoint:** implementation PASS. The first live census projected
-   1,866 of 12,854 durable CPU completions across 19 transition lineages and
-   found 0 decision episodes. Verdict: `EMPTY_DECISION_SURFACE`; blocker:
-   `missing_pre_action_goal`. Model training and authority remain false.
-10. Freeze ID, surface, retrieval, typed effect-algebra, and bounded typed-search
-   baselines before training any hidden representation. If a required goal,
-   action-alternative, intervention, horizon, or lineage-disjoint surface is
-   empty, stop the model route and repair capture or grow K1 instead.
-11. Open the K2 grounded-meaning experiment over the frozen K1 basis. The
-   hidden model may propose relations and probes but may not supply authority.
-   MS7 is only the bounded executor; an explicit meta-law must survive goal and
-   action intervention, substitution, delayed horizon, novel composition,
-   independent natural future, and the existing certificate/admission route.
-12. Continue product portfolio optimization independently, with the next target
-   being stable >=10% global current-epoch token savings and then progressively
-   higher verified coverage.
+   including the currently absent natural boolean surface, without source
+   hints.
+8. Repeat the autonomous route for Law #3. Freeze `K1VocabularySnapshotV1`
+   only at 3 distinct laws, 3 semantic consequences, 2 topology roots,
+   complete cleanup, and zero active false bad apply. This is a minimum K2
+   seed, not a completed alphabet or a limit on further K1 CPU laws.
+
+Next grounded-meaning route, paper-first:
+
+9. Commit the preregistered Grounded Meaning plan and its adversarial critique.
+   Every later slice receives its own immutable entry, exit, budget, evidence,
+   and rollback manifest before code.
+10. Implement S1C only: freeze an exact typed goal, applicable admitted K1
+    alternatives, constraints, observation mask, and horizon before action
+    selection; later join the selected action and independently verified
+    satisfaction. Evidence failures censor K2 while ordinary serving remains
+    unchanged.
+11. Rerun the append-cursor S1B census. Stop with an exact terminal verdict if
+    goals, alternatives, or independent lineages remain insufficient. No
+    hidden model is trained merely because transition rows exist.
+12. Freeze ID, surface, retrieval, typed effect-algebra, and bounded
+    typed-search baselines before training any hidden representation. If a
+    required goal, action-alternative, intervention, horizon, or
+    lineage-disjoint surface is empty, stop the model route and grow K1 or
+    repair the exact capture owner.
+13. Open one bounded K2 grounded-meaning experiment over the frozen K1 basis.
+    The hidden model may propose relations and probes but may not supply
+    authority. MS7 is only the bounded executor; an explicit meta-law must
+    survive goal and action intervention, substitution, delayed horizon, novel
+    composition, independent natural future, and the existing
+    certificate/admission route.
+14. Continue product portfolio optimization independently, with the next
+    target being stable >=10% global current-epoch token savings and then
+    progressively higher verified coverage.
 
 ## 15. Milestone Gates
 
@@ -758,13 +778,14 @@ M4 K1 MINIMUM BASIS
   status: CLOSED
 
 M5 K2 GROUNDED MEANING
+  S1C pre-action owner PASS
   pre-action goal + alternatives + frozen horizon are independently bound
   hidden representation beats frozen bounded typed-search baseline
   goal/action + substitution + causal/nuisance + horizon intervention PASS
   explicit composition/equivalence law discovered from K1 decision episodes
   no supplied DAG, family mapping, episode IDs, or latent authority
   independent natural future and MetaSkillPackage
-  status: BLOCKED
+  status: BLOCKED AT S1C
 ```
 
 Failure to broaden global verified coverage after Law #2 is a product stop

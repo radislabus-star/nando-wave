@@ -8,11 +8,23 @@ Owning roadmap:
 Forward recursive-meaning architecture:
 [`GROUNDED_MEANING_ARCHITECTURE_V1.md`](GROUNDED_MEANING_ARCHITECTURE_V1.md).
 
+Adversarial review and accepted repairs:
+[`GROUNDED_MEANING_PLAN_CRITIQUE_V1.md`](GROUNDED_MEANING_PLAN_CRITIQUE_V1.md).
+
+Paper-plan verification receipt:
+[`GROUNDED_MEANING_PLAN_VERIFICATION_2026-08-11.md`](GROUNDED_MEANING_PLAN_VERIFICATION_2026-08-11.md).
+
 The forward contract keeps K1 operational laws, K2 grounded meanings, and the
 historical W1/W2/W3 Wave representation layers in separate namespaces. It does
 not rewrite or promote any frozen evidence receipt in this directory. K2 meaning
 is goal-conditioned decision evidence, not a latent alias for one verified
 transition.
+
+The Grounded Meaning document is a paper-first preregistration. Its current
+ordered boundary is `S1A PASS -> S1B EMPTY -> S1C NEXT`. S2 baselines, hidden
+model training, and K2 claims are forbidden until S1C produces a nonempty,
+lineage-independent natural decision surface. The critique records why waiting
+on the old archive cannot create that surface.
 
 This directory contains one migration ladder and its immutable checkpoint
 evidence. Read the ladder in order; do not infer current authority from the

@@ -494,6 +494,16 @@ An episode without a pre-action goal or meaningful alternative is
 counterfactual alternatives, but never natural future or authority.
 The goal-binding receipt freezes before action selection and cannot inspect the
 selected action, package identity, actor output, or post-action state.
+Free-text or LLM goal inference is not authoritative natural goal evidence.
+External admission owns which packages are permitted; a separate frozen
+deterministic applicability evaluator owns which permitted packages are
+applicable under the same pre-action observation. The complete applicable set,
+including `ABSTAIN`, freezes before ranking.
+Missing, late, invalid, or ambiguous research receipts censor K2 evidence and
+leave ordinary K1/upstream serving unchanged. S2 baseline work may begin only
+after S1C produces valid natural decision episodes from at least two independent
+lineages. A composition claim additionally requires at least two independently
+realized K1 laws and a meaningful nonselected alternative.
 
 The first candidate mechanism is action-conditioned and JEPA-inspired:
 
@@ -537,6 +547,12 @@ ordered implementation slices are canonical in:
 ```text
 plans/effect-law-unification-v1/GROUNDED_MEANING_ARCHITECTURE_V1.md
 ```
+
+That document is a paper-first preregistration. Each K2 implementation slice
+must freeze its evidence root, allowed and forbidden inputs, budgets, exit
+evidence, rollback, and stop verdict before code. The current route is
+`S1A PASS -> S1B EMPTY_DECISION_SURFACE -> S1C pre-action owner`; baseline or
+model work cannot skip S1C.
 
 This K2 research plane is first-class for the scientific north star but remains
 outside the production hot path. K1 CPU coverage does not wait for it.
