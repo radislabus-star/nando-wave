@@ -17,7 +17,7 @@ struct MotifSupportReservoir {
     key: MotifCandidateKey,
     selected_rows: usize,
     selected_lineages: BTreeSet<String>,
-    retained_row_roots_sha256: Vec<String>,
+    retained_rows: Vec<(u64, String)>,
     overflow_occurrences: u64,
     overflow_manifest_root_sha256: String,
 }
@@ -37,7 +37,7 @@ impl MotifSupportReservoir {
             key,
             selected_rows: 0,
             selected_lineages: BTreeSet::new(),
-            retained_row_roots_sha256: Vec::new(),
+            retained_rows: Vec::new(),
             overflow_occurrences: 0,
             overflow_manifest_root_sha256,
         })
@@ -66,8 +66,9 @@ impl MotifSupportReservoir {
         true
     }
 
-    fn record_retained(&mut self, row_root_sha256: String) {
-        self.retained_row_roots_sha256.push(row_root_sha256);
+    fn record_retained(&mut self, row: &K1NaturalEvidenceRowV1) {
+        self.retained_rows
+            .push((row.capture_sequence, row.row_root_sha256.clone()));
     }
 
     fn record_overflow(&mut self, row: &K1NaturalEvidenceRowV1) -> Result<(), String> {
@@ -85,14 +86,15 @@ impl MotifSupportReservoir {
         Ok(())
     }
 
-    fn finish(self) -> Result<K1MotifCandidateSupportV1, String> {
-        let retained_rows = u64::try_from(self.retained_row_roots_sha256.len())
+    fn finish(mut self) -> Result<K1MotifCandidateSupportV1, String> {
+        self.retained_rows.sort();
+        let retained_rows = u64::try_from(self.retained_rows.len())
             .map_err(|_| "k1_motif_retained_count".to_owned())?;
         let retained_manifest_root_sha256 = canonical_json_sha256(&(
             "nando.k1-motif-evidence-manifest.v1",
-            self.retained_row_roots_sha256
+            self.retained_rows
                 .iter()
-                .map(String::as_str)
+                .map(|(_, row_root_sha256)| row_root_sha256.as_str())
                 .collect::<Vec<_>>(),
         ))
         .map_err(str::to_owned)?;
@@ -563,7 +565,7 @@ impl MotifEvidenceAccumulator {
     ) -> Result<Self, String> {
         archive.validate(arena)?;
         let mut retained_by_candidate =
-            BTreeMap::<MotifCandidateKey, (Vec<String>, BTreeSet<String>)>::new();
+            BTreeMap::<MotifCandidateKey, (Vec<(u64, String)>, BTreeSet<String>)>::new();
         for binding in &archive.occurrences {
             let state = retained_by_candidate
                 .entry(MotifCandidateKey {
@@ -579,7 +581,10 @@ impl MotifEvidenceAccumulator {
                     consequence_type: binding.row.consequence_type,
                 })
                 .or_default();
-            state.0.push(binding.row.row_root_sha256.clone());
+            state.0.push((
+                binding.row.capture_sequence,
+                binding.row.row_root_sha256.clone(),
+            ));
             state.1.insert(binding.row.lineage_root_sha256.clone());
         }
         let mut reservoirs = BTreeMap::new();
@@ -592,10 +597,10 @@ impl MotifEvidenceAccumulator {
                     .clone(),
                 consequence_type: support.consequence_type,
             };
-            let (retained_row_roots_sha256, selected_lineages) = retained_by_candidate
+            let (retained_rows, selected_lineages) = retained_by_candidate
                 .remove(&key)
                 .ok_or_else(|| "k1_motif_resume_support_orphaned".to_owned())?;
-            let selected_rows = retained_row_roots_sha256.len();
+            let selected_rows = retained_rows.len();
             if support.retained_rows != u64::try_from(selected_rows).unwrap_or(u64::MAX) {
                 return Err("k1_motif_resume_support_count".to_owned());
             }
@@ -605,7 +610,7 @@ impl MotifEvidenceAccumulator {
                     key,
                     selected_rows,
                     selected_lineages,
-                    retained_row_roots_sha256,
+                    retained_rows,
                     overflow_occurrences: support.overflow_occurrences,
                     overflow_manifest_root_sha256: support.overflow_manifest_root_sha256.clone(),
                 },
@@ -791,7 +796,7 @@ impl MotifEvidenceAccumulator {
                 .get_mut(&key)
                 .ok_or_else(|| "k1_motif_reservoir_missing".to_owned())?;
             if reservoir.should_retain(&joined.session_lineage_sha256) {
-                reservoir.record_retained(row.row_root_sha256.clone());
+                reservoir.record_retained(&row);
                 source_occurrences.push((
                     motif.motif_root_sha256,
                     row.row_root_sha256.clone(),
@@ -1155,6 +1160,52 @@ mod tests {
                 .map(|row| (row, K1NaturalEvidenceClassV1::NaturalLive, false))
                 .collect(),
         )
+    }
+
+    #[test]
+    fn support_manifest_uses_row_root_order_when_capture_sequences_match() {
+        let rows = (1..=64)
+            .map(|offset| {
+                let mut row = joined(7, offset);
+                row.join_root_sha256 = root(50_000 + offset);
+                row
+            })
+            .collect::<Vec<_>>();
+        let pair = rows
+            .windows(2)
+            .find(|pair| {
+                let left = exact_motif_occurrences_for_joined(&pair[0]).expect("left motifs")[0]
+                    .row
+                    .row_root_sha256
+                    .clone();
+                let right = exact_motif_occurrences_for_joined(&pair[1]).expect("right motifs")[0]
+                    .row
+                    .row_root_sha256
+                    .clone();
+                left > right
+            })
+            .expect("deterministic row-root inversion")
+            .to_vec();
+        let (_, archive) = build_natural_archive(pair);
+        let mut retained = archive.evidence_rows();
+        retained.sort_by(|left, right| {
+            left.capture_sequence
+                .cmp(&right.capture_sequence)
+                .then_with(|| left.row_root_sha256.cmp(&right.row_root_sha256))
+        });
+        let expected_manifest_root_sha256 = canonical_json_sha256(&(
+            "nando.k1-motif-evidence-manifest.v1",
+            retained
+                .iter()
+                .map(|row| row.row_root_sha256.as_str())
+                .collect::<Vec<_>>(),
+        ))
+        .expect("manifest");
+
+        assert_eq!(
+            archive.candidate_supports[0].retained_manifest_root_sha256,
+            expected_manifest_root_sha256
+        );
     }
 
     fn freeze_for_support(
