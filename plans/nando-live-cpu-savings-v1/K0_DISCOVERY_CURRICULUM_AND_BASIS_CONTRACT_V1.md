@@ -231,5 +231,5 @@ Implementation is complete only when focused and restart tests prove:
 
 Generation 78 entering identification is an implementation result, not Law #2.
 Law #2 still requires exact version-space collapse, independent future,
-cleanup, certification, ordinary verified CPU execution, and zero false
-accepts.
+ordinary verified CPU execution, exact economics, cleanup, certification, and
+zero false accepts.

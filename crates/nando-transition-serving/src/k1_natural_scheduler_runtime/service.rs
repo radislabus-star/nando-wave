@@ -677,19 +677,14 @@ fn rebuild_prepared_context(
         .iter()
         .map(|frame| frame.client_intent_id_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let mut accumulator = EvidenceBindingAccumulator::new(retain_safety_payloads);
+    let mut accumulator = EvidenceBindingAccumulator::new(true);
     let join_report = stream_multi_source_joins_from_iter(
         topologies.iter().map(|row| row.as_ref()),
         frames.iter().map(|frame| frame.as_ref()),
         |joined| accumulator.push(joined),
     )?;
     let bindings = accumulator.finish()?;
-    let prepared = prepare_tick_context_from_bindings(
-        join_report,
-        bindings,
-        active_protocols,
-        retain_safety_payloads,
-    )?;
+    let prepared = prepare_tick_context_from_bindings(join_report, bindings, active_protocols)?;
     let active_protocol_root = prepared.active_protocol_mode_set_root_sha256.clone();
     evidence_cursor.prepared = Some(prepared);
     evidence_cursor.record(
@@ -1132,7 +1127,6 @@ mod tests {
             streamed_report,
             accumulator.finish().expect("streamed bindings"),
             &active_protocols,
-            false,
         )
         .expect("streamed context");
 
@@ -1157,6 +1151,8 @@ mod tests {
         assert_eq!(incremental.join_report, oracle.join_report);
         assert_eq!(incremental.bindings, oracle.bindings);
         assert_eq!(incremental.catalog, oracle.catalog);
+        assert_eq!(incremental.motif_archive, oracle.motif_archive);
+        assert_eq!(incremental.motif_catalog, oracle.motif_catalog);
         assert_eq!(
             incremental.evidence_epoch_root_sha256,
             oracle.evidence_epoch_root_sha256
@@ -1168,6 +1164,8 @@ mod tests {
         assert_eq!(incremental.contract_watermark, oracle.contract_watermark);
         assert_eq!(streamed.join_report, oracle.join_report);
         assert_eq!(streamed.catalog, oracle.catalog);
+        assert_eq!(streamed.motif_archive, oracle.motif_archive);
+        assert_eq!(streamed.motif_catalog, oracle.motif_catalog);
         assert_eq!(
             streamed.evidence_epoch_root_sha256,
             oracle.evidence_epoch_root_sha256

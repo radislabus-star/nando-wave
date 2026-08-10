@@ -1,9 +1,13 @@
 use super::*;
 
-pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
-    bindings: &'a [EvidenceBinding],
+pub(in crate::k1_natural_scheduler_runtime) fn frozen_support_count(
+    bindings: &[EvidenceBinding],
+    motif_archive: Option<&MotifEvidenceArchive>,
     freeze: &K1NaturalCandidateFreezeV1,
-) -> Result<Vec<&'a EvidenceBinding>, String> {
+) -> Result<u64, String> {
+    if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+        return frozen_motif_support_count(bindings, motif_archive, freeze);
+    }
     let mut support = Vec::new();
     let mut projected_rows = Vec::new();
     for binding in bindings {
@@ -59,7 +63,89 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support<'a>(
             freeze.evidence_manifest_root_sha256,
         ));
     }
-    Ok(support)
+    u64::try_from(support.len()).map_err(|_| "k1_runtime_frozen_support_count".to_owned())
+}
+
+fn frozen_motif_support_count(
+    bindings: &[EvidenceBinding],
+    motif_archive: Option<&MotifEvidenceArchive>,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> Result<u64, String> {
+    let archive = motif_archive.ok_or_else(|| "k1_motif_archive_missing".to_owned())?;
+    archive.validate(bindings)?;
+    if archive.disposition.summary_root_sha256 != freeze.motif_disposition_summary_root_sha256
+        || archive.disposition.enumeration_config_root_sha256
+            != freeze.motif_enumeration_config_root_sha256
+    {
+        return Err("k1_runtime_frozen_motif_disposition_mismatch".to_owned());
+    }
+    let mut support = archive
+        .occurrences
+        .iter()
+        .filter(|binding| {
+            row_identity_matches_freeze(&binding.row, freeze)
+                && frozen_row_is_eligible(&binding.row, freeze)
+                && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
+        })
+        .collect::<Vec<_>>();
+    support.sort_by(|left, right| {
+        left.row
+            .capture_sequence
+            .cmp(&right.row.capture_sequence)
+            .then_with(|| left.row.row_root_sha256.cmp(&right.row.row_root_sha256))
+    });
+    let manifest = canonical_json_sha256(&(
+        "nando.k1-motif-evidence-manifest.v1",
+        support
+            .iter()
+            .map(|binding| binding.row.row_root_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+    .map_err(str::to_owned)?;
+    let complete_topology_manifest = canonical_json_sha256(&(
+        "nando.k1-motif-complete-topology-manifest.v1",
+        support
+            .iter()
+            .map(|binding| binding.row.complete_topology_root_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+    .map_err(str::to_owned)?;
+    let embedding_manifest = canonical_json_sha256(&(
+        "nando.k1-motif-candidate-embedding-manifest.v1",
+        support
+            .iter()
+            .map(|binding| binding.row.motif_embedding_manifest_root_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+    .map_err(str::to_owned)?;
+    let support_receipt = archive
+        .candidate_supports
+        .iter()
+        .find(|receipt| {
+            receipt.capture_generation_root_sha256 == freeze.capture_generation_root_sha256
+                && receipt.motif_root_sha256 == freeze.candidate_structural_root_sha256
+                && receipt.semantic_novelty_signature_root_sha256
+                    == freeze.semantic_novelty_signature_root_sha256
+                && receipt.consequence_type == freeze.consequence_type
+        })
+        .ok_or_else(|| "k1_runtime_frozen_motif_support_receipt_missing".to_owned())?;
+    if support.is_empty()
+        || support.len() > K1_MAX_SUPPORT_ROWS_V1
+        || support_receipt.retained_rows != u64::try_from(support.len()).unwrap_or(u64::MAX)
+        || support_receipt.retained_manifest_root_sha256 != manifest
+        || support_receipt.overflow_occurrences != freeze.motif_support_overflow_occurrences
+        || support_receipt.overflow_manifest_root_sha256
+            != freeze.motif_support_overflow_manifest_root_sha256
+        || manifest != freeze.evidence_manifest_root_sha256
+        || complete_topology_manifest != freeze.complete_topology_manifest_root_sha256
+        || embedding_manifest != freeze.motif_embedding_manifest_root_sha256
+    {
+        return Err("k1_runtime_frozen_motif_support_manifest_mismatch".to_owned());
+    }
+    for binding in support {
+        archive.exact_occurrence(bindings, binding)?;
+    }
+    Ok(support_receipt.retained_rows)
 }
 
 pub(in crate::k1_natural_scheduler_runtime) fn binding_matches_freeze(
@@ -133,6 +219,9 @@ fn evidence_row_for_freeze(
     binding: &EvidenceBinding,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<Option<K1NaturalEvidenceRowV1>, String> {
+    if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+        return Ok(exact_motif_occurrence_for_binding(binding, freeze)?.map(|value| value.row));
+    }
     if matches!(
         freeze.schema.as_str(),
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5
@@ -186,8 +275,22 @@ fn evidence_row_for_freeze(
     Ok(Some(projected))
 }
 
+fn exact_motif_occurrence_for_binding(
+    binding: &EvidenceBinding,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> Result<Option<ExactMotifOccurrenceV1>, String> {
+    let Some(joined) = binding.joined.as_deref() else {
+        return Ok(None);
+    };
+    Ok(exact_motif_occurrences_for_joined(joined)?
+        .into_iter()
+        .find(|occurrence| row_identity_matches_freeze(&occurrence.row, freeze)))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     bindings: &[EvidenceBinding],
+    motif_archive: Option<&MotifEvidenceArchive>,
     frames: &[RelationFrame],
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
     candidate_artifacts: &[NaturalT1ProgramArtifactV1],
@@ -196,52 +299,116 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     trial_roots: &BTreeSet<String>,
 ) -> Result<MultiSourceT1IdentificationV3, String> {
     validate_installed_discovery_basis(freeze)?;
-    let mut selected = bindings
-        .iter()
-        .filter(|binding| {
-            binding_is_eligible_for_freeze(binding, freeze)
-                && (frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
-                    || applied_roots.contains(binding.join_root_sha256())
-                    || trial_roots.contains(binding.join_root_sha256()))
-        })
-        .map(|binding| binding.joined().clone())
-        .collect::<Vec<_>>();
-    selected.sort_by(|left, right| {
-        left.capture_sequence
-            .cmp(&right.capture_sequence)
-            .then_with(|| left.join_root_sha256.cmp(&right.join_root_sha256))
-    });
-    let epoch = canonical_json_sha256(&(
-        "nando.k1-frozen-identification-evidence.v1",
-        freeze.freeze_root_sha256.as_str(),
-        selected
-            .iter()
-            .map(|row| row.join_root_sha256.as_str())
-            .collect::<Vec<_>>(),
-        candidate_artifacts
-            .iter()
-            .filter(|artifact| {
-                selected.iter().any(|row| {
-                    row.turn_intent_id_sha256 == artifact.turn_intent_id_sha256
-                        && row.session_id_sha256 == artifact.session_id_sha256
+    let (mut selected, motifs, occurrence_row_roots) =
+        if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+            let (selected, motifs, row_roots) = frozen_motif_identification_evidence(
+                bindings,
+                motif_archive,
+                freeze,
+                applied_roots,
+                trial_roots,
+            )?;
+            (selected, Some(motifs), row_roots)
+        } else {
+            let selected = bindings
+                .iter()
+                .filter(|binding| {
+                    binding_is_eligible_for_freeze(binding, freeze)
+                        && (frozen_support_contains(
+                            binding.row.capture_sequence,
+                            freeze.support_watermark,
+                        ) || applied_roots.contains(binding.join_root_sha256())
+                            || trial_roots.contains(binding.join_root_sha256()))
                 })
+                .map(|binding| binding.joined().clone())
+                .collect::<Vec<_>>();
+            (selected, None, Vec::new())
+        };
+    let selected_motifs = motifs;
+    if let Some(motifs) = selected_motifs.as_ref() {
+        if motifs.len() != selected.len() {
+            return Err("k1_runtime_frozen_motif_alignment_mismatch".to_owned());
+        }
+    } else {
+        selected.sort_by(|left, right| {
+            left.capture_sequence
+                .cmp(&right.capture_sequence)
+                .then_with(|| left.join_root_sha256.cmp(&right.join_root_sha256))
+        });
+    }
+    let artifact_roots = candidate_artifacts
+        .iter()
+        .filter(|artifact| {
+            selected.iter().any(|row| {
+                row.turn_intent_id_sha256 == artifact.turn_intent_id_sha256
+                    && row.session_id_sha256 == artifact.session_id_sha256
             })
-            .map(|artifact| artifact.artifact_root_sha256.as_str())
-            .collect::<Vec<_>>(),
-    ))
+        })
+        .map(|artifact| artifact.artifact_root_sha256.as_str())
+        .collect::<Vec<_>>();
+    let epoch = if let Some(motifs) = selected_motifs.as_ref() {
+        canonical_json_sha256(&(
+            "nando.k1-frozen-motif-identification-evidence.v1",
+            freeze.freeze_root_sha256.as_str(),
+            occurrence_row_roots,
+            selected
+                .iter()
+                .zip(motifs)
+                .map(|(row, motif)| {
+                    (
+                        row.join_root_sha256.as_str(),
+                        motif.motif_root_sha256.as_str(),
+                        motif
+                            .embeddings
+                            .iter()
+                            .map(|embedding| embedding.embedding_root_sha256.as_str())
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            artifact_roots,
+        ))
+    } else {
+        canonical_json_sha256(&(
+            "nando.k1-frozen-identification-evidence.v1",
+            freeze.freeze_root_sha256.as_str(),
+            selected
+                .iter()
+                .map(|row| row.join_root_sha256.as_str())
+                .collect::<Vec<_>>(),
+            artifact_roots,
+        ))
+    }
     .map_err(str::to_owned)?;
-    let report = identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
-        &selected,
-        frames,
-        &BTreeSet::new(),
-        active_protocol_mode_roots_sha256,
-        candidate_artifacts,
-        FrozenRawPhaseT1ContractV1 {
-            frozen_domain_root_sha256: &freeze.freeze_root_sha256,
-            support_watermark: freeze.support_watermark,
-            candidate_generator_schema: &freeze.generator_schema,
+    let contract = FrozenRawPhaseT1ContractV1 {
+        frozen_domain_root_sha256: &freeze.freeze_root_sha256,
+        support_watermark: freeze.support_watermark,
+        candidate_generator_schema: &freeze.generator_schema,
+    };
+    let report = selected_motifs.as_ref().map_or_else(
+        || {
+            identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
+                &selected,
+                frames,
+                &BTreeSet::new(),
+                active_protocol_mode_roots_sha256,
+                candidate_artifacts,
+                contract,
+                epoch.clone(),
+            )
         },
-        epoch,
+        |motifs| {
+            identify_multi_source_t1_operator_with_frozen_motif_v1(
+                &selected,
+                motifs,
+                frames,
+                &BTreeSet::new(),
+                active_protocol_mode_roots_sha256,
+                candidate_artifacts,
+                contract,
+                epoch.clone(),
+            )
+        },
     );
     if !report.validate()
         || !selected_shape_is_compatible(
@@ -252,6 +419,68 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         return Err("k1_runtime_identification_report_invalid".to_owned());
     }
     Ok(report)
+}
+
+type FrozenMotifIdentificationEvidence = (
+    Vec<BlindThenRevealJoinedTransitionV1>,
+    Vec<SourceNeutralTopologyMotifV1>,
+    Vec<String>,
+);
+
+pub(in crate::k1_natural_scheduler_runtime) fn frozen_motif_identification_evidence(
+    bindings: &[EvidenceBinding],
+    motif_archive: Option<&MotifEvidenceArchive>,
+    freeze: &K1NaturalCandidateFreezeV1,
+    applied_roots: &BTreeSet<String>,
+    trial_roots: &BTreeSet<String>,
+) -> Result<FrozenMotifIdentificationEvidence, String> {
+    let archive = motif_archive.ok_or_else(|| "k1_motif_archive_missing".to_owned())?;
+    archive.validate(bindings)?;
+    let mut selected = BTreeMap::<
+        (u64, String),
+        (
+            BlindThenRevealJoinedTransitionV1,
+            SourceNeutralTopologyMotifV1,
+            String,
+        ),
+    >::new();
+    for binding in archive.occurrences.iter().filter(|binding| {
+        row_identity_matches_freeze(&binding.row, freeze)
+            && frozen_row_is_eligible(&binding.row, freeze)
+            && frozen_support_contains(binding.row.capture_sequence, freeze.support_watermark)
+    }) {
+        let exact = archive.exact_occurrence(bindings, binding)?;
+        let joined = archive.joined_for(bindings, binding)?.clone();
+        selected.insert(
+            (joined.capture_sequence, joined.join_root_sha256.clone()),
+            (joined, exact.motif, exact.row.row_root_sha256),
+        );
+    }
+    for binding in bindings.iter().filter(|binding| {
+        applied_roots.contains(binding.join_root_sha256())
+            || trial_roots.contains(binding.join_root_sha256())
+    }) {
+        let Some(exact) = exact_motif_occurrence_for_binding(binding, freeze)? else {
+            continue;
+        };
+        if !frozen_row_is_eligible(&exact.row, freeze) {
+            continue;
+        }
+        let joined = binding.joined().clone();
+        selected.insert(
+            (joined.capture_sequence, joined.join_root_sha256.clone()),
+            (joined, exact.motif, exact.row.row_root_sha256),
+        );
+    }
+    let mut joined = Vec::with_capacity(selected.len());
+    let mut motifs = Vec::with_capacity(selected.len());
+    let mut row_roots = Vec::with_capacity(selected.len());
+    for (_, (row, motif, row_root)) in selected {
+        joined.push(row);
+        motifs.push(motif);
+        row_roots.push(row_root);
+    }
+    Ok((joined, motifs, row_roots))
 }
 
 fn capture_generation_matches(
@@ -276,6 +505,11 @@ fn capture_generation_matches(
                 && !row_generation.is_empty()
                 && row_generation == freeze_generation
         }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => {
+            row_schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V4
+                && !row_generation.is_empty()
+                && row_generation == freeze_generation
+        }
         _ => false,
     }
 }
@@ -297,6 +531,9 @@ fn validate_installed_discovery_basis_fields(
         }
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?
+        }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => {
+            natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?
         }
         _ => return Ok(()),
     };

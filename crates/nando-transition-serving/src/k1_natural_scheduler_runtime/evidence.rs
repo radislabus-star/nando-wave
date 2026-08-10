@@ -1,9 +1,11 @@
 use super::*;
 
 mod identification;
+mod motif;
 mod topology;
 
 pub(super) use identification::*;
+pub(super) use motif::*;
 pub(super) use topology::*;
 
 #[derive(Clone, Debug, PartialEq)]

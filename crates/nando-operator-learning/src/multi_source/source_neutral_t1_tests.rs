@@ -7,7 +7,10 @@ use nando_operator_kernel::{
     ResponseValueSelector, ValueProjectionFormat, sha256_bytes,
 };
 
-use super::pre_action_t1_binding_root;
+use crate::multi_source::{
+    bind_pre_action_t1_program_to_motif_v1, pre_action_t1_binding_root,
+    pre_action_t1_consumed_role_ids_v1, source_neutral_topology_motifs_v1,
+};
 
 fn program() -> ResponseProgram {
     ResponseProgram::compose_collection(
@@ -158,6 +161,51 @@ fn collection_binding_requires_renderer_selected_role() {
         Err("collection_selector_role_missing_or_ambiguous")
     );
     assert!(pre_action_t1_binding_root(&program, &topology(&["renderer-selector"])).is_ok());
+}
+
+#[test]
+fn collection_consumed_role_set_includes_collection_and_selector() {
+    let topology = topology(&["selector"]);
+    assert_eq!(
+        pre_action_t1_consumed_role_ids_v1(&program(), &topology).expect("consumed roles"),
+        vec![1, 2]
+    );
+}
+
+#[test]
+fn motif_binding_rejects_a_program_role_outside_the_embedding() {
+    let mut topology = topology(&["selector"]);
+    topology.relations.push(MultiSourceRelationEdgeV1 {
+        relation: MultiSourceRelationKindV1::Contains,
+        source_role_id: 1,
+        target_role_id: 2,
+    });
+    topology.relations.sort();
+    topology.validate().expect("connected topology");
+    let motifs = source_neutral_topology_motifs_v1(&topology).expect("motifs");
+    let singleton = motifs
+        .iter()
+        .find(|motif| {
+            motif.role_count == 1
+                && motif
+                    .embeddings
+                    .iter()
+                    .any(|embedding| embedding.local_role_ids == vec![1])
+        })
+        .expect("collection singleton");
+    assert_eq!(
+        bind_pre_action_t1_program_to_motif_v1(&program(), &topology, singleton),
+        Err("program_consumed_roles_outside_frozen_motif")
+    );
+
+    let connected_pair = motifs
+        .iter()
+        .find(|motif| motif.role_count == 2 && motif.relation_count == 1)
+        .expect("connected pair");
+    let binding = bind_pre_action_t1_program_to_motif_v1(&program(), &topology, connected_pair)
+        .expect("program fits exact motif");
+    assert_eq!(binding.consumed_local_role_ids, vec![1, 2]);
+    binding.validate().expect("valid motif binding");
 }
 
 #[test]

@@ -12,6 +12,12 @@ use super::{BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1};
 pub const MULTI_SOURCE_FACTORIZED_ROW_SCHEMA_V1: &str = "nando.multi-source-factorized-row.v1";
 pub const SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2: &str =
     "nando.k1-source-neutral-topology-quotient.v2";
+pub const SOURCE_NEUTRAL_TOPOLOGY_MOTIF_SCHEMA_V1: &str =
+    "nando.k1-source-neutral-topology-motif.v1";
+pub const SOURCE_NEUTRAL_TOPOLOGY_MOTIF_EMBEDDING_SCHEMA_V1: &str =
+    "nando.k1-source-neutral-topology-motif-embedding.v1";
+pub const SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_ROLES_V1: usize = 4;
+pub const SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_PER_ROW_V1: usize = 512;
 const SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SEARCH_BUDGET_V2: usize = 4_096;
 
 type RoleClassV2 = (
@@ -24,6 +30,84 @@ type RoleClassV2 = (
 );
 
 type CanonicalTopologyEncodingV2 = (Vec<RoleClassV2>, Vec<(usize, usize, u8)>);
+
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceNeutralTopologyMotifEmbeddingV1 {
+    pub embedding_root_sha256: String,
+    pub ambient_topology_root_sha256: String,
+    pub local_role_ids: Vec<u16>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceNeutralTopologyMotifV1 {
+    pub motif_root_sha256: String,
+    pub role_count: u8,
+    pub relation_count: u8,
+    pub embeddings: Vec<SourceNeutralTopologyMotifEmbeddingV1>,
+}
+
+impl SourceNeutralTopologyMotifEmbeddingV1 {
+    fn seal(
+        motif_root_sha256: &str,
+        ambient_topology_root_sha256: String,
+        mut local_role_ids: Vec<u16>,
+    ) -> Result<Self, &'static str> {
+        local_role_ids.sort_unstable();
+        local_role_ids.dedup();
+        let embedding_root_sha256 = canonical_json_sha256(&(
+            SOURCE_NEUTRAL_TOPOLOGY_MOTIF_EMBEDDING_SCHEMA_V1,
+            motif_root_sha256,
+            ambient_topology_root_sha256.as_str(),
+            local_role_ids.as_slice(),
+        ))?;
+        let embedding = Self {
+            embedding_root_sha256,
+            ambient_topology_root_sha256,
+            local_role_ids,
+        };
+        embedding.validate(motif_root_sha256)?;
+        Ok(embedding)
+    }
+
+    pub fn validate(&self, motif_root_sha256: &str) -> Result<(), &'static str> {
+        if self.local_role_ids.is_empty()
+            || self.local_role_ids.len() > SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_ROLES_V1
+            || !self.local_role_ids.windows(2).all(|pair| pair[0] < pair[1])
+            || self.embedding_root_sha256
+                != canonical_json_sha256(&(
+                    SOURCE_NEUTRAL_TOPOLOGY_MOTIF_EMBEDDING_SCHEMA_V1,
+                    motif_root_sha256,
+                    self.ambient_topology_root_sha256.as_str(),
+                    self.local_role_ids.as_slice(),
+                ))?
+        {
+            return Err("source_neutral_topology_motif_embedding_invalid");
+        }
+        Ok(())
+    }
+}
+
+impl SourceNeutralTopologyMotifV1 {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.role_count == 0
+            || usize::from(self.role_count) > SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_ROLES_V1
+            || self.embeddings.is_empty()
+            || !self
+                .embeddings
+                .windows(2)
+                .all(|pair| pair[0].embedding_root_sha256 < pair[1].embedding_root_sha256)
+            || self.embeddings.iter().any(|embedding| {
+                embedding.local_role_ids.len() != usize::from(self.role_count)
+                    || embedding.validate(&self.motif_root_sha256).is_err()
+            })
+        {
+            return Err("source_neutral_topology_motif_invalid");
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -255,6 +339,213 @@ pub fn source_neutral_topology_quotient_root_v2(
         "exact_role_order_fallback",
         source_neutral_topology_root_v1(topology)?,
     ))
+}
+
+/// Enumerates bounded connected induced motifs without inspecting role values or outcomes.
+pub fn source_neutral_topology_motifs_v1(
+    topology: &PreActionMultiSourceTopologyV1,
+) -> Result<Vec<SourceNeutralTopologyMotifV1>, &'static str> {
+    topology.validate()?;
+    if matches!(
+        topology.extraction_status,
+        MultiSourceExtractionStatusV1::Censored { .. }
+    ) {
+        return Err("source_neutral_topology_motif_censored");
+    }
+    if topology.roles.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let role_index = topology
+        .roles
+        .iter()
+        .enumerate()
+        .map(|(index, role)| (role.local_role_id, index))
+        .collect::<BTreeMap<_, _>>();
+    let mut adjacency = vec![BTreeSet::<usize>::new(); topology.roles.len()];
+    for edge in &topology.relations {
+        let source = *role_index
+            .get(&edge.source_role_id)
+            .ok_or("source_neutral_topology_motif_source_role_missing")?;
+        let target = *role_index
+            .get(&edge.target_role_id)
+            .ok_or("source_neutral_topology_motif_target_role_missing")?;
+        adjacency[source].insert(target);
+        adjacency[target].insert(source);
+    }
+
+    let maximum_roles = topology
+        .roles
+        .len()
+        .min(SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_ROLES_V1);
+    let mut subsets = (0..topology.roles.len())
+        .map(|role| vec![role])
+        .collect::<BTreeSet<_>>();
+    if subsets.len() > SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_PER_ROW_V1 {
+        return Err("source_neutral_topology_motif_budget");
+    }
+    for size in 1..maximum_roles {
+        let current = subsets
+            .iter()
+            .filter(|subset| subset.len() == size)
+            .cloned()
+            .collect::<Vec<_>>();
+        for subset in current {
+            let additions = subset
+                .iter()
+                .flat_map(|role| adjacency[*role].iter().copied())
+                .filter(|role| subset.binary_search(role).is_err())
+                .collect::<BTreeSet<_>>();
+            for addition in additions {
+                let mut expanded = subset.clone();
+                expanded.push(addition);
+                expanded.sort_unstable();
+                subsets.insert(expanded);
+                if subsets.len() > SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_PER_ROW_V1 {
+                    return Err("source_neutral_topology_motif_budget");
+                }
+            }
+        }
+    }
+
+    let ambient_topology_root_sha256 = canonical_json_sha256(topology)?;
+    let enumeration_config_root_sha256 = source_neutral_topology_motif_config_root_v1()?;
+    let mut motifs = BTreeMap::<String, SourceNeutralTopologyMotifV1>::new();
+    for subset in subsets {
+        let projected = project_topology_motif_v1(topology, &subset)?;
+        let quotient_root_sha256 = source_neutral_topology_quotient_root_v2(&projected)?;
+        let motif_root_sha256 = canonical_json_sha256(&(
+            SOURCE_NEUTRAL_TOPOLOGY_MOTIF_SCHEMA_V1,
+            enumeration_config_root_sha256.as_str(),
+            quotient_root_sha256.as_str(),
+            projected.roles.len(),
+            projected.relations.len(),
+        ))?;
+        let local_role_ids = subset
+            .iter()
+            .map(|index| topology.roles[*index].local_role_id)
+            .collect::<Vec<_>>();
+        let embedding = SourceNeutralTopologyMotifEmbeddingV1::seal(
+            &motif_root_sha256,
+            ambient_topology_root_sha256.clone(),
+            local_role_ids,
+        )?;
+        let role_count = u8::try_from(projected.roles.len())
+            .map_err(|_| "source_neutral_topology_motif_count")?;
+        let relation_count = u8::try_from(projected.relations.len())
+            .map_err(|_| "source_neutral_topology_motif_count")?;
+        if let Some(existing) = motifs.get_mut(&motif_root_sha256) {
+            if existing.role_count != role_count || existing.relation_count != relation_count {
+                return Err("source_neutral_topology_motif_shape_collision");
+            }
+            if existing
+                .embeddings
+                .iter()
+                .all(|known| known.embedding_root_sha256 != embedding.embedding_root_sha256)
+            {
+                existing.embeddings.push(embedding);
+            }
+        } else {
+            motifs.insert(
+                motif_root_sha256.clone(),
+                SourceNeutralTopologyMotifV1 {
+                    motif_root_sha256,
+                    role_count,
+                    relation_count,
+                    embeddings: vec![embedding],
+                },
+            );
+        }
+    }
+    let mut motifs = motifs.into_values().collect::<Vec<_>>();
+    for motif in &mut motifs {
+        motif
+            .embeddings
+            .sort_by(|left, right| left.embedding_root_sha256.cmp(&right.embedding_root_sha256));
+        motif.validate()?;
+    }
+    Ok(motifs)
+}
+
+pub fn source_neutral_topology_motif_config_root_v1() -> Result<String, &'static str> {
+    canonical_json_sha256(&(
+        "nando.k1-source-neutral-topology-motif-enumeration-config.v1",
+        "connected_induced_subgraph",
+        SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_ROLES_V1,
+        SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_PER_ROW_V1,
+        SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+    ))
+}
+
+fn project_topology_motif_v1(
+    topology: &PreActionMultiSourceTopologyV1,
+    subset: &[usize],
+) -> Result<PreActionMultiSourceTopologyV1, &'static str> {
+    let selected = subset.iter().copied().collect::<BTreeSet<_>>();
+    let local_index = subset
+        .iter()
+        .enumerate()
+        .map(|(local, original)| (topology.roles[*original].local_role_id, local as u16))
+        .collect::<BTreeMap<_, _>>();
+    let source_count = subset
+        .iter()
+        .map(|index| topology.roles[*index].source_ordinal)
+        .collect::<BTreeSet<_>>()
+        .len();
+    let output_part_count = subset
+        .iter()
+        .map(|index| {
+            let role = &topology.roles[*index];
+            (role.source_ordinal, role.value_ordinal)
+        })
+        .collect::<BTreeSet<_>>()
+        .len();
+    let roles = subset
+        .iter()
+        .enumerate()
+        .map(|(local, original)| {
+            let mut role = topology.roles[*original].clone();
+            role.local_role_id = local as u16;
+            role.source_ordinal = 0;
+            role.value_ordinal = 0;
+            role
+        })
+        .collect::<Vec<_>>();
+    let mut relations = topology
+        .relations
+        .iter()
+        .filter_map(|edge| {
+            let source = topology
+                .roles
+                .iter()
+                .position(|role| role.local_role_id == edge.source_role_id)?;
+            let target = topology
+                .roles
+                .iter()
+                .position(|role| role.local_role_id == edge.target_role_id)?;
+            if !selected.contains(&source) || !selected.contains(&target) {
+                return None;
+            }
+            Some(nando_operator_kernel::MultiSourceRelationEdgeV1 {
+                relation: edge.relation,
+                source_role_id: *local_index.get(&edge.source_role_id)?,
+                target_role_id: *local_index.get(&edge.target_role_id)?,
+            })
+        })
+        .collect::<Vec<_>>();
+    relations.sort();
+    let projected = PreActionMultiSourceTopologyV1 {
+        extraction_status: MultiSourceExtractionStatusV1::Complete,
+        grounded_output_count: u16::try_from(source_count)
+            .map_err(|_| "source_neutral_topology_motif_count")?,
+        output_part_count: u16::try_from(output_part_count)
+            .map_err(|_| "source_neutral_topology_motif_count")?,
+        roles,
+        role_witnesses: Vec::new(),
+        relations,
+    };
+    projected.validate()?;
+    Ok(projected)
 }
 
 struct TopologyCanonicalizerV2<'a> {
@@ -589,5 +880,57 @@ mod tests {
             source_neutral_topology_quotient_root_v2(&two_cycles)
                 .expect("two three-cycles quotient")
         );
+    }
+
+    #[test]
+    fn motif_descriptor_retains_every_exact_ambient_embedding() {
+        let chain = topology(3, &[(0, 1), (1, 2)]);
+        let motifs = source_neutral_topology_motifs_v1(&chain).expect("motifs");
+        let singleton = motifs
+            .iter()
+            .find(|motif| motif.role_count == 1)
+            .expect("singleton motif");
+        singleton.validate().expect("valid motif descriptor");
+        let embedded_role_sets = singleton
+            .embeddings
+            .iter()
+            .map(|embedding| embedding.local_role_ids.clone())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            embedded_role_sets,
+            BTreeSet::from([vec![0], vec![1], vec![2]])
+        );
+        assert_eq!(singleton.embeddings.len(), 3);
+    }
+
+    #[test]
+    fn motif_root_is_ambient_neutral_but_embedding_root_is_not() {
+        let chain = topology(3, &[(0, 1), (1, 2)]);
+        let extended = topology(4, &[(0, 1), (1, 2), (2, 3)]);
+        let chain_motif = source_neutral_topology_motifs_v1(&chain)
+            .expect("chain motifs")
+            .into_iter()
+            .find(|motif| motif.role_count == 2 && motif.relation_count == 1)
+            .expect("chain edge motif");
+        let extended_motif = source_neutral_topology_motifs_v1(&extended)
+            .expect("extended motifs")
+            .into_iter()
+            .find(|motif| motif.motif_root_sha256 == chain_motif.motif_root_sha256)
+            .expect("same local motif in different ambient topology");
+
+        assert_eq!(
+            chain_motif.motif_root_sha256,
+            extended_motif.motif_root_sha256
+        );
+        assert_ne!(
+            chain_motif.embeddings[0].ambient_topology_root_sha256,
+            extended_motif.embeddings[0].ambient_topology_root_sha256
+        );
+        assert!(chain_motif.embeddings.iter().all(|left| {
+            extended_motif
+                .embeddings
+                .iter()
+                .all(|right| left.embedding_root_sha256 != right.embedding_root_sha256)
+        }));
     }
 }

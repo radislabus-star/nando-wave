@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use super::evidence::K1ConsequenceTypeV1;
 use super::{
     K1_DEFICIT_SNAPSHOT_SCHEMA_V1, K1_NATURAL_CANDIDATE_MAX_ROWS_V1,
-    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1, canonical_root_slice, canonical_roots, strict_values,
+    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2,
+    canonical_root_slice, canonical_roots, strict_values,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -233,8 +234,10 @@ impl K1NaturalCandidateQueueV1 {
             .completed_candidates_excluded
             .checked_add(self.scored_candidates);
         let scored_partition = retained_candidates.checked_add(self.capacity_excluded_candidates);
-        if self.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1
-            || !valid_nonzero_sha256(&self.queue_root_sha256)
+        if !matches!(
+            self.schema.as_str(),
+            K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1 | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2
+        ) || !valid_nonzero_sha256(&self.queue_root_sha256)
             || !valid_nonzero_sha256(&self.catalog_root_sha256)
             || !valid_nonzero_sha256(&self.k1_deficit_snapshot_root_sha256)
             || !valid_nonzero_sha256(&self.fixture_exclusion_root_sha256)
@@ -259,7 +262,7 @@ impl K1NaturalCandidateQueueV1 {
             || !self
                 .rows
                 .windows(2)
-                .all(|pair| pair[0].ranks_before(&pair[1]))
+                .all(|pair| pair[0].ranks_before(&pair[1], &self.schema))
             || self.authority_ready
             || self.queue_root_sha256 != self.expected_root()?
         {
@@ -270,7 +273,7 @@ impl K1NaturalCandidateQueueV1 {
 
     pub(in super::super) fn expected_root(&self) -> Result<String, &'static str> {
         canonical_json_sha256(&(
-            K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1,
+            self.schema.as_str(),
             self.catalog_root_sha256.as_str(),
             self.k1_deficit_snapshot_root_sha256.as_str(),
             self.fixture_exclusion_root_sha256.as_str(),
@@ -290,23 +293,40 @@ impl K1NaturalCandidateQueueV1 {
 }
 
 impl K1NaturalCandidateQueueRowV1 {
-    pub(super) fn ranks_before(&self, other: &Self) -> bool {
-        other
+    pub(super) fn ranks_before(&self, other: &Self, queue_schema: &str) -> bool {
+        let order = other
             .score
             .total_k1_gain
             .cmp(&self.score.total_k1_gain)
-            .then_with(|| other.score.readiness_rank.cmp(&self.score.readiness_rank))
-            .then_with(|| {
-                other
-                    .score
-                    .expected_verified_input_tokens
-                    .cmp(&self.score.expected_verified_input_tokens)
-            })
-            .then_with(|| {
-                self.score
-                    .bounded_discovery_cost_units
-                    .cmp(&other.score.bounded_discovery_cost_units)
-            })
+            .then_with(|| other.score.readiness_rank.cmp(&self.score.readiness_rank));
+        let order = if queue_schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2 {
+            order
+                .then_with(|| {
+                    self.score
+                        .bounded_discovery_cost_units
+                        .cmp(&other.score.bounded_discovery_cost_units)
+                })
+                .then_with(|| {
+                    other
+                        .score
+                        .expected_verified_input_tokens
+                        .cmp(&self.score.expected_verified_input_tokens)
+                })
+        } else {
+            order
+                .then_with(|| {
+                    other
+                        .score
+                        .expected_verified_input_tokens
+                        .cmp(&self.score.expected_verified_input_tokens)
+                })
+                .then_with(|| {
+                    self.score
+                        .bounded_discovery_cost_units
+                        .cmp(&other.score.bounded_discovery_cost_units)
+                })
+        };
+        order
             .then_with(|| {
                 self.score
                     .stable_hash_sha256

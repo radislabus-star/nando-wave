@@ -10,6 +10,7 @@ use super::journal::encode_hex;
 use super::*;
 
 mod authority;
+mod candidate_binding;
 mod duplicate_cohorts;
 mod fork;
 mod future_censor;

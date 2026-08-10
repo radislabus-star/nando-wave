@@ -18,6 +18,7 @@ const K1_SCHEDULER_EVENT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-event.v1"
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "receipt")]
+#[allow(clippy::large_enum_variant)]
 pub enum K1SchedulerEventPayloadV1 {
     CandidateFreeze(K1NaturalCandidateFreezeV1),
     IdentificationFreeze(K1IdentificationFreezeV1),

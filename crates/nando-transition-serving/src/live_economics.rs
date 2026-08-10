@@ -1409,6 +1409,17 @@ mod tests {
             snapshot["verified_by_package"][package_id]["first_receipt_root_sha256"],
             receipt_root
         );
+        let completions =
+            durable_package_completions(&root.join("economics-live.json"), package_id)
+                .expect("durable package completions");
+        assert_eq!(completions.len(), 1);
+        assert_eq!(completions[0].package_id, package_id);
+        assert_eq!(completions[0].intent_sha256, intent_sha256);
+        assert_eq!(completions[0].exact_input_tokens, 321);
+        assert_eq!(
+            completions[0].verification_receipt_root_sha256,
+            receipt_root
+        );
 
         drop(ledger);
         let mut replayed = LiveEconomicsLedger::open(&root).expect("restart");
@@ -1428,6 +1439,11 @@ mod tests {
         )
         .expect("false snapshot");
         assert!(snapshot["verified_by_package"][package_id].is_null());
+        assert!(
+            durable_package_completions(&root.join("economics-live.json"), package_id)
+                .expect("revoked package completions")
+                .is_empty()
+        );
         let _ = fs::remove_dir_all(root);
     }
 }

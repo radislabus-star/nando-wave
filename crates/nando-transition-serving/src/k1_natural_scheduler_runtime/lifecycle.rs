@@ -15,9 +15,11 @@ pub(super) struct PreparedK1TickContextV1 {
     pub bindings: Vec<EvidenceBinding>,
     pub evidence_epoch_root_sha256: String,
     pub catalog: K1NaturalCohortCatalogV1,
+    pub motif_archive: Option<MotifEvidenceArchive>,
+    pub motif_evidence_epoch_root_sha256: String,
+    pub motif_catalog: K1NaturalCohortCatalogV1,
     pub active_protocol_mode_set_root_sha256: String,
     pub contract_watermark: u64,
-    pub retain_safety_payloads: bool,
 }
 
 #[cfg(test)]
@@ -37,20 +39,16 @@ pub(super) fn prepare_tick_context_from_join_ledger(
 ) -> Result<PreparedK1TickContextV1, String> {
     let join_report = join_ledger.report();
     let bindings = build_evidence_bindings(join_ledger.into_rows())?;
-    prepare_tick_context_from_bindings(
-        join_report,
-        bindings,
-        active_protocol_mode_roots_sha256,
-        true,
-    )
+    prepare_tick_context_from_bindings(join_report, bindings, active_protocol_mode_roots_sha256)
 }
 
 pub(super) fn prepare_tick_context_from_bindings(
     join_report: MultiSourceJoinReportV1,
     bindings: Vec<EvidenceBinding>,
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
-    retain_safety_payloads: bool,
 ) -> Result<PreparedK1TickContextV1, String> {
+    let motif_archive = build_motif_archive(&bindings)?;
+    let (motif_evidence_epoch_root_sha256, motif_catalog) = build_motif_catalog(&motif_archive)?;
     let evidence_epoch_root_sha256 = evidence_epoch_root(&bindings)?;
     let catalog = build_k1_natural_cohort_catalog_v1(
         &bindings
@@ -77,9 +75,11 @@ pub(super) fn prepare_tick_context_from_bindings(
         bindings,
         evidence_epoch_root_sha256,
         catalog,
+        motif_archive: Some(motif_archive),
+        motif_evidence_epoch_root_sha256,
+        motif_catalog,
         active_protocol_mode_set_root_sha256,
         contract_watermark,
-        retain_safety_payloads,
     })
 }
 
@@ -89,11 +89,27 @@ pub(super) fn extend_prepared_tick_context(
     join_report: MultiSourceJoinReportV1,
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
 ) -> Result<(), String> {
-    extend_evidence_bindings(
-        &mut prepared.bindings,
-        prepared.retain_safety_payloads,
-        joined_rows,
-    )?;
+    let previous_binding_rows = prepared.bindings.len();
+    extend_evidence_bindings(&mut prepared.bindings, true, joined_rows)?;
+    let motif_archive = prepared
+        .motif_archive
+        .take()
+        .ok_or_else(|| "k1_motif_archive_missing".to_owned())?;
+    let mut motif_accumulator =
+        MotifEvidenceAccumulator::resume(motif_archive, &prepared.bindings)?;
+    for (index, binding) in prepared
+        .bindings
+        .iter()
+        .enumerate()
+        .skip(previous_binding_rows)
+    {
+        if !binding.payload_retained() {
+            return Err("k1_motif_ambient_payload_missing".to_owned());
+        }
+        motif_accumulator.push_natural(index, binding.joined())?;
+    }
+    let motif_archive = motif_accumulator.finish(&prepared.bindings)?;
+    let (motif_evidence_epoch_root_sha256, motif_catalog) = build_motif_catalog(&motif_archive)?;
     let evidence_epoch_root_sha256 = evidence_epoch_root(&prepared.bindings)?;
     let catalog = build_k1_natural_cohort_catalog_v1(
         &prepared
@@ -120,9 +136,49 @@ pub(super) fn extend_prepared_tick_context(
     prepared.join_report = join_report;
     prepared.evidence_epoch_root_sha256 = evidence_epoch_root_sha256;
     prepared.catalog = catalog;
+    prepared.motif_archive = Some(motif_archive);
+    prepared.motif_evidence_epoch_root_sha256 = motif_evidence_epoch_root_sha256;
+    prepared.motif_catalog = motif_catalog;
     prepared.active_protocol_mode_set_root_sha256 = active_protocol_mode_set_root_sha256;
     prepared.contract_watermark = contract_watermark;
     Ok(())
+}
+
+fn build_motif_archive(bindings: &[EvidenceBinding]) -> Result<MotifEvidenceArchive, String> {
+    let mut accumulator = MotifEvidenceAccumulator::new();
+    for (index, binding) in bindings.iter().enumerate() {
+        if !binding.payload_retained() {
+            return Err("k1_motif_ambient_payload_missing".to_owned());
+        }
+        accumulator.push_natural(index, binding.joined())?;
+    }
+    accumulator.finish(bindings)
+}
+
+fn build_motif_catalog(
+    archive: &MotifEvidenceArchive,
+) -> Result<(String, K1NaturalCohortCatalogV1), String> {
+    let evidence_rows = archive.evidence_rows();
+    let evidence_epoch_root_sha256 = canonical_json_sha256(&(
+        "nando.k1-motif-evidence-epoch.v1",
+        archive.archive_root_sha256.as_str(),
+        archive.disposition.summary_root_sha256.as_str(),
+        evidence_rows
+            .iter()
+            .map(|row| row.row_root_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+    .map_err(str::to_owned)?;
+    let catalog = build_k1_motif_cohort_catalog_v1(
+        &evidence_rows,
+        &archive.candidate_supports,
+        evidence_epoch_root_sha256.clone(),
+        fixture_exclusion_root()?,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4.to_owned(),
+        archive.disposition.clone(),
+    )
+    .map_err(str::to_owned)?;
+    Ok((evidence_epoch_root_sha256, catalog))
 }
 
 pub(super) fn advance(
@@ -142,20 +198,40 @@ pub(super) fn advance(
     } = input;
     let join_report = prepared.join_report.clone();
     let bindings = &prepared.bindings;
-    let catalog = prepared.catalog.clone();
-    if catalog.evidence_epoch_root_sha256 != prepared.evidence_epoch_root_sha256 {
-        return Err("k1_prepared_context_evidence_epoch_mismatch".to_owned());
-    }
+    let motif_archive = prepared.motif_archive.as_ref();
     let deficit = current_deficit_snapshot(certification)?;
     let active_protocol_mode_set_root_sha256 = &prepared.active_protocol_mode_set_root_sha256;
     let mut projection = restore_projection_for(certification, lane)?;
+    let motif_v6 = projection
+        .active_candidate_freeze
+        .as_ref()
+        .is_none_or(|freeze| freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6);
+    let (catalog, expected_evidence_epoch, candidate_freeze_schema, discovery_basis_root) =
+        if motif_v6 {
+            (
+                prepared.motif_catalog.clone(),
+                &prepared.motif_evidence_epoch_root_sha256,
+                K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
+                natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?,
+            )
+        } else {
+            (
+                prepared.catalog.clone(),
+                &prepared.evidence_epoch_root_sha256,
+                K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
+                natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
+            )
+        };
+    if catalog.evidence_epoch_root_sha256 != *expected_evidence_epoch {
+        return Err("k1_prepared_context_evidence_epoch_mismatch".to_owned());
+    }
     let completed = candidate_exclusions_for(
         certification,
         lane,
         &catalog,
         active_protocol_mode_set_root_sha256,
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
-        &natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
+        candidate_freeze_schema,
+        &discovery_basis_root,
     )?;
     let contract_watermark = prepared.contract_watermark;
     let queue = build_k1_natural_candidate_queue_with_exclusions_v1(
@@ -242,7 +318,7 @@ pub(super) fn advance(
             &candidate,
             queue_row.score.clone(),
             K1_SCHEDULER_SCHEMA_V2.to_owned(),
-            natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
+            discovery_basis_root,
             generation_budget(),
             candidate.last_capture_sequence,
             contract_watermark,
@@ -282,8 +358,7 @@ pub(super) fn advance(
         .active_candidate_freeze
         .clone()
         .ok_or_else(|| "k1_runtime_active_candidate_missing".to_owned())?;
-    let support = frozen_support(bindings, &candidate_freeze)?;
-    let frozen_evidence_rows = u64::try_from(support.len()).unwrap_or(u64::MAX);
+    let frozen_evidence_rows = frozen_support_count(bindings, motif_archive, &candidate_freeze)?;
     let future_eligible_rows = u64::try_from(
         bindings
             .iter()
@@ -337,6 +412,7 @@ pub(super) fn advance(
         .collect::<BTreeSet<_>>();
     let base_identification = identify_frozen_candidate(
         bindings,
+        motif_archive,
         frames,
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
@@ -545,6 +621,7 @@ pub(super) fn advance(
             candidate_freeze,
             identification_freeze,
             bindings,
+            motif_archive,
             frames,
             active_protocol_mode_roots_sha256,
             candidate_artifacts,
@@ -601,6 +678,7 @@ pub(super) fn advance(
         candidate_freeze,
         identification_freeze,
         bindings,
+        motif_archive,
         frames,
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
@@ -623,6 +701,8 @@ mod tests {
         assert_eq!(first.join_report, second.join_report);
         assert_eq!(first.bindings, second.bindings);
         assert_eq!(first.catalog, second.catalog);
+        assert_eq!(first.motif_archive, second.motif_archive);
+        assert_eq!(first.motif_catalog, second.motif_catalog);
         assert_eq!(
             first.active_protocol_mode_set_root_sha256,
             second.active_protocol_mode_set_root_sha256
@@ -632,6 +712,11 @@ mod tests {
             first.evidence_epoch_root_sha256,
             first.catalog.evidence_epoch_root_sha256
         );
+        assert_eq!(
+            first.motif_evidence_epoch_root_sha256,
+            first.motif_catalog.evidence_epoch_root_sha256
+        );
         assert!(!first.catalog.authority_ready);
+        assert!(!first.motif_catalog.authority_ready);
     }
 }

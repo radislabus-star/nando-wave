@@ -20,6 +20,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
     candidate_freeze: K1NaturalCandidateFreezeV1,
     identification_freeze: K1IdentificationFreezeV1,
     bindings: &[EvidenceBinding],
+    motif_archive: Option<&MotifEvidenceArchive>,
     frames: &[RelationFrame],
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
     candidate_artifacts: &[NaturalT1ProgramArtifactV1],
@@ -72,6 +73,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn advance_probe(
         trial_roots.insert(future.join_root_sha256().to_owned());
         let trial = identify_frozen_candidate(
             bindings,
+            motif_archive,
             frames,
             active_protocol_mode_roots_sha256,
             candidate_artifacts,

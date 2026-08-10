@@ -296,7 +296,7 @@ fn candidate_identity(
     })
 }
 
-fn capture_generation_v2(joined: &BlindThenRevealJoinedTransitionV1) -> bool {
+pub(super) fn capture_generation_v2(joined: &BlindThenRevealJoinedTransitionV1) -> bool {
     joined.schema == nando_operator_learning::multi_source::BLIND_THEN_REVEAL_JOIN_SCHEMA_V2
         && capture_generation_v2_roots(
             &joined.extractor_root_sha256,
@@ -332,7 +332,7 @@ fn capture_generation_v2_roots(extractor: &str, config: &str, generation: &str) 
             .unwrap_or_default()
 }
 
-fn consequence_type(
+pub(super) fn consequence_type(
     joined: &BlindThenRevealJoinedTransitionV1,
     effect: CompletedEffectFormV1,
 ) -> K1ConsequenceTypeV1 {

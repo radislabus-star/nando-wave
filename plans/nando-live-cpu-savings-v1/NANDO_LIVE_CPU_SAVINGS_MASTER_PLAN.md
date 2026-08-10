@@ -2,11 +2,13 @@
 
 Status: canonical execution plan.
 
-Revision: 2026-08-09.
+Revision: 2026-08-10, exact connected-motif reviewer repair.
 
 ```text
 PLAN_STRUCTURE_PASS        PASS
 IMPLEMENTATION_PASS        PARTIAL
+MOTIF V4/V6 BRANCH         IMPLEMENTATION PASS
+MOTIF V4/V6 LIVE           NOT DEPLOYED
 AUTONOMOUS LAW #2          NOT PROVED
 NATURAL RAW PHASE CAUSAL   NOT PROVED
 ```
@@ -24,20 +26,25 @@ The finite engineering target is:
 ```text
 previously unseen ordinary natural surface
 -> source-neutral pre-action capture
--> operator-blind structural frontier
+-> immutable complete topology
+-> bounded exact connected-motif frontier
 -> autonomous frozen candidate
 -> Raw Phase hypothesis formation inside the frozen domain
 -> existing OperatorIdentificationMachineV1
 -> independent post-freeze future
--> LawCertificate
--> BundleV4 + external admission
+-> transfer-ready terminal, authority false
+-> canonical BundleV4 candidate
+-> external admission + bounded lease
 -> typed CPU execution before upstream
 -> independent verifier
 -> local accept or exact upstream fallback
--> durable avoided-upstream and economics receipt
+-> durable CPU completion and exact economics receipt
+-> exact-memory cleanup verifier
+-> LawCertificate + Epistemic Registry
 ```
 
-The loop is complete only when an unseen eligible surface can traverse that
+The loop is complete only when an unseen eligible local law, including one
+embedded in different request-specific ambient graphs, can traverse that
 route without a code change, handwritten family mapping, manually selected
 profile, threshold weakening, or synthetic natural evidence.
 
@@ -72,7 +79,7 @@ These verdicts are independent and must never be collapsed:
 | `PLAN_STRUCTURE_PASS` | The proposed routes and authority boundaries are structurally coherent. No implementation claim. |
 | `IMPLEMENTATION_PASS` | Exact code, tests, installed artifacts, runtime state, and receipts prove one scoped route. |
 | `CAPABILITY_PASS` | A typed executor or verifier works on fixtures or shadow evidence. Not a natural law. |
-| `LAW_PASS` | Natural support, frozen version space, independent future, cleanup, and LawCertificate all pass. |
+| `LAW_PASS` | Natural support, frozen version space, independent future, ordinary verified CPU completion, exact economics, cleanup, and LawCertificate all pass. |
 | `MECHANISM_PASS` | Causal ablations and heldout transfer prove the claimed Raw Phase/Wave mechanism. |
 | `PRODUCT_PASS` | An admitted package completed ordinary traffic locally before upstream with an independent verifier. |
 
@@ -94,17 +101,15 @@ dashboard coherence != execution authority
 
 ## 3. Verified Live Baseline
 
-Snapshot: 2026-08-09 22:00 EEST, mini-PC `e@192.168.3.94`.
+Snapshot: 2026-08-10, mini-PC `e@192.168.3.94`.
 
 ### Deployment
 
 ```text
-deployed source commit       57cfee6f0bc73b076a13abf0a8afa127c3f90116
-installed learner SHA-256    962b2e1de1e2a958d0d31de81a97d2534e327b37d831aae61b2f8ae3ccaa4459
-deployment receipt root      36339b9b0e47a166162ae8e4b21994c803616a4ff2e19cc1e493bc087a55b7b5
-K1 scheduler enabled         true
+deployed source commit       c822feda4fdb84dd74f66ab958f8fd5e621822e2
+deployment receipt root      6b056a838950d8969d4045ff0eb94888dc6b478de888e479f8453b50e677ba0d
+K1 research on hot serving   disabled
 retired MS3 research         CLOSED
-hot PID unchanged            3901227
 Nginx PID unchanged          682430
 service restarts             0
 ```
@@ -129,11 +134,11 @@ Authoritative rolling snapshot:
 `nando.economics-snapshot.v4`.
 
 ```text
-current epoch input tokens             503,961,442
-verified avoided input tokens           42,297,506
-current epoch token share                     8.3%
-verified local accepts                         185
-avoided upstream calls                         185
+current epoch input tokens           2,915,218,037
+verified avoided input tokens          566,009,968
+current epoch token share                    19.4%
+verified local accepts                       2,287
+avoided upstream calls                       2,287
 verification coverage                         100%
 active economics false accepts                   0
 runtime parity mismatches                        0
@@ -173,27 +178,69 @@ adjudicated or permanently retained as historical failures.
 ```text
 K1 state                         waiting_for_evidence
 K1 blocker                       no_readiness_pass_candidate
-next generation                  78
-scheduler ledger revision        157
-catalog / retained / ready       746 / 256 / 0
-frontier topology rows           49,836
+catalog cohorts                  746
 readiness-PASS cohorts           37
 schedulable cohorts              0
-consequence types                scalar 648
-                                 record 77
-                                 collection 20
-                                 rendered_sequence 1
-                                 boolean 0
-completed cohorts excluded       36
-capacity-excluded cohorts        454
+schedulability blocker           complete ambient topology identity
+settled below 8                  708
+lineage below 2                    1
 scheduler authority              false
 phase mutation                   false
 ```
 
-`37 readiness-PASS / 0 schedulable` means evidence readiness is not selection
-authority. Completed, duplicate, unsafe, or otherwise ineligible candidates
-remain excluded. A new generation may freeze only from the queue after every
-veto and exact-registry check passes.
+The root-complete reviewer audit found that the remaining blocker is the unit
+of repetition. The exact V2 quotient correctly removes role-ID permutations,
+but the scheduler still groups by the complete request-specific graph. A local
+law recurring inside different ambient graphs is therefore split into mostly
+singleton cohorts. The quotient must not be weakened and non-isomorphic complete
+graphs must not be merged.
+
+A read-only connected-motif census over the live natural archive found:
+
+```text
+topology / frame / joined rows    53,968 / 10,404 / 9,218
+bounded exact motif candidates    1,156
+readiness-PASS motifs               658
+  scalar / record / collection      308 / 179 / 171
+enumeration-budget dispositions      116
+empty-topology dispositions        1,048
+```
+
+This is evidence availability, not Law #2. Production integration is governed
+by `K1_EXACT_CONNECTED_MOTIF_DISCOVERY_CONTRACT_V1.md`.
+
+### Verified Development Checkpoint
+
+The working branch implements the preregistered motif route without changing
+the deployed `c822fed` baseline:
+
+```text
+Evidence V1-V3 / Freeze V1-V5     exact legacy dispatch preserved
+Evidence V4 / Candidate V4        exact motif cohorting implemented
+Freeze V6 / DiscoveryBasis V4     authority CAS implemented
+support reservoir                 64 exact rows + explicit overflow
+support / future partition        watermark exact; no backfill
+program binding                   every consumed role in one embedding
+replay / future / actor binding   same candidate-program binding root
+controlled BundleV4 route         admission + unseen CPU execution PASS
+exact economics completion        ingress tokens + package + verifier bound
+```
+
+Fresh mini-PC verification for this branch:
+
+```text
+nando-operator-learning           402 unit PASS; auxiliary suites PASS
+nando-response-actor              377 unit PASS; 3 integration PASS
+nando-transition-serving          291 PASS / 7 ignored
+strict Clippy, three crates        PASS
+rustfmt                            PASS
+```
+
+The cross-ambient transfer and downstream CPU test is controlled regression
+evidence. It proves implementation compatibility through canonical BundleV4,
+external admission, independent execution verification, and fail-closed
+economics accounting. It does not count as natural evidence, a LawCertificate,
+Law #2, production deployment, or autonomous live scheduling.
 
 Generation 77 terminated honestly:
 
@@ -225,14 +272,18 @@ package.
 ### Epistemic Lane
 
 ```text
-natural Capture V2 rows
--> adaptive structural frontier
+natural evidence rows
+-> immutable complete topology provenance
+-> bounded exact connected motifs
 -> K1 candidate queue
 -> immutable one-generation freeze
 -> Raw Phase hypotheses inside the frozen domain
 -> exact bounded version space
 -> semantic quotient / probe
 -> independent future
+-> transfer-ready terminal, authority false
+-> wait for verified product completion
+-> durable CPU completion and exact economics receipt
 -> cleanup verifier
 -> LawCertificate
 ```
@@ -244,19 +295,23 @@ frozen. `OperatorIdentificationMachineV1` remains the sole identifier.
 ### Product Lane
 
 ```text
-LawCertificate
--> Epistemic Registry
--> BundleV4
+transfer-ready terminal
+-> canonical BundleV4 candidate
 -> external admission
 -> bounded lease
 -> applicability guard
 -> typed executor
 -> independent verifier
--> local accept or ABSTAIN
+-> local accept or upstream fallback
+-> durable CPU completion and economics receipt
 ```
 
-MS8 may optimize execution among admitted packages. It may not choose what law
-to discover or convert an economic opportunity into epistemic authority.
+External admission grants only the exact package execution identity. It does
+not issue a LawCertificate or add a K1 member. Product completion crosses back
+to the epistemic lane only through its durable receipt and the independent
+cleanup verifier. MS8 may optimize execution among admitted packages. It may
+not choose what law to discover or convert an economic opportunity into
+epistemic authority.
 
 ### Mechanism Lane
 
@@ -276,12 +331,13 @@ natural Raw Phase causality remains `NOT PROVED`.
 
 The frontier is not a fixed list of three surfaces and is not a list of
 top-level `ResponseOperation` names. It continuously partitions every observed
-eligible pre-action row by source-neutral structure:
+eligible pre-action row by source-neutral local structure while retaining its
+complete ambient topology:
 
 ```text
 capture_generation_root
-candidate_structural_root
-source_neutral_topology_root
+complete_source_neutral_topology_root
+bounded_connected_motif_root
 semantic_novelty_signature_root
 consequence_type
 ```
@@ -292,7 +348,19 @@ Allowed consequence types are:
 scalar | record | collection | boolean | rendered_sequence
 ```
 
-Every observed row must receive one durable disposition:
+Every scanned source row receives exactly one motif-lane disposition:
+
+```text
+MOTIF_RETAINED
+MOTIF_SUPPORT_OVERFLOW
+CENSORED_EMPTY_OR_INCOMPLETE_TOPOLOGY
+CENSORED_MOTIF_ENUMERATION_BUDGET
+CENSORED_INVALID_EMBEDDING
+FIXTURE_OR_CONTROLLED_EXCLUDED
+SAFETY_VETO
+```
+
+Every resulting cohort separately receives one scheduler disposition:
 
 ```text
 RETAINED_READINESS_PENDING
@@ -313,11 +381,18 @@ Physical programs, `FILTER`, `COUNT`, `BRANCH`, renderer names, function names,
 source names, and active package names are forbidden in pre-freeze ranking.
 They may appear only as post-cohort diagnostics or identifier output.
 
-Natural Vocabulary Census V1 remains decode-compatible historical evidence,
-but its top-level operation grouping has no selection authority. Structural
-Frontier V2 and the K1 queue are the only live selection substrate.
+Natural Vocabulary Census V1 and complete-topology Frontier V2 remain
+decode-compatible historical evidence. Their roots are never reinterpreted.
+The new Evidence V4 / Candidate V4 motif lane is the only substrate allowed to
+cohort across different ambient graphs.
 
-## 6. Preregistered K1 Lifecycle
+Every motif descriptor retains all exact embeddings in its complete topology.
+After freeze, a generated program is admissible only when its complete consumed
+role set, including implicit and renderer selectors, fits one exact frozen
+embedding on every support row. This same check is repeated by replay, future,
+actor, and certification authority.
+
+## 6. Versioned K1 Lifecycle
 
 ```text
 registry root + frontier root + K1 deficit root
@@ -327,22 +402,27 @@ registry root + frontier root + K1 deficit root
 -> bounded support / version space
 -> unique class | probe | abstain | acquisition failure
 -> independent future
--> transfer / cleanup / certification
+-> transfer-ready terminal, authority false
+-> BundleV4 candidate / external admission
+-> ordinary verified CPU completion / exact economics
+-> cleanup / LawCertificate
 ```
 
-The freeze binds at least:
+The current motif freeze uses `K1NaturalCandidateFreezeV6` and binds at least:
 
 ```text
 epistemic_registry_revision and root
 frontier catalog root
 K1 deficit snapshot root
 fixture exclusion root
-candidate structural root
+complete catalog and motif catalog roots
+candidate motif structural root
+exact embedding manifest root
 consequence type
 readiness receipt root
 scoring tuple
 scheduler schema
-discovery basis root
+Evidence V4 / Candidate V4 / Generator V4 / DiscoveryBasis V4 roots
 budget
 support watermark
 contract watermark
@@ -350,12 +430,32 @@ future minimum sequence
 selected timestamp
 ```
 
-`discovery basis root` commits the source-neutral K0 curriculum, Raw Phase
+`discovery basis root` commits the source-neutral K0 curriculum, exact motif
+semantics and budgets, consumed-role extractor, Raw Phase
 hypothesis generator, executable circuit builder, verifier semantics, and
 bounded search configuration. K0 may contain universal primitives such as typed
 selection, comparison, filtering, counting, transformation, branching, and
 rendering. It may not contain a cohort-to-program mapping, source name, package
 identity, or a law credited to K1.
+
+Schema dispatch is explicit and non-migrating:
+
+```text
+Freeze V1-V5
+  exact legacy applicability shape + topology + binding
+
+Freeze V6
+  exact frozen motif presence
+  + exact ambient embedding
+  + complete consumed-role containment
+```
+
+The candidate-program binding root is included in the existing durable
+`complete_pre_action_binding_root`. Hot fence matching, prediction precommit,
+authority reconstruction, support replay, future selection, outcome
+reconstruction, actor reconstruction, and certification authority all call the
+same schema-dispatched binding contract. Historical ledgers require no
+retroactive rewrite.
 
 A duplicate terminal verdict is scoped to:
 
@@ -408,10 +508,12 @@ No gate may infer another gate's PASS.
 | Freeze | coherent registry/catalog/deficit roots and fsynced contract | stale or fail closed |
 | Identification | exact replay, bounded version space, semantic quotient | probe, abstain, or fail |
 | Future | prediction durable before outcome and independent terminal join | censor or contradiction |
-| Transfer | package candidate, cleanup receipt, LawCertificate | no registry mutation |
+| Transfer terminal | unique class and independent future bound to one identification | authority false; no candidate publication |
+| Crystallization | transfer identification rebuilt into canonical BundleV4 | no package candidate |
 | Promotion | BundleV4, external admission, lease, safety ledger | no activation |
 | Execution | applicability, typed executor, independent verifier | ABSTAIN and upstream |
 | Economics | intent/attempt join, terminal receipt, exact token accounting | claim `UNKNOWN` |
+| Cleanup/certification | verified CPU completion, exact economics receipt, cleanup receipt | no LawCertificate or K1 registry mutation |
 
 The same evidence row may be referenced by multiple receipts, but a downstream
 receipt must bind the upstream root; it may not reconstruct or reinterpret it.
@@ -482,6 +584,8 @@ Absolute vetoes:
 - no terminal outcome or future response in a pre-action prediction;
 - no manual family mapping or profile-specific operator assignment;
 - no physical-program hint before freeze and identification;
+- no program role may resolve outside one exact frozen motif embedding;
+- no cross-ambient cohorting without immutable complete-topology provenance;
 - no threshold weakening to manufacture readiness;
 - no local accept without independent verifier coverage;
 - any active false accept durably revokes the exact execution identity;
@@ -562,7 +666,7 @@ Heavy builds, archive scans, and scored experiments run only on the mini-PC.
 | Scheduler is autonomous | natural archive advance causes queue/freeze without command | NOT PROVED |
 | Full frontier is observed | every eligible row has a durable disposition and denominator | NOT PROVED |
 | Raw Phase discovered a law | frozen domain, hypotheses, exact quotient, independent future | NOT PROVED |
-| Natural law exists | freeze, version space, future, cleanup, LawCertificate | NOT PROVED |
+| Natural law exists | freeze, version space, independent future, ordinary verified CPU completion, exact economics, cleanup, LawCertificate | NOT PROVED |
 | Local answer is correct | independent verifier receipt | UNKNOWN |
 | Upstream was avoided | route fence and absent provider attempt | UNKNOWN |
 | Runtime matches law | runtime parity receipt | UNKNOWN |
@@ -585,7 +689,13 @@ As of the verified baseline:
 | Exact intent-level token accounting | `IMPLEMENTATION_PASS` |
 | Verified CPU before upstream | `PRODUCT_PASS` for admitted packages |
 | Product M1: >=100 calls, >=1%, 100% verification | `PASS` in current epoch |
-| Full observed frontier disposition coverage | `PARTIAL`; capacity and historical rows require audit |
+| Full observed frontier disposition coverage | `PARTIAL`; motif budget/overflow dispositions not deployed |
+| Exact connected-motif discovery lane | `IMPLEMENTATION_PASS` in branch; live deployment pending |
+| V1-V5 compatibility and V6 authority dispatch | `IMPLEMENTATION_PASS` in branch |
+| Exact program-to-embedding binding | `IMPLEMENTATION_PASS` through synthesis, replay, future, actor, and authority |
+| V6 transfer -> BundleV4 -> admission -> CPU | `CAPABILITY_PASS`; controlled regression only |
+| Exact package CPU completion accounting | `IMPLEMENTATION_PASS`; ingress token denominator and verifier root bound |
+| Autonomous natural V6 generation | `NOT PROVED`; branch not deployed |
 | Raw Phase as sole natural synthesis path | `PARTIAL`; production causal route not proved |
 | Natural Law #2 | `NOT PROVED` |
 | K1 vocabulary open | `NO`, 1/3 |
@@ -594,26 +704,31 @@ As of the verified baseline:
 
 ## 14. Ordered Delivery
 
-1. Keep the now-live K1 runtime within the resource budget and preserve its
-   streaming/full-oracle equivalence on every runtime change.
-2. Audit `37 readiness-PASS / 0 schedulable` to a root-complete partition:
-   completed, duplicate, safety-vetoed, capacity-deferred, or stale. No row may
-   disappear behind an aggregate blocker.
-3. Make frontier updates incremental for every consequence type, including the
-   currently absent natural boolean surface, without source-specific hints.
-4. Bind Raw Phase hypothesis formation to the immutable K1 freeze and existing
-   identifier. Prove that no fixture/profile/operation name enters selection.
-5. Let the next genuinely novel readiness-PASS cohort traverse identification,
-   independent future, cleanup, LawCertificate, BundleV4, admission, and typed
-   CPU execution without manual intervention.
+1. Commit the verified Evidence V4 / Candidate V4 / Freeze V6 implementation
+   with its exact connected-motif contract and controlled downstream regression.
+2. Build release artifacts on the mini-PC, verify installed hashes, and deploy
+   transactionally with an explicit rollback receipt. Preserve Nginx and
+   connector PIDs; restart only binaries that own changed runtime code.
+3. Prove live restart parity, cold resource budgets, archive cursor continuity,
+   zero active false accepts, zero parity failures, and zero missing receipts.
+4. Let ordinary natural archive advance produce one autonomous V6 freeze. If it
+   cannot, give every readiness-PASS motif an exact durable terminal disposition;
+   no aggregate `candidate input = 1` may hide the denominator.
+5. Let the selected motif traverse the existing identifier, prediction-before-
+   outcome future gate, transfer-ready terminal, BundleV4 publication, external
+   admission, ordinary verified CPU execution, cleanup, and LawCertificate
+   without a manual program or profile.
 6. Measure Law #2's incremental global token coverage, not its package-conditional
    match rate. Preserve zero active false accepts and full verification.
-7. Repeat for Law #3. Freeze `K1VocabularySnapshotV1` only at 3 distinct laws,
+7. Continue incremental motif-frontier updates for every consequence type,
+   including the currently absent natural boolean surface, without source hints.
+8. Repeat the same autonomous route for Law #3. Freeze
+   `K1VocabularySnapshotV1` only at 3 distinct laws,
    3 semantic consequences, 2 topology roots, complete cleanup, and zero active
    false bad apply.
-8. Open natural L2 over the frozen K1 vocabulary without supplying a DAG. MS7
+9. Open natural L2 over the frozen K1 vocabulary without supplying a DAG. MS7
    is only the bounded executor; the composition law must be discovered.
-9. Continue product portfolio optimization independently, with the next target
+10. Continue product portfolio optimization independently, with the next target
    being stable >=10% global current-epoch token savings and then progressively
    higher verified coverage.
 
@@ -631,7 +746,8 @@ M2 AUTONOMOUS FRONTIER
   all observed eligible rows durably dispositioned
   no manual profile/family mapping
   one unseen cohort freezes automatically
-  status: PARTIAL
+  branch implementation: PASS
+  live autonomous evidence: NOT PROVED
 
 M3 LAW #2 PRODUCT TRANSFER
   second natural LawCertificate

@@ -8,8 +8,14 @@ use super::{
     K1_IDENTIFICATION_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
-    K1_VERSION_SPACE_MAX_CLASSES_V1, canonical_root_slice, canonical_roots, version_space_root,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V4,
+    K1_NATURAL_COHORT_CATALOG_SCHEMA_V2, K1_VERSION_SPACE_MAX_CLASSES_V1, canonical_root_slice,
+    canonical_roots, version_space_root,
 };
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -52,6 +58,18 @@ pub struct K1NaturalCandidateFreezeV1 {
     pub selected_at_unix: u64,
     pub authority_ready: bool,
     pub phase_mutation_allowed: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub motif_disposition_summary_root_sha256: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub motif_enumeration_config_root_sha256: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub complete_topology_manifest_root_sha256: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub motif_embedding_manifest_root_sha256: String,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub motif_support_overflow_occurrences: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub motif_support_overflow_manifest_root_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -159,6 +177,42 @@ struct CandidateFreezeDigestV3<'a> {
     phase_mutation_allowed: bool,
 }
 
+#[derive(Serialize)]
+struct CandidateFreezeDigestV6<'a> {
+    schema: &'static str,
+    generation_sequence: u64,
+    catalog_root_sha256: &'a str,
+    k1_deficit_snapshot_root_sha256: &'a str,
+    epistemic_registry_revision: u64,
+    epistemic_registry_root_sha256: &'a str,
+    fixture_exclusion_root_sha256: &'a str,
+    candidate_root_sha256: &'a str,
+    capture_generation_root_sha256: &'a str,
+    candidate_structural_root_sha256: &'a str,
+    source_neutral_topology_root_sha256: &'a str,
+    semantic_novelty_signature_root_sha256: &'a str,
+    consequence_type: K1ConsequenceTypeV1,
+    evidence_manifest_root_sha256: &'a str,
+    generator_schema: &'a str,
+    discovery_basis_root_sha256: &'a str,
+    readiness_receipt_root_sha256: &'a str,
+    scoring_tuple: &'a K1CandidateScoreV1,
+    scheduler_schema: &'a str,
+    budget: K1GenerationBudgetV1,
+    support_watermark: u64,
+    contract_watermark: u64,
+    future_min_sequence: u64,
+    selected_at_unix: u64,
+    motif_disposition_summary_root_sha256: &'a str,
+    motif_enumeration_config_root_sha256: &'a str,
+    complete_topology_manifest_root_sha256: &'a str,
+    motif_embedding_manifest_root_sha256: &'a str,
+    motif_support_overflow_occurrences: u64,
+    motif_support_overflow_manifest_root_sha256: &'a str,
+    authority_ready: bool,
+    phase_mutation_allowed: bool,
+}
+
 impl K1GenerationBudgetV1 {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.maximum_support_rows == 0
@@ -218,8 +272,20 @@ impl K1NaturalCandidateFreezeV1 {
         {
             return Err("k1_candidate_freeze_binding_invalid");
         }
+        let motif_disposition = catalog.motif_disposition.as_ref();
+        let motif_v6 = catalog.schema == K1_NATURAL_COHORT_CATALOG_SCHEMA_V2
+            && candidate.schema == K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V4
+            && motif_disposition.is_some();
+        if (catalog.schema == K1_NATURAL_COHORT_CATALOG_SCHEMA_V2) != motif_v6 {
+            return Err("k1_candidate_freeze_motif_version_invalid");
+        }
         let mut freeze = Self {
-            schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5.to_owned(),
+            schema: if motif_v6 {
+                K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+            } else {
+                K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5
+            }
+            .to_owned(),
             freeze_root_sha256: String::new(),
             generation_sequence,
             catalog_root_sha256: catalog.catalog_root_sha256.clone(),
@@ -253,6 +319,22 @@ impl K1NaturalCandidateFreezeV1 {
             selected_at_unix,
             authority_ready: false,
             phase_mutation_allowed: false,
+            motif_disposition_summary_root_sha256: motif_disposition
+                .map(|summary| summary.summary_root_sha256.clone())
+                .unwrap_or_default(),
+            motif_enumeration_config_root_sha256: motif_disposition
+                .map(|summary| summary.enumeration_config_root_sha256.clone())
+                .unwrap_or_default(),
+            complete_topology_manifest_root_sha256: candidate
+                .complete_topology_manifest_root_sha256
+                .clone(),
+            motif_embedding_manifest_root_sha256: candidate
+                .motif_embedding_manifest_root_sha256
+                .clone(),
+            motif_support_overflow_occurrences: candidate.motif_support_overflow_occurrences,
+            motif_support_overflow_manifest_root_sha256: candidate
+                .motif_support_overflow_manifest_root_sha256
+                .clone(),
         };
         freeze.freeze_root_sha256 = freeze.expected_root()?;
         freeze.validate()?;
@@ -275,20 +357,38 @@ impl K1NaturalCandidateFreezeV1 {
             self.evidence_manifest_root_sha256.as_str(),
             self.readiness_receipt_root_sha256.as_str(),
         ];
+        let motif_fields_empty = self.motif_disposition_summary_root_sha256.is_empty()
+            && self.motif_enumeration_config_root_sha256.is_empty()
+            && self.complete_topology_manifest_root_sha256.is_empty()
+            && self.motif_embedding_manifest_root_sha256.is_empty()
+            && self.motif_support_overflow_occurrences == 0
+            && self.motif_support_overflow_manifest_root_sha256.is_empty();
         let version_fields_valid = match self.schema.as_str() {
             K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1 => {
                 self.capture_generation_root_sha256.is_empty()
                     && self.discovery_basis_root_sha256.is_empty()
+                    && motif_fields_empty
             }
             K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2 => {
                 valid_nonzero_sha256(&self.capture_generation_root_sha256)
                     && self.discovery_basis_root_sha256.is_empty()
+                    && motif_fields_empty
             }
             K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3
             | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4
             | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
                 valid_nonzero_sha256(&self.capture_generation_root_sha256)
                     && valid_nonzero_sha256(&self.discovery_basis_root_sha256)
+                    && motif_fields_empty
+            }
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => {
+                valid_nonzero_sha256(&self.capture_generation_root_sha256)
+                    && valid_nonzero_sha256(&self.discovery_basis_root_sha256)
+                    && valid_nonzero_sha256(&self.motif_disposition_summary_root_sha256)
+                    && valid_nonzero_sha256(&self.motif_enumeration_config_root_sha256)
+                    && valid_nonzero_sha256(&self.complete_topology_manifest_root_sha256)
+                    && valid_nonzero_sha256(&self.motif_embedding_manifest_root_sha256)
+                    && valid_nonzero_sha256(&self.motif_support_overflow_manifest_root_sha256)
             }
             _ => false,
         };
@@ -310,6 +410,45 @@ impl K1NaturalCandidateFreezeV1 {
     }
 
     pub(crate) fn expected_root(&self) -> Result<String, &'static str> {
+        if self.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+            return canonical_json_sha256(&CandidateFreezeDigestV6 {
+                schema: K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
+                generation_sequence: self.generation_sequence,
+                catalog_root_sha256: &self.catalog_root_sha256,
+                k1_deficit_snapshot_root_sha256: &self.k1_deficit_snapshot_root_sha256,
+                epistemic_registry_revision: self.epistemic_registry_revision,
+                epistemic_registry_root_sha256: &self.epistemic_registry_root_sha256,
+                fixture_exclusion_root_sha256: &self.fixture_exclusion_root_sha256,
+                candidate_root_sha256: &self.candidate_root_sha256,
+                capture_generation_root_sha256: &self.capture_generation_root_sha256,
+                candidate_structural_root_sha256: &self.candidate_structural_root_sha256,
+                source_neutral_topology_root_sha256: &self.source_neutral_topology_root_sha256,
+                semantic_novelty_signature_root_sha256: &self
+                    .semantic_novelty_signature_root_sha256,
+                consequence_type: self.consequence_type,
+                evidence_manifest_root_sha256: &self.evidence_manifest_root_sha256,
+                generator_schema: &self.generator_schema,
+                discovery_basis_root_sha256: &self.discovery_basis_root_sha256,
+                readiness_receipt_root_sha256: &self.readiness_receipt_root_sha256,
+                scoring_tuple: &self.scoring_tuple,
+                scheduler_schema: &self.scheduler_schema,
+                budget: self.budget,
+                support_watermark: self.support_watermark,
+                contract_watermark: self.contract_watermark,
+                future_min_sequence: self.future_min_sequence,
+                selected_at_unix: self.selected_at_unix,
+                motif_disposition_summary_root_sha256: &self.motif_disposition_summary_root_sha256,
+                motif_enumeration_config_root_sha256: &self.motif_enumeration_config_root_sha256,
+                complete_topology_manifest_root_sha256: &self
+                    .complete_topology_manifest_root_sha256,
+                motif_embedding_manifest_root_sha256: &self.motif_embedding_manifest_root_sha256,
+                motif_support_overflow_occurrences: self.motif_support_overflow_occurrences,
+                motif_support_overflow_manifest_root_sha256: &self
+                    .motif_support_overflow_manifest_root_sha256,
+                authority_ready: false,
+                phase_mutation_allowed: false,
+            });
+        }
         if matches!(
             self.schema.as_str(),
             K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3

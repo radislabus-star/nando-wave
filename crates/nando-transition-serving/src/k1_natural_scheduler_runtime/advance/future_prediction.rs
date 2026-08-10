@@ -300,15 +300,8 @@ fn next_pre_action_topology<'a>(
                 && !predicted_topologies.contains(topology.commit.commitment_root_sha256.as_str())
                 && !completed_intents.contains(topology.structure.turn_intent_id_sha256.as_str())
         })
-        .filter_map(|topology| {
-            let shape =
-                pre_action_applicability_shape_root_v1(&topology.structure.topology).ok()?;
-            let role_graph =
-                candidate_topology_root(candidate, &topology.structure.topology).ok()?;
-            (shape == candidate.candidate_structural_root_sha256
-                && role_graph == candidate.source_neutral_topology_root_sha256
-                && pre_action_t1_binding_root(program, &topology.structure.topology).is_ok())
-            .then_some(topology)
+        .filter(|topology| {
+            candidate_program_binding_root(candidate, program, &topology.structure.topology).is_ok()
         })
         .collect::<Vec<_>>();
     eligible.sort_by(|left, right| {

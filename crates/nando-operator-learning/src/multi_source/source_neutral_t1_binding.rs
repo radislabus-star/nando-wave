@@ -5,7 +5,49 @@ use nando_operator_kernel::{
     ResponseValueSelector, canonical_json_sha256,
 };
 
-use super::source_neutral_t1_manifest::pre_action_t1_input_binding_manifest_v1;
+use super::source_neutral_t1_manifest::{
+    PreActionT1ConsumedInputV1, pre_action_t1_input_binding_manifest_v1,
+};
+
+pub fn pre_action_t1_consumed_role_ids_v1(
+    program: &ResponseProgram,
+    topology: &PreActionMultiSourceTopologyV1,
+) -> Result<Vec<u16>, &'static str> {
+    let mut role_ids = if matches!(
+        program.operation,
+        ResponseOperation::ComposeCollection { .. }
+    ) {
+        pre_action_t1_input_binding_manifest_v1(program, topology)?
+            .inputs
+            .into_iter()
+            .map(|input| match input {
+                PreActionT1ConsumedInputV1::CollectionSource { local_role_id, .. }
+                | PreActionT1ConsumedInputV1::SelectedValue { local_role_id, .. }
+                | PreActionT1ConsumedInputV1::ImplicitRequestValue { local_role_id, .. } => {
+                    local_role_id
+                }
+            })
+            .collect::<Vec<_>>()
+    } else {
+        program_role_selectors(program)
+            .ok_or("primary_selector_missing")?
+            .into_iter()
+            .map(|selector| {
+                let witness = witness_for_selector(selector, topology)
+                    .ok_or("structural_role_missing_or_ambiguous")?;
+                role_for_witness(topology, witness)
+                    .map(|role| role.local_role_id)
+                    .ok_or("selected_structural_role_missing")
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    role_ids.sort_unstable();
+    role_ids.dedup();
+    if role_ids.is_empty() {
+        return Err("consumed_role_set_empty");
+    }
+    Ok(role_ids)
+}
 
 pub fn pre_action_t1_binding_root(
     program: &ResponseProgram,

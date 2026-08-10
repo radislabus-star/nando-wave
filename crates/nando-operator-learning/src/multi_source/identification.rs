@@ -19,8 +19,11 @@ use crate::{
 
 use super::{
     BlindThenRevealJoinedTransitionV1, CompletedEffectFormV1, FactorizedMultiSourceRowV1,
-    NaturalT1ProgramArtifactV1, PreActionShapeClassV1, SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
-    factor_multi_source_row_v1,
+    NaturalT1ProgramArtifactV1, PRE_ACTION_T1_MOTIF_BINDING_SCHEMA_V1, PreActionShapeClassV1,
+    SOURCE_NEUTRAL_TOPOLOGY_MOTIF_EMBEDDING_SCHEMA_V1, SOURCE_NEUTRAL_TOPOLOGY_MOTIF_SCHEMA_V1,
+    SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2, SourceNeutralTopologyMotifV1,
+    bind_pre_action_t1_program_to_motif_v1, factor_multi_source_row_v1,
+    source_neutral_topology_motif_config_root_v1,
 };
 
 mod natural_artifacts;
@@ -57,9 +60,12 @@ pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2: &str =
     "nando.multi-source-t1.source-neutral-role-version-space.v2";
 pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3: &str =
     "nando.multi-source-t1.source-neutral-role-version-space.v3";
+pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4: &str =
+    "nando.multi-source-t1.exact-connected-motif-version-space.v4";
 pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V1: &str = "nando.natural-t1-discovery-basis.v1";
 pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V2: &str = "nando.natural-t1-discovery-basis.v2";
 pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V3: &str = "nando.natural-t1-discovery-basis.v3";
+pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V4: &str = "nando.natural-t1-discovery-basis.v4";
 pub const NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1: &str =
     "nando.natural-t1-known-epistemic-protocol-mode-set.v1";
 pub const NATURAL_T1_K0_CURRICULUM_SCHEMA_V1: &str = "nando.natural-t1-k0-typed-curriculum.v1";
@@ -113,6 +119,28 @@ pub fn natural_t1_discovery_basis_root_v3() -> Result<String, &'static str> {
         NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V3,
         MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3,
         SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+        NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1,
+        RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1,
+        RAW_PHASE_EXECUTABLE_BLUEPRINT_BUILDER_V1,
+        NATURAL_T1_K0_CURRICULUM_SCHEMA_V1,
+        NATURAL_T1_K0_PRIMITIVES_V1,
+        NATURAL_T1_VERIFIER_SEMANTICS_SCHEMA_V1,
+        MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
+        MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS,
+        MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS,
+    ))
+    .map_err(|_| "natural_t1_discovery_basis_root_failed")
+}
+
+pub fn natural_t1_discovery_basis_root_v4() -> Result<String, &'static str> {
+    canonical_json_sha256(&(
+        NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V4,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4,
+        SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+        SOURCE_NEUTRAL_TOPOLOGY_MOTIF_SCHEMA_V1,
+        SOURCE_NEUTRAL_TOPOLOGY_MOTIF_EMBEDDING_SCHEMA_V1,
+        source_neutral_topology_motif_config_root_v1()?,
+        PRE_ACTION_T1_MOTIF_BINDING_SCHEMA_V1,
         NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1,
         RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1,
         RAW_PHASE_EXECUTABLE_BLUEPRINT_BUILDER_V1,
@@ -219,6 +247,7 @@ struct EligibleT1Row {
     joined: BlindThenRevealJoinedTransitionV1,
     frame: RelationFrame,
     factorized: FactorizedMultiSourceRowV1,
+    motif: Option<SourceNeutralTopologyMotifV1>,
     protocol_mode_root_sha256: String,
     seed_programs: BTreeMap<String, ResponseProgram>,
     external_program_evidence: Option<ExternalProgramEvidence>,
@@ -355,6 +384,7 @@ pub fn identify_multi_source_t1_operator_with_candidate_artifacts_v1(
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
         None,
+        None,
         evidence_epoch_sha256,
     )
 }
@@ -379,10 +409,39 @@ pub fn identify_multi_source_t1_operator_with_frozen_raw_phase_v1(
         active_protocol_mode_roots_sha256,
         candidate_artifacts,
         Some(raw_phase_contract),
+        None,
         evidence_epoch_sha256,
     )
 }
 
+/// Runs the existing identifier inside one exact connected-motif domain.
+/// Motifs are positionally bound to `joined_rows`; they constrain candidate
+/// applicability but never supply an operator or program family.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn identify_multi_source_t1_operator_with_frozen_motif_v1(
+    joined_rows: &[BlindThenRevealJoinedTransitionV1],
+    motifs: &[SourceNeutralTopologyMotifV1],
+    frames: &[RelationFrame],
+    active_intents: &BTreeSet<String>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+    candidate_artifacts: &[NaturalT1ProgramArtifactV1],
+    raw_phase_contract: FrozenRawPhaseT1ContractV1<'_>,
+    evidence_epoch_sha256: String,
+) -> MultiSourceT1IdentificationV3 {
+    identify_multi_source_t1_operator_internal_v1(
+        joined_rows,
+        frames,
+        active_intents,
+        active_protocol_mode_roots_sha256,
+        candidate_artifacts,
+        Some(raw_phase_contract),
+        Some(motifs),
+        evidence_epoch_sha256,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 fn identify_multi_source_t1_operator_internal_v1(
     joined_rows: &[BlindThenRevealJoinedTransitionV1],
     frames: &[RelationFrame],
@@ -390,6 +449,7 @@ fn identify_multi_source_t1_operator_internal_v1(
     active_protocol_mode_roots_sha256: &BTreeSet<String>,
     candidate_artifacts: &[NaturalT1ProgramArtifactV1],
     raw_phase_contract: Option<FrozenRawPhaseT1ContractV1<'_>>,
+    motif_domains: Option<&[SourceNeutralTopologyMotifV1]>,
     evidence_epoch_sha256: String,
 ) -> MultiSourceT1IdentificationV3 {
     let candidate_generator_schema = raw_phase_contract
@@ -398,12 +458,24 @@ fn identify_multi_source_t1_operator_internal_v1(
         });
     if !matches!(
         candidate_generator_schema,
-        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2 | MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2
+            | MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3
+            | MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4
     ) {
         return terminal_report(
             evidence_epoch_sha256,
             MultiSourceT1IdentificationStateV1::InvalidEvidence,
             "candidate_generator_schema_unsupported",
+        );
+    }
+    let motif_v4 = candidate_generator_schema == MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4;
+    if motif_v4 != motif_domains.is_some()
+        || motif_domains.is_some_and(|motifs| motifs.len() != joined_rows.len())
+    {
+        return terminal_report(
+            evidence_epoch_sha256,
+            MultiSourceT1IdentificationStateV1::InvalidEvidence,
+            "frozen_motif_domain_binding_invalid",
         );
     }
     let frame_by_root = frames
@@ -428,10 +500,39 @@ fn identify_multi_source_t1_operator_internal_v1(
     let mut eligible_rows = Vec::new();
     let mut active_duplicate_tokens = 0u64;
     let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
-    for joined in joined_rows {
+    for (joined_index, joined) in joined_rows.iter().enumerate() {
+        let motif = motif_domains.and_then(|motifs| motifs.get(joined_index));
+        if let Some(motif) = motif {
+            let ambient_root = match canonical_json_sha256(&joined.topology) {
+                Ok(root) => root,
+                Err(_) => {
+                    return terminal_report(
+                        evidence_epoch_sha256,
+                        MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                        "frozen_motif_ambient_root_failed",
+                    );
+                }
+            };
+            if motif.validate().is_err()
+                || motif
+                    .embeddings
+                    .iter()
+                    .any(|embedding| embedding.ambient_topology_root_sha256 != ambient_root)
+            {
+                return terminal_report(
+                    evidence_epoch_sha256,
+                    MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                    "frozen_motif_domain_evidence_invalid",
+                );
+            }
+        }
         let is_hypothesis_support = raw_phase_contract
             .is_none_or(|contract| joined.capture_sequence <= contract.support_watermark);
         let factorized = factor_multi_source_row_v1(joined);
+        let cohort_shape_root_sha256 = motif.map_or_else(
+            || factorized.applicability_shape_root_sha256.clone(),
+            |motif| motif.motif_root_sha256.clone(),
+        );
         let supported_shape = matches!(
             factorized.pre_action_shape,
             PreActionShapeClassV1::SingleRoleProjection
@@ -475,7 +576,7 @@ fn identify_multi_source_t1_operator_internal_v1(
                 Err(blocker) => {
                     if is_hypothesis_support {
                         let blocked_tokens = candidate_generation_blocks
-                            .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                            .entry((cohort_shape_root_sha256.clone(), blocker))
                             .or_default();
                         if joined.accepted {
                             *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
@@ -496,7 +597,7 @@ fn identify_multi_source_t1_operator_internal_v1(
             Err(blocker) => {
                 if is_hypothesis_support {
                     let blocked_tokens = candidate_generation_blocks
-                        .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                        .entry((cohort_shape_root_sha256.clone(), blocker))
                         .or_default();
                     if joined.accepted {
                         *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
@@ -505,12 +606,31 @@ fn identify_multi_source_t1_operator_internal_v1(
                 continue;
             }
         };
+        let seed_programs = motif.map_or(seed_programs.clone(), |motif| {
+            seed_programs
+                .into_iter()
+                .filter(|(_, program)| {
+                    bind_pre_action_t1_program_to_motif_v1(program, &joined.topology, motif).is_ok()
+                })
+                .collect()
+        });
+        if seed_programs.is_empty() {
+            if is_hypothesis_support && joined.accepted {
+                *candidate_generation_blocks
+                    .entry((
+                        cohort_shape_root_sha256.clone(),
+                        "motif_program_candidates_empty",
+                    ))
+                    .or_default() += joined.input_tokens;
+            }
+            continue;
+        }
         let protocol_mode_root_sha256 = match t1_protocol_mode_root(&seed_programs) {
             Ok(root) => root,
             Err(blocker) => {
                 if is_hypothesis_support {
                     let blocked_tokens = candidate_generation_blocks
-                        .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                        .entry((cohort_shape_root_sha256.clone(), blocker))
                         .or_default();
                     if joined.accepted {
                         *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
@@ -530,6 +650,7 @@ fn identify_multi_source_t1_operator_internal_v1(
             joined: joined.clone(),
             frame: frame.clone(),
             factorized,
+            motif: motif.cloned(),
             protocol_mode_root_sha256: protocol_mode_root_sha256.clone(),
             seed_programs,
             external_program_evidence,
@@ -537,10 +658,7 @@ fn identify_multi_source_t1_operator_internal_v1(
         if is_hypothesis_support {
             cohorts
                 .entry(T1CohortKey {
-                    effect_shape_root_sha256: row
-                        .factorized
-                        .applicability_shape_root_sha256
-                        .clone(),
+                    effect_shape_root_sha256: cohort_shape_root_sha256,
                     protocol_mode_root_sha256,
                 })
                 .or_default()
@@ -1548,6 +1666,7 @@ fn observation_for_row(
         &row.frame,
         programs,
         row.external_program_evidence.as_ref(),
+        row.motif.as_ref(),
     )
 }
 
@@ -1556,7 +1675,7 @@ pub(super) fn observation_for_transition(
     frame: &RelationFrame,
     programs: &BTreeMap<String, ResponseProgram>,
 ) -> Result<crate::OperatorObservationV1, String> {
-    observation_for_transition_with_external(joined, frame, programs, None)
+    observation_for_transition_with_external(joined, frame, programs, None, None)
 }
 
 fn observation_for_transition_with_external(
@@ -1564,20 +1683,25 @@ fn observation_for_transition_with_external(
     frame: &RelationFrame,
     programs: &BTreeMap<String, ResponseProgram>,
     external: Option<&ExternalProgramEvidence>,
+    motif: Option<&SourceNeutralTopologyMotifV1>,
 ) -> Result<crate::OperatorObservationV1, String> {
     let evaluations = programs
         .iter()
         .map(|(root, program)| {
-            let accepted = external.map_or_else(
-                || super::source_neutral_t1::t1_program_is_consistent(program, joined, frame),
-                |evidence| {
-                    let observed = super::observed_typed_consequence_root_v1(frame).ok();
-                    evidence
-                        .predicted_typed_consequence_roots_sha256
-                        .get(root)
-                        .is_some_and(|predicted| Some(predicted) == observed.as_ref())
-                },
-            );
+            let motif_bound = motif.is_none_or(|motif| {
+                bind_pre_action_t1_program_to_motif_v1(program, &joined.topology, motif).is_ok()
+            });
+            let accepted = motif_bound
+                && external.map_or_else(
+                    || super::source_neutral_t1::t1_program_is_consistent(program, joined, frame),
+                    |evidence| {
+                        let observed = super::observed_typed_consequence_root_v1(frame).ok();
+                        evidence
+                            .predicted_typed_consequence_roots_sha256
+                            .get(root)
+                            .is_some_and(|predicted| Some(predicted) == observed.as_ref())
+                    },
+                );
             ExactProgramEvaluation {
                 program_digest_sha256: root.clone(),
                 accepted,
@@ -1624,6 +1748,11 @@ fn row_program_consistency_blocker(
     row: &EligibleT1Row,
     program: &ResponseProgram,
 ) -> Option<&'static str> {
+    if row.motif.as_ref().is_some_and(|motif| {
+        bind_pre_action_t1_program_to_motif_v1(program, &row.joined.topology, motif).is_err()
+    }) {
+        return Some("program_consumed_roles_outside_frozen_motif");
+    }
     if let Some(evidence) = &row.external_program_evidence {
         let Ok(root) = response_program_version_root_sha256(program) else {
             return Some("external_program_digest_failed");

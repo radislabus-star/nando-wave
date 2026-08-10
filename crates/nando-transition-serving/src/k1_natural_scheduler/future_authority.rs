@@ -2,8 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use nando_operator_kernel::MultiSourceEvidenceOriginV1;
 use nando_operator_learning::multi_source::{
-    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, MultiSourceJoinLedgerV1,
-    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root, t1_program_is_consistent,
+    K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1, MultiSourceJoinLedgerV1, t1_program_is_consistent,
     validate_pre_action_topology_join_eligibility_v1,
 };
 
@@ -110,11 +109,12 @@ pub(super) fn append_future_prediction_authoritative(
     if contract.contract_root_sha256 != request.contract_root_sha256
         || topology.commit.capture_sequence < candidate.future_min_sequence
         || topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
-        || pre_action_applicability_shape_root_v1(&topology.structure.topology)
-            .map_err(str::to_owned)?
-            != candidate.candidate_structural_root_sha256
-        || candidate_topology_root(candidate, &topology.structure.topology)?
-            != candidate.source_neutral_topology_root_sha256
+        || candidate_program_binding_root(
+            candidate,
+            &contract.canonical_program,
+            &topology.structure.topology,
+        )
+        .is_err()
     {
         return Err("k1_future_prediction_candidate_mismatch".to_owned());
     }
@@ -133,12 +133,14 @@ pub(super) fn append_future_prediction_authoritative(
                 &request.topology_commitment_root_sha256,
                 &request.provider_capture_request_root_sha256,
             )?;
-            let receipt = crate::k1_pre_action_prediction::execute_collection_prediction(
-                contract.contract_root_sha256.clone(),
-                &contract.canonical_program,
-                &evidence.topology,
-                &evidence.provider_payload_json,
-            )?;
+            let receipt =
+                crate::k1_pre_action_prediction::execute_collection_prediction_for_candidate(
+                    contract.contract_root_sha256.clone(),
+                    candidate,
+                    &contract.canonical_program,
+                    &evidence.topology,
+                    &evidence.provider_payload_json,
+                )?;
             let predicted_at_unix_nanos = unix_now_nanos()?;
             if receipt.contract_root_sha256 != contract.contract_root_sha256
                 || receipt.canonical_program_root_sha256 != contract.canonical_program_root_sha256
@@ -174,11 +176,11 @@ pub(super) fn append_future_prediction_authoritative(
         }
         _ => {
             let predicted_at_unix_nanos = unix_now_nanos()?;
-            let binding_root = pre_action_t1_binding_root(
+            let binding_root = candidate_program_binding_root(
+                candidate,
                 &contract.canonical_program,
                 &topology.structure.topology,
-            )
-            .map_err(str::to_owned)?;
+            )?;
             K1FuturePredictionReceiptV1::seal(
                 contract.contract_root_sha256.clone(),
                 candidate.freeze_root_sha256.clone(),
@@ -357,11 +359,12 @@ pub(super) fn archive_pre_action_evidence_authoritative(
     )?;
     if topology.commit.capture_sequence < candidate.future_min_sequence
         || topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
-        || pre_action_applicability_shape_root_v1(&topology.structure.topology)
-            .map_err(str::to_owned)?
-            != candidate.candidate_structural_root_sha256
-        || candidate_topology_root(candidate, &topology.structure.topology)?
-            != candidate.source_neutral_topology_root_sha256
+        || candidate_program_binding_root(
+            candidate,
+            &contract.canonical_program,
+            &topology.structure.topology,
+        )
+        .is_err()
     {
         return Err("k1_pre_action_evidence_candidate_mismatch".to_owned());
     }
@@ -402,6 +405,16 @@ pub(super) fn append_future_outcome_authoritative(
         .future_prediction_contract
         .as_ref()
         .ok_or_else(|| "k1_future_outcome_contract_missing".to_owned())?;
+    let candidate = projection
+        .active_candidate_freeze
+        .as_ref()
+        .ok_or_else(|| "k1_future_outcome_candidate_missing".to_owned())?;
+    candidate_program_binding_root(
+        candidate,
+        &contract.canonical_program,
+        &request.topology.structure.topology,
+    )
+    .map_err(|_| "k1_future_outcome_candidate_mismatch".to_owned())?;
     let join = MultiSourceJoinLedgerV1::build(
         std::slice::from_ref(&request.topology),
         std::slice::from_ref(&request.frame),

@@ -1,0 +1,32 @@
+# NANDA Triad Worksheet
+
+task_id: nando-motif-identifier-20260810
+domain: general
+query: Validate exact motif-domain constraints inside the existing OperatorIdentificationMachineV1
+
+## triads
+
+| id | subject | relation | object | evidence | confidence | subject_role | object_role | route | group | layer | owner | entrypoint | output | evidence_path | scope |
+|----|---------|----------|--------|----------|------------|--------------|-------------|-------|-------|-------|-------|------------|--------|---------------|-------|
+| t1 | OperatorIdentificationMachineV1 motif input | requires | one exact motif descriptor per selected ambient row | DiscoveryBasis V4 commits exact motif embeddings and binding semantics | 1.0 | existing identifier | frozen motif domain | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | identify frozen raw phase | validated aligned motif input | crates/nando-operator-learning/src/multi_source/identification.rs | generator V4 only |
+| t2 | OperatorIdentificationMachineV1 candidate generation | filters | every generated program through exact pre-action motif binding | consumed roles must be contained in an exact ambient embedding | 1.0 | existing identifier | bounded executable candidates | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | candidate generation | motif-contained program set | crates/nando-operator-learning/src/multi_source/motif_program_binding.rs | no manual operator hints |
+| t3 | OperatorIdentificationMachineV1 cohort identity | uses | frozen motif root instead of ambient full-topology shape | same local law across different ambient graphs forms one version space | 1.0 | existing identifier | source-neutral cohort identity | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | cohort grouping | motif-root cohort | plans/nando-live-cpu-savings-v1/K1_EXACT_CONNECTED_MOTIF_DISCOVERY_CONTRACT_V1.md | no ambient fragmentation |
+| t4 | OperatorIdentificationMachineV1 support application | evaluates | motif-contained programs against completed ambient outcomes | completed trace remains the training label while motif limits applicability | 1.0 | existing identifier | exact support observations | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | apply support | bounded semantic version space | ARCHITECTURE_CANON.md | no future label at routing |
+| t5 | OperatorIdentificationMachineV1 freeze | emits | existing identification freeze and canonical program | no second identifier or execution language is introduced | 1.0 | existing identifier | canonical identification result | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | complete candidate generation | one existing-machine result | crates/nando-operator-learning/src/multi_source/identification.rs | authority false |
+| t6 | OperatorIdentificationMachineV1 compatibility dispatch | preserves | generator V2 and V3 behavior | motif constraints apply only to DiscoveryBasis V4 | 1.0 | existing identifier | historical identification route | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | generator schema dispatch | unchanged historical result | crates/nando-operator-learning/src/multi_source/identification.rs | no retroactive reinterpretation |
+
+## candidate_triads
+
+| id | subject | relation | object | evidence | confidence | subject_role | object_role | route | group | layer | owner | entrypoint | output | evidence_path | scope |
+|----|---------|----------|--------|----------|------------|--------------|-------------|-------|-------|-------|-------|------------|--------|---------------|-------|
+| c1 | OperatorIdentificationMachineV1 motif input | requires | one exact motif descriptor per selected ambient row | implementation assertion for V4 input validation | 0.99 | existing identifier | frozen motif domain | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | identify frozen raw phase | validated aligned motif input | candidate_answer | generator V4 only |
+| c2 | OperatorIdentificationMachineV1 candidate generation | filters | every generated program through exact pre-action motif binding | implementation assertion for role-contained candidates | 0.99 | existing identifier | bounded executable candidates | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | candidate generation | motif-contained program set | candidate_answer | no manual operator hints |
+| c3 | OperatorIdentificationMachineV1 cohort identity | uses | frozen motif root instead of ambient full-topology shape | implementation assertion for ambient-neutral grouping | 0.99 | existing identifier | source-neutral cohort identity | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | cohort grouping | motif-root cohort | candidate_answer | no ambient fragmentation |
+| c4 | OperatorIdentificationMachineV1 support application | evaluates | motif-contained programs against completed ambient outcomes | implementation assertion for exact support evaluation | 0.99 | existing identifier | exact support observations | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | apply support | bounded semantic version space | candidate_answer | no future label at routing |
+| c5 | OperatorIdentificationMachineV1 freeze | emits | existing identification freeze and canonical program | implementation assertion for reuse of the existing machine | 0.99 | existing identifier | canonical identification result | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | complete candidate generation | one existing-machine result | candidate_answer | authority false |
+| c6 | OperatorIdentificationMachineV1 compatibility dispatch | preserves | generator V2 and V3 behavior | implementation assertion for schema-scoped motif constraints | 1.0 | existing identifier | historical identification route | identification | motif-identifier | domain | OperatorIdentificationMachineV1 | generator schema dispatch | unchanged historical result | candidate_answer | no retroactive reinterpretation |
+
+## notes
+
+- The motif descriptor constrains applicability; it does not provide a program or operator family hint.
+- Independent future, actor execution, verifier, certification, and admission remain separate later boundaries.

@@ -6,9 +6,8 @@ use nando_operator_kernel::{
     response_program_version_root_sha256, sha256_bytes,
 };
 use nando_operator_learning::multi_source::{
-    K1PreActionExecutionReceiptV1, PreActionT1ConsumedInputV1, PreActionTopologyAuditRowV1,
-    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
-    pre_action_t1_input_binding_manifest_v1,
+    K1NaturalCandidateFreezeV1, K1PreActionExecutionReceiptV1, PreActionT1ConsumedInputV1,
+    PreActionTopologyAuditRowV1, pre_action_t1_input_binding_manifest_v1,
 };
 use nando_operator_runtime::{
     collection_implicit_request_values_for_program, collection_source_value_for_program,
@@ -22,7 +21,7 @@ use crate::k1_natural_scheduler::{
     K1_FUTURE_PREDICTION_AUTHORITY_REQUEST_SCHEMA_V1,
     K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1, K1FuturePredictionAuthorityRequestV1,
     K1PreActionEvidenceAuthorityRequestV1, K1SchedulerLaneV1, K1SchedulerProjectionV1,
-    append_future_prediction, archive_pre_action_evidence, candidate_topology_root,
+    append_future_prediction, archive_pre_action_evidence, candidate_program_binding_root,
     restore_projection,
 };
 use crate::operator_certification::CertificationAuthorityConfigV1;
@@ -43,11 +42,12 @@ pub(crate) fn candidate_match_requires_fence(
         ResponseOperation::ComposeCollection { .. }
     ) && commit.capture_sequence >= candidate.future_min_sequence
         && commit.evidence_origin == MultiSourceEvidenceOriginV1::FreshLive
-        && pre_action_applicability_shape_root_v1(&structure.topology).map_err(str::to_owned)?
-            == candidate.candidate_structural_root_sha256
-        && candidate_topology_root(candidate, &structure.topology)?
-            == candidate.source_neutral_topology_root_sha256
-        && pre_action_t1_binding_root(&contract.canonical_program, &structure.topology).is_ok()
+        && candidate_program_binding_root(
+            candidate,
+            &contract.canonical_program,
+            &structure.topology,
+        )
+        .is_ok()
         && !projection.future_predictions.iter().any(|prediction| {
             !projection
                 .future_outcomes
@@ -76,13 +76,12 @@ pub(crate) fn precommit_candidate_match(
         ResponseOperation::ComposeCollection { .. }
     ) || topology.commit.capture_sequence < candidate.future_min_sequence
         || topology.commit.evidence_origin != MultiSourceEvidenceOriginV1::FreshLive
-        || pre_action_applicability_shape_root_v1(&topology.structure.topology)
-            .map_err(str::to_owned)?
-            != candidate.candidate_structural_root_sha256
-        || candidate_topology_root(candidate, &topology.structure.topology)?
-            != candidate.source_neutral_topology_root_sha256
-        || pre_action_t1_binding_root(&contract.canonical_program, &topology.structure.topology)
-            .is_err()
+        || candidate_program_binding_root(
+            candidate,
+            &contract.canonical_program,
+            &topology.structure.topology,
+        )
+        .is_err()
         || projection.future_predictions.iter().any(|prediction| {
             !projection
                 .future_outcomes
@@ -137,11 +136,46 @@ pub(crate) fn precommit_candidate_match(
     Ok(true)
 }
 
+#[cfg(test)]
 pub(crate) fn execute_collection_prediction(
     contract_root_sha256: String,
     canonical_program: &ResponseProgram,
     topology: &PreActionTopologyAuditRowV1,
     provider_payload_json: &str,
+) -> Result<K1PreActionExecutionReceiptV1, String> {
+    execute_collection_prediction_with_binding(
+        contract_root_sha256,
+        canonical_program,
+        topology,
+        provider_payload_json,
+        None,
+    )
+}
+
+pub(crate) fn execute_collection_prediction_for_candidate(
+    contract_root_sha256: String,
+    candidate: &K1NaturalCandidateFreezeV1,
+    canonical_program: &ResponseProgram,
+    topology: &PreActionTopologyAuditRowV1,
+    provider_payload_json: &str,
+) -> Result<K1PreActionExecutionReceiptV1, String> {
+    let candidate_binding_root =
+        candidate_program_binding_root(candidate, canonical_program, &topology.structure.topology)?;
+    execute_collection_prediction_with_binding(
+        contract_root_sha256,
+        canonical_program,
+        topology,
+        provider_payload_json,
+        Some(candidate_binding_root),
+    )
+}
+
+fn execute_collection_prediction_with_binding(
+    contract_root_sha256: String,
+    canonical_program: &ResponseProgram,
+    topology: &PreActionTopologyAuditRowV1,
+    provider_payload_json: &str,
+    candidate_binding_root_sha256: Option<String>,
 ) -> Result<K1PreActionExecutionReceiptV1, String> {
     let provider_capture_request_root_sha256 =
         topology.commit.provider_capture_request_root_sha256.clone();
@@ -154,7 +188,8 @@ pub(crate) fn execute_collection_prediction(
     let binding_manifest =
         pre_action_t1_input_binding_manifest_v1(canonical_program, &topology.structure.topology)
             .map_err(|reason| format!("k1_pre_action_role_binding:{reason}"))?;
-    let structural_binding_root = binding_manifest.root_sha256().map_err(str::to_owned)?;
+    let structural_binding_root = candidate_binding_root_sha256
+        .map_or_else(|| binding_manifest.root_sha256().map_err(str::to_owned), Ok)?;
     let implicit_values = binding_manifest
         .inputs
         .iter()

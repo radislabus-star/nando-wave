@@ -13,6 +13,7 @@ mod k1_natural_scheduler_v1;
 mod linked_frame_acquisition;
 mod live_snapshot;
 mod marginal;
+mod motif_program_binding;
 mod ms3_generation_registry_v1;
 mod natural_program_artifact;
 mod natural_vocabulary_census;
@@ -39,8 +40,12 @@ pub use coverage_portfolio_shadow_v1::{
 };
 pub use factorizer::{
     CompletedEffectFormV1, FactorizedMultiSourceRowV1, MULTI_SOURCE_FACTORIZED_ROW_SCHEMA_V1,
-    MultiSourceReasonV1, PreActionShapeClassV1, SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+    MultiSourceReasonV1, PreActionShapeClassV1, SOURCE_NEUTRAL_TOPOLOGY_MOTIF_EMBEDDING_SCHEMA_V1,
+    SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_PER_ROW_V1, SOURCE_NEUTRAL_TOPOLOGY_MOTIF_MAX_ROLES_V1,
+    SOURCE_NEUTRAL_TOPOLOGY_MOTIF_SCHEMA_V1, SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+    SourceNeutralTopologyMotifEmbeddingV1, SourceNeutralTopologyMotifV1,
     factor_multi_source_row_v1, pre_action_applicability_shape_root_v1,
+    source_neutral_topology_motif_config_root_v1, source_neutral_topology_motifs_v1,
     source_neutral_topology_quotient_root_v2, source_neutral_topology_root_v1,
 };
 pub use failure_corpus::{
@@ -69,10 +74,11 @@ pub use frozen_version_space::{
 };
 pub use identification::{
     FrozenRawPhaseT1ContractV1, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
-    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3, MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3,
-    MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1, MultiSourceT1IdentificationStateV1,
-    MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1, NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V1,
-    NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V2, NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V3,
+    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4,
+    MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
+    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1,
+    NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V1, NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V2,
+    NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V3, NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V4,
     NATURAL_T1_K0_CURRICULUM_SCHEMA_V1, NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1,
     NATURAL_T1_VERIFIER_SEMANTICS_SCHEMA_V1, PassiveT1ProbeContractV1,
     RAW_PHASE_EXECUTABLE_BLUEPRINT_BUILDER_V1, RAW_PHASE_EXECUTABLE_BLUEPRINT_ENVELOPE_SCHEMA_V1,
@@ -85,10 +91,12 @@ pub use identification::{
     identify_multi_source_t1_operator_v1,
     identify_multi_source_t1_operator_with_active_protocols_v1,
     identify_multi_source_t1_operator_with_candidate_artifacts_v1,
+    identify_multi_source_t1_operator_with_frozen_motif_v1,
     identify_multi_source_t1_operator_with_frozen_raw_phase_v1, natural_t1_discovery_basis_root_v1,
     natural_t1_discovery_basis_root_v2, natural_t1_discovery_basis_root_v3,
-    raw_phase_executable_runtime_selectors_v1, raw_phase_executable_surface_bundle_v1,
-    rebuild_raw_phase_selected_executable_v1, seal_raw_phase_t1_hypothesis_envelope_v1,
+    natural_t1_discovery_basis_root_v4, raw_phase_executable_runtime_selectors_v1,
+    raw_phase_executable_surface_bundle_v1, rebuild_raw_phase_selected_executable_v1,
+    seal_raw_phase_t1_hypothesis_envelope_v1,
 };
 pub use join::{
     BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BLIND_THEN_REVEAL_JOIN_SCHEMA_V2,
@@ -107,22 +115,27 @@ pub use k1_natural_scheduler_v1::{
     K1_IDENTIFICATION_FREEZE_SCHEMA_V1, K1_MISSING_COMPLETED_FRAME_BLOCKER_V1,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
+    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2,
     K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2,
-    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V4,
+    K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, K1_NATURAL_COHORT_CATALOG_SCHEMA_V2,
     K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3, K1_PROBE_ROUND_RECEIPT_SCHEMA_V1, K1_SCHEDULER_SCHEMA_V1,
-    K1CandidateReadinessV1, K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
-    K1FutureOutcomeReceiptV1, K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1,
-    K1FuturePredictionReceiptV1, K1GenerationBudgetV1, K1GenerationTerminalVerdictV1,
-    K1GenerationVerdictClassV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V4,
+    K1_PROBE_ROUND_RECEIPT_SCHEMA_V1, K1_SCHEDULER_SCHEMA_V1, K1CandidateReadinessV1,
+    K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1FutureOutcomeReceiptV1,
+    K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
+    K1GenerationBudgetV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
+    K1IdentificationFreezeV1, K1MotifCandidateSupportV1, K1MotifDispositionSummaryV1,
+    K1MotifSourceDispositionClassV1, K1MotifSourceDispositionV1, K1NaturalCandidateFreezeV1,
     K1NaturalCandidateQueueRowV1, K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1,
     K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
     K1PreActionExecutionReceiptV1, K1ProbeBudgetRemainingV1, K1ProbeClassPredictionV1,
     K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
-    K1SchedulerLedgerV1, K1TransferSettlementV1, build_k1_natural_candidate_queue_v1,
-    build_k1_natural_candidate_queue_with_exclusions_v1, build_k1_natural_cohort_catalog_v1,
-    observed_typed_consequence_root_v1, typed_consequence_root_v1,
+    K1SchedulerLedgerV1, K1TransferSettlementV1, build_k1_motif_cohort_catalog_v1,
+    build_k1_natural_candidate_queue_v1, build_k1_natural_candidate_queue_with_exclusions_v1,
+    build_k1_natural_cohort_catalog_v1, observed_typed_consequence_root_v1,
+    typed_consequence_root_v1,
 };
 pub use linked_frame_acquisition::{
     MS3_CENSORED_INELIGIBLE_PROBE, MS3_CENSORED_PRE_ROUTE_RECEIPT_EPOCH,
@@ -157,6 +170,10 @@ pub use marginal::{
     COVERAGE_OPPORTUNITY_MAX_ROWS_V1, COVERAGE_OPPORTUNITY_SNAPSHOT_SCHEMA_V1,
     CoverageOpportunitySnapshotV1, MarginalShapeOpportunityV1,
     build_coverage_opportunity_snapshot_v1,
+};
+pub use motif_program_binding::{
+    PRE_ACTION_T1_MOTIF_BINDING_SCHEMA_V1, PreActionT1MotifBindingV1,
+    bind_pre_action_t1_program_to_motif_v1,
 };
 pub use ms3_generation_registry_v1::{
     MS3_CAPTURE_GAP_REPAIR_REQUIRED, MS3_GENERATION_ACQUISITION_FAILURE_SCHEMA_V1,
@@ -196,6 +213,7 @@ pub use representation_gap::{
     RepresentationGapClassV1, build_representation_gap_adjudication_report_v1,
 };
 pub use source_neutral_t1::{pre_action_t1_binding_root, t1_program_is_consistent};
+pub use source_neutral_t1_binding::pre_action_t1_consumed_role_ids_v1;
 pub use source_neutral_t1_manifest::{
     PreActionT1ConsumedInputV1, PreActionT1InputBindingManifestV1, PreActionT1SelectorOriginV1,
     pre_action_t1_input_binding_manifest_v1,

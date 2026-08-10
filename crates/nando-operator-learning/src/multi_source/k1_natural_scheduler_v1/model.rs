@@ -1,14 +1,19 @@
 mod cohort;
 mod evidence;
 mod freeze;
+mod motif;
 mod queue;
 mod readiness;
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
-pub use cohort::{K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1};
+pub use cohort::{
+    K1MotifCandidateSupportV1, K1MotifDispositionSummaryV1, K1NaturalCohortCandidateV1,
+    K1NaturalCohortCatalogV1,
+};
 pub use evidence::{K1ConsequenceTypeV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1};
 pub use freeze::{K1GenerationBudgetV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1};
+pub use motif::{K1MotifSourceDispositionClassV1, K1MotifSourceDispositionV1};
 pub use queue::{
     K1CandidateScoreV1, K1DeficitSnapshotV1, K1NaturalCandidateQueueRowV1,
     K1NaturalCandidateQueueV1,
@@ -17,18 +22,26 @@ pub use readiness::K1CandidateReadinessV1;
 
 pub const K1_DEFICIT_SNAPSHOT_SCHEMA_V1: &str = "nando.k1-deficit-snapshot.v1";
 pub const K1_NATURAL_COHORT_CATALOG_SCHEMA_V1: &str = "nando.k1-natural-cohort-catalog.v1";
+pub const K1_NATURAL_COHORT_CATALOG_SCHEMA_V2: &str = "nando.k1-natural-cohort-catalog.v2";
+pub const K1_MOTIF_DISPOSITION_SUMMARY_SCHEMA_V1: &str = "nando.k1-motif-disposition-summary.v1";
+pub const K1_MOTIF_CANDIDATE_SUPPORT_SCHEMA_V1: &str = "nando.k1-motif-candidate-support.v1";
+pub const K1_MOTIF_SOURCE_DISPOSITION_SCHEMA_V1: &str = "nando.k1-motif-source-disposition.v1";
 pub const K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V1: &str = "nando.k1-natural-cohort-candidate.v1";
 pub const K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V2: &str = "nando.k1-natural-cohort-candidate.v2";
 pub const K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3: &str = "nando.k1-natural-cohort-candidate.v3";
+pub const K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V4: &str = "nando.k1-natural-cohort-candidate.v4";
 pub const K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1: &str = "nando.k1-natural-candidate-queue.v1";
+pub const K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2: &str = "nando.k1-natural-candidate-queue.v2";
 pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1: &str = "nando.k1-natural-candidate-freeze.v1";
 pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2: &str = "nando.k1-natural-candidate-freeze.v2";
 pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3: &str = "nando.k1-natural-candidate-freeze.v3";
 pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4: &str = "nando.k1-natural-candidate-freeze.v4";
 pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5: &str = "nando.k1-natural-candidate-freeze.v5";
+pub const K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6: &str = "nando.k1-natural-candidate-freeze.v6";
 pub const K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1: &str = "nando.k1-natural-evidence-row.v1";
 pub const K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2: &str = "nando.k1-natural-evidence-row.v2";
 pub const K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3: &str = "nando.k1-natural-evidence-row.v3";
+pub const K1_NATURAL_EVIDENCE_ROW_SCHEMA_V4: &str = "nando.k1-natural-evidence-row.v4";
 pub const K1_IDENTIFICATION_FREEZE_SCHEMA_V1: &str = "nando.k1-identification-freeze.v1";
 pub const K1_PROBE_ROUND_RECEIPT_SCHEMA_V1: &str = "nando.k1-probe-round-receipt.v1";
 pub const K1_SCHEDULER_SCHEMA_V1: &str = "nando.k1-natural-scheduler-ledger.v1";

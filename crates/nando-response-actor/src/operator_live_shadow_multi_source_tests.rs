@@ -11,10 +11,11 @@ use nando_operator_kernel::{
 };
 use nando_operator_learning::multi_source::{
     BlindThenRevealJoinedTransitionV1, FrozenRawPhaseT1ContractV1,
-    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MultiSourceJoinLedgerV1,
-    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, PreActionTopologyAuditRowV1,
-    identify_multi_source_t1_operator_v1,
-    identify_multi_source_t1_operator_with_frozen_raw_phase_v1,
+    MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4,
+    MultiSourceJoinLedgerV1, MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3,
+    PreActionTopologyAuditRowV1, identify_multi_source_t1_operator_v1,
+    identify_multi_source_t1_operator_with_frozen_motif_v1,
+    identify_multi_source_t1_operator_with_frozen_raw_phase_v1, source_neutral_topology_motifs_v1,
 };
 use nando_operator_learning::{
     CaptureEvidenceReceipt, CaptureRecordCommitment, CaptureTransitionBinding,
@@ -22,9 +23,9 @@ use nando_operator_learning::{
 use serde_json::json;
 
 use crate::{
-    ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, RuntimeParityCase, TeacherTransition,
-    build_crystallized_admission_snapshot, crystallize_multi_source_t1_candidate_v1,
-    teacher_transition_from_completed,
+    ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, ResponseExecutionStatus, ResponseExecutor,
+    RuntimeParityCase, TeacherTransition, build_crystallized_admission_snapshot,
+    crystallize_multi_source_t1_candidate_v1, teacher_transition_from_completed,
 };
 
 fn root(label: &str) -> String {
@@ -86,12 +87,12 @@ fn completed_projection_frame(
     }
 }
 
-fn joined_row(
+fn topology_row(
     frame: &RelationFrame,
     request_event: &str,
     session: &str,
     capture_sequence: u64,
-) -> BlindThenRevealJoinedTransitionV1 {
+) -> PreActionTopologyAuditRowV1 {
     let value_root = canonical_json_sha256(&json!(7)).expect("value root");
     let mut topology = PreActionMultiSourceTopologyV1 {
         extraction_status: MultiSourceExtractionStatusV1::Complete,
@@ -151,7 +152,7 @@ fn joined_row(
         capture_sequence,
     )
     .expect("topology commit");
-    let topology_row = PreActionTopologyAuditRowV1 {
+    PreActionTopologyAuditRowV1 {
         bridge_epoch_sha256: root("bridge"),
         bridge_sequence: Some(capture_sequence),
         record_sha256: Some(root(&format!("record:{capture_sequence}"))),
@@ -163,12 +164,90 @@ fn joined_row(
         physical_order_proven: true,
         structure,
         commit,
-    };
+    }
+}
+
+fn joined_row(
+    frame: &RelationFrame,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+) -> BlindThenRevealJoinedTransitionV1 {
+    let topology_row = topology_row(frame, request_event, session, capture_sequence);
     MultiSourceJoinLedgerV1::build(&[topology_row], std::slice::from_ref(frame))
         .rows()
         .into_iter()
         .next()
         .expect("joined row")
+}
+
+fn joined_row_with_ambient_role(
+    frame: &RelationFrame,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    ambient_type: MultiSourceTypeClassV1,
+) -> BlindThenRevealJoinedTransitionV1 {
+    let mut topology_row = topology_row(frame, request_event, session, capture_sequence);
+    topology_row.structure.topology.role_witnesses[0].request_reference_ordinal = None;
+    topology_row
+        .structure
+        .topology
+        .relations
+        .retain(|edge| edge.relation != MultiSourceRelationKindV1::RequestReferencesRole);
+    topology_row
+        .structure
+        .topology
+        .roles
+        .push(MultiSourceRoleNodeV1 {
+            local_role_id: 1,
+            source_ordinal: 1,
+            value_ordinal: 0,
+            type_class: ambient_type,
+            container_class: MultiSourceContainerClassV1::Scalar,
+            cardinality_class: MultiSourceCardinalityClassV1::One,
+            temporal_class: MultiSourceTemporalClassV1::Latest,
+            depth_bucket: 2,
+            structural_flags: 1,
+        });
+    topology_row
+        .structure
+        .topology
+        .role_witnesses
+        .push(MultiSourceRoleWitnessV1 {
+            local_role_id: 1,
+            value_sha256: root(&format!("ambient:{request_event}")),
+            request_reference_ordinal: None,
+            request_reference_ordinal_candidates: Vec::new(),
+        });
+    topology_row
+        .structure
+        .topology
+        .relations
+        .push(MultiSourceRelationEdgeV1 {
+            relation: MultiSourceRelationKindV1::Precedes,
+            source_role_id: 0,
+            target_role_id: 1,
+        });
+    topology_row.structure.topology.relations.sort();
+    topology_row
+        .structure
+        .topology
+        .validate()
+        .expect("ambient topology");
+    topology_row.commit = PreActionTopologyCommitV1::seal(
+        &topology_row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("ambient topology commit");
+    MultiSourceJoinLedgerV1::build(&[topology_row], std::slice::from_ref(frame))
+        .rows()
+        .into_iter()
+        .next()
+        .expect("ambient joined row")
 }
 
 fn raw_phase_fixture() -> (MultiSourceT1IdentificationV3, Vec<TeacherTransition>) {
@@ -271,6 +350,151 @@ fn raw_phase_selected_executable_reconstructs_before_crystallization() {
     assert_eq!(candidate.package.proof.runtime_parity_failures, 0);
     assert_eq!(candidate.support.len(), 2);
     assert_eq!(candidate.future.len(), 4);
+}
+
+#[test]
+fn motif_transfer_crosses_bundle_v4_admission_and_unseen_cpu_execution() {
+    let sessions = [
+        "motif-session-a",
+        "motif-session-b",
+        "motif-session-c",
+        "motif-session-d",
+        "motif-session-e",
+        "motif-session-f",
+    ];
+    let frames = [
+        ("motif-intent-a", "motif-event-a", sessions[0]),
+        ("motif-intent-b", "motif-event-b", sessions[1]),
+        ("motif-intent-c", "motif-event-c", sessions[2]),
+        ("motif-intent-d", "motif-event-d", sessions[3]),
+        ("motif-intent-e", "motif-event-e", sessions[4]),
+        ("motif-intent-f", "motif-event-f", sessions[5]),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, (intent, event, session))| {
+        completed_projection_frame(
+            intent,
+            event,
+            session,
+            "alpha",
+            u64::try_from(index + 1).expect("frame index") * 1_000_000_000 + 500_000_000,
+        )
+    })
+    .collect::<Vec<_>>();
+    let joined = frames
+        .iter()
+        .enumerate()
+        .map(|(index, frame)| {
+            let sequence = u64::try_from(index + 1).expect("capture sequence");
+            joined_row_with_ambient_role(
+                frame,
+                &format!("motif-request-{sequence}"),
+                sessions[index],
+                sequence,
+                if sequence % 2 == 0 {
+                    MultiSourceTypeClassV1::Boolean
+                } else {
+                    MultiSourceTypeClassV1::String
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    let motifs = joined
+        .iter()
+        .map(|row| {
+            source_neutral_topology_motifs_v1(&row.topology)
+                .expect("motif enumeration")
+                .into_iter()
+                .find(|motif| {
+                    motif.role_count == 1
+                        && motif
+                            .embeddings
+                            .iter()
+                            .any(|embedding| embedding.local_role_ids == vec![0])
+                })
+                .expect("selected scalar motif")
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        motifs
+            .iter()
+            .all(|motif| motif.motif_root_sha256 == motifs[0].motif_root_sha256)
+    );
+    assert_ne!(
+        canonical_json_sha256(&joined[0].topology).expect("first ambient root"),
+        canonical_json_sha256(&joined[1].topology).expect("second ambient root")
+    );
+
+    let identification = identify_multi_source_t1_operator_with_frozen_motif_v1(
+        &joined,
+        &motifs,
+        &frames,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+        &[],
+        FrozenRawPhaseT1ContractV1 {
+            frozen_domain_root_sha256: &root("motif bundle v4 domain"),
+            support_watermark: 2,
+            candidate_generator_schema: MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V4,
+        },
+        root("motif bundle v4 epoch"),
+    );
+    assert_eq!(
+        identification.state,
+        MultiSourceT1IdentificationStateV1::TransferReady,
+        "{identification:#?}"
+    );
+    assert_eq!(
+        identification.selected_shape_root_sha256.as_deref(),
+        Some(motifs[0].motif_root_sha256.as_str())
+    );
+    let transitions = frames
+        .iter()
+        .enumerate()
+        .map(|(index, frame)| {
+            runtime_transition(
+                frame,
+                "alpha",
+                u64::try_from(index + 1).expect("transition sequence"),
+            )
+        })
+        .collect::<Vec<_>>();
+    let candidate = crystallize_multi_source_t1_candidate_v1(&identification, &transitions)
+        .expect("motif candidate");
+    assert!(
+        candidate
+            .package
+            .crystallized_operator
+            .as_ref()
+            .is_some_and(crate::VerifiedOperatorRestartBundle::has_canonical_bundle_v4)
+    );
+    let snapshot = build_crystallized_admission_snapshot(
+        &[candidate],
+        "motif-bundle-v4-test",
+        1,
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+    )
+    .expect("motif admission evaluation")
+    .expect("motif admission snapshot");
+    assert_eq!(snapshot.registry.packages.len(), 1);
+    let executor = ResponseExecutor::from_registry(snapshot.registry).expect("motif CPU executor");
+    let unseen_frame = completed_projection_frame(
+        "motif-intent-unseen",
+        "motif-event-unseen",
+        "motif-session-unseen",
+        "beta",
+        7_500_000_000,
+    );
+    let unseen = runtime_transition(&unseen_frame, "beta", 7)
+        .runtime_parity_case
+        .expect("unseen runtime parity");
+    let execution = executor.execute_shadow(&unseen.request_text, &unseen.provider_payload);
+    assert_eq!(execution.status, ResponseExecutionStatus::Executed);
+    assert_eq!(execution.response.as_deref(), Some("7"));
 }
 
 #[test]

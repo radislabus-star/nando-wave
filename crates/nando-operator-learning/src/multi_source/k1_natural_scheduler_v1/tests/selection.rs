@@ -235,3 +235,184 @@ fn oversized_catalog_keeps_a_complete_denominator_and_a_bounded_ready_queue() {
         ready_candidate.candidate_root_sha256
     );
 }
+
+#[test]
+fn motif_catalog_groups_one_exact_law_across_different_ambient_graphs() {
+    let small = motif_topology(2, &[(0, 1)]);
+    let extended = motif_topology(3, &[(0, 1), (1, 2)]);
+    let small_motif = exact_motif(&small, 2, 1);
+    let extended_motif = source_neutral_topology_motifs_v1(&extended)
+        .expect("extended motifs")
+        .into_iter()
+        .find(|motif| motif.motif_root_sha256 == small_motif.motif_root_sha256)
+        .expect("same exact motif in extended graph");
+    assert_ne!(
+        small_motif.embeddings[0].ambient_topology_root_sha256,
+        extended_motif.embeddings[0].ambient_topology_root_sha256
+    );
+
+    let rows = (1..=8)
+        .map(|index| {
+            motif_evidence_row(
+                index,
+                if index % 2 == 0 {
+                    &small_motif
+                } else {
+                    &extended_motif
+                },
+                100,
+                if index <= 4 { 300 } else { 301 },
+                1_000 + index,
+            )
+        })
+        .collect::<Vec<_>>();
+    let catalog = motif_catalog(&rows, &[]);
+    let candidate = &catalog.candidates[0];
+
+    assert_eq!(catalog.schema, K1_NATURAL_COHORT_CATALOG_SCHEMA_V2);
+    assert_eq!(catalog.candidates.len(), 1);
+    assert_eq!(candidate.schema, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V4);
+    assert_eq!(candidate.evidence_rows, 8);
+    assert_eq!(candidate.independent_lineages, 2);
+    assert!(candidate.readiness.pass);
+    assert_eq!(
+        candidate.candidate_structural_root_sha256,
+        small_motif.motif_root_sha256
+    );
+    let bytes = serde_json::to_vec(&catalog).expect("encode motif catalog");
+    let restored: K1NaturalCohortCatalogV1 =
+        serde_json::from_slice(&bytes).expect("decode motif catalog");
+    restored
+        .validate()
+        .expect("validate restored motif catalog");
+    assert_eq!(
+        serde_json::to_vec(&restored).expect("re-encode motif catalog"),
+        bytes
+    );
+}
+
+#[test]
+fn motif_queue_v2_ranks_bounded_cost_before_verified_tokens() {
+    let topology = motif_topology(2, &[(0, 1)]);
+    let expensive = exact_motif(&topology, 2, 1);
+    let cheap = exact_motif(&topology, 1, 0);
+    let mut rows = (1..=8)
+        .map(|index| {
+            motif_evidence_row(
+                index,
+                &expensive,
+                100,
+                if index <= 4 { 300 } else { 301 },
+                100_000 + index,
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.extend((101..=108).map(|index| {
+        motif_evidence_row(
+            index,
+            &cheap,
+            100,
+            if index <= 104 { 302 } else { 303 },
+            1_000 + index,
+        )
+    }));
+    let catalog = motif_catalog(&rows, &[(expensive.motif_root_sha256.clone(), 80)]);
+    let queue = build_k1_natural_candidate_queue_v1(&catalog, &deficit(Vec::new()), 108)
+        .expect("motif queue");
+
+    assert_eq!(queue.schema, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2);
+    assert_eq!(queue.rows.len(), 2);
+    let first_candidate = catalog
+        .candidates
+        .iter()
+        .find(|candidate| candidate.candidate_root_sha256 == queue.rows[0].candidate_root_sha256)
+        .expect("first ranked motif candidate");
+    assert_eq!(
+        first_candidate.candidate_structural_root_sha256,
+        cheap.motif_root_sha256
+    );
+    assert!(
+        queue.rows[0].score.bounded_discovery_cost_units
+            < queue.rows[1].score.bounded_discovery_cost_units
+    );
+    assert!(
+        queue.rows[0].score.expected_verified_input_tokens
+            < queue.rows[1].score.expected_verified_input_tokens
+    );
+}
+
+#[test]
+fn motif_freeze_v6_seals_every_catalog_and_embedding_root() {
+    let topology = motif_topology(2, &[(0, 1)]);
+    let motif = exact_motif(&topology, 2, 1);
+    let rows = (1..=8)
+        .map(|index| {
+            motif_evidence_row(
+                index,
+                &motif,
+                100,
+                if index <= 4 { 300 } else { 301 },
+                1_000 + index,
+            )
+        })
+        .collect::<Vec<_>>();
+    let catalog = motif_catalog(&rows, &[]);
+    let deficit = deficit(Vec::new());
+    let queue =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, 8).expect("motif candidate queue");
+    let queue_row = queue.first_readiness_pass().expect("ready motif");
+    let candidate = catalog
+        .candidates
+        .iter()
+        .find(|candidate| candidate.candidate_root_sha256 == queue_row.candidate_root_sha256)
+        .expect("motif candidate");
+    let freeze = K1NaturalCandidateFreezeV1::seal(
+        6,
+        &catalog,
+        &deficit,
+        &queue,
+        candidate,
+        queue_row.score.clone(),
+        "nando.k1-operator-blind-scheduler.v2".to_owned(),
+        root(706),
+        K1GenerationBudgetV1 {
+            maximum_support_rows: 64,
+            maximum_probe_rounds: 4,
+            maximum_probe_cost_units: 100,
+            maximum_generation_seconds: 3_600,
+        },
+        8,
+        8,
+        1_700_000_000,
+    )
+    .expect("motif candidate freeze");
+
+    assert_eq!(freeze.schema, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6);
+    assert_eq!(
+        freeze.motif_disposition_summary_root_sha256,
+        catalog
+            .motif_disposition
+            .as_ref()
+            .expect("motif disposition")
+            .summary_root_sha256
+    );
+    assert_eq!(
+        freeze.motif_embedding_manifest_root_sha256,
+        candidate.motif_embedding_manifest_root_sha256
+    );
+    let bytes = serde_json::to_vec(&freeze).expect("encode v6 freeze");
+    let restored: K1NaturalCandidateFreezeV1 =
+        serde_json::from_slice(&bytes).expect("decode v6 freeze");
+    restored.validate().expect("validate restored v6 freeze");
+    assert_eq!(
+        serde_json::to_vec(&restored).expect("re-encode v6 freeze"),
+        bytes
+    );
+
+    let mut tampered = freeze;
+    tampered.motif_embedding_manifest_root_sha256 = root(99_999);
+    assert_eq!(
+        tampered.validate(),
+        Err("k1_natural_candidate_freeze_invalid")
+    );
+}

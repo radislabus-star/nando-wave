@@ -205,6 +205,9 @@ pub(super) fn validate_discovery_basis_cas(
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?
         }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => {
+            natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?
+        }
         _ => return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned()),
     };
     if freeze.discovery_basis_root_sha256 != current {
