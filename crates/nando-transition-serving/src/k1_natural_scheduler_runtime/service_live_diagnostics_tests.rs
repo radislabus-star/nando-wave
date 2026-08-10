@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use nando_operator_kernel::{AtomSource, RelationAtom, canonical_json_sha256};
+use nando_operator_kernel::{
+    AtomSource, RelationAtom, ResponseOperation, ResponseValueSelector, canonical_json_sha256,
+};
 
 use super::*;
 use crate::multi_source_frame_archive::MultiSourceFrameArchive;
@@ -78,10 +80,12 @@ fn dump_live_candidate_role_witness_hashes() {
                 .atoms
                 .iter()
                 .filter_map(|atom| match atom {
-                    RelationAtom::ObservationSelector { slot_id, .. } => Some(*slot_id),
+                    RelationAtom::ObservationSelector { slot_id, selector } => {
+                        Some((*slot_id, selector))
+                    }
                     _ => None,
                 })
-                .collect::<BTreeSet<_>>();
+                .collect::<std::collections::BTreeMap<_, _>>();
             let observations = frame
                 .atoms
                 .iter()
@@ -91,10 +95,13 @@ fn dump_live_candidate_role_witness_hashes() {
                         value_type,
                         source: AtomSource::Observation,
                         value_sha256,
-                    } if selected_slots.contains(slot_id) => Some(serde_json::json!({
+                    } if selected_slots.contains_key(slot_id) => Some(serde_json::json!({
                         "slot_id": slot_id,
                         "value_type": value_type,
                         "value_sha256": value_sha256,
+                        "selector_kind": selector_kind(selected_slots[slot_id]),
+                        "selector_root_sha256": canonical_json_sha256(selected_slots[slot_id])
+                            .expect("selector root"),
                         "exact_witness_roles": joined
                             .topology
                             .role_witnesses
@@ -106,14 +113,40 @@ fn dump_live_candidate_role_witness_hashes() {
                     _ => None,
                 })
                 .collect::<Vec<_>>();
+            let factorized = factor_multi_source_row_v1(joined);
+            let physical_programs = nando_operator_learning::synthesis::
+                enumerate_response_program_candidates(std::slice::from_ref(frame));
+            let role_types = joined.topology.roles.iter().fold(
+                std::collections::BTreeMap::<String, usize>::new(),
+                |mut counts, role| {
+                    *counts.entry(format!("{:?}", role.type_class)).or_default() += 1;
+                    counts
+                },
+            );
+            let role_containers = joined.topology.roles.iter().fold(
+                std::collections::BTreeMap::<String, usize>::new(),
+                |mut counts, role| {
+                    *counts
+                        .entry(format!("{:?}", role.container_class))
+                        .or_default() += 1;
+                    counts
+                },
+            );
             serde_json::json!({
                 "capture_sequence": binding.row.capture_sequence,
                 "evidence_root_sha256": binding.row.evidence_root_sha256,
                 "topology_commitment_root_sha256": binding.topology_commitment_root_sha256,
                 "completed_frame_root_sha256": binding.completed_frame_root_sha256,
-                "roles": joined.topology.roles,
-                "role_witnesses": joined.topology.role_witnesses,
-                "relations": joined.topology.relations,
+                "pre_action_shape": factorized.pre_action_shape,
+                "completed_effect": factorized.completed_effect,
+                "roles": joined.topology.roles.len(),
+                "role_witnesses": joined.topology.role_witnesses.len(),
+                "role_types": role_types,
+                "role_containers": role_containers,
+                "physical_programs": physical_programs
+                    .iter()
+                    .map(|program| operation_summary(&program.operation))
+                    .collect::<Vec<_>>(),
                 "selected_observations": observations
             })
         })
@@ -126,4 +159,85 @@ fn dump_live_candidate_role_witness_hashes() {
         }))
         .expect("diagnostic json")
     );
+}
+
+fn selector_kind(selector: &ResponseValueSelector) -> &'static str {
+    match selector {
+        ResponseValueSelector::ContinuationHandle { .. } => "continuation_handle",
+        ResponseValueSelector::UniqueScalar { .. } => "unique_scalar",
+        ResponseValueSelector::UniqueTurnScalar { .. } => "unique_turn_scalar",
+        ResponseValueSelector::ContentLinePrefix { .. } => "content_line_prefix",
+        ResponseValueSelector::JsonField { .. } => "json_field",
+        ResponseValueSelector::JsonScalarOrdinal { .. } => "json_scalar_ordinal",
+        ResponseValueSelector::UniqueTurnJsonField { .. } => "unique_turn_json_field",
+        ResponseValueSelector::UniqueActiveTurnJsonField { .. } => {
+            "unique_active_turn_json_field"
+        }
+        ResponseValueSelector::RequestReferencedJsonField { .. } => {
+            "request_referenced_json_field"
+        }
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. } => {
+            "request_referenced_json_field_ordinal"
+        }
+        ResponseValueSelector::TurnOutputLine { .. } => "turn_output_line",
+        ResponseValueSelector::TurnOutputScalarOrdinal { .. } => "turn_output_scalar_ordinal",
+        ResponseValueSelector::LatestTurnOutputLine { .. } => "latest_turn_output_line",
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. } => {
+            "latest_turn_output_scalar_ordinal"
+        }
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. } => {
+            "latest_turn_output_scalar_from_end"
+        }
+        ResponseValueSelector::CommandOutputBody => "command_output_body",
+        ResponseValueSelector::RequestLastToken => "request_last_token",
+        ResponseValueSelector::RequestUniqueLiteral => "request_unique_literal",
+    }
+}
+
+fn operation_summary(operation: &ResponseOperation) -> serde_json::Value {
+    match operation {
+        ResponseOperation::ProjectSelectedValue { selector, .. } => serde_json::json!({
+            "op": "project_selected_value",
+            "selector_kind": selector_kind(selector)
+        }),
+        ResponseOperation::ProjectStatus {
+            selector, mapping, ..
+        } => serde_json::json!({
+            "op": "project_status",
+            "selector_kind": selector_kind(selector),
+            "mapping": mapping
+        }),
+        ResponseOperation::ComposeCollection { steps, .. } => serde_json::json!({
+            "op": "compose_collection",
+            "steps": steps.len()
+        }),
+        ResponseOperation::FunctionCallFromRoles { selector, .. } => serde_json::json!({
+            "op": "function_call_from_roles",
+            "selector_kind": selector_kind(selector)
+        }),
+        ResponseOperation::CustomToolCallFromRoles { selector, .. } => serde_json::json!({
+            "op": "custom_tool_call_from_roles",
+            "selector_kind": selector_kind(selector)
+        }),
+        ResponseOperation::UniqueConsensus { variants, .. } => serde_json::json!({
+            "op": "unique_consensus",
+            "variants": variants.len()
+        }),
+        ResponseOperation::AdvancePlan { .. } => serde_json::json!({"op": "advance_plan"}),
+        ResponseOperation::CopyAfterPrefix { .. } => {
+            serde_json::json!({"op": "copy_after_prefix"})
+        }
+        ResponseOperation::TestResultSummary { .. } => {
+            serde_json::json!({"op": "test_result_summary"})
+        }
+        ResponseOperation::WaitOnYieldedCell { .. } => {
+            serde_json::json!({"op": "wait_on_yielded_cell"})
+        }
+        ResponseOperation::WaitOnAnyYieldedCell { .. } => {
+            serde_json::json!({"op": "wait_on_any_yielded_cell"})
+        }
+        ResponseOperation::WaitOnYieldedSurfaces { .. } => {
+            serde_json::json!({"op": "wait_on_yielded_surfaces"})
+        }
+    }
 }
