@@ -10,7 +10,7 @@ use nando_operator_learning::{
 };
 
 const LEDGER_PREFIX: &str = "multi-source-topology";
-const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ROW_BYTES: usize = 256 * 1024;
 const MAX_ARCHIVE_ROWS: usize = 262_144;
 

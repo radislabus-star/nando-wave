@@ -673,14 +673,14 @@ fn read_record(path: &Path, expected_digest: &str) -> Result<LearningStructureRe
 }
 
 fn pending_paths(directory: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut paths = fs::read_dir(directory)
+    let mut names = fs::read_dir(directory)
         .map_err(|error| format!("learning_structure_bridge_pending_read:{error}"))?
         .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("cbor"))
+        .map(|entry| entry.file_name())
+        .filter(|name| Path::new(name).extension().and_then(|value| value.to_str()) == Some("cbor"))
         .collect::<Vec<_>>();
-    paths.sort_unstable();
-    Ok(paths)
+    names.sort_unstable();
+    Ok(names.into_iter().map(|name| directory.join(name)).collect())
 }
 
 fn pending_identity(path: &Path) -> Result<(u64, String), String> {
@@ -704,22 +704,33 @@ fn pending_identity(path: &Path) -> Result<(u64, String), String> {
 }
 
 fn next_pending_sequence(directory: &Path) -> Result<u64, String> {
-    pending_paths(directory)?
-        .iter()
-        .try_fold(0_u64, |maximum, path| {
-            pending_identity(path).map(|(sequence, _)| maximum.max(sequence))
+    pending_entries(directory)?
+        .filter_map(Result::ok)
+        .try_fold(0_u64, |maximum, entry| {
+            pending_identity(&entry.path()).map(|(sequence, _)| maximum.max(sequence))
         })
 }
 
 fn pending_stats(directory: &Path) -> (u64, u64) {
-    pending_paths(directory).map_or((0, 0), |paths| {
-        paths.iter().fold((0_u64, 0_u64), |(count, bytes), path| {
-            (
-                count.saturating_add(1),
-                bytes.saturating_add(path.metadata().map_or(0, |metadata| metadata.len())),
-            )
-        })
+    pending_entries(directory).map_or((0, 0), |entries| {
+        entries
+            .filter_map(Result::ok)
+            .fold((0_u64, 0_u64), |(count, bytes), entry| {
+                let path = entry.path();
+                if path.extension().and_then(|value| value.to_str()) != Some("cbor") {
+                    return (count, bytes);
+                }
+                (
+                    count.saturating_add(1),
+                    bytes.saturating_add(entry.metadata().map_or(0, |metadata| metadata.len())),
+                )
+            })
     })
+}
+
+fn pending_entries(directory: &Path) -> Result<fs::ReadDir, String> {
+    fs::read_dir(directory)
+        .map_err(|error| format!("learning_structure_bridge_pending_read:{error}"))
 }
 
 fn sync_pending_records(
