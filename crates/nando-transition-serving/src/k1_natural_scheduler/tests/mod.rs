@@ -59,7 +59,7 @@ fn test_context() -> (PathBuf, CertificationAuthorityConfigV1, SigningKey) {
 }
 
 fn candidate_freeze() -> K1NaturalCandidateFreezeV1 {
-    candidate_freeze_with_basis(natural_t1_discovery_basis_root_v2().expect("discovery basis"))
+    candidate_freeze_with_basis(natural_t1_discovery_basis_root_v3().expect("discovery basis"))
 }
 
 fn candidate_freeze_with_basis(discovery_basis_root_sha256: String) -> K1NaturalCandidateFreezeV1 {

@@ -1,20 +1,20 @@
 use std::collections::BTreeSet;
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
+use nando_operator_learning::multi_source::NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1;
 
 use super::*;
 
 const DUPLICATE_PROTOCOL_BLOCKER: &str = "all_supported_t1_protocol_modes_already_active";
 const COHORT_IDENTITY_SCHEMA: &str = "nando.k1-natural-cohort-identity.v2";
-const ACTIVE_PROTOCOL_MODE_SET_SCHEMA: &str = "nando.k1-active-protocol-mode-set.v1";
 const LEGACY_DISCOVERY_BASIS_SCHEMA: &str = "nando.k1-legacy-unversioned-discovery-basis.v1";
 
-pub(crate) fn active_protocol_mode_set_root(
-    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+pub(crate) fn known_epistemic_protocol_mode_set_root(
+    known_protocol_mode_roots_sha256: &BTreeSet<String>,
 ) -> Result<String, String> {
     canonical_json_sha256(&(
-        ACTIVE_PROTOCOL_MODE_SET_SCHEMA,
-        active_protocol_mode_roots_sha256,
+        NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1,
+        known_protocol_mode_roots_sha256,
     ))
     .map_err(str::to_owned)
 }

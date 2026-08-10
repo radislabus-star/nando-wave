@@ -59,6 +59,9 @@ pub const MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3: &str =
     "nando.multi-source-t1.source-neutral-role-version-space.v3";
 pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V1: &str = "nando.natural-t1-discovery-basis.v1";
 pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V2: &str = "nando.natural-t1-discovery-basis.v2";
+pub const NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V3: &str = "nando.natural-t1-discovery-basis.v3";
+pub const NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1: &str =
+    "nando.natural-t1-known-epistemic-protocol-mode-set.v1";
 pub const NATURAL_T1_K0_CURRICULUM_SCHEMA_V1: &str = "nando.natural-t1-k0-typed-curriculum.v1";
 pub const NATURAL_T1_VERIFIER_SEMANTICS_SCHEMA_V1: &str =
     "nando.natural-t1-independent-verifier-semantics.v1";
@@ -93,6 +96,24 @@ pub fn natural_t1_discovery_basis_root_v2() -> Result<String, &'static str> {
         NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V2,
         MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3,
         SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+        RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1,
+        RAW_PHASE_EXECUTABLE_BLUEPRINT_BUILDER_V1,
+        NATURAL_T1_K0_CURRICULUM_SCHEMA_V1,
+        NATURAL_T1_K0_PRIMITIVES_V1,
+        NATURAL_T1_VERIFIER_SEMANTICS_SCHEMA_V1,
+        MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
+        MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS,
+        MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS,
+    ))
+    .map_err(|_| "natural_t1_discovery_basis_root_failed")
+}
+
+pub fn natural_t1_discovery_basis_root_v3() -> Result<String, &'static str> {
+    canonical_json_sha256(&(
+        NATURAL_T1_DISCOVERY_BASIS_SCHEMA_V3,
+        MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V3,
+        SOURCE_NEUTRAL_TOPOLOGY_QUOTIENT_SCHEMA_V2,
+        NATURAL_T1_KNOWN_PROTOCOL_MODE_SET_SCHEMA_V1,
         RAW_PHASE_T1_HYPOTHESIS_GENERATOR_V1,
         RAW_PHASE_EXECUTABLE_BLUEPRINT_BUILDER_V1,
         NATURAL_T1_K0_CURRICULUM_SCHEMA_V1,

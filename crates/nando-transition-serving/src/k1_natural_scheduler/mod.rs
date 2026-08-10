@@ -15,15 +15,15 @@ use nando_operator_kernel::{
 use nando_operator_learning::multi_source::{
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
-    K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1FutureOutcomeReceiptV1,
-    K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
-    K1GenerationTerminalVerdictV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1,
-    K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
-    K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
+    K1FutureOutcomeReceiptV1, K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1,
+    K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1, K1IdentificationFreezeV1,
+    K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1,
+    K1NaturalCohortCatalogV1, K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
     K1SchedulerEventPayloadV1, K1SchedulerEventV1, K1SchedulerLedgerV1, K1TransferSettlementV1,
     NaturalT1ProgramArtifactV1, PreActionTopologyAuditRowV1, natural_t1_discovery_basis_root_v1,
-    natural_t1_discovery_basis_root_v2, source_neutral_topology_quotient_root_v2,
-    source_neutral_topology_root_v1,
+    natural_t1_discovery_basis_root_v2, natural_t1_discovery_basis_root_v3,
+    source_neutral_topology_quotient_root_v2, source_neutral_topology_root_v1,
 };
 use nando_response_actor::{
     CollectionOutputRenderer, ResponseOperation, ResponseProgram, ResponseRegistry,
@@ -380,7 +380,7 @@ pub(crate) fn duplicate_candidate_exclusions_for(
         &restore_anchored_scheduler_for(config, lane)?,
         catalog,
         active_protocol_mode_set_root_sha256,
-        &natural_t1_discovery_basis_root_v2().map_err(str::to_owned)?,
+        &natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
     )
 }
 
@@ -394,7 +394,7 @@ pub(crate) fn candidate_topology_root(
         | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3 => {
             source_neutral_topology_root_v1(topology).map_err(str::to_owned)
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             source_neutral_topology_quotient_root_v2(topology).map_err(str::to_owned)
         }
         _ => Err("k1_candidate_topology_schema_unsupported".to_owned()),

@@ -133,7 +133,10 @@ fn evidence_row_for_freeze(
     binding: &EvidenceBinding,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<Option<K1NaturalEvidenceRowV1>, String> {
-    if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 {
+    if matches!(
+        freeze.schema.as_str(),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5
+    ) {
         return Ok(
             (binding.row.schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3).then(|| binding.row.clone())
         );
@@ -268,7 +271,7 @@ fn capture_generation_matches(
                 && !row_generation.is_empty()
                 && row_generation == freeze_generation
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             row_schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3
                 && !row_generation.is_empty()
                 && row_generation == freeze_generation
@@ -291,6 +294,9 @@ fn validate_installed_discovery_basis_fields(
         }
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
             natural_t1_discovery_basis_root_v2().map_err(str::to_owned)?
+        }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
+            natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?
         }
         _ => return Ok(()),
     };

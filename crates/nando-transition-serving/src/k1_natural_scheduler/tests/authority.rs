@@ -20,7 +20,7 @@ fn authority_rejects_a_valid_freeze_bound_to_an_uninstalled_discovery_basis() {
 }
 
 #[test]
-fn authority_rejects_stale_active_protocol_mode_set_root() {
+fn authority_rejects_stale_known_epistemic_protocol_mode_set_root() {
     let (root_dir, config, _) = test_context();
     std::fs::write(
         &config.response_registry_path,
@@ -32,8 +32,9 @@ fn authority_rejects_stale_active_protocol_mode_set_root() {
         .expect("registry encode"),
     )
     .expect("registry write");
-    let current = super::super::duplicate_cohorts::active_protocol_mode_set_root(&BTreeSet::new())
-        .expect("active set root");
+    let current =
+        super::super::duplicate_cohorts::known_epistemic_protocol_mode_set_root(&BTreeSet::new())
+            .expect("known set root");
     validate_active_protocol_mode_cas(&config, &current).expect("current root");
     assert_eq!(
         validate_active_protocol_mode_cas(&config, &root(999)),

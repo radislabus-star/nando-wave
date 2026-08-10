@@ -63,7 +63,7 @@ pub(super) fn prepare_tick_context_from_bindings(
     )
     .map_err(str::to_owned)?;
     let active_protocol_mode_set_root_sha256 =
-        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+        crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
             active_protocol_mode_roots_sha256,
         )?;
     let contract_watermark = bindings
@@ -107,7 +107,7 @@ pub(super) fn extend_prepared_tick_context(
     )
     .map_err(str::to_owned)?;
     let active_protocol_mode_set_root_sha256 =
-        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+        crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
             active_protocol_mode_roots_sha256,
         )?;
     let contract_watermark = prepared
@@ -246,7 +246,7 @@ pub(super) fn advance(
             &candidate,
             queue_row.score.clone(),
             K1_SCHEDULER_SCHEMA_V2.to_owned(),
-            natural_t1_discovery_basis_root_v2().map_err(str::to_owned)?,
+            natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?,
             generation_budget(),
             candidate.last_capture_sequence,
             contract_watermark,

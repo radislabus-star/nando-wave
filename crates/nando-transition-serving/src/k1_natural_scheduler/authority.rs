@@ -206,6 +206,9 @@ pub(super) fn validate_discovery_basis_cas(
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 => {
             natural_t1_discovery_basis_root_v2().map_err(str::to_owned)?
         }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
+            natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?
+        }
         _ => return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned()),
     };
     if freeze.discovery_basis_root_sha256 != current {
@@ -218,9 +221,13 @@ pub(super) fn validate_active_protocol_mode_cas(
     config: &CertificationAuthorityConfigV1,
     claimed_root_sha256: &str,
 ) -> Result<(), String> {
-    let current_active_modes =
-        crate::multi_source_live::active_protocol_mode_roots(&config.response_registry_path)?;
-    let current_root = duplicate_cohorts::active_protocol_mode_set_root(&current_active_modes)?;
+    let certification = restore_anchored_ledger(config)?;
+    let current_known_modes = crate::multi_source_live::known_epistemic_protocol_mode_roots(
+        &config.response_registry_path,
+        &certification,
+    )?;
+    let current_root =
+        duplicate_cohorts::known_epistemic_protocol_mode_set_root(&current_known_modes)?;
     if claimed_root_sha256 != current_root {
         return Err("k1_candidate_freeze_active_protocol_mode_cas_failed".to_owned());
     }

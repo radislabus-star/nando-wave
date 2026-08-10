@@ -203,10 +203,15 @@ pub(crate) fn advance_state(
     state: &AppState,
     evidence_cursor: &mut K1EvidenceCursorV1,
 ) -> Result<(), String> {
-    let active_protocols =
-        multi_source_live::active_protocol_mode_roots(&state.config.response_registry_path)?;
+    let certification = crate::operator_certification::restore_anchored_ledger(
+        &state.operator_certification_config,
+    )?;
+    let active_protocols = multi_source_live::known_epistemic_protocol_mode_roots(
+        &state.config.response_registry_path,
+        &certification,
+    )?;
     let active_protocol_mode_set_root_sha256 =
-        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+        crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
             &active_protocols,
         )?;
     let epistemic_projection = restore_projection_for(
@@ -391,7 +396,7 @@ fn refresh_prepared_context(
     retain_safety_payloads: bool,
 ) -> Result<(), String> {
     let active_protocol_root =
-        crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+        crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
             active_protocols,
         )?;
     let (topology_rows, appended_since_cursor) = {
@@ -635,7 +640,7 @@ fn extend_prepared_from_delta(
     if joined_rows.is_empty() {
         prepared.join_report = report;
         prepared.active_protocol_mode_set_root_sha256 =
-            crate::k1_natural_scheduler::duplicate_cohorts::active_protocol_mode_set_root(
+            crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
                 active_protocols,
             )?;
         return Ok(());

@@ -12,7 +12,7 @@ fn ledger_with_terminal(
     ledger_with_terminal_for_basis(
         blocker,
         evidence_roots_sha256,
-        natural_t1_discovery_basis_root_v2().expect("discovery basis"),
+        natural_t1_discovery_basis_root_v3().expect("discovery basis"),
     )
 }
 
@@ -115,7 +115,7 @@ fn active_protocol_mode_set_change_reopens_duplicate_cohort() {
         &ledger,
         &catalog,
         &root(999),
-        &natural_t1_discovery_basis_root_v2().expect("discovery basis"),
+        &natural_t1_discovery_basis_root_v3().expect("discovery basis"),
     )
     .expect("exclusions");
     assert!(excluded.is_empty());
@@ -149,7 +149,7 @@ fn legacy_duplicate_terminal_without_active_set_root_is_re_evaluated() {
         &ledger,
         &catalog_with_additional_evidence(),
         &root(900),
-        &natural_t1_discovery_basis_root_v2().expect("discovery basis"),
+        &natural_t1_discovery_basis_root_v3().expect("discovery basis"),
     )
     .expect("exclusions");
     assert!(excluded.is_empty());
@@ -164,7 +164,7 @@ fn repairable_acquisition_failure_does_not_suppress_cohort() {
         &ledger,
         &catalog,
         &root(900),
-        &natural_t1_discovery_basis_root_v2().expect("discovery basis"),
+        &natural_t1_discovery_basis_root_v3().expect("discovery basis"),
     )
     .expect("exclusions");
     assert!(excluded.is_empty());

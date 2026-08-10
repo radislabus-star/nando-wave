@@ -10,9 +10,10 @@ use super::{
 use nando_operator_learning::multi_source::{
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
     K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3, natural_t1_discovery_basis_root_v1,
-    natural_t1_discovery_basis_root_v2,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V1,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V2, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3,
+    natural_t1_discovery_basis_root_v1, natural_t1_discovery_basis_root_v2,
+    natural_t1_discovery_basis_root_v3,
 };
 
 fn root(value: u64) -> String {
@@ -129,6 +130,9 @@ fn versioned_identification_rejects_an_uninstalled_discovery_basis() {
     let installed_v2 = natural_t1_discovery_basis_root_v2().expect("installed v2 basis");
     validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4, &installed_v2)
         .expect("supported quotient basis");
+    let installed_v3 = natural_t1_discovery_basis_root_v3().expect("installed v3 basis");
+    validate_installed_discovery_basis_fields(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, &installed_v3)
+        .expect("supported epistemic-known basis");
     assert_eq!(
         validate_installed_discovery_basis_fields(
             K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
