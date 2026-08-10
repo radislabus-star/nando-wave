@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use nando_operator_kernel::{
     AtomSource, RelationAtom, ResponseOperation, ResponseValueSelector, canonical_json_sha256,
 };
+use nando_operator_learning::multi_source::factor_multi_source_row_v1;
 
 use super::*;
 use crate::multi_source_frame_archive::MultiSourceFrameArchive;
