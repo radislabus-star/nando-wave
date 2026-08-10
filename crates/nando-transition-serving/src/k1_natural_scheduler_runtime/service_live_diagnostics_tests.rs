@@ -100,7 +100,7 @@ fn dump_live_candidate_role_witness_hashes() {
                         "slot_id": slot_id,
                         "value_type": value_type,
                         "value_sha256": value_sha256,
-                        "selector_kind": selector_kind(selected_slots[slot_id]),
+                        "selector": selector_summary(selected_slots[slot_id]),
                         "selector_root_sha256": canonical_json_sha256(selected_slots[slot_id])
                             .expect("selector root"),
                         "exact_witness_roles": joined
@@ -195,6 +195,18 @@ fn selector_kind(selector: &ResponseValueSelector) -> &'static str {
     }
 }
 
+fn selector_summary(selector: &ResponseValueSelector) -> serde_json::Value {
+    match selector {
+        ResponseValueSelector::JsonField { field, .. }
+        | ResponseValueSelector::UniqueTurnJsonField { field, .. }
+        | ResponseValueSelector::UniqueActiveTurnJsonField { field, .. } => serde_json::json!({
+            "kind": selector_kind(selector),
+            "field": field,
+        }),
+        _ => serde_json::json!({"kind": selector_kind(selector)}),
+    }
+}
+
 fn operation_summary(operation: &ResponseOperation) -> serde_json::Value {
     match operation {
         ResponseOperation::ProjectSelectedValue { selector, .. } => serde_json::json!({
@@ -218,7 +230,7 @@ fn operation_summary(operation: &ResponseOperation) -> serde_json::Value {
         }),
         ResponseOperation::CustomToolCallFromRoles { selector, .. } => serde_json::json!({
             "op": "custom_tool_call_from_roles",
-            "selector_kind": selector_kind(selector)
+            "selector": selector_summary(selector)
         }),
         ResponseOperation::UniqueConsensus { variants, .. } => serde_json::json!({
             "op": "unique_consensus",
