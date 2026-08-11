@@ -1,0 +1,19 @@
+{
+  "task_id": "s1c1-slice-boundary",
+  "domain": "code",
+  "query": "Does the S1C-1 candidate remain pure, authority-false, and undeployed?",
+  "triads": [
+    {"id":"s1","subject":"S1C-1","relation":"permits","object":"pure contracts evaluator journal and tests","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:590-600","confidence":1.0,"subject_role":"slice","object_role":"allowed_scope","route":"scope","group":"slice"},
+    {"id":"s2","subject":"S1C-1","relation":"forbids","object":"deployment live capture and authority claims","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:590-600","confidence":1.0,"subject_role":"slice","object_role":"forbidden_scope","route":"scope","group":"slice"},
+    {"id":"s3","subject":"capture disabled path","relation":"preserves","object":"ordinary output parity","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:518-536","confidence":1.0,"subject_role":"runtime_path","object_role":"serving_behavior","route":"parity","group":"safety"},
+    {"id":"s4","subject":"S1C-1 journal","relation":"persists no","object":"raw request or provider payload","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:500-512","confidence":1.0,"subject_role":"journal","object_role":"raw_payload","route":"privacy","group":"safety"},
+    {"id":"s5","subject":"S1C-1","relation":"grants no","object":"K2 execution or phase authority","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:590-600","confidence":1.0,"subject_role":"slice","object_role":"authority","route":"scope","group":"authority"}
+  ],
+  "candidate_triads": [
+    {"id":"c1","subject":"S1C-1","relation":"permits","object":"pure contracts evaluator journal and tests","evidence":"git diff limited to operator-learning response-actor transition-serving library modules","confidence":1.0,"subject_role":"slice","object_role":"allowed_scope","route":"scope","group":"slice"},
+    {"id":"c2","subject":"S1C-1","relation":"forbids","object":"deployment live capture and authority claims","evidence":"no ops dashboard service or deployment files changed","confidence":1.0,"subject_role":"slice","object_role":"forbidden_scope","route":"scope","group":"slice"},
+    {"id":"c3","subject":"capture disabled path","relation":"preserves","object":"ordinary output parity","evidence":"baseline and candidate parity oracle root dfb558103efe...f229526","confidence":1.0,"subject_role":"runtime_path","object_role":"serving_behavior","route":"parity","group":"safety"},
+    {"id":"c4","subject":"S1C-1 journal","relation":"persists no","object":"raw request or provider payload","evidence":"persisted_precommit_contains_no_raw_marker PASS","confidence":1.0,"subject_role":"journal","object_role":"raw_payload","route":"privacy","group":"safety"},
+    {"id":"c5","subject":"S1C-1","relation":"grants no","object":"K2 execution or phase authority","evidence":"authority_ready=false and phase_mutation_allowed=false validation","confidence":1.0,"subject_role":"slice","object_role":"authority","route":"scope","group":"authority"}
+  ]
+}

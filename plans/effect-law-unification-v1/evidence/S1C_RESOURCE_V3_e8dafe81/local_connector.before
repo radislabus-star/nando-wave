@@ -1,0 +1,11 @@
+{
+  "active_state": "active",
+  "label": "before",
+  "main_pid": 2919,
+  "nrestarts": 0,
+  "observed_at": "2026-08-11T16:38:02,568394040+03:00",
+  "protocol_commit": "e8dafe8180b5cc86ec1a5353b81641af147d8cdd",
+  "protocol_epoch_root": "2a21bc5d99a0dd8181ec105a2bdb449f66715674ffb109e3d8941a0bf9a47590",
+  "route_receipt_failures": 0,
+  "schema": "nando.s1c1-resource-v3.connector-snapshot.v1"
+}

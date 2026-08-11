@@ -1,0 +1,524 @@
+   Compiling serde_core v1.0.228
+   Compiling memchr v2.8.2
+   Compiling serde_json v1.0.150
+   Compiling pin-project-lite v0.2.17
+   Compiling log v0.4.33
+   Compiling futures-core v0.3.32
+   Compiling bytes v1.12.1
+   Compiling regex-syntax v0.8.11
+   Compiling once_cell v1.21.4
+   Compiling httparse v1.10.1
+   Compiling slab v0.4.12
+   Compiling errno v0.3.14
+   Compiling socket2 v0.6.4
+   Compiling futures-task v0.3.32
+   Compiling tower-service v0.3.3
+   Compiling inotify-sys v0.1.8
+   Compiling syn v2.0.118
+   Compiling digest v0.10.7
+   Compiling rustversion v1.0.23
+   Compiling libmimalloc-sys v0.1.49
+   Compiling tower-layer v0.3.3
+   Compiling bitflags v2.13.0
+   Compiling signal-hook-registry v1.4.8
+   Compiling mio v1.2.1
+   Compiling tracing-core v0.1.36
+   Compiling futures-channel v0.3.32
+   Compiling futures-util v0.3.32
+   Compiling bit-vec v0.6.3
+   Compiling smallvec v1.15.2
+   Compiling sync_wrapper v1.0.2
+   Compiling sha2 v0.10.9
+   Compiling atomic-waker v1.1.2
+   Compiling percent-encoding v2.3.2
+   Compiling httpdate v1.0.3
+   Compiling anyhow v1.0.103
+   Compiling bit-set v0.5.3
+   Compiling num-conv v0.2.2
+   Compiling form_urlencoded v1.2.2
+   Compiling mime v0.3.17
+   Compiling nando-core v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-core)
+   Compiling aho-corasick v1.1.4
+   Compiling ryu v1.0.23
+   Compiling powerfmt v0.2.0
+   Compiling time-core v0.1.9
+   Compiling deranged v0.5.8
+   Compiling same-file v1.0.6
+   Compiling tracing v0.1.44
+   Compiling inotify v0.11.4
+   Compiling notify-types v2.1.0
+   Compiling lazy_static v1.5.0
+   Compiling http v1.4.2
+   Compiling walkdir v2.5.0
+   Compiling base64 v0.22.1
+   Compiling rustc-hash v1.1.0
+   Compiling matchit v0.7.3
+   Compiling hmac v0.12.1
+   Compiling notify v8.2.0
+   Compiling http-body v1.0.1
+   Compiling http-body-util v0.1.3
+   Compiling time v0.3.53
+   Compiling mimalloc v0.1.52
+   Compiling regex-automata v0.4.15
+   Compiling serde_bytes v0.11.19
+   Compiling serde_path_to_error v0.1.20
+   Compiling serde_derive v1.0.228
+   Compiling tokio-macros v2.7.0
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling async-trait v0.1.89
+   Compiling tokio v1.52.3
+   Compiling curve25519-dalek v4.1.3
+   Compiling axum-core v0.4.5
+   Compiling ed25519-dalek v2.2.0
+   Compiling serde v1.0.228
+   Compiling fancy-regex v0.13.0
+   Compiling bstr v1.13.0
+   Compiling regex v1.13.0
+   Compiling nando-operator-kernel v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-operator-kernel)
+   Compiling serde_cbor v0.11.2
+   Compiling nando-client-evidence v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-client-evidence)
+   Compiling nando-transition-actor v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-transition-actor)
+   Compiling serde_urlencoded v0.7.1
+   Compiling nando-expression-runtime v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-expression-runtime)
+   Compiling tiktoken-rs v0.7.0
+   Compiling nando-transition-inducer v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-transition-inducer)
+   Compiling hyper v1.10.1
+   Compiling tower v0.5.3
+   Compiling hyper-util v0.1.20
+   Compiling axum v0.7.9
+   Compiling nando-operator-proof v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-operator-proof)
+   Compiling nando-operator-runtime v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-operator-runtime)
+   Compiling nando-operator-learning v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-operator-learning)
+   Compiling nando-operator-persistence v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-operator-persistence)
+   Compiling nando-operator-admission v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-operator-admission)
+   Compiling nando-response-actor v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-response-actor)
+   Compiling nando-transition-serving v0.1.0 (/tmp/nando-s1c1-v3-check-e8dafe81/crates/nando-transition-serving)
+    Finished `test` profile [unoptimized] target(s) in 1m 12s
+     Running unittests src/lib.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_transition_serving-fe69e9afa398be46)
+
+running 307 tests
+test bridge_health::tests::compact_snapshot_keeps_routes_separate_and_has_no_authority ... ok
+test capture_transition_binding_archive::tests::reader_rejects_a_tampered_writer_chain ... ok
+test capture_transition_binding_archive::tests::replay_is_idempotent_and_frame_rebinding_fails_closed ... ok
+test capture_transition_binding_archive::tests::writer_and_reader_reject_receipt_substitution ... ok
+test custom_tool_projection::tests::custom_tool_projection_matches_responses_shape_and_stream_events ... ok
+test custom_tool_projection::tests::parser_rejects_text_and_function_call_shapes ... ok
+test economics_worker::tests::token_accounting_is_stable_across_json_key_order_and_whitespace ... ok
+test generation_shadow::types::tests::live_shadow_preserves_the_capture_owner_receipt_without_a_second_body_hash ... ok
+test grounded_decision_capture::tests::append_sync_receipt_and_restart_recovery_are_exact ... ok
+test grounded_decision_capture::tests::duplicate_request_and_quota_fail_closed ... ok
+test grounded_decision_capture::tests::durable_sync_path_stays_within_budget_and_rotates_exactly ... ignored, isolated remote release S1C durability and rotation gate
+test grounded_decision_capture::tests::partial_tail_is_removed_without_replaying_an_action ... ok
+test grounded_decision_capture::tests::persisted_precommit_contains_no_raw_marker ... ok
+test k1_natural_scheduler::pre_action_evidence_retention::tests::partial_cleanup_resumes_from_durable_intent ... ok
+test k1_natural_scheduler::pre_action_evidence_retention::tests::terminal_cleanup_is_bounded_and_receipted ... ok
+test k1_natural_scheduler::tests::authority::authority_rebuilds_queue_and_rejects_a_valid_omission ... ok
+test k1_natural_scheduler::tests::authority::authority_rejects_a_valid_freeze_bound_to_an_uninstalled_discovery_basis ... ok
+test k1_natural_scheduler::tests::authority::authority_rejects_stale_known_epistemic_protocol_mode_set_root ... ok
+test k1_natural_scheduler::tests::authority::stale_registry_snapshot_cannot_freeze_a_generation ... ok
+test k1_natural_scheduler::tests::authority::transfer_settlement_cannot_precede_law_certificate_pass ... ok
+test k1_natural_scheduler::tests::candidate_binding::v6_candidate_binding_rejects_a_program_that_consumes_an_ambient_role ... ok
+test k1_natural_scheduler::tests::candidate_binding::v6_candidate_binding_seals_the_exact_embedding_when_all_roles_fit ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::active_protocol_mode_set_change_reopens_duplicate_cohort ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::completed_duplicate_cohort_stays_excluded_when_evidence_manifest_grows ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::discovery_basis_change_reopens_once_then_new_terminal_excludes ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::effective_exclusions_reopen_only_old_basis_duplicate_terminal ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::legacy_duplicate_terminal_without_active_set_root_is_re_evaluated ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::projection_preserves_two_basis_attempts_for_the_same_candidate_bytes ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::repairable_acquisition_failure_does_not_suppress_cohort ... ok
+test k1_natural_scheduler::tests::duplicate_cohorts::unrelated_epistemic_registry_change_does_not_reopen_duplicate_cohort ... ok
+test k1_natural_scheduler::tests::fork::epistemic_anchor_detects_rollback_independently ... ok
+test k1_natural_scheduler::tests::fork::signed_fork_preserves_mechanism_bytes_and_excludes_watched_candidate ... ok
+test k1_natural_scheduler::tests::future_censor::authority_censors_missing_frame_and_restart_projection_is_identical ... ok
+test k1_natural_scheduler::tests::future_censor::authority_rejects_censor_when_completed_frame_exists ... ok
+test k1_natural_scheduler::tests::future_censor::authority_rejects_wrong_lineage_and_preterminal_fence ... ok
+test k1_natural_scheduler::tests::journal::existing_final_journal_event_is_never_replaced ... ok
+test k1_natural_scheduler::tests::journal::genesis_anchor_detects_unsigned_first_event_rollback ... ok
+test k1_natural_scheduler::tests::journal::genesis_root_is_nonzero_and_stable ... ok
+test k1_natural_scheduler::tests::journal::journal_tamper_is_rejected_even_when_anchor_still_exists ... ok
+test k1_natural_scheduler::tests::journal::signed_crash_tail_advances_only_after_prefix_anchor_matches ... ok
+test k1_natural_scheduler::tests::journal::stale_crash_temp_is_replaced_before_atomic_journal_publish ... ok
+test k1_natural_scheduler::tests::pre_action_evidence::authority_archive_restores_hash_bound_payload_by_roots ... ok
+test k1_natural_scheduler::tests::pre_action_evidence::self_valid_topology_absent_from_archive_is_rejected ... ok
+test k1_natural_scheduler_runtime::advance::future_prediction::tests::passive_partition_schema_is_not_a_durable_future_precommit ... ok
+test k1_natural_scheduler_runtime::advance::future_prediction::tests::terminal_and_later_same_lineage_fence_select_missing_frame_censor ... ok
+test k1_natural_scheduler_runtime::advance::probe::tests::counterevidence_cannot_disappear_from_the_terminal_denominator ... ok
+test k1_natural_scheduler_runtime::advance::probe::tests::only_precommitted_strict_subset_is_applied ... ok
+test k1_natural_scheduler_runtime::advance::probe::tests::unchanged_version_space_is_the_only_censored_no_information_case ... ok
+test k1_natural_scheduler_runtime::deadline::tests::predicted_future_that_never_settled_is_acquisition_fail ... ok
+test k1_natural_scheduler_runtime::deadline::tests::unique_class_without_durable_prediction_contract_is_acquisition_fail ... ok
+test k1_natural_scheduler_runtime::deadline::tests::unique_class_without_future_is_not_a_mechanism_failure ... ok
+test k1_natural_scheduler_runtime::deadline::tests::unpredicted_future_is_acquisition_fail ... ok
+test k1_natural_scheduler_runtime::deadline::tests::unresolved_version_space_remains_probe_exhausted ... ok
+test k1_natural_scheduler_runtime::evidence::identification::tests::capture_generation_compatibility_is_exact_and_versioned ... ok
+test k1_natural_scheduler_runtime::evidence::identification::tests::contract_gap_never_enters_frozen_support ... ok
+test k1_natural_scheduler_runtime::evidence::identification::tests::empty_identification_can_reach_a_terminal_verdict ... ok
+test k1_natural_scheduler_runtime::evidence::identification::tests::historical_v1_manifest_replay_removes_only_the_migration_veto ... ok
+test k1_natural_scheduler_runtime::evidence::identification::tests::support_manifest_is_canonical_across_join_order ... ok
+test k1_natural_scheduler_runtime::evidence::identification::tests::versioned_identification_rejects_an_uninstalled_discovery_basis ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::duplicate_and_out_of_order_source_rows_fail_closed ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::one_ambient_payload_is_shared_by_all_retained_motif_occurrences ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::overflow_changes_support_receipt_without_mutating_retained_evidence ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::post_freeze_overflow_is_future_only_and_never_backfills_support ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::resumed_delta_matches_one_pass_archive_exactly ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::source_and_occurrence_denominators_and_censors_are_disjoint ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::support_manifest_uses_row_root_order_when_capture_sequences_match ... ok
+test k1_natural_scheduler_runtime::evidence::motif::tests::support_reservoir_is_bounded_and_preserves_independent_lineage_slots ... ok
+test k1_natural_scheduler_runtime::evidence::topology::tests::compact_bindings_preserve_roots_and_drop_only_veto_payloads ... ok
+test k1_natural_scheduler_runtime::evidence::topology::tests::incremental_evidence_matches_full_oracle_for_ordered_delta ... ok
+test k1_natural_scheduler_runtime::evidence::topology::tests::incremental_evidence_rejects_out_of_order_delta ... ok
+test k1_natural_scheduler_runtime::evidence::topology::tests::legacy_capture_roots_are_diagnostic_only ... ok
+test k1_natural_scheduler_runtime::evidence::topology::tests::role_id_permutations_form_one_v3_scheduler_cohort ... ok
+test k1_natural_scheduler_runtime::evidence::topology::tests::support_reservoir_preserves_a_slot_for_an_independent_lineage ... ok
+test k1_natural_scheduler_runtime::law_lab_eligibility::tests::active_probe_root_precommits_typed_operations ... ok
+test k1_natural_scheduler_runtime::law_lab_eligibility::tests::inactive_projection_seals_an_authority_free_waiting_report ... ok
+test k1_natural_scheduler_runtime::law_lab_eligibility::tests::no_active_generation_is_not_an_eligible_law_lab_probe ... ok
+test k1_natural_scheduler_runtime::law_lab_eligibility::tests::precommitted_probe_still_requires_a_typed_execution_contract ... ok
+test k1_natural_scheduler_runtime::law_lab_eligibility::tests::probe_requires_ambiguity_and_durable_prediction_precommit ... ok
+test k1_natural_scheduler_runtime::lifecycle::tests::prepared_tick_context_is_deterministic_and_authority_free ... ok
+test k1_natural_scheduler_runtime::service::tests::compact_summary_counts_only_current_queue_readiness ... ok
+test k1_natural_scheduler_runtime::service::tests::incremental_prepared_context_matches_full_join_oracle ... ok
+test k1_natural_scheduler_runtime::service::tests::waiting_tick_cannot_skip_a_live_mechanism_lane ... ok
+test k1_natural_scheduler_runtime::service::tests::waiting_tick_rebuilds_only_for_join_relevant_archive_deltas ... ok
+test k1_natural_scheduler_runtime::structural_frontier_census::tests::immutable_report_and_latest_pointer_are_byte_identical ... ok
+test k1_natural_scheduler_runtime::structural_frontier_census::tests::runtime_context_accepts_ambient_and_exact_motif_catalogs ... ok
+test k1_pre_action_prediction::tests::authority_rejects_implicit_request_value_that_differs_from_frozen_witness ... ok
+test k1_pre_action_prediction::tests::authority_rejects_payload_that_does_not_match_the_provider_capture ... ok
+test k1_pre_action_prediction::tests::authority_rejects_runtime_selector_value_that_differs_from_frozen_witness ... ok
+test k1_pre_action_prediction::tests::authority_wire_rejects_a_client_supplied_execution_receipt ... ok
+test k1_pre_action_prediction::tests::authority_wire_rejects_forged_request_text_and_topology ... ok
+test k1_pre_action_prediction::tests::independent_authority_executes_and_seals_the_typed_consequence ... ok
+test k1_transfer_lifecycle::completion::tests::historical_accept_cannot_satisfy_post_terminal_cpu_requirement ... ok
+test k1_transfer_lifecycle::completion::tests::terminal_timestamp_itself_is_post_terminal_evidence ... ok
+test learning_evidence_bridge::tests::cold_decode_derives_request_text_and_rejects_digest_tampering ... ok
+test learning_evidence_bridge::tests::consumer_refuses_to_replace_a_non_socket_path ... ok
+test learning_evidence_bridge::tests::oversized_payload_crosses_as_structure_without_raw_f8_authority ... ok
+test learning_evidence_bridge::tests::process_bridge_delivers_every_structure_and_only_bounded_raw_evidence ... ok
+test learning_evidence_bridge::tests::producer_uses_bounded_queue_and_receives_cold_ack ... ok
+test learning_structure_bridge::durable_tests::candidate_record_is_complete_and_durable_before_return ... ok
+test learning_structure_bridge::tests::batch_boundary_restores_checkpoint_and_topology_archive ... ok
+test learning_structure_bridge::tests::durable_structure_restores_checkpoint_and_contiguous_sequence ... ok
+test learning_structure_bridge::tests::v3_record_is_archived_before_bridge_ack ... ok
+test learning_structure_bridge::tests::v3_record_restarts_through_the_existing_single_consumer ... ok
+test learning_structure_bridge::tests::v4_checkpoint_keeps_each_commitment_when_turn_identity_repeats ... ok
+test live_economics::tests::corrected_epoch_keeps_legacy_totals_only_for_dashboard_continuity ... ok
+test live_economics::tests::false_accept_removes_cpu_savings_and_replays_as_fallback ... ok
+test live_economics::tests::independent_request_events_do_not_conflict_inside_one_user_turn ... ok
+test live_economics::tests::ineligible_probe_never_enters_commercial_numerator_or_denominator ... ok
+test live_economics::tests::live_in_flight_request_stays_outside_completed_denominator ... ok
+test live_economics::tests::package_receipt_and_exact_tokens_survive_restart_and_false_accept ... ok
+test live_economics::tests::restart_accounts_interrupted_request_as_fallback_without_savings ... ok
+test miner_worker::tests::collection_health_snapshot_keeps_only_status_and_package_count ... ok
+test miner_worker::tests::durable_opportunity_ack_follows_synced_ledger_and_applied_state ... ok
+test miner_worker::tests::idle_report_heartbeat_does_not_rewrite_semantic_checkpoint ... ok
+test miner_worker::tests::opportunity_group_commit_benchmark_receipt ... ignored, remote durability benchmark
+test miner_worker::tests::opportunity_ledger_replays_legacy_events_and_atomic_batches ... ok
+test miner_worker::tests::timed_checkpoint_requires_a_meaningful_durable_delta ... ok
+test ms3_capture_health::tests::any_post_watermark_topology_is_capture_progress ... ok
+test ms3_capture_health::tests::durable_topology_proves_progress_before_opportunity_snapshot_checkpoint ... ok
+test ms3_capture_health::tests::pre_open_and_non_authoritative_rows_do_not_count_as_ordinary_traffic ... ok
+test ms3_capture_health::tests::receipt_stall_overrides_generic_capture_progress ... ok
+test ms3_capture_health::tests::traffic_within_slo_waits_without_declaring_scientific_failure ... ok
+test ms3_capture_health::tests::traffic_without_topology_crosses_operational_stall_slo ... ok
+test ms3_capture_health::tests::unavailable_evidence_and_closed_acquisition_are_not_capture_stalls ... ok
+test ms3_frozen_version_space::tests::committed_applicability_event_without_prediction_row_is_rejected ... ok
+test ms3_frozen_version_space::tests::committed_state_loss_is_fail_closed_but_precommit_staging_is_retryable ... ok
+test ms3_frozen_version_space::tests::failed_applicability_write_does_not_mutate_ram_ledger ... ok
+test ms3_frozen_version_space::tests::live_topology_can_precommit_concurrently_but_historical_replay_cannot ... ok
+test ms3_generation_lifecycle::tests::capture_gap_repair_closes_generation_before_fresh_successor ... ok
+test ms3_generation_lifecycle::tests::contradiction_rolls_to_fresh_generation_and_restarts_without_evidence_loss ... ok
+test ms3_generation_lifecycle::tests::exhausted_applicability_gate_rolls_to_fresh_generation_and_restarts ... ok
+test ms3_generation_lifecycle::tests::exhausted_linked_acquisition_rolls_forward_and_preserves_generation_sequence ... ok
+test ms3_generation_lifecycle::tests::first_generation_uses_legacy_paths_and_manifest_is_canonical ... ok
+test ms3_generation_lifecycle::tests::frozen_g16_fixture_censors_unattributed_rows_without_losing_overflow ... ignored, requires NANDO_MS3_G16_FIXTURE pointing to a disposable live-state copy
+test ms3_generation_lifecycle::tests::frozen_g25_fixture_closes_pre_route_receipt_epoch_into_v3 ... ignored, requires NANDO_MS3_G25_FIXTURE pointing to a disposable live-state copy
+test ms3_generation_lifecycle::tests::future_pass_does_not_create_a_successor ... ok
+test ms3_generation_lifecycle::tests::linked_binding_reconstruction_keeps_non_support_request_boundary ... ok
+test ms3_generation_lifecycle::tests::missing_manifest_cannot_reinfer_a_started_successor ... ok
+test ms3_generation_lifecycle::tests::ms4_external_candidate_rebuilds_authority_without_trusting_candidate_flags ... ok
+test ms3_generation_lifecycle::tests::prepared_successor_is_idempotent_when_manifest_publish_did_not_happen ... ok
+test ms3_generation_lifecycle::tests::reused_linked_lineage_closes_immutably_and_opens_fresh_successor ... ok
+test ms3_generation_lifecycle::tests::terminal_v1_fixture_uses_its_bound_report_cursor_without_reordering_archive ... ignored, requires NANDO_MS3_TERMINAL_V1_FIXTURE pointing to a disposable live-state copy
+test ms3_linked_frame_acquisition::tests::changed_topology_prefix_rejects_existing_contract ... ok
+test ms3_linked_frame_acquisition::tests::contract_and_terminal_failure_restart_byte_identically ... ok
+test ms3_receipt_health::tests::all_exact_requests_with_terminals_are_complete ... ok
+test ms3_receipt_health::tests::closed_acquisition_does_not_reopen_operational_repair ... ok
+test ms3_receipt_health::tests::matching_terminal_completes_the_exact_request ... ok
+test ms3_receipt_health::tests::missing_capture_time_is_unavailable_not_stalled ... ok
+test ms3_receipt_health::tests::uncovered_topology_crosses_receipt_stall_slo ... ok
+test ms3_receipt_health::tests::young_uncovered_topology_is_in_flight ... ok
+test ms4_closed_loop::tests::completion_latches_first_receipt_and_rejects_mutable_snapshot_rebinding ... ok
+test ms4_closed_loop::tests::completion_requires_a_durable_framed_v4_receipt ... ok
+test ms4_closed_loop::tests::report_restore_accepts_legacy_and_v3_separates_operational_from_exact_wave ... ok
+test ms4_closed_loop::tests::revoked_report_preserves_completion_proof_and_closes_authority ... ok
+test ms4_exact_wave_holdout::tests::holdout_contract_uses_a_post_freeze_watermark ... ok
+test ms4_exact_wave_holdout::tests::independent_proof_rejects_incomplete_scored_denominator ... ok
+test ms4_exact_wave_holdout::tests::independent_proof_requires_every_real_control_to_degrade ... ok
+test ms4_exact_wave_holdout::tests::precommit_restart_rejects_duplicate_request_identity ... ok
+test ms4_exact_wave_holdout::tests::settled_counterexamples_are_not_filtered_from_the_score ... ok
+test multi_source_capture::container_role::tests::classifies_sequence_and_mapping_without_retaining_raw_values ... ok
+test multi_source_capture::extractor::tests::bounded_extractor_throughput_stays_inside_hot_budget ... ok
+test multi_source_capture::extractor::tests::bounded_extractor_wall_p99_stays_inside_hot_budget ... ignored, requires an isolated wall-clock performance runner
+test multi_source_capture::extractor::tests::capture_and_runtime_share_collection_canonicalization ... ok
+test multi_source_capture::extractor::tests::continuation_handle_is_a_pre_action_structural_role ... ok
+test multi_source_capture::extractor::tests::embedded_custom_output_exposes_typed_scalar_without_retaining_payload ... ok
+test multi_source_capture::extractor::tests::long_history_keeps_referenced_and_recent_outputs_inside_budget ... ok
+test multi_source_capture::extractor::tests::output_over_budget_is_censored_without_partial_graph ... ok
+test multi_source_capture::extractor::tests::oversized_referenced_output_remains_censored ... ok
+test multi_source_capture::extractor::tests::production_capture_feeds_collection_binding_and_factorizer ... ok
+test multi_source_capture::extractor::tests::renamed_and_reordered_fields_keep_source_neutral_topology ... ok
+test multi_source_capture::extractor::tests::repeated_request_mention_is_preserved_as_typed_ambiguity ... ok
+test multi_source_capture::extractor::tests::runtime_rejected_object_never_becomes_a_collection_role ... ok
+test multi_source_capture::extractor::tests::semantic_handle_survives_the_bounded_output_reservoir ... ok
+test multi_source_capture::extractor::tests::source_ordinals_match_the_runtime_active_turn ... ok
+test multi_source_frame_archive::tests::archive_exposes_restart_stable_append_cursor ... ok
+test multi_source_frame_archive::tests::archive_rejects_unverified_frame ... ok
+test multi_source_frame_archive::tests::archive_resolves_only_requested_canonical_roots_after_restart ... ok
+test multi_source_frame_archive::tests::archive_retains_more_than_one_signature_reservoir_and_restarts ... ok
+test multi_source_live::tests::cross_process_snapshot_rejects_forged_root ... ok
+test multi_source_live::tests::cross_process_snapshot_roundtrip_preserves_root_and_authority_boundary ... ok
+test multi_source_live::tests::law_certificate_promotion_makes_product_package_an_epistemic_duplicate ... ok
+test multi_source_topology_archive::tests::archive_accepts_backfilled_order_with_a_clean_closure_boundary ... ok
+test multi_source_topology_archive::tests::archive_maps_closure_sequence_to_the_exact_consumed_cursor ... ok
+test multi_source_topology_archive::tests::archive_rejects_a_closure_that_would_consume_future_rows ... ok
+test multi_source_topology_archive::tests::archive_rejects_an_ambiguous_closure_sequence ... ok
+test multi_source_topology_archive::tests::archive_rejects_unproven_physical_order ... ok
+test multi_source_topology_archive::tests::archive_requires_the_exact_closure_sequence ... ok
+test multi_source_topology_archive::tests::archive_retains_rows_across_restart ... ok
+test nginx_terminal::tests::parses_legacy_rfc3339_terminal_receipt_conservatively ... ok
+test nginx_terminal::tests::parses_precise_terminal_receipt ... ok
+test operator_certification::tests::nonempty_journal_without_external_anchor_fails_closed ... ok
+test operator_certification::tests::signed_journal_detects_physical_rollback ... ok
+test operator_certification::tests::signed_tail_recovers_after_crash_but_old_anchor_cannot_return ... ok
+test operator_certification::tests::signed_topology_migration_replays_after_restart ... ok
+test operator_certification::tests::stale_projection_accepts_safe_append_but_rejects_later_revocation ... ok
+test operator_certification::tests::topology_reconciliation_applies_revocation_before_migration ... ok
+test operator_certification::tests::topology_reconciliation_migrates_without_changing_certificates ... ok
+test operator_certification::transport::tests::bounded_line_accepts_exact_payload_limit ... ok
+test operator_certification::transport::tests::bounded_line_rejects_oversize_and_unterminated_requests ... ok
+test operator_certification_reconciliation::tests::blocked_projection_cannot_regress_execution_or_terminal_mechanism ... ok
+test operator_certification_reconciliation::tests::terminal_fail_cannot_regress_to_collecting_without_topology_change ... ok
+test operator_cleanup::protocol::tests::cleanup_request_rejects_source_receipt_rebinding ... ok
+test operator_cleanup::protocol::tests::package_candidate_root_binds_every_cleanup_identity ... ok
+test operator_cleanup::protocol::tests::write_once_allows_idempotence_but_rejects_rebind ... ok
+test opportunity_bridge::tests::corrupt_counter_checkpoint_fails_closed ... ok
+test opportunity_bridge::tests::counter_checkpoint_restores_empty_spool_and_monotonic_sequence ... ok
+test opportunity_bridge::tests::failed_delivery_remains_pending_for_at_least_once_retry ... ok
+test opportunity_bridge::tests::pending_batch_decodes_only_the_requested_backlog_window ... ok
+test opportunity_bridge::tests::producer_recovers_a_complete_staging_event_after_restart ... ok
+test opportunity_bridge::tests::rejected_event_sequence_is_not_reused_after_restart ... ok
+test opportunity_bridge::tests::restart_discards_checkpointed_spool_residue_without_redelivery ... ok
+test opportunity_bridge::tests::spool_capacity_rejects_new_events_before_disk_growth ... ok
+test opportunity_bridge::tests::spool_preserves_event_order_and_deletes_only_after_ack ... ok
+test provider_capture::runtime::tests::queue_overload_is_censored_without_semantic_updates ... ok
+test provider_capture::tests::hash_only_capture_is_durable_and_duplicate_requests_are_censored ... ok
+test provider_capture::tests::invalid_provider_input_is_terminally_censored_without_starting_capture ... ok
+test remote_evidence_spool::tests::authenticated_batch_is_durable_and_restart_idempotent ... ok
+test remote_evidence_spool::tests::invalid_signature_is_rejected_before_archive_mutation ... ok
+test remote_evidence_spool::tests::pending_receipt_recovers_after_archive_append_crash_boundary ... ok
+test remote_evidence_spool::tests::route_binding_requires_the_full_pre_action_receipt ... ok
+test remote_evidence_spool::tests::route_bound_frame_count_survives_restart_without_promoting_authority ... ok
+test remote_evidence_spool::tests::runtime_parity_survives_restart_and_rebound_is_rejected ... ok
+test request_identity::tests::one_turn_can_contain_multiple_independent_provider_requests ... ok
+test request_identity::tests::provider_turn_and_session_identities_are_kept_separate ... ok
+test request_identity::tests::unattributed_requests_share_one_conservative_lineage ... ok
+test request_learning::tests::checkpoint_byte_budget_evicts_oldest_topology_and_keeps_newest ... ok
+test request_learning::tests::pre_v3_checkpoint_without_topology_counter_still_decodes ... ok
+test runtime_policy::tests::atomic_policy_replacement_reaches_runtime_cache ... ok
+test runtime_policy::tests::malformed_or_missing_mode_is_fail_closed ... ok
+test session_backfill::tests::evidence_prefix_offset_is_exclusive ... ok
+test session_backfill::tests::historical_backfill_is_resumable_and_builds_generic_quarantine ... ok
+test session_backfill::tests::overflow_projection_keeps_request_provenance_and_drops_outputs ... ok
+test session_stream::capture_bound_tests::capture_bound_replay_censors_frames_before_first_turn_context ... ok
+test session_stream::compaction_replay_tests::context_refresh_replay_keeps_nonempty_parity_request ... ok
+test session_stream::request_text::tests::codex_context_refresh_preserves_request_provenance_until_a_new_turn ... ok
+test session_stream::request_text::tests::codex_v0146_row_order_populates_runtime_request_text ... ok
+test session_stream::request_text::tests::extracts_legacy_event_message_with_the_same_bound ... ok
+test session_stream::tests::action_without_linked_tool_output_is_not_teacher_evidence ... ok
+test session_stream::tests::assistant_renderer_captures_two_source_roles_without_raw_output_payload ... ok
+test session_stream::tests::bounded_session_head_recovers_custom_write_stdin_parity ... ok
+test session_stream::tests::canonical_identity_survives_a_large_resume_offset ... ok
+test session_stream::tests::compact_request_structure_joins_by_turn_and_session_without_raw_payload_storage ... ok
+test session_stream::tests::completed_plan_transition_emits_typed_frame_only_after_explicit_success ... ok
+test session_stream::tests::custom_exec_array_output_grounds_embedded_json_handle ... ok
+test session_stream::tests::custom_exec_wrapper_emits_typed_inner_tool_frame ... ok
+test session_stream::tests::duplicate_extraction_of_same_structural_selector_is_one_binding ... ok
+test session_stream::tests::equal_values_from_different_structural_selectors_remain_ambiguous ... ok
+test session_stream::tests::frame_identity_distinguishes_repeated_content_at_different_offsets ... ok
+test session_stream::tests::invalid_utf8_censors_only_the_partial_turn ... ok
+test session_stream::tests::live_collection_binding_is_archived_but_offline_replay_cannot_mint_it ... ok
+test session_stream::tests::live_turn_feeds_collection_version_space_without_persisting_raw_example ... ok
+test session_stream::tests::miner_bridge_drains_frames_captured_before_warmup ... ok
+test session_stream::tests::missing_session_meta_is_censored_without_path_fallback ... ok
+test session_stream::tests::multi_role_action_emits_every_unambiguous_source_binding ... ok
+test session_stream::tests::multi_turn_batch_retains_runtime_parity_until_frames_are_delivered ... ok
+test session_stream::tests::offline_replay_censors_mixed_session_identity_without_losing_batch ... ok
+test session_stream::tests::offline_replay_returns_only_durable_capture_bound_cases ... ok
+test session_stream::tests::relation_backfill_replays_request_phases_without_raw_request_text ... ok
+test session_stream::tests::resumed_capture_skips_the_committed_row_and_waits_for_a_fresh_turn ... ok
+test session_stream::tests::rollout_filename_mismatch_is_censored ... ok
+test session_stream::tests::runtime_parity_uses_latest_output_not_accumulated_collection_history ... ok
+test session_stream::tests::runtime_provider_payload_retains_all_outputs_in_the_active_turn ... ok
+test session_stream::tests::scalar_assistant_projection_emits_synthesizable_typed_binding ... ok
+test session_stream::tests::scalar_tool_output_and_teacher_action_emit_one_grounded_frame ... ok
+test session_stream::tests::session_tail_alignment_skips_partial_utf8_json_line ... ok
+test session_stream::tests::sparse_backfill_recovers_direct_write_stdin_parity ... ok
+test session_stream::tests::structured_custom_continuation_reaches_crystallized_cpu_operator ... ok
+test session_stream::tests::tail_backfill_waits_for_an_authoritative_turn_boundary ... ok
+test session_stream::tests::total_capture_accounts_rows_and_retains_multiple_outputs_without_raw_text ... ok
+test session_stream::tests::unique_identifier_binding_wins_over_incidental_numeric_matches ... ok
+test session_stream::tests::yielded_cell_is_extracted_structurally_for_wait ... ok
+test session_stream::turn_boundary::tests::repeated_explicit_turn_id_is_a_context_refresh ... ok
+test stream_evidence::tests::corrupted_checkpoint_fails_closed ... ok
+test stream_evidence::tests::partial_tail_is_truncated_before_replay ... ok
+test stream_evidence::tests::restart_replays_tail_and_preserves_duplicate_semantics ... ok
+test terminal_receipt_archive::tests::archive_does_not_advance_past_partial_source_line ... ok
+test terminal_receipt_archive::tests::archive_keeps_committed_receipts_across_source_rotation ... ok
+test terminal_receipt_archive::tests::archive_retains_old_receipt_beyond_previous_tail_limit_and_restart ... ok
+test tests::controlled_and_dogfood_sources_are_not_commercial_denominator ... ok
+test tests::controlled_request_does_not_enter_provider_capture ... ok
+test tests::controlled_sources_are_not_natural_learning_evidence ... ok
+test tests::diagnostic_execution_is_not_booked_as_llm_savings ... ok
+test tests::envelope_requires_explicit_metadata ... ok
+test tests::expired_hot_cache_guard_does_not_renew_authority ... ok
+test tests::expression_candidate_runs_only_in_shadow_counters ... ok
+test tests::failed_checkpoint_warmup_never_blocks_health_or_publishes_partial_miners ... ok
+test tests::frozen_g26_fixture_replays_the_exact_scientific_denominator ... ignored, requires NANDO_MS3_G26_FIXTURE pointing to a disposable live-state copy
+test tests::frozen_live_fixture_replays_active_candidate_snapshot ... ignored, requires NANDO_MS3_LIVE_FIXTURE pointing to a disposable live-state copy
+test tests::function_call_projection_is_structured_and_streamable ... ok
+test tests::independent_future_terminalizes_the_applicability_gate ... ok
+test tests::ms3_freeze_waits_for_terminal_linked_evidence ... ok
+test tests::non_learning_serving_process_does_not_own_ms3_lifecycle ... ok
+test tests::observation_dedupe_memory_is_bounded ... ok
+test tests::observation_trace_rotates_before_exceeding_segment_budget ... ok
+test tests::project_status_serving_integration_is_verified_and_fails_closed ... ok
+test tests::provider_shape_is_bounded_and_stores_no_raw_text ... ok
+test tests::rejected_response_authority_is_cached_until_inputs_change ... ok
+test tests::request_text_skips_non_message_items ... ok
+test tests::response_actor_fallback_stage_is_exact ... ok
+test tests::response_stream_has_terminal_event ... ok
+test tests::runtime_false_accept_persists_execution_identity_revocation ... ok
+test tests::sealed_ms3_future_owns_effective_lifecycle_status ... ok
+test tests::stale_external_admission_is_revalidated_against_current_artifacts ... ok
+test tests::successful_warmup_atomically_publishes_complete_miner_slots ... ok
+test tests::traffic_source_header_precedes_payload_metadata ... ok
+test tests::verified_scalar_projection_is_a_real_assistant_output_text ... ok
+test tests::verifier_receipt_validation_rejects_missing_authority ... ok
+
+test result: ok. 299 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 18.57s
+
+     Running unittests src/bin/nando-collection-migration.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_collection_migration-202e8a4adf997a70)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-evidence-agent.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_evidence_agent-b178103132eb2b6a)
+
+running 8 tests
+test tests::acknowledged_outbox_compacts_and_restarts_empty ... ok
+test tests::corrupted_transport_censor_ledger_is_fatal_on_restart ... ok
+test tests::invalid_transport_frame_is_censored_before_next_valid_frame ... ok
+test tests::outbox_accepts_only_pre_action_nando_route_bound_frames ... ok
+test tests::outbox_allows_only_monotonic_runtime_parity_enrichment ... ok
+test tests::parses_content_length_and_chunked_json_responses ... ok
+test tests::parses_lan_origin_without_response_api_prefix ... ok
+test tests::retry_backoff_is_bounded ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/bin/nando-grounded-decision-census.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_grounded_decision_census-21bfebe3f7362611)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-merge-relation-ledgers.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_merge_relation_ledgers-46ca65d26eed4b35)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-multi-source-audit.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_multi_source_audit-7b2eb894796803ce)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-operator-certification-authority.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_operator_certification_authority-fe2b4f8602cfa163)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-operator-cleanup-verifier.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_operator_cleanup_verifier-d4a8e1ba26ed6704)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-opportunity-scan.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_opportunity_scan-2f4bbdbce1fe3d01)
+
+running 2 tests
+test opportunity_scan::tests::scan_finds_exact_count_without_persisting_raw_payload ... ok
+test opportunity_scan::tests::turn_sample_accepts_bounded_custom_output_parts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running unittests src/bin/nando-repair-relation-event-time.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_repair_relation_event_time-901bcf6c7bf97ae6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-response-history-seed.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_response_history_seed-82a7ae1ab53853bf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-response-parity-backfill.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_response_parity_backfill-5c1051239e0fb658)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/nando-response-relation-backfill.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_response_relation_backfill-647aa5644d592ed3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/nando_transition_serving-9245dbbc3d2f9237)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/f7_generation_shadow_v3.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/f7_generation_shadow_v3-207cc2050f80e442)
+
+running 8 tests
+test capture_mismatch_keeps_registry_empty_and_start_is_nonblocking ... ok
+test duplicate_capture_root_is_censored_without_waiting_for_the_join_deadline ... ok
+test generation_swap_preserves_old_pin_and_installs_exact_child ... ok
+test joined_generation_executes_f5_and_independent_f6_without_authority ... ok
+test performance::full_generation_shadow_latency_stays_within_traffic_budget ... ignored, remote release F7-E performance gate
+test provider_capture_joins_to_a_durable_generation_owned_shadow_receipt ... ok
+test removing_the_store_clears_the_shadow_registry ... ok
+test tampered_capture_index_revokes_the_loaded_shadow_snapshot ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.88s
+
+     Running tests/f8_controlled_live_seed_v3.rs (/home/e/.cache/nando-wave-s1c1-v3-post-pass-target/debug/deps/f8_controlled_live_seed_v3-165b3aae4e6fd38e)
+
+running 1 test
+test export_controlled_shadow_seed_without_authority ... ignored, explicit F8-E controlled shadow provisioning only
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nando_transition_serving
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

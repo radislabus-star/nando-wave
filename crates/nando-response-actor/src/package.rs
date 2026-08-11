@@ -10,17 +10,24 @@ use std::path::Path;
 use crate::authority::{
     CompositeResponseAdmissionV2, FinalizedRuntimeVerificationReceiptV2,
     IndependentlyVerifiedExecution, ValidatedResponseAuthority, canonical_json_sha256,
-    finalize_runtime_receipt, validate_response_authority,
+    finalize_runtime_receipt, response_registry_digest, valid_nonzero_sha256,
+    validate_response_authority,
 };
 #[cfg(test)]
 use crate::contracts::canonical_response_value_selector;
 use crate::runtime::immediate_selected_scalar;
 
 use crate::{
-    AtomValueType, RelationAtom, RelationFrame, ResponseArgument, ResponseExecutionStatus,
-    ResponseOperation, ResponseProgram, ResponseValueSelector, SemanticRole,
-    VerifiedCrystallizedOperator, VerifiedOperatorRestartBundle, VerifierProgram, execute_response,
-    verify_response_independently,
+    AtomValueType, BoundCrystallizedOperator, RelationAtom, RelationFrame, ResponseArgument,
+    ResponseExecutionStatus, ResponseOperation, ResponseProgram, ResponseValueSelector,
+    SemanticRole, VerifiedCrystallizedOperator, VerifiedOperatorRestartBundle, VerifierProgram,
+    execute_response, verify_response_independently,
+};
+
+use nando_operator_admission::OperatorCertificationLedgerV1;
+use nando_operator_learning::{
+    AvailableActionContractsV1, DecisionAuthoritySnapshotV1, K1ActionContractProjectionV1,
+    OpaqueActionExecutionBindingV1,
 };
 
 #[cfg(test)]
@@ -583,6 +590,151 @@ pub struct RoutedResponseExecution {
     verified: Option<IndependentlyVerifiedExecution>,
 }
 
+pub const RESPONSE_PRE_ACTION_EVALUATOR_SCHEMA_V1: &str = "nando.response-pre-action-evaluator.v1";
+const MAX_K1_ACTION_INDEX_ENTRIES_V1: usize = 2_048;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PreparedK1EvidenceCensorV1 {
+    CaptureDisabled,
+    AuthoritySnapshotMismatch,
+    NoApplicableK1Action,
+    ActionProjectionIncomplete,
+    CapacityExhausted,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PreparedK1EvidenceV1 {
+    Ready {
+        authority_snapshot_root_sha256: String,
+        available_actions: AvailableActionContractsV1,
+        opaque_execution_binding_set_root_sha256: String,
+    },
+    Censored(PreparedK1EvidenceCensorV1),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct K1ActionIndexEntryV1 {
+    package_id: String,
+    projection: K1ActionContractProjectionV1,
+    execution_binding: OpaqueActionExecutionBindingV1,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct K1ActionIndexEntryMaterialV1 {
+    pub package_id: String,
+    pub projection: K1ActionContractProjectionV1,
+    pub execution_binding: OpaqueActionExecutionBindingV1,
+}
+
+impl K1ActionIndexEntryV1 {
+    fn new(
+        package_id: String,
+        projection: K1ActionContractProjectionV1,
+        execution_binding: OpaqueActionExecutionBindingV1,
+    ) -> Result<Self, &'static str> {
+        projection.validate()?;
+        execution_binding.validate()?;
+        if package_id.is_empty()
+            || execution_binding.action_contract_root_sha256
+                != projection.action_contract_root_sha256
+        {
+            return Err("k1_action_index_entry_invalid");
+        }
+        Ok(Self {
+            package_id,
+            projection,
+            execution_binding,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct K1ActionIndexV1 {
+    authority_snapshot: DecisionAuthoritySnapshotV1,
+    abstain_contract_root_sha256: String,
+    entries: BTreeMap<String, K1ActionIndexEntryV1>,
+}
+
+impl K1ActionIndexV1 {
+    fn new(
+        authority_snapshot: DecisionAuthoritySnapshotV1,
+        abstain_contract_root_sha256: String,
+        entries: Vec<K1ActionIndexEntryV1>,
+    ) -> Result<Self, &'static str> {
+        authority_snapshot.validate()?;
+        if !valid_nonzero_sha256(&abstain_contract_root_sha256)
+            || entries.len() > MAX_K1_ACTION_INDEX_ENTRIES_V1
+        {
+            return Err("k1_action_index_invalid");
+        }
+        let mut by_package = BTreeMap::new();
+        for entry in entries {
+            if entry.execution_binding.response_registry_revision
+                != authority_snapshot.response_registry_revision
+                || entry.execution_binding.response_registry_root_sha256
+                    != authority_snapshot.response_registry_root_sha256
+                || entry.execution_binding.certification_ledger_revision
+                    != authority_snapshot.certification_ledger_revision
+                || entry.execution_binding.certification_ledger_root_sha256
+                    != authority_snapshot.certification_ledger_root_sha256
+            {
+                return Err("k1_action_index_binding_snapshot_mismatch");
+            }
+            if by_package.insert(entry.package_id.clone(), entry).is_some() {
+                return Err("k1_action_index_duplicate_package");
+            }
+        }
+        Ok(Self {
+            authority_snapshot,
+            abstain_contract_root_sha256,
+            entries: by_package,
+        })
+    }
+
+    fn entry(&self, package_id: &str) -> Option<&K1ActionIndexEntryV1> {
+        self.entries.get(package_id)
+    }
+}
+
+struct PreparedResponseCandidate<'a> {
+    margin: i64,
+    package: &'a ResponsePackage,
+    crystallized_binding: Option<BoundCrystallizedOperator>,
+}
+
+enum PreparedResponsePlan<'a> {
+    Rejected(RoutedResponseExecution),
+    Selected(PreparedResponseCandidate<'a>),
+}
+
+pub struct PreparedResponseEvaluation<'a> {
+    executor_snapshot_root_sha256: &'a str,
+    request_identity_root_sha256: Option<String>,
+    provider_identity_root_sha256: Option<String>,
+    request_text: &'a str,
+    provider_payload: &'a Value,
+    require_authority: bool,
+    k1_evidence: PreparedK1EvidenceV1,
+    plan: PreparedResponsePlan<'a>,
+}
+
+impl PreparedResponseEvaluation<'_> {
+    #[must_use]
+    pub const fn k1_evidence(&self) -> &PreparedK1EvidenceV1 {
+        &self.k1_evidence
+    }
+
+    #[must_use]
+    pub fn request_identity_root_sha256(&self) -> Option<&str> {
+        self.request_identity_root_sha256.as_deref()
+    }
+
+    #[must_use]
+    pub fn provider_identity_root_sha256(&self) -> Option<&str> {
+        self.provider_identity_root_sha256.as_deref()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponsePhaseControlV1 {
@@ -618,12 +770,98 @@ impl ResponsePhaseControlV1 {
 pub struct ResponseExecutor {
     schema: String,
     revision: u64,
+    registry_root_sha256: String,
+    snapshot_root_sha256: String,
     packages: Vec<ResponsePackage>,
     crystallized_operators: BTreeMap<String, VerifiedCrystallizedOperator>,
     authority: Option<ValidatedResponseAuthority>,
 }
 
 impl ResponseExecutor {
+    /// Builds the capture-only K1 index from the same immutable authority
+    /// material that produced this executor. The certification ledger must
+    /// already have passed anchored-ledger validation in the off-path owner.
+    pub fn build_k1_action_index_v1(
+        &self,
+        authority_snapshot: DecisionAuthoritySnapshotV1,
+        abstain_contract_root_sha256: String,
+        certification_ledger: &OperatorCertificationLedgerV1,
+        entry_materials: Vec<K1ActionIndexEntryMaterialV1>,
+    ) -> Result<K1ActionIndexV1, &'static str> {
+        certification_ledger.validate()?;
+        let vocabulary_gate = certification_ledger.k1_vocabulary_gate()?;
+        let Some(runtime_authority) = &self.authority else {
+            return Err("k1_action_index_execution_authority_missing");
+        };
+        if authority_snapshot.response_registry_schema != self.schema
+            || authority_snapshot.response_registry_revision != self.revision
+            || authority_snapshot.response_registry_root_sha256 != self.registry_root_sha256
+            || authority_snapshot.external_admission_authority_root_sha256
+                != runtime_authority.admission_sha256
+            || authority_snapshot.certification_ledger_revision != certification_ledger.revision
+            || authority_snapshot.certification_ledger_root_sha256
+                != certification_ledger.ledger_root_sha256
+            || authority_snapshot.k1_vocabulary_gate_root_sha256 != vocabulary_gate.gate_root_sha256
+            || authority_snapshot.runtime_contract_root_sha256
+                != crate::response_runtime_contract_sha256()
+        {
+            return Err("k1_action_index_authority_snapshot_mismatch");
+        }
+
+        let latest_certification = certification_ledger
+            .latest_entries()
+            .into_iter()
+            .map(|entry| (entry.package_id.as_str(), entry))
+            .collect::<BTreeMap<_, _>>();
+        let entries = entry_materials
+            .into_iter()
+            .map(|material| {
+                K1ActionIndexEntryV1::new(
+                    material.package_id,
+                    material.projection,
+                    material.execution_binding,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for entry in &entries {
+            let package = self
+                .packages
+                .iter()
+                .find(|package| package.package_id == entry.package_id)
+                .ok_or("k1_action_index_package_missing")?;
+            let admitted = runtime_authority
+                .packages
+                .get(&entry.package_id)
+                .ok_or("k1_action_index_admission_binding_missing")?;
+            let certification = latest_certification
+                .get(entry.package_id.as_str())
+                .ok_or("k1_action_index_certification_entry_missing")?;
+            let execution_payload_root_sha256 = crate::response_execution_payload_digest(package)?;
+            if admitted.execution_payload_sha256 != execution_payload_root_sha256
+                || entry.execution_binding.execution_payload_root_sha256
+                    != execution_payload_root_sha256
+            {
+                return Err("k1_action_index_execution_payload_mismatch");
+            }
+            if entry
+                .execution_binding
+                .external_admission_package_binding_root_sha256
+                != admitted_package_binding_root_v1(admitted)?
+            {
+                return Err("k1_action_index_admission_package_binding_mismatch");
+            }
+            if !certification.k1_unit_eligible
+                || certification.entry_root_sha256
+                    != entry.execution_binding.certification_entry_root_sha256
+                || certification.semantic_law_id_sha256 != entry.projection.semantic_law_id_sha256
+                || certification.role_topology_id_sha256 != entry.projection.role_topology_id_sha256
+            {
+                return Err("k1_action_index_certification_projection_mismatch");
+            }
+        }
+        K1ActionIndexV1::new(authority_snapshot, abstain_contract_root_sha256, entries)
+    }
+
     pub fn load(path: &Path) -> Result<Self, String> {
         let bytes = fs::read(path).map_err(|error| format!("response_registry_read:{error}"))?;
         let registry: ResponseRegistry = serde_json::from_slice(&bytes)
@@ -633,6 +871,12 @@ impl ResponseExecutor {
 
     pub fn from_registry(registry: ResponseRegistry) -> Result<Self, &'static str> {
         registry.validate()?;
+        let registry_root_sha256 = response_registry_digest(&registry)?;
+        let snapshot_root_sha256 = canonical_json_sha256(&(
+            "nando.response-executor-snapshot.v1",
+            registry_root_sha256.as_str(),
+            Option::<&str>::None,
+        ))?;
         let packages = registry
             .packages
             .into_iter()
@@ -645,6 +889,8 @@ impl ResponseExecutor {
         Ok(Self {
             schema: registry.schema,
             revision: registry.revision,
+            registry_root_sha256,
+            snapshot_root_sha256,
             packages,
             crystallized_operators,
             authority: None,
@@ -661,6 +907,7 @@ impl ResponseExecutor {
         now_unix: u64,
         max_age_seconds: u64,
     ) -> Result<Self, &'static str> {
+        let registry_root_sha256 = response_registry_digest(&registry)?;
         let authority = validate_response_authority(
             &registry,
             &admission,
@@ -670,6 +917,11 @@ impl ResponseExecutor {
             now_unix,
             max_age_seconds,
         )?;
+        let snapshot_root_sha256 = canonical_json_sha256(&(
+            "nando.response-executor-snapshot.v1",
+            registry_root_sha256.as_str(),
+            Some(authority.admission_sha256.as_str()),
+        ))?;
         let admitted_ids = authority.packages.keys().collect::<BTreeSet<_>>();
         let packages = registry
             .packages
@@ -680,6 +932,8 @@ impl ResponseExecutor {
         Ok(Self {
             schema: registry.schema,
             revision: registry.revision,
+            registry_root_sha256,
+            snapshot_root_sha256,
             packages,
             crystallized_operators,
             authority: Some(authority),
@@ -813,10 +1067,8 @@ impl ResponseExecutor {
 
     #[must_use]
     pub fn execute(&self, request_text: &str, provider_payload: &Value) -> RoutedResponseExecution {
-        if self.authority.is_none() {
-            return rejected("execution_authority_missing");
-        }
-        self.execute_inner(request_text, provider_payload, true)
+        let prepared = self.prepare_inner(request_text, provider_payload, true, None);
+        self.execute_prepared(prepared)
     }
 
     #[must_use]
@@ -825,7 +1077,18 @@ impl ResponseExecutor {
         request_text: &str,
         provider_payload: &Value,
     ) -> RoutedResponseExecution {
-        self.execute_inner(request_text, provider_payload, false)
+        let prepared = self.prepare_inner(request_text, provider_payload, false, None);
+        self.execute_prepared(prepared)
+    }
+
+    #[must_use]
+    pub fn evaluate_pre_action<'a>(
+        &'a self,
+        request_text: &'a str,
+        provider_payload: &'a Value,
+        k1_index: &K1ActionIndexV1,
+    ) -> PreparedResponseEvaluation<'a> {
+        self.prepare_inner(request_text, provider_payload, true, Some(k1_index))
     }
 
     /// Proof-only package-scoped execution. It never carries authority and
@@ -963,19 +1226,65 @@ impl ResponseExecutor {
         )
     }
 
-    fn execute_inner(
-        &self,
-        request_text: &str,
-        provider_payload: &Value,
+    fn k1_index_matches_authority(&self, index: &K1ActionIndexV1) -> bool {
+        let Some(authority) = &self.authority else {
+            return false;
+        };
+        index.authority_snapshot.response_registry_schema == self.schema
+            && index.authority_snapshot.response_registry_revision == self.revision
+            && index.authority_snapshot.response_registry_root_sha256 == self.registry_root_sha256
+            && index
+                .authority_snapshot
+                .external_admission_authority_root_sha256
+                == authority.admission_sha256
+    }
+
+    fn prepare_inner<'a>(
+        &'a self,
+        request_text: &'a str,
+        provider_payload: &'a Value,
         require_authority: bool,
-    ) -> RoutedResponseExecution {
+        k1_index: Option<&K1ActionIndexV1>,
+    ) -> PreparedResponseEvaluation<'a> {
+        let (request_identity_root_sha256, provider_identity_root_sha256) = match k1_index {
+            Some(_) => (
+                Some(crate::sha256_bytes(request_text.as_bytes())),
+                Some(match serde_json::to_vec(provider_payload) {
+                    Ok(bytes) => crate::sha256_bytes(&bytes),
+                    Err(_) => crate::sha256_bytes(b"provider_identity_serialization_failed"),
+                }),
+            ),
+            None => (None, None),
+        };
+        let k1_authority_matches =
+            k1_index.is_none_or(|index| self.k1_index_matches_authority(index));
+        let effective_k1_index = if k1_authority_matches { k1_index } else { None };
+        if require_authority && self.authority.is_none() {
+            return PreparedResponseEvaluation {
+                executor_snapshot_root_sha256: &self.snapshot_root_sha256,
+                request_identity_root_sha256,
+                provider_identity_root_sha256,
+                request_text,
+                provider_payload,
+                require_authority,
+                k1_evidence: PreparedK1EvidenceV1::Censored(if k1_index.is_some() {
+                    PreparedK1EvidenceCensorV1::AuthoritySnapshotMismatch
+                } else {
+                    PreparedK1EvidenceCensorV1::NoApplicableK1Action
+                }),
+                plan: PreparedResponsePlan::Rejected(rejected("execution_authority_missing")),
+            };
+        }
         let context_counts = response_pre_action_context_counts(provider_payload);
         let mut predicate_matches = 0_usize;
         let mut grounded_matches = 0_usize;
         let mut guard_matches = 0_usize;
         let mut best_margin = i64::MIN;
         let mut best_threshold = 0_i64;
-        let mut ranked = [None; 8];
+        let mut ranked: [Option<PreparedResponseCandidate<'a>>; 8] = std::array::from_fn(|_| None);
+        let mut k1_action_roots = BTreeSet::new();
+        let mut k1_binding_roots = BTreeSet::new();
+        let mut k1_capacity_exhausted = false;
         for package in &self.packages {
             if !routing_predicates_match_counts(&package.routing_predicates, &context_counts) {
                 continue;
@@ -1008,7 +1317,21 @@ impl ResponseExecutor {
                     best_threshold = package.wave_margin_micro;
                 }
                 if margin >= package.wave_margin_micro {
-                    insert_top_response_candidate(&mut ranked, (margin, package));
+                    record_applicable_k1_action(
+                        package,
+                        effective_k1_index,
+                        &mut k1_action_roots,
+                        &mut k1_binding_roots,
+                        &mut k1_capacity_exhausted,
+                    );
+                    insert_top_response_candidate(
+                        &mut ranked,
+                        PreparedResponseCandidate {
+                            margin,
+                            package,
+                            crystallized_binding: Some(bound),
+                        },
+                    );
                 }
                 continue;
             }
@@ -1116,26 +1439,110 @@ impl ResponseExecutor {
                 best_threshold = package.wave_margin_micro;
             }
             if margin >= package.wave_margin_micro {
-                insert_top_response_candidate(&mut ranked, (margin, package));
+                record_applicable_k1_action(
+                    package,
+                    effective_k1_index,
+                    &mut k1_action_roots,
+                    &mut k1_binding_roots,
+                    &mut k1_capacity_exhausted,
+                );
+                insert_top_response_candidate(
+                    &mut ranked,
+                    PreparedResponseCandidate {
+                        margin,
+                        package,
+                        crystallized_binding: None,
+                    },
+                );
             }
         }
-        let Some((top_margin, package)) = ranked[0] else {
-            return rejected(format!(
-                "no_phase_routed_profile:packages={}:predicates={predicate_matches}:grounded={grounded_matches}:guard={guard_matches}:best_margin={best_margin}:best_threshold={best_threshold}",
-                self.packages.len()
-            ));
+        let k1_evidence = finalize_prepared_k1_evidence(
+            k1_index,
+            k1_authority_matches,
+            k1_action_roots,
+            k1_binding_roots,
+            k1_capacity_exhausted,
+        );
+        let Some(top_margin) = ranked[0].as_ref().map(|candidate| candidate.margin) else {
+            return PreparedResponseEvaluation {
+                executor_snapshot_root_sha256: &self.snapshot_root_sha256,
+                request_identity_root_sha256,
+                provider_identity_root_sha256,
+                request_text,
+                provider_payload,
+                require_authority,
+                k1_evidence,
+                plan: PreparedResponsePlan::Rejected(rejected(format!(
+                    "no_phase_routed_profile:packages={}:predicates={predicate_matches}:grounded={grounded_matches}:guard={guard_matches}:best_margin={best_margin}:best_threshold={best_threshold}",
+                    self.packages.len()
+                ))),
+            };
         };
-        if ranked[1].is_some_and(|(margin, _)| margin == top_margin) {
-            return rejected("ambiguous_phase_route");
+        if ranked[1]
+            .as_ref()
+            .is_some_and(|candidate| candidate.margin == top_margin)
+        {
+            return PreparedResponseEvaluation {
+                executor_snapshot_root_sha256: &self.snapshot_root_sha256,
+                request_identity_root_sha256,
+                provider_identity_root_sha256,
+                request_text,
+                provider_payload,
+                require_authority,
+                k1_evidence,
+                plan: PreparedResponsePlan::Rejected(rejected("ambiguous_phase_route")),
+            };
         }
+        let Some(candidate) = ranked[0].take() else {
+            return PreparedResponseEvaluation {
+                executor_snapshot_root_sha256: &self.snapshot_root_sha256,
+                request_identity_root_sha256,
+                provider_identity_root_sha256,
+                request_text,
+                provider_payload,
+                require_authority,
+                k1_evidence,
+                plan: PreparedResponsePlan::Rejected(rejected("prepared_candidate_missing")),
+            };
+        };
+        PreparedResponseEvaluation {
+            executor_snapshot_root_sha256: &self.snapshot_root_sha256,
+            request_identity_root_sha256,
+            provider_identity_root_sha256,
+            request_text,
+            provider_payload,
+            require_authority,
+            k1_evidence,
+            plan: PreparedResponsePlan::Selected(candidate),
+        }
+    }
+
+    #[must_use]
+    pub fn execute_prepared(
+        &self,
+        prepared: PreparedResponseEvaluation<'_>,
+    ) -> RoutedResponseExecution {
+        if prepared.executor_snapshot_root_sha256 != self.snapshot_root_sha256 {
+            return rejected("prepared_executor_snapshot_mismatch");
+        }
+        let PreparedResponseEvaluation {
+            request_text,
+            provider_payload,
+            require_authority,
+            plan,
+            ..
+        } = prepared;
+        let candidate = match plan {
+            PreparedResponsePlan::Rejected(execution) => return execution,
+            PreparedResponsePlan::Selected(candidate) => candidate,
+        };
+        let PreparedResponseCandidate {
+            margin: top_margin,
+            package,
+            crystallized_binding,
+        } = candidate;
         let (execution_status, execution_reason, execution_response, independently_verified) =
-            if let Some(operator) = self.crystallized_operators.get(&package.package_id) {
-                let bound = match operator.bind_pre_action(request_text, provider_payload) {
-                    Ok(bound) => bound,
-                    Err(error) => {
-                        return rejected(format!("crystallized_role_binding:{error:?}"));
-                    }
-                };
+            if let Some(bound) = crystallized_binding {
                 match bound.execute_verified() {
                     Ok(response) => (
                         ResponseExecutionStatus::Executed,
@@ -1211,11 +1618,87 @@ impl ResponseExecutor {
             package_id: Some(package.package_id.clone()),
             verification_receipt_id: None,
             verifier_schema: Some(package.proof.verifier_schema.clone()),
-            phase_candidates: ranked.len(),
+            phase_candidates: 8,
             exact_actor_checks: 1,
             phase_margin_micro: Some(top_margin),
             verified,
         }
+    }
+}
+
+fn record_applicable_k1_action(
+    package: &ResponsePackage,
+    k1_index: Option<&K1ActionIndexV1>,
+    action_roots: &mut BTreeSet<String>,
+    binding_roots: &mut BTreeSet<String>,
+    capacity_exhausted: &mut bool,
+) {
+    let Some(entry) = k1_index.and_then(|index| index.entry(&package.package_id)) else {
+        return;
+    };
+    let action_root = &entry.projection.action_contract_root_sha256;
+    if !action_roots.contains(action_root) && action_roots.len() >= 256 {
+        *capacity_exhausted = true;
+        return;
+    }
+    action_roots.insert(action_root.clone());
+    if binding_roots.len() >= MAX_K1_ACTION_INDEX_ENTRIES_V1
+        && !binding_roots.contains(&entry.execution_binding.binding_root_sha256)
+    {
+        *capacity_exhausted = true;
+        return;
+    }
+    binding_roots.insert(entry.execution_binding.binding_root_sha256.clone());
+}
+
+fn finalize_prepared_k1_evidence(
+    k1_index: Option<&K1ActionIndexV1>,
+    authority_matches: bool,
+    action_roots: BTreeSet<String>,
+    binding_roots: BTreeSet<String>,
+    capacity_exhausted: bool,
+) -> PreparedK1EvidenceV1 {
+    let Some(index) = k1_index else {
+        return PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::CaptureDisabled);
+    };
+    if !authority_matches {
+        return PreparedK1EvidenceV1::Censored(
+            PreparedK1EvidenceCensorV1::AuthoritySnapshotMismatch,
+        );
+    }
+    if capacity_exhausted {
+        return PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::CapacityExhausted);
+    }
+    if action_roots.is_empty() {
+        return PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::NoApplicableK1Action);
+    }
+    let available_actions = match AvailableActionContractsV1::seal(
+        action_roots.into_iter().collect(),
+        index.abstain_contract_root_sha256.clone(),
+    ) {
+        Ok(available_actions) => available_actions,
+        Err(_) => {
+            return PreparedK1EvidenceV1::Censored(
+                PreparedK1EvidenceCensorV1::ActionProjectionIncomplete,
+            );
+        }
+    };
+    let binding_roots = binding_roots.into_iter().collect::<Vec<_>>();
+    let opaque_execution_binding_set_root_sha256 = match canonical_json_sha256(&(
+        "nando.opaque-action-execution-binding-set.v1",
+        &binding_roots,
+    )) {
+        Ok(root) => root,
+        Err(_) => {
+            return PreparedK1EvidenceV1::Censored(
+                PreparedK1EvidenceCensorV1::ActionProjectionIncomplete,
+            );
+        }
+    };
+    PreparedK1EvidenceV1::Ready {
+        authority_snapshot_root_sha256: index.authority_snapshot.snapshot_root_sha256.clone(),
+        available_actions,
+        opaque_execution_binding_set_root_sha256,
     }
 }
 
@@ -1627,20 +2110,21 @@ fn matched_random_center(center: &[PhaseCenterCell]) -> Vec<PhaseCenterCell> {
 }
 
 fn insert_top_response_candidate<'a>(
-    ranked: &mut [Option<(i64, &'a ResponsePackage)>; 8],
-    candidate: (i64, &'a ResponsePackage),
+    ranked: &mut [Option<PreparedResponseCandidate<'a>>; 8],
+    candidate: PreparedResponseCandidate<'a>,
 ) {
     let position = ranked.iter().position(|current| {
-        current.is_none_or(|(margin, package)| {
-            candidate.0 > margin
-                || (candidate.0 == margin && candidate.1.package_id < package.package_id)
+        current.as_ref().is_none_or(|current| {
+            candidate.margin > current.margin
+                || (candidate.margin == current.margin
+                    && candidate.package.package_id < current.package.package_id)
         })
     });
     let Some(position) = position else {
         return;
     };
     for index in (position + 1..ranked.len()).rev() {
-        ranked[index] = ranked[index - 1];
+        ranked[index] = ranked[index - 1].take();
     }
     ranked[position] = Some(candidate);
 }
@@ -1829,6 +2313,51 @@ pub(crate) fn response_pre_action_context_atom_ids(provider_payload: &Value) -> 
     nando_operator_runtime::response_pre_action_context_atom_ids(provider_payload)
 }
 
+fn admitted_package_binding_root_v1(
+    admitted: &nando_operator_admission::AuthorizedResponsePackage,
+) -> Result<String, &'static str> {
+    #[derive(Serialize)]
+    struct BindingMaterial<'a> {
+        schema: &'static str,
+        admission_sha256: &'a str,
+        registry_sha256: &'a str,
+        registry_revision: u64,
+        package_sha256: &'a str,
+        execution_payload_sha256: &'a str,
+        actor_program_sha256: &'a str,
+        independent_verifier_program_sha256: &'a str,
+        verifier_schema: &'a str,
+        gate_build_sha256: &'a str,
+        runtime_build_sha256: &'a str,
+        support_manifest_sha256: &'a str,
+        exact_causal_proof_sha256: &'a str,
+        runtime_parity_receipt_set_sha256: &'a str,
+        future_verifier_receipt_set_sha256: &'a str,
+        semantic_alias_proof_sha256: &'a str,
+        proof_receipts_sha256: &'a str,
+    }
+
+    canonical_json_sha256(&BindingMaterial {
+        schema: "nando.response-admission-package-binding-projection.v1",
+        admission_sha256: &admitted.admission_sha256,
+        registry_sha256: &admitted.registry_sha256,
+        registry_revision: admitted.registry_revision,
+        package_sha256: &admitted.package_sha256,
+        execution_payload_sha256: &admitted.execution_payload_sha256,
+        actor_program_sha256: &admitted.actor_program_sha256,
+        independent_verifier_program_sha256: &admitted.independent_verifier_program_sha256,
+        verifier_schema: &admitted.verifier_schema,
+        gate_build_sha256: &admitted.gate_build_sha256,
+        runtime_build_sha256: &admitted.runtime_build_sha256,
+        support_manifest_sha256: &admitted.support_manifest_sha256,
+        exact_causal_proof_sha256: &admitted.exact_causal_proof_sha256,
+        runtime_parity_receipt_set_sha256: &admitted.runtime_parity_receipt_set_sha256,
+        future_verifier_receipt_set_sha256: &admitted.future_verifier_receipt_set_sha256,
+        semantic_alias_proof_sha256: &admitted.semantic_alias_proof_sha256,
+        proof_receipts_sha256: &admitted.proof_receipts_sha256,
+    })
+}
+
 fn response_pre_action_context_counts(provider_payload: &Value) -> BTreeMap<String, u32> {
     nando_operator_runtime::response_pre_action_context_counts(provider_payload)
 }
@@ -1890,6 +2419,8 @@ fn rejected(reason: impl Into<String>) -> RoutedResponseExecution {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
     use crate::{
         ProjectStatusMapping, RELATION_FRAME_SCHEMA, SOURCE_NEUTRAL_EXTRACTOR_VERSION,
@@ -2033,6 +2564,493 @@ mod tests {
                 adaptive_identification: None,
             },
         }
+    }
+
+    fn digest_root(label: &str) -> String {
+        canonical_json_sha256(&("nando.s1c-test-root.v1", label)).expect("root")
+    }
+
+    fn k1_projection(label: &str) -> K1ActionContractProjectionV1 {
+        K1ActionContractProjectionV1::seal(
+            digest_root(&format!("{label}:law")),
+            digest_root(&format!("{label}:topology")),
+            digest_root(&format!("{label}:semantic")),
+            digest_root(&format!("{label}:effect")),
+            digest_root(&format!("{label}:applicability")),
+            digest_root(&format!("{label}:verifier")),
+            digest_root(&format!("{label}:callees")),
+            nando_operator_learning::multi_source::K1ConsequenceTypeV1::Scalar,
+        )
+        .expect("projection")
+    }
+
+    fn k1_index_entry(
+        package_id: String,
+        label: &str,
+        snapshot: &DecisionAuthoritySnapshotV1,
+    ) -> K1ActionIndexEntryV1 {
+        let projection = k1_projection(label);
+        let binding = OpaqueActionExecutionBindingV1::seal(
+            projection.action_contract_root_sha256.clone(),
+            digest_root(&format!("{label}:execution")),
+            digest_root(&format!("{label}:admission-binding")),
+            digest_root(&format!("{label}:certification-entry")),
+            snapshot.response_registry_root_sha256.clone(),
+            snapshot.response_registry_revision,
+            snapshot.certification_ledger_root_sha256.clone(),
+            snapshot.certification_ledger_revision,
+        )
+        .expect("binding");
+        K1ActionIndexEntryV1::new(package_id, projection, binding).expect("entry")
+    }
+
+    fn k1_certification_ledger(
+        package_id: &str,
+        projection: &K1ActionContractProjectionV1,
+    ) -> nando_operator_admission::OperatorCertificationLedgerV1 {
+        use nando_operator_admission::{
+            ExecutionCertificateStatusV1, ExecutionCertificateV1, LawCertificateStatusV1,
+            LawCertificateV1, MechanismCertificateStatusV1, MechanismCertificateV1,
+            OperatorCertificationEntryV1, OperatorMechanismClassV1,
+        };
+
+        let bundle_id = digest_root(&format!("{package_id}:bundle"));
+        let execution = ExecutionCertificateV1::seal(
+            &bundle_id,
+            package_id,
+            ExecutionCertificateStatusV1::Pass,
+            vec![digest_root(&format!("{package_id}:execution-evidence"))],
+            "",
+        )
+        .expect("execution certificate");
+        let law = LawCertificateV1::seal(
+            &bundle_id,
+            package_id,
+            LawCertificateStatusV1::Pass,
+            vec![digest_root(&format!("{package_id}:law-evidence"))],
+            Some(digest_root(&format!("{package_id}:cleanup"))),
+            "",
+        )
+        .expect("law certificate");
+        let mechanism = MechanismCertificateV1::seal(
+            &bundle_id,
+            package_id,
+            MechanismCertificateStatusV1::Collecting,
+            OperatorMechanismClassV1::Unresolved,
+            vec![digest_root(&format!("{package_id}:mechanism-evidence"))],
+            "mechanism_collecting",
+        )
+        .expect("mechanism certificate");
+        let entry = OperatorCertificationEntryV1::seal(
+            &bundle_id,
+            package_id,
+            &projection.semantic_law_id_sha256,
+            &projection.role_topology_id_sha256,
+            execution,
+            law,
+            mechanism,
+            0,
+        )
+        .expect("certification entry");
+        let mut ledger =
+            nando_operator_admission::OperatorCertificationLedgerV1::empty().expect("empty ledger");
+        assert!(ledger.append(entry).expect("append certification"));
+        ledger
+    }
+
+    fn projection_payload() -> Value {
+        serde_json::json!({
+            "input": [{
+                "type": "function_call_output",
+                "call_id": "call-1",
+                "output": "{\"status\":\"ready\"}"
+            }]
+        })
+    }
+
+    fn authorized_executor(
+        revision: u64,
+        packages: Vec<ResponsePackage>,
+    ) -> (ResponseExecutor, DecisionAuthoritySnapshotV1) {
+        let registry = ResponseRegistry {
+            schema: "nando.response-registry.v6".to_owned(),
+            revision,
+            packages,
+        };
+        let registry_root = response_registry_digest(&registry).expect("registry root");
+        let receipt_digests = registry
+            .packages
+            .iter()
+            .map(|package| {
+                (
+                    package.package_id.clone(),
+                    (
+                        digest_root(&format!("{}:support", package.package_id)),
+                        digest_root(&format!("{}:causal", package.package_id)),
+                        digest_root(&format!("{}:parity", package.package_id)),
+                        digest_root(&format!("{}:future", package.package_id)),
+                        digest_root(&format!("{}:alias", package.package_id)),
+                    ),
+                )
+            })
+            .collect();
+        let gate_build = digest_root("gate-build");
+        let runtime_build = digest_root("runtime-build");
+        let admission = crate::authority::build_composite_admission_for_registry(
+            &registry,
+            receipt_digests,
+            "s1c-test-project",
+            100,
+            30,
+            &gate_build,
+            &runtime_build,
+            "missing receipts",
+            "missing verifier",
+        )
+        .expect("admission");
+        let admission_root = canonical_json_sha256(&admission).expect("admission root");
+        let snapshot = DecisionAuthoritySnapshotV1::seal(
+            registry.schema.clone(),
+            registry.revision,
+            registry_root,
+            admission_root,
+            1,
+            digest_root("certification-ledger"),
+            digest_root("k1-gate"),
+            crate::response_runtime_contract_sha256(),
+        )
+        .expect("snapshot");
+        let executor = ResponseExecutor::from_registry_with_admission(
+            registry,
+            admission,
+            "s1c-test-project",
+            &gate_build,
+            &runtime_build,
+            100,
+            30,
+        )
+        .expect("executor");
+        (executor, snapshot)
+    }
+
+    #[test]
+    fn capture_disabled_prepared_route_skips_request_identity_materialization() {
+        let (executor, _) = authorized_executor(100, vec![active_projection_package()]);
+        let payload = projection_payload();
+        let prepared = executor.prepare_inner("compatibility request", &payload, true, None);
+
+        assert_eq!(
+            prepared.k1_evidence(),
+            &PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::CaptureDisabled)
+        );
+        assert_eq!(prepared.request_identity_root_sha256(), None);
+        assert_eq!(prepared.provider_identity_root_sha256(), None);
+        assert_eq!(
+            executor.execute_prepared(prepared).status,
+            ResponseExecutionStatus::Executed
+        );
+    }
+
+    #[test]
+    #[ignore = "isolated remote release S1C compatibility latency gate"]
+    fn capture_disabled_compatibility_latency_stays_within_hot_budget() {
+        const SAMPLES: usize = 4_096;
+        let (executor, _) = authorized_executor(99, vec![active_projection_package()]);
+        let matched = projection_payload();
+        let unmatched = serde_json::json!({});
+
+        for _ in 0..128 {
+            assert_eq!(
+                executor.execute("compatibility request", &matched).status,
+                ResponseExecutionStatus::Executed
+            );
+            assert_eq!(
+                executor.execute("unmatched request", &unmatched).status,
+                ResponseExecutionStatus::Abstain
+            );
+        }
+        let matched_samples = execution_latency_samples(
+            &executor,
+            "compatibility request",
+            &matched,
+            ResponseExecutionStatus::Executed,
+            SAMPLES,
+        );
+        let unmatched_samples = execution_latency_samples(
+            &executor,
+            "unmatched request",
+            &unmatched,
+            ResponseExecutionStatus::Abstain,
+            SAMPLES,
+        );
+        let matched_p99 = percentile_ns(&matched_samples, 99);
+        let unmatched_p99 = percentile_ns(&unmatched_samples, 99);
+        let hard_max = matched_samples
+            .iter()
+            .chain(&unmatched_samples)
+            .copied()
+            .max()
+            .unwrap_or(u128::MAX);
+        println!(
+            "S1C_HOT_LATENCY matched_p99_ns={matched_p99} no_goal_p99_ns={unmatched_p99} hard_max_ns={hard_max} samples={SAMPLES}"
+        );
+        assert!(matched_p99 <= 1_000_000, "matched p99 exceeded 1 ms");
+        assert!(unmatched_p99 <= 250_000, "no-goal p99 exceeded 250 us");
+        assert!(hard_max <= 2_000_000, "hard ceiling exceeded 2 ms");
+    }
+
+    #[test]
+    #[ignore = "isolated remote release S1C 60-second idle CPU gate"]
+    fn capture_disabled_executor_has_no_sustained_idle_cpu_work() {
+        let (executor, _) = authorized_executor(100, vec![active_projection_package()]);
+        assert_eq!(
+            executor
+                .execute("compatibility request", &projection_payload())
+                .status,
+            ResponseExecutionStatus::Executed
+        );
+        let ticks_per_second = std::process::Command::new("getconf")
+            .arg("CLK_TCK")
+            .output()
+            .expect("getconf CLK_TCK");
+        assert!(ticks_per_second.status.success());
+        let ticks_per_second = String::from_utf8(ticks_per_second.stdout)
+            .expect("CLK_TCK utf8")
+            .trim()
+            .parse::<u64>()
+            .expect("CLK_TCK integer");
+        let before = process_cpu_ticks();
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        let elapsed_ticks = process_cpu_ticks().saturating_sub(before);
+        let cpu_percent_of_one_core =
+            (elapsed_ticks as f64) * 100.0 / ((ticks_per_second as f64) * 60.0);
+        println!(
+            "S1C_IDLE_CPU elapsed_ticks={elapsed_ticks} ticks_per_second={ticks_per_second} percent_of_one_core={cpu_percent_of_one_core:.6}"
+        );
+        assert!(
+            cpu_percent_of_one_core <= 0.25,
+            "idle CPU exceeded 0.25% of one core"
+        );
+    }
+
+    fn process_cpu_ticks() -> u64 {
+        let stat = std::fs::read_to_string("/proc/self/stat").expect("process stat");
+        let after_name = stat.rsplit_once(") ").expect("process stat comm").1;
+        let fields = after_name.split_ascii_whitespace().collect::<Vec<_>>();
+        let user_ticks = fields[11].parse::<u64>().expect("process user ticks");
+        let system_ticks = fields[12].parse::<u64>().expect("process system ticks");
+        user_ticks.saturating_add(system_ticks)
+    }
+
+    fn execution_latency_samples(
+        executor: &ResponseExecutor,
+        request_text: &str,
+        provider_payload: &Value,
+        expected: ResponseExecutionStatus,
+        count: usize,
+    ) -> Vec<u128> {
+        (0..count)
+            .map(|_| {
+                let started = Instant::now();
+                let execution = executor.execute(request_text, provider_payload);
+                let elapsed = started.elapsed().as_nanos();
+                assert_eq!(execution.status, expected);
+                elapsed
+            })
+            .collect()
+    }
+
+    fn percentile_ns(samples: &[u128], percentile: usize) -> u128 {
+        let mut sorted = samples.to_vec();
+        sorted.sort_unstable();
+        let index = sorted
+            .len()
+            .saturating_mul(percentile)
+            .div_ceil(100)
+            .saturating_sub(1)
+            .min(sorted.len().saturating_sub(1));
+        sorted[index]
+    }
+
+    #[test]
+    fn prepared_route_preserves_the_frozen_serving_execution() {
+        let (executor, authority_snapshot) =
+            authorized_executor(101, vec![active_projection_package()]);
+        let payload = projection_payload();
+        let compatibility = executor.execute("", &payload);
+        assert_eq!(compatibility.status, ResponseExecutionStatus::Executed);
+
+        let entry = k1_index_entry(
+            "projection-package".to_owned(),
+            "projection",
+            &authority_snapshot,
+        );
+        let index = K1ActionIndexV1::new(authority_snapshot, digest_root("abstain"), vec![entry])
+            .expect("index");
+        let prepared = executor.evaluate_pre_action("", &payload, &index);
+        assert!(prepared.request_identity_root_sha256().is_some());
+        assert!(prepared.provider_identity_root_sha256().is_some());
+        let evidence = prepared.k1_evidence().clone();
+        let direct = executor.execute_prepared(prepared);
+        assert_eq!(direct, compatibility);
+        let PreparedK1EvidenceV1::Ready {
+            authority_snapshot_root_sha256,
+            available_actions,
+            ..
+        } = evidence
+        else {
+            panic!("K1 evidence was not prepared")
+        };
+        assert_eq!(
+            authority_snapshot_root_sha256,
+            index.authority_snapshot.snapshot_root_sha256
+        );
+        assert_eq!(available_actions.action_contract_roots_sha256.len(), 1);
+        assert_eq!(
+            available_actions.action_contract_roots_sha256[0],
+            k1_projection("projection").action_contract_root_sha256
+        );
+    }
+
+    #[test]
+    fn authority_builder_rejects_forged_execution_payload_binding() {
+        let package_id = "projection-package";
+        let (executor, _) = authorized_executor(151, vec![active_projection_package()]);
+        let projection = k1_projection("projection");
+        let ledger = k1_certification_ledger(package_id, &projection);
+        let gate = ledger.k1_vocabulary_gate().expect("K1 gate");
+        let runtime_authority = executor.authority.as_ref().expect("runtime authority");
+        let snapshot = DecisionAuthoritySnapshotV1::seal(
+            executor.schema.clone(),
+            executor.revision,
+            executor.registry_root_sha256.clone(),
+            runtime_authority.admission_sha256.clone(),
+            ledger.revision,
+            ledger.ledger_root_sha256.clone(),
+            gate.gate_root_sha256,
+            crate::response_runtime_contract_sha256(),
+        )
+        .expect("authority snapshot");
+        let certification = ledger
+            .latest_entries()
+            .into_iter()
+            .find(|entry| entry.package_id == package_id)
+            .expect("certification entry");
+        let admitted = runtime_authority
+            .packages
+            .get(package_id)
+            .expect("admitted package");
+        let forged_binding = OpaqueActionExecutionBindingV1::seal(
+            projection.action_contract_root_sha256.clone(),
+            digest_root("forged-execution-payload"),
+            admitted_package_binding_root_v1(admitted).expect("admission binding root"),
+            certification.entry_root_sha256.clone(),
+            snapshot.response_registry_root_sha256.clone(),
+            snapshot.response_registry_revision,
+            snapshot.certification_ledger_root_sha256.clone(),
+            snapshot.certification_ledger_revision,
+        )
+        .expect("forged binding");
+        let entry = K1ActionIndexEntryMaterialV1 {
+            package_id: package_id.to_owned(),
+            projection,
+            execution_binding: forged_binding,
+        };
+
+        assert_eq!(
+            executor.build_k1_action_index_v1(
+                snapshot,
+                digest_root("abstain"),
+                &ledger,
+                vec![entry],
+            ),
+            Err("k1_action_index_execution_payload_mismatch")
+        );
+    }
+
+    #[test]
+    fn prepared_state_rejects_a_different_executor_snapshot() {
+        let left = ResponseExecutor::from_registry(ResponseRegistry {
+            schema: "nando.response-registry.v6".to_owned(),
+            revision: 201,
+            packages: vec![active_projection_package()],
+        })
+        .expect("left");
+        let right = ResponseExecutor::from_registry(ResponseRegistry {
+            schema: "nando.response-registry.v6".to_owned(),
+            revision: 202,
+            packages: vec![active_projection_package()],
+        })
+        .expect("right");
+        let payload = projection_payload();
+        let prepared = left.prepare_inner("", &payload, false, None);
+        assert_eq!(
+            right.execute_prepared(prepared).reason,
+            "prepared_executor_snapshot_mismatch"
+        );
+    }
+
+    #[test]
+    fn torn_k1_authority_snapshot_censors_evidence_without_changing_serving() {
+        let (executor, _) = authorized_executor(251, vec![active_projection_package()]);
+        let mismatched = DecisionAuthoritySnapshotV1::seal(
+            "nando.response-registry.v6".to_owned(),
+            999,
+            digest_root("wrong-registry"),
+            digest_root("wrong-admission"),
+            2,
+            digest_root("wrong-certification"),
+            digest_root("wrong-k1-gate"),
+            crate::response_runtime_contract_sha256(),
+        )
+        .expect("mismatched snapshot");
+        let entry = k1_index_entry(
+            "projection-package".to_owned(),
+            "projection-mismatch",
+            &mismatched,
+        );
+        let index = K1ActionIndexV1::new(mismatched, digest_root("abstain-mismatch"), vec![entry])
+            .expect("index");
+        let payload = projection_payload();
+        let compatibility = executor.execute("", &payload);
+        let prepared = executor.evaluate_pre_action("", &payload, &index);
+        assert_eq!(
+            prepared.k1_evidence(),
+            &PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::AuthoritySnapshotMismatch)
+        );
+        assert_eq!(executor.execute_prepared(prepared), compatibility);
+    }
+
+    #[test]
+    fn k1_action_capacity_censors_evidence_but_not_serving() {
+        let mut packages = Vec::new();
+        for index in 0..257 {
+            let package_id = format!("projection-package-{index:03}");
+            let mut package = active_projection_package();
+            package.package_id = package_id.clone();
+            packages.push(package);
+        }
+        let (executor, authority_snapshot) = authorized_executor(301, packages);
+        let entries = (0..257)
+            .map(|index| {
+                k1_index_entry(
+                    format!("projection-package-{index:03}"),
+                    &format!("projection-{index:03}"),
+                    &authority_snapshot,
+                )
+            })
+            .collect();
+        let index =
+            K1ActionIndexV1::new(authority_snapshot, digest_root("abstain-capacity"), entries)
+                .expect("index");
+        let payload = projection_payload();
+        let compatibility = executor.execute("", &payload);
+        let prepared = executor.evaluate_pre_action("", &payload, &index);
+        assert_eq!(
+            prepared.k1_evidence(),
+            &PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::CapacityExhausted)
+        );
+        assert_eq!(executor.execute_prepared(prepared), compatibility);
     }
 
     fn adaptive_request_last_token_package() -> ResponsePackage {

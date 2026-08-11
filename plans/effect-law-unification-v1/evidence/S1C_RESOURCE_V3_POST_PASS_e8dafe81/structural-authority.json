@@ -1,0 +1,444 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.1-rust",
+  "core_version": "sparse-triad-v6.1-trusted-proof",
+  "wave_dim": 1024,
+  "task_id": "s1c1-authority-binding",
+  "domain": "code",
+  "complexity_score": 26,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.2308,
+      "c2": 0.2308,
+      "c3": 0.2308,
+      "c4": 0.2308,
+      "c5": 0.2308,
+      "c6": 0.2308
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.4188,
+      "c2": 0.4188,
+      "c3": 0.4219,
+      "c4": 0.406,
+      "c5": 0.398,
+      "c6": 0.3853
+    },
+    "source_self_score": 0.4081,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "admission-binding": "admission-binding",
+      "authority": "authority",
+      "certification-binding": "certification-binding",
+      "eligibility": "eligibility",
+      "payload-binding": "payload-binding"
+    },
+    "scores": {
+      "admission-binding": 1.0,
+      "authority": 1.0,
+      "certification-binding": 1.0,
+      "eligibility": 1.0,
+      "payload-binding": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "admission-binding": 1,
+      "authority": 2,
+      "certification-binding": 1,
+      "eligibility": 1,
+      "payload-binding": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.4081,
+      "norm": 78.3582,
+      "triads": 6
+    },
+    "core_version": "sparse-triad-v6.1-trusted-proof",
+    "dominant_source_group": {
+      "admission-binding": "admission-binding",
+      "authority": "authority",
+      "certification-binding": "certification-binding",
+      "eligibility": "eligibility",
+      "payload-binding": "payload-binding"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "admission-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 45.9565,
+          "self_coherence": 0.7181,
+          "triads": 2
+        },
+        "certification-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "eligibility": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "payload-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "admission-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 45.9565,
+          "self_coherence": 0.7181,
+          "triads": 2
+        },
+        "certification-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "eligibility": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "payload-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "admission-binding": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "admission-binding",
+        "exact_source_groups": [
+          "admission-binding"
+        ]
+      },
+      "authority": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "authority",
+        "exact_source_groups": [
+          "authority"
+        ]
+      },
+      "certification-binding": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "certification-binding",
+        "exact_source_groups": [
+          "certification-binding"
+        ]
+      },
+      "eligibility": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "eligibility",
+        "exact_source_groups": [
+          "eligibility"
+        ]
+      },
+      "payload-binding": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "payload-binding",
+        "exact_source_groups": [
+          "payload-binding"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "admission-binding": {
+        "admission-binding": 1.0,
+        "authority": 0.0054,
+        "certification-binding": 0.0039,
+        "eligibility": -0.0078,
+        "payload-binding": -0.0098
+      },
+      "authority": {
+        "admission-binding": 0.0054,
+        "authority": 1.0,
+        "certification-binding": -0.019,
+        "eligibility": -0.0027,
+        "payload-binding": 0.0082
+      },
+      "certification-binding": {
+        "admission-binding": 0.0039,
+        "authority": -0.019,
+        "certification-binding": 1.0,
+        "eligibility": -0.0391,
+        "payload-binding": 0.0371
+      },
+      "eligibility": {
+        "admission-binding": -0.0078,
+        "authority": -0.0027,
+        "certification-binding": -0.0391,
+        "eligibility": 1.0,
+        "payload-binding": -0.0059
+      },
+      "payload-binding": {
+        "admission-binding": -0.0098,
+        "authority": 0.0082,
+        "certification-binding": 0.0371,
+        "eligibility": -0.0059,
+        "payload-binding": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "admission-binding": {
+          "gravity": 1.0,
+          "owner": "admission-binding",
+          "owners": {
+            "admission-binding": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "authority": {
+          "gravity": 1.0,
+          "owner": "authority",
+          "owners": {
+            "authority": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "certification-binding": {
+          "gravity": 1.0,
+          "owner": "certification-binding",
+          "owners": {
+            "certification-binding": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "eligibility": {
+          "gravity": 1.0,
+          "owner": "eligibility",
+          "owners": {
+            "eligibility": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "payload-binding": {
+          "gravity": 1.0,
+          "owner": "payload-binding",
+          "owners": {
+            "payload-binding": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.3333,
+          "owner": "authority",
+          "owners": {
+            "admission-binding": 2,
+            "authority": 4,
+            "certification-binding": 2,
+            "eligibility": 2,
+            "payload-binding": 2
+          },
+          "support": 4,
+          "total": 12
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 6,
+          "entrypoints": [],
+          "evidence_paths": [
+            "crates/nando-response-actor/src/package.rs admitted_package_binding_root_v1",
+            "crates/nando-response-actor/src/package.rs build_k1_action_index_v1",
+            "crates/nando-response-actor/src/package.rs certification.k1_unit_eligible guard",
+            "crates/nando-response-actor/src/package.rs k1_action_index_certification_projection_mismatch",
+            "crates/nando-response-actor/src/package.rs k1_action_index_execution_payload_mismatch",
+            "s1c_pre_action_decision_owner_preregistration_v1.md:163-178",
+            "s1c_pre_action_decision_owner_preregistration_v1.md:261-276",
+            "s1c_pre_action_decision_owner_preregistration_v1.md:271-276",
+            "s1c_pre_action_decision_owner_preregistration_v1.md:307",
+            "s1c_pre_action_decision_owner_preregistration_v1.md:308",
+            "s1c_pre_action_decision_owner_preregistration_v1.md:309"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "admission-binding",
+            "authority",
+            "certification-binding",
+            "eligibility",
+            "payload-binding"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 6,
+          "triads": 12
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 78.3582,
+          "self_coherence": 0.4081,
+          "triads": 6
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 78.3582,
+          "self_coherence": 0.4081,
+          "triads": 6
+        }
+      }
+    },
+    "source_group_sizes": {
+      "admission-binding": 1,
+      "authority": 2,
+      "certification-binding": 1,
+      "eligibility": 1,
+      "payload-binding": 1
+    },
+    "stable_groups": [
+      "admission-binding",
+      "authority",
+      "certification-binding",
+      "eligibility",
+      "payload-binding"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c1-authority-binding.trace.json"
+}

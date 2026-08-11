@@ -1,0 +1,7 @@
+
+running 1 test
+test package::tests::capture_disabled_compatibility_latency_stays_within_hot_budget ... S1C_HOT_LATENCY matched_p99_ns=15956 no_goal_p99_ns=748 hard_max_ns=28903 samples=4096
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 384 filtered out; finished in 0.06s
+

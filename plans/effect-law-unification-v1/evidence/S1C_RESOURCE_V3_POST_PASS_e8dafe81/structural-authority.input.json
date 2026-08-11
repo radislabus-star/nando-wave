@@ -1,0 +1,21 @@
+{
+  "task_id": "s1c1-authority-binding",
+  "domain": "code",
+  "query": "Does S1C-1 preserve the frozen registry, admission, certification, and source-neutral action authority boundary?",
+  "triads": [
+    {"id":"s1","subject":"DecisionAuthoritySnapshotV1","relation":"binds","object":"one registry admission certification snapshot","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:163-178","confidence":1.0,"subject_role":"snapshot","object_role":"authority_set","route":"authority","group":"authority"},
+    {"id":"s2","subject":"K1 action","relation":"requires","object":"admitted package and latest K1 eligible certification","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:261-276","confidence":1.0,"subject_role":"action","object_role":"authority_evidence","route":"authority","group":"authority"},
+    {"id":"s3","subject":"opaque execution binding","relation":"binds","object":"actual execution payload","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:307","confidence":1.0,"subject_role":"binding","object_role":"payload","route":"authority","group":"payload-binding"},
+    {"id":"s4","subject":"opaque execution binding","relation":"binds","object":"external admission package binding","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:308","confidence":1.0,"subject_role":"binding","object_role":"admission_binding","route":"authority","group":"admission-binding"},
+    {"id":"s5","subject":"opaque execution binding","relation":"binds","object":"latest certification entry","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:309","confidence":1.0,"subject_role":"binding","object_role":"certification_entry","route":"authority","group":"certification-binding"},
+    {"id":"s6","subject":"product-only package","relation":"is excluded from","object":"K2 evidence","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:271-276","confidence":1.0,"subject_role":"package","object_role":"evidence_set","route":"authority","group":"eligibility"}
+  ],
+  "candidate_triads": [
+    {"id":"c1","subject":"DecisionAuthoritySnapshotV1","relation":"binds","object":"one registry admission certification snapshot","evidence":"crates/nando-response-actor/src/package.rs build_k1_action_index_v1","confidence":1.0,"subject_role":"snapshot","object_role":"authority_set","route":"authority","group":"authority"},
+    {"id":"c2","subject":"K1 action","relation":"requires","object":"admitted package and latest K1 eligible certification","evidence":"crates/nando-response-actor/src/package.rs build_k1_action_index_v1","confidence":1.0,"subject_role":"action","object_role":"authority_evidence","route":"authority","group":"authority"},
+    {"id":"c3","subject":"opaque execution binding","relation":"binds","object":"actual execution payload","evidence":"crates/nando-response-actor/src/package.rs k1_action_index_execution_payload_mismatch","confidence":1.0,"subject_role":"binding","object_role":"payload","route":"authority","group":"payload-binding"},
+    {"id":"c4","subject":"opaque execution binding","relation":"binds","object":"external admission package binding","evidence":"crates/nando-response-actor/src/package.rs admitted_package_binding_root_v1","confidence":1.0,"subject_role":"binding","object_role":"admission_binding","route":"authority","group":"admission-binding"},
+    {"id":"c5","subject":"opaque execution binding","relation":"binds","object":"latest certification entry","evidence":"crates/nando-response-actor/src/package.rs k1_action_index_certification_projection_mismatch","confidence":1.0,"subject_role":"binding","object_role":"certification_entry","route":"authority","group":"certification-binding"},
+    {"id":"c6","subject":"product-only package","relation":"is excluded from","object":"K2 evidence","evidence":"crates/nando-response-actor/src/package.rs certification.k1_unit_eligible guard","confidence":1.0,"subject_role":"package","object_role":"evidence_set","route":"authority","group":"eligibility"}
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "schema": "nando.s1c1-resource-v3.measurements.v1",
+  "protocol_epoch_root": "2a21bc5d99a0dd8181ec105a2bdb449f66715674ffb109e3d8941a0bf9a47590",
+  "protocol_parent_commit": "335696e903e58c3710e7f813ed79805fec5b26cc",
+  "protocol_commit": "e8dafe8180b5cc86ec1a5353b81641af147d8cdd",
+  "source_manifest_root": "aa046add5048987c744ca25db89d1510d5f99105305d72bcfc4bed7be805b6b2",
+  "evidence_directory_name": "s1c1-v3-e8dafe81",
+  "evidence_manifest_sha256": "2e5b29f78e31aa002e9c5671b54195629c5a24f0ec119dd8283a20eea7a23949",
+  "targeted_runs": [
+    {
+      "ordinal": 1,
+      "test": "package::tests::capture_disabled_compatibility_latency_stays_within_hot_budget",
+      "binary_sha256": "dd785c1c96122aa1c6aa33f5f637d92636346b15d55902659cfe067c127a124b",
+      "samples": 4096,
+      "matched_p99_ns": 15956,
+      "no_goal_p99_ns": 748,
+      "hard_max_ns": 28903,
+      "exit_code": 0
+    },
+    {
+      "ordinal": 2,
+      "test": "package::tests::capture_disabled_compatibility_latency_stays_within_hot_budget",
+      "binary_sha256": "dd785c1c96122aa1c6aa33f5f637d92636346b15d55902659cfe067c127a124b",
+      "samples": 4096,
+      "matched_p99_ns": 25433,
+      "no_goal_p99_ns": 1399,
+      "hard_max_ns": 40945,
+      "exit_code": 0
+    },
+    {
+      "ordinal": 3,
+      "test": "package::tests::capture_disabled_compatibility_latency_stays_within_hot_budget",
+      "binary_sha256": "dd785c1c96122aa1c6aa33f5f637d92636346b15d55902659cfe067c127a124b",
+      "samples": 4096,
+      "matched_p99_ns": 25453,
+      "no_goal_p99_ns": 1408,
+      "hard_max_ns": 36136,
+      "exit_code": 0
+    }
+  ],
+  "inherited_pairs": [
+    {
+      "ordinal": 1,
+      "order": "baseline_candidate",
+      "baseline": {
+        "ordinal": 1,
+        "test": "performance::full_generation_shadow_latency_stays_within_traffic_budget",
+        "binary_sha256": "ab31fde97776084de499e8d70ff3ade6d20a9d05dba912e69e5d069c777e6656",
+        "samples": 4096,
+        "matched_p99_ns": 1376501,
+        "no_match_p99_ns": 422658,
+        "hard_max_ns": 1505740,
+        "exit_code": 101
+      },
+      "candidate": {
+        "ordinal": 1,
+        "test": "performance::full_generation_shadow_latency_stays_within_traffic_budget",
+        "binary_sha256": "99c8b9fe8c8e192c418aa1057bec0380c568f666166d40674685aa2132982277",
+        "samples": 4096,
+        "matched_p99_ns": 1331377,
+        "no_match_p99_ns": 421228,
+        "hard_max_ns": 1465339,
+        "exit_code": 101
+      }
+    },
+    {
+      "ordinal": 2,
+      "order": "candidate_baseline",
+      "baseline": {
+        "ordinal": 2,
+        "test": "performance::full_generation_shadow_latency_stays_within_traffic_budget",
+        "binary_sha256": "ab31fde97776084de499e8d70ff3ade6d20a9d05dba912e69e5d069c777e6656",
+        "samples": 4096,
+        "matched_p99_ns": 1344319,
+        "no_match_p99_ns": 426210,
+        "hard_max_ns": 1478311,
+        "exit_code": 101
+      },
+      "candidate": {
+        "ordinal": 2,
+        "test": "performance::full_generation_shadow_latency_stays_within_traffic_budget",
+        "binary_sha256": "99c8b9fe8c8e192c418aa1057bec0380c568f666166d40674685aa2132982277",
+        "samples": 4096,
+        "matched_p99_ns": 1367105,
+        "no_match_p99_ns": 429106,
+        "hard_max_ns": 1469850,
+        "exit_code": 101
+      }
+    },
+    {
+      "ordinal": 3,
+      "order": "baseline_candidate",
+      "baseline": {
+        "ordinal": 3,
+        "test": "performance::full_generation_shadow_latency_stays_within_traffic_budget",
+        "binary_sha256": "ab31fde97776084de499e8d70ff3ade6d20a9d05dba912e69e5d069c777e6656",
+        "samples": 4096,
+        "matched_p99_ns": 1342370,
+        "no_match_p99_ns": 449455,
+        "hard_max_ns": 1550610,
+        "exit_code": 101
+      },
+      "candidate": {
+        "ordinal": 3,
+        "test": "performance::full_generation_shadow_latency_stays_within_traffic_budget",
+        "binary_sha256": "99c8b9fe8c8e192c418aa1057bec0380c568f666166d40674685aa2132982277",
+        "samples": 4096,
+        "matched_p99_ns": 1334716,
+        "no_match_p99_ns": 435627,
+        "hard_max_ns": 1468020,
+        "exit_code": 101
+      }
+    }
+  ],
+  "safety": {
+    "production_service_survival": true,
+    "connector_survival": true,
+    "false_accepts": 0,
+    "runtime_parity_failures": 0,
+    "serving_parity_equal": true,
+    "structural_verdict": "PASS"
+  }
+}

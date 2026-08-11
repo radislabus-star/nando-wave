@@ -354,11 +354,13 @@ pub use output_graph::{
 pub(crate) use package::stable_atom_id;
 pub use package::{
     COLLECTION_EXTERNAL_VERIFIER_SCHEMA, CONTINUATION_EXTERNAL_VERIFIER_SCHEMA,
-    CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA, LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_MIN_SESSIONS,
-    LEGACY_CONTROL_MIN_SURFACES, LEGACY_CONTROL_SUPPORT_ROWS, LearnedWaveRoute,
-    LearnedWaveSubcenter, ResponseExecutor, ResponsePackage, ResponsePackageOrigin,
-    ResponsePackageProof, ResponsePackageState, ResponsePhaseControlV1, ResponseRegistry,
-    ResponseRoutingComparison, ResponseRoutingPredicate, RoutedResponseExecution,
+    CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA, K1ActionIndexEntryMaterialV1, K1ActionIndexV1,
+    LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_MIN_SESSIONS, LEGACY_CONTROL_MIN_SURFACES,
+    LEGACY_CONTROL_SUPPORT_ROWS, LearnedWaveRoute, LearnedWaveSubcenter,
+    PreparedK1EvidenceCensorV1, PreparedK1EvidenceV1, PreparedResponseEvaluation,
+    RESPONSE_PRE_ACTION_EVALUATOR_SCHEMA_V1, ResponseExecutor, ResponsePackage,
+    ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState, ResponsePhaseControlV1,
+    ResponseRegistry, ResponseRoutingComparison, ResponseRoutingPredicate, RoutedResponseExecution,
     SOURCE_VALUE_EXTERNAL_VERIFIER_SCHEMA, STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA,
     VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA, provider_tool_capability_atom_ids,
     relation_frame_online_routing_atom_ids, relation_frame_phase_atom_ids,

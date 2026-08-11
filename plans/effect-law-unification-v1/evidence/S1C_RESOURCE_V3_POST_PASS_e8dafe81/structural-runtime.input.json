@@ -1,0 +1,21 @@
+{
+  "task_id": "s1c1-runtime-persistence",
+  "domain": "code",
+  "query": "Does S1C-1 preserve one evaluator, precommit-before-execution, and fail-closed persistence?",
+  "triads": [
+    {"id":"s1","subject":"compatibility execute","relation":"uses","object":"one prepared evaluator","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:346-380","confidence":1.0,"subject_role":"entrypoint","object_role":"evaluator","route":"runtime","group":"evaluator"},
+    {"id":"s2","subject":"prepared evaluation","relation":"is consumed by","object":"execute_prepared","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:346-380","confidence":1.0,"subject_role":"prepared_state","object_role":"executor","route":"runtime","group":"evaluator"},
+    {"id":"s3","subject":"durable precommit","relation":"precedes","object":"selected action execution","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:410-447","confidence":1.0,"subject_role":"precommit","object_role":"execution","route":"temporal","group":"journal"},
+    {"id":"s4","subject":"journal append","relation":"is synchronized before","object":"durability receipt","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:410-447","confidence":1.0,"subject_role":"journal_write","object_role":"durability_receipt","route":"persistence","group":"journal"},
+    {"id":"s5","subject":"K2 evidence failure","relation":"does not change","object":"ordinary serving result","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:493-500","confidence":1.0,"subject_role":"evidence_failure","object_role":"serving_result","route":"safety","group":"fallback"},
+    {"id":"s6","subject":"partial journal tail","relation":"recovers without","object":"replaying an action","evidence":"S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md:575-588","confidence":1.0,"subject_role":"partial_tail","object_role":"action_replay","route":"persistence","group":"journal"}
+  ],
+  "candidate_triads": [
+    {"id":"c1","subject":"compatibility execute","relation":"uses","object":"one prepared evaluator","evidence":"crates/nando-response-actor/src/package.rs execute and prepare_inner","confidence":1.0,"subject_role":"entrypoint","object_role":"evaluator","route":"runtime","group":"evaluator"},
+    {"id":"c2","subject":"prepared evaluation","relation":"is consumed by","object":"execute_prepared","evidence":"crates/nando-response-actor/src/package.rs execute_prepared","confidence":1.0,"subject_role":"prepared_state","object_role":"executor","route":"runtime","group":"evaluator"},
+    {"id":"c3","subject":"durable precommit","relation":"precedes","object":"selected action execution","evidence":"crates/nando-operator-learning/src/grounded_decision/pre_action.rs temporal validation","confidence":1.0,"subject_role":"precommit","object_role":"execution","route":"temporal","group":"journal"},
+    {"id":"c4","subject":"journal append","relation":"is synchronized before","object":"durability receipt","evidence":"crates/nando-transition-serving/src/grounded_decision_capture.rs append_precommit","confidence":1.0,"subject_role":"journal_write","object_role":"durability_receipt","route":"persistence","group":"journal"},
+    {"id":"c5","subject":"K2 evidence failure","relation":"does not change","object":"ordinary serving result","evidence":"crates/nando-response-actor/src/package.rs PreparedK1EvidenceCensorV1 parity tests","confidence":1.0,"subject_role":"evidence_failure","object_role":"serving_result","route":"safety","group":"fallback"},
+    {"id":"c6","subject":"partial journal tail","relation":"recovers without","object":"replaying an action","evidence":"crates/nando-transition-serving/src/grounded_decision_capture.rs partial_tail_is_removed_without_replaying_an_action","confidence":1.0,"subject_role":"partial_tail","object_role":"action_replay","route":"persistence","group":"journal"}
+  ]
+}

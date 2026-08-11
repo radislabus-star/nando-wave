@@ -1,0 +1,158 @@
+{
+  "schema": "nando.s1c1-resource-v3.final-receipt.v1",
+  "recorded_at": "2026-08-11T17:05:49.108493545+03:00",
+  "verdict": "PASS",
+  "claim": "frozen_s1c1_source_is_eligible_for_one_source_commit_only",
+  "protocol": {
+    "parent_commit": "335696e903e58c3710e7f813ed79805fec5b26cc",
+    "commit": "e8dafe8180b5cc86ec1a5353b81641af147d8cdd",
+    "epoch_root": "2a21bc5d99a0dd8181ec105a2bdb449f66715674ffb109e3d8941a0bf9a47590",
+    "document": "plans/effect-law-unification-v1/S1C_PRE_ACTION_DECISION_OWNER_RESOURCE_PROTOCOL_V3.md",
+    "document_sha256": "4d0ff88f199c5742270bbfd631a9a0edace9dd7f113c32515362a5074c783703",
+    "critique": "plans/effect-law-unification-v1/S1C_PRE_ACTION_DECISION_OWNER_RESOURCE_PROTOCOL_V3_CRITIQUE.md",
+    "critique_sha256": "2786abebe2d72b6bca4040f3b30c1ff99d3a85053cff77e132cda4f59951cd6e",
+    "preregistration_manifest_sha256": "bb57d80e16cbf0aca9ccf910fa57b3d524841970769d0746e097218dd6edfc05"
+  },
+  "frozen_candidate": {
+    "base_commit": "ac98ec02da9e6b8584bba0cd48aa6b54d457bb53",
+    "tracked_diff_sha256": "283d566c531b87f16dde62f77f97a752fd1ccdabefa425c4453f396a47ea24f1",
+    "pre_action_rs_sha256": "3a22c7e2f7ba679f0294cc19fab460d28113f8dce5b5ec05fa8c88df2dfff3e9",
+    "pre_action_tests_rs_sha256": "879336edfaf0f837c503351a9184ff768b06c31f4e3b4069e180117f635b2615",
+    "grounded_decision_capture_rs_sha256": "10aaf8ba40e0152ea205934729521adc76384b7a890acd2a8fc1c0f1e3f50486",
+    "source_manifest_root": "aa046add5048987c744ca25db89d1510d5f99105305d72bcfc4bed7be805b6b2",
+    "identity_drift": false
+  },
+  "measurement": {
+    "rerun_count": 0,
+    "measurements": "plans/effect-law-unification-v1/S1C_PRE_ACTION_DECISION_OWNER_RESOURCE_V3_MEASUREMENTS.json",
+    "measurements_sha256": "2b5bad4b60d10919ae707dddb7a68dbf5d12b075b1920f94150e4185b0a6de35",
+    "raw_evidence": "plans/effect-law-unification-v1/evidence/S1C_RESOURCE_V3_e8dafe81",
+    "raw_evidence_files": 40,
+    "raw_evidence_manifest": "plans/effect-law-unification-v1/evidence/S1C_RESOURCE_V3_e8dafe81.SHA256SUMS",
+    "raw_evidence_manifest_sha256": "2e5b29f78e31aa002e9c5671b54195629c5a24f0ec119dd8283a20eea7a23949",
+    "targeted_absolute_passes": 3,
+    "targeted_runs": 3,
+    "baseline_inherited_absolute_passes": 0,
+    "candidate_inherited_absolute_passes": 0,
+    "inherited_absolute_environment": "FAIL",
+    "inherited_regression_gate": "PASS"
+  },
+  "precommitted_verifier": {
+    "runner_sha256": "a871f0f148a9fa2f85a7f848f36473d02f8d77e8cf745c234bbfa16f421b7d4b",
+    "verifier_sha256": "10c4371ed0dd3b87853e24c711a53a1eb83b97813e593905dff7c818f460ee8c",
+    "verifier_tests_sha256": "929e47ed7de47e87db0e38cdddd2ead4c05db5f3f046ecbb7525cd9f83469037",
+    "verifier_tests": "13/13 PASS",
+    "verdict_output": "plans/effect-law-unification-v1/evidence/S1C_RESOURCE_V3_e8dafe81.VERDICT.json",
+    "verdict_output_sha256": "d20a19324a58a45274a10a98454fd41744dc0102cf3f191fcd2fcd31595d7d88",
+    "evidence_gate": "PASS",
+    "targeted_gate": "PASS",
+    "inherited_regression_gate": "PASS",
+    "safety_gate": "PASS",
+    "authority_ready": false,
+    "deployment_allowed": false
+  },
+  "post_pass": {
+    "evidence": "plans/effect-law-unification-v1/evidence/S1C_RESOURCE_V3_POST_PASS_e8dafe81",
+    "evidence_files": 35,
+    "evidence_manifest_sha256": "d828d75bce81a45579259fc1565cd508ff2989d21a6eddd628cdce992f536504",
+    "tests": {
+      "nando_operator_learning": {
+        "passed": 416,
+        "failed": 0,
+        "ignored": 3,
+        "log_sha256": "f120298ae59b0945f0dfcaf9c26939ee13ff12d1371a374b3b6c0172c1d97650"
+      },
+      "nando_response_actor": {
+        "passed": 405,
+        "failed": 0,
+        "ignored": 2,
+        "log_sha256": "c9f6f6786281b2bfdf6d522008781ca558985b706974f9962b67efe3e502700d"
+      },
+      "nando_transition_serving": {
+        "passed": 316,
+        "failed": 0,
+        "ignored": 10,
+        "log_sha256": "afa23cc90cd4f5b9f6a5459f1bdf6a409096ede9e978d29c0233d3299c403b5d"
+      }
+    },
+    "strict_clippy": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "log_sha256": "829bccac7763612996484fae96f330963ffb1142ce4906303080afd013234504"
+    },
+    "format": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "git_diff_check": {
+      "verdict": "PASS",
+      "scope": "implementation_measurements_and_receipt",
+      "raw_evidence_normalized": false
+    },
+    "serving_parity": {
+      "verdict": "BYTE_IDENTICAL",
+      "rows_per_side": 16,
+      "oracle_source_sha256": "0657e2464267a509c1f7185b3bcf0c8a8769465a27064bbbcbf00ec4e253d5c9",
+      "baseline_sha256": "dfb558103efebe5fb66ba35bcb7b4775053aefcb7aa345aa6d887d905f229526",
+      "candidate_sha256": "dfb558103efebe5fb66ba35bcb7b4775053aefcb7aa345aa6d887d905f229526",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "oracle_rerun": false,
+      "initial_wrapper_exit": 1,
+      "initial_wrapper_error": "candidate_expected_root_literal_omitted_b4775053aefc_after_successful_oracle_and_diff",
+      "raw_byte_validation": "PASS"
+    },
+    "structural": {
+      "slice_boundary": {
+        "input_sha256": "40f5b231335c315dbd1da4594e63c1601009af306116f885dca421f2b1b1bfa0",
+        "result_sha256": "3c4639ac9f292b7e765039bb591cd45987d20e2ab4f643210d4ed83e668f36c3",
+        "verdict": "PASS"
+      },
+      "runtime_persistence": {
+        "input_sha256": "a199e5fd8e08e48dbf96d5a781812a25b8d1ddc400acf12668eb0407420b7bf1",
+        "result_sha256": "d26ddb81e13eb696a07f197f0418e574a7d420dd58a8f9aef71438063f675bdc",
+        "verdict": "PASS"
+      },
+      "authority_binding": {
+        "input_sha256": "b87aa462c7e4f48d91ac1966ce3227c8cc5e9a807d2759afbd804d3abec51330",
+        "result_sha256": "3ec7eb11a7fc730174c5ebd3eaa13f0693f98bd585530674c05602e874eeffc3",
+        "verdict": "PASS"
+      },
+      "watch": 0,
+      "conflicts": 0,
+      "foreign_pull": 0,
+      "owner_conflicts": 0,
+      "negative_hits": 0,
+      "repair_queue": 0,
+      "authority_ready": false
+    }
+  },
+  "production": {
+    "deployment_performed": false,
+    "installed_binary_changed": false,
+    "service_restarted": false,
+    "service_snapshot_before_sha256": "b6098e9078187c35d53ce1ce7f1a2bb5ca592815d163867ff48a00963bb218d8",
+    "service_snapshot_after_sha256": "b6098e9078187c35d53ce1ce7f1a2bb5ca592815d163867ff48a00963bb218d8",
+    "service_snapshot_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "remote_services_active": 5,
+    "remote_service_restarts": 0,
+    "gateway_health": "PASS",
+    "cpu_mode": "CPU",
+    "admission_verdict": "PASS",
+    "active_profiles": 2,
+    "false_accepts": 0,
+    "local_connector_pid": 2919,
+    "local_connector_restarts": 0,
+    "route_receipt_failures": 0,
+    "graphify_out_modified": false
+  },
+  "authority": {
+    "implementation_commit_allowed": true,
+    "implementation_commit_relation": "direct_child_of_protocol_commit",
+    "s1c2_allowed": false,
+    "capture_activation_allowed": false,
+    "deployment_allowed": false,
+    "serving_authority_changed": false,
+    "natural_evidence_changed": false
+  }
+}
