@@ -1,0 +1,474 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.1-rust",
+  "core_version": "sparse-triad-v6.1-trusted-proof",
+  "wave_dim": 1024,
+  "task_id": "s1c2-persistence-serving",
+  "domain": "code",
+  "complexity_score": 23,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "cp2",
+    "cp3",
+    "cp4",
+    "cp5"
+  ],
+  "weak_triads": [
+    "cp1"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "cp2",
+      "cp3",
+      "cp4",
+      "cp5"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "cp1": 0.125,
+      "cp2": 0.2,
+      "cp3": 0.2,
+      "cp4": 0.2,
+      "cp5": 0.2
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "wave_summary": {
+    "scores": {
+      "cp1": -0.0238,
+      "cp2": 0.4504,
+      "cp3": 0.4583,
+      "cp4": 0.4178,
+      "cp5": 0.4381
+    },
+    "source_self_score": 0.4441,
+    "stable": [
+      "cp2",
+      "cp3",
+      "cp4",
+      "cp5"
+    ],
+    "weak": [
+      "cp1"
+    ],
+    "weak_details": {
+      "cp1": {
+        "nearest_source": "p1",
+        "nearest_source_score": 0.0176,
+        "score": -0.0238,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "durability": "durability",
+      "privacy": "privacy",
+      "recovery": "recovery",
+      "resources": "resources",
+      "serving": "serving"
+    },
+    "scores": {
+      "durability": 0.0176,
+      "privacy": 1.0,
+      "recovery": 1.0,
+      "resources": 1.0,
+      "serving": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "durability": 1,
+      "privacy": 1,
+      "recovery": 1,
+      "resources": 1,
+      "serving": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.4366,
+      "norm": 69.857,
+      "triads": 5
+    },
+    "core_version": "sparse-triad-v6.1-trusted-proof",
+    "dominant_source_group": {
+      "durability": "durability",
+      "privacy": "privacy",
+      "recovery": "recovery",
+      "resources": "resources",
+      "serving": "serving"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "durability": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "privacy": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "recovery": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "resources": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "serving": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "durability": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "privacy": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "recovery": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "resources": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "serving": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "durability": {
+        "dominant_score": 0.0176,
+        "dominant_source_group": "durability",
+        "exact_source_groups": []
+      },
+      "privacy": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "privacy",
+        "exact_source_groups": [
+          "privacy"
+        ]
+      },
+      "recovery": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "recovery",
+        "exact_source_groups": [
+          "recovery"
+        ]
+      },
+      "resources": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "resources",
+        "exact_source_groups": [
+          "resources"
+        ]
+      },
+      "serving": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "serving",
+        "exact_source_groups": [
+          "serving"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "durability": {
+        "durability": 0.0176,
+        "privacy": -0.0352,
+        "recovery": -0.0293,
+        "resources": -0.0137,
+        "serving": 0.0078
+      },
+      "privacy": {
+        "durability": 0.0137,
+        "privacy": 1.0,
+        "recovery": -0.0254,
+        "resources": -0.0332,
+        "serving": -0.0273
+      },
+      "recovery": {
+        "durability": 0.0156,
+        "privacy": -0.0254,
+        "recovery": 1.0,
+        "resources": 0.0234,
+        "serving": -0.0137
+      },
+      "resources": {
+        "durability": -0.0469,
+        "privacy": -0.0332,
+        "recovery": 0.0234,
+        "resources": 1.0,
+        "serving": 0.0293
+      },
+      "serving": {
+        "durability": 0.0293,
+        "privacy": -0.0273,
+        "recovery": -0.0137,
+        "resources": 0.0293,
+        "serving": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "durability": {
+          "gravity": 1.0,
+          "owner": "durability",
+          "owners": {
+            "durability": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "privacy": {
+          "gravity": 1.0,
+          "owner": "grounded decision journal",
+          "owners": {
+            "grounded decision journal": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "recovery": {
+          "gravity": 1.0,
+          "owner": "grounded decision recovery",
+          "owners": {
+            "grounded decision recovery": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "resources": {
+          "gravity": 1.0,
+          "owner": "all grounded decision ledgers",
+          "owners": {
+            "all grounded decision ledgers": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "serving": {
+          "gravity": 1.0,
+          "owner": "serving",
+          "owners": {
+            "serving": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "persistence-serving": {
+          "gravity": 0.2,
+          "owner": "all grounded decision ledgers",
+          "owners": {
+            "all grounded decision ledgers": 2,
+            "durability": 2,
+            "grounded decision journal": 2,
+            "grounded decision recovery": 2,
+            "serving": 2
+          },
+          "support": 2,
+          "total": 10
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "durability"
+      }
+    ],
+    "repair_tasks": [
+      {
+        "candidate_group": "durability",
+        "dominant_source_group": "durability",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0176,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      }
+    ],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "persistence-serving": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 5,
+          "entrypoints": [],
+          "evidence_paths": [
+            "crates/nando-transition-serving/src/grounded_decision_capture.rs:11-14",
+            "crates/nando-transition-serving/src/grounded_decision_capture.rs:46-60,121-129",
+            "crates/nando-transition-serving/src/grounded_decision_capture.rs:71-118",
+            "s1c_shadow_producer_critique_v1.md:28-35",
+            "s1c_shadow_producer_preregistration_v1.md:131-163,283-296",
+            "s1c_shadow_producer_preregistration_v1.md:337-361",
+            "s1c_shadow_producer_preregistration_v1.md:348-365",
+            "s1c_shadow_producer_preregistration_v1.md:367-369",
+            "s1c_shadow_producer_preregistration_v1.md:401-421"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "all grounded decision ledgers",
+            "durability",
+            "grounded decision journal",
+            "grounded decision recovery",
+            "serving"
+          ],
+          "scopes": [
+            "persistence-serving"
+          ],
+          "source_triads": 5,
+          "triads": 10
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "persistence-serving": {
+          "norm": 69.857,
+          "self_coherence": 0.4366,
+          "triads": 5
+        }
+      },
+      "interference_matrix": {
+        "persistence-serving": {
+          "persistence-serving": 0.7975
+        }
+      },
+      "source": {
+        "persistence-serving": {
+          "norm": 71.0493,
+          "self_coherence": 0.4441,
+          "triads": 5
+        }
+      }
+    },
+    "source_group_sizes": {
+      "durability": 1,
+      "privacy": 1,
+      "recovery": 1,
+      "resources": 1,
+      "serving": 1
+    },
+    "stable_groups": [
+      "privacy",
+      "recovery",
+      "resources",
+      "serving"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "durability"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 1,
+    "repair_queue": [
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "durability"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate triad has weak composite-mode support."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\nRecheck or remove weak candidate triads:\n- cp1: score=-0.0238, nearest_source=p1, why=candidate triad does not resonate with the composite source memory above the stability threshold",
+  "trace_path": "/tmp/nanda-structural-gate/s1c2-persistence-serving.trace.json"
+}

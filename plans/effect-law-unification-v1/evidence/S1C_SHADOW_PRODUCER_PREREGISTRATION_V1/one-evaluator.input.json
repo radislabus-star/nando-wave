@@ -1,0 +1,105 @@
+{
+  "task_id": "s1c2-one-evaluator",
+  "domain": "code",
+  "query": "Does the S1C-2 temporal route guarantee that evidence and serving consume one and the same prepared response evaluation?",
+  "triads": [
+    {
+      "id": "e1",
+      "subject": "eligible shadow request",
+      "relation": "calls exactly once",
+      "object": "evaluate_pre_action",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:261-281",
+      "confidence": 1.0,
+      "subject_role": "request_route",
+      "object_role": "decision_evaluator",
+      "route": "one-evaluator",
+      "group": "prepare"
+    },
+    {
+      "id": "e2",
+      "subject": "durable precommit",
+      "relation": "must precede",
+      "object": "execute_prepared",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:267-281",
+      "confidence": 1.0,
+      "subject_role": "pre_action_evidence",
+      "object_role": "execution",
+      "route": "one-evaluator",
+      "group": "chronology"
+    },
+    {
+      "id": "e3",
+      "subject": "capture failure after preparation",
+      "relation": "still consumes",
+      "object": "the same PreparedResponseEvaluation",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:291-296",
+      "confidence": 1.0,
+      "subject_role": "failure_route",
+      "object_role": "prepared_object",
+      "route": "one-evaluator",
+      "group": "failure"
+    },
+    {
+      "id": "e4",
+      "subject": "S1C-2 route",
+      "relation": "forbids",
+      "object": "evaluate then executor.execute or evaluate twice",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:283-296",
+      "confidence": 1.0,
+      "subject_role": "route_contract",
+      "object_role": "duplicate_evaluation",
+      "route": "one-evaluator",
+      "group": "denylist"
+    }
+  ],
+  "candidate_triads": [
+    {
+      "id": "ce1",
+      "subject": "eligible shadow request",
+      "relation": "calls exactly once",
+      "object": "evaluate_pre_action",
+      "evidence": "crates/nando-response-actor/src/package.rs:1085-1092",
+      "confidence": 1.0,
+      "subject_role": "request_route",
+      "object_role": "decision_evaluator",
+      "route": "one-evaluator",
+      "group": "prepare"
+    },
+    {
+      "id": "ce2",
+      "subject": "durable precommit",
+      "relation": "must precede",
+      "object": "execute_prepared",
+      "evidence": "crates/nando-response-actor/src/package.rs:1521-1538",
+      "confidence": 1.0,
+      "subject_role": "pre_action_evidence",
+      "object_role": "execution",
+      "route": "one-evaluator",
+      "group": "chronology"
+    },
+    {
+      "id": "ce3",
+      "subject": "capture failure after preparation",
+      "relation": "still consumes",
+      "object": "the same PreparedResponseEvaluation",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:28-31",
+      "confidence": 1.0,
+      "subject_role": "failure_route",
+      "object_role": "prepared_object",
+      "route": "one-evaluator",
+      "group": "failure"
+    },
+    {
+      "id": "ce4",
+      "subject": "S1C-2 route",
+      "relation": "forbids",
+      "object": "evaluate then executor.execute or evaluate twice",
+      "evidence": "crates/nando-transition-serving/src/lib.rs:5282; S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:27-31",
+      "confidence": 1.0,
+      "subject_role": "route_contract",
+      "object_role": "duplicate_evaluation",
+      "route": "one-evaluator",
+      "group": "denylist"
+    }
+  ]
+}

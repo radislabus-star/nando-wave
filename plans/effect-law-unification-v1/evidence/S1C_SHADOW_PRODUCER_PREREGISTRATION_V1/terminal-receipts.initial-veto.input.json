@@ -1,0 +1,105 @@
+{
+  "task_id": "s1c2-terminal-receipts",
+  "domain": "code",
+  "query": "Does the S1C-2 terminal route bind the actual selected K1 action and independently verified consequence to the pre-action goal without treating operational success as satisfaction?",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "selected action receipt",
+      "relation": "must bind",
+      "object": "one action and execution-binding root from the durable precommit",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:300-329",
+      "confidence": 1.0,
+      "subject_role": "selected_receipt",
+      "object_role": "precommitted_action",
+      "route": "terminal-receipts",
+      "group": "selected"
+    },
+    {
+      "id": "t2",
+      "subject": "terminal consequence",
+      "relation": "must come from",
+      "object": "existing actor plus independent verifier",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:300-329",
+      "confidence": 1.0,
+      "subject_role": "consequence_truth",
+      "object_role": "independent_verifier",
+      "route": "terminal-receipts",
+      "group": "truth"
+    },
+    {
+      "id": "t3",
+      "subject": "goal satisfaction",
+      "relation": "is computed by",
+      "object": "frozen exact predicate over verified consequence",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:329-335",
+      "confidence": 1.0,
+      "subject_role": "satisfaction_receipt",
+      "object_role": "exact_predicate",
+      "route": "terminal-receipts",
+      "group": "satisfaction"
+    },
+    {
+      "id": "t4",
+      "subject": "exact false predicate",
+      "relation": "produces",
+      "object": "durable satisfied false evidence",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:331-335",
+      "confidence": 1.0,
+      "subject_role": "negative_outcome",
+      "object_role": "valid_evidence",
+      "route": "terminal-receipts",
+      "group": "negative"
+    }
+  ],
+  "candidate_triads": [
+    {
+      "id": "ct1",
+      "subject": "SelectedActionBindingReceiptV1",
+      "relation": "binds",
+      "object": "precommit action binding runtime receipt sequence and epoch roots",
+      "evidence": "crates/nando-operator-learning/src/grounded_decision/pre_action.rs:680-756",
+      "confidence": 1.0,
+      "subject_role": "selected_receipt",
+      "object_role": "precommitted_action",
+      "route": "terminal-receipts",
+      "group": "selected"
+    },
+    {
+      "id": "ct2",
+      "subject": "execute_prepared",
+      "relation": "retains verified execution only after",
+      "object": "independent verifier and admission binding pass",
+      "evidence": "crates/nando-response-actor/src/package.rs:1544-1625",
+      "confidence": 1.0,
+      "subject_role": "consequence_truth",
+      "object_role": "independent_verifier",
+      "route": "terminal-receipts",
+      "group": "truth"
+    },
+    {
+      "id": "ct3",
+      "subject": "GoalSatisfactionReceiptV1",
+      "relation": "binds",
+      "object": "goal horizon observed consequence verifier and satisfied boolean",
+      "evidence": "crates/nando-operator-learning/src/grounded_decision/model.rs:394-455",
+      "confidence": 1.0,
+      "subject_role": "satisfaction_receipt",
+      "object_role": "exact_predicate",
+      "route": "terminal-receipts",
+      "group": "satisfaction"
+    },
+    {
+      "id": "ct4",
+      "subject": "accepted satisfaction repair",
+      "relation": "distinguishes",
+      "object": "exact false evidence from missing or unverifiable terminal truth",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:30-35",
+      "confidence": 1.0,
+      "subject_role": "negative_outcome",
+      "object_role": "valid_evidence",
+      "route": "terminal-receipts",
+      "group": "negative"
+    }
+  ]
+}

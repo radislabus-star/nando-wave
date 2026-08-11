@@ -1,0 +1,9 @@
+Id=nando-client-connector.service
+ActiveState=active
+SubState=running
+MainPID=2919
+NRestarts=0
+RouteReceipts=57676
+RouteIdentityMissing=92
+RouteReceiptFailures=0
+UptimeSeconds=837286

@@ -1,0 +1,129 @@
+{
+  "task_id": "s1c2-slice-boundary",
+  "domain": "code",
+  "query": "Does the S1C-2 paper grant only a false-by-default source implementation while keeping deployment, capture activation, learning, phase, certification, admission, and execution authority closed?",
+  "triads": [
+    {
+      "id": "b1",
+      "subject": "S1C-2 feature",
+      "relation": "defaults to",
+      "object": "NANDO_GROUNDED_DECISION_SHADOW_ENABLED false",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:131-148",
+      "confidence": 1.0,
+      "subject_role": "feature_flag",
+      "object_role": "disabled_state",
+      "route": "slice-boundary",
+      "group": "activation"
+    },
+    {
+      "id": "b2",
+      "subject": "accepted paper receipt",
+      "relation": "may grant only",
+      "object": "S1C-2 source implementation",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:53-85",
+      "confidence": 1.0,
+      "subject_role": "paper_authority",
+      "object_role": "source_slice",
+      "route": "slice-boundary",
+      "group": "source"
+    },
+    {
+      "id": "b3",
+      "subject": "S1C-2 source PASS",
+      "relation": "does not grant",
+      "object": "capture activation deployment model training or phase mutation",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:499-510",
+      "confidence": 1.0,
+      "subject_role": "source_verdict",
+      "object_role": "forbidden_authority",
+      "route": "slice-boundary",
+      "group": "authority"
+    },
+    {
+      "id": "b4",
+      "subject": "external response admission",
+      "relation": "remains",
+      "object": "the only execution authority",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:241-251",
+      "confidence": 1.0,
+      "subject_role": "admission_owner",
+      "object_role": "execution_authority",
+      "route": "slice-boundary",
+      "group": "execution"
+    },
+    {
+      "id": "b5",
+      "subject": "S1C-2 paper work",
+      "relation": "must leave untouched",
+      "object": "production connector services and graphify-out",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:512-526",
+      "confidence": 1.0,
+      "subject_role": "paper_scope",
+      "object_role": "runtime_state",
+      "route": "slice-boundary",
+      "group": "nonmutation"
+    }
+  ],
+  "candidate_triads": [
+    {
+      "id": "cb1",
+      "subject": "S1C-2 feature",
+      "relation": "defaults to",
+      "object": "NANDO_GROUNDED_DECISION_SHADOW_ENABLED false",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:33-37",
+      "confidence": 1.0,
+      "subject_role": "feature_flag",
+      "object_role": "disabled_state",
+      "route": "slice-boundary",
+      "group": "activation"
+    },
+    {
+      "id": "cb2",
+      "subject": "accepted paper receipt",
+      "relation": "may grant only",
+      "object": "S1C-2 source implementation",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:87-105",
+      "confidence": 1.0,
+      "subject_role": "paper_authority",
+      "object_role": "source_slice",
+      "route": "slice-boundary",
+      "group": "source"
+    },
+    {
+      "id": "cb3",
+      "subject": "S1C-2 source PASS",
+      "relation": "does not grant",
+      "object": "capture activation deployment model training or phase mutation",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:87-105",
+      "confidence": 1.0,
+      "subject_role": "source_verdict",
+      "object_role": "forbidden_authority",
+      "route": "slice-boundary",
+      "group": "authority"
+    },
+    {
+      "id": "cb4",
+      "subject": "external response admission",
+      "relation": "remains",
+      "object": "the only execution authority",
+      "evidence": "S1C_PRE_ACTION_DECISION_OWNER_RESOURCE_V3_FINAL_RECEIPT.json:production,authority",
+      "confidence": 1.0,
+      "subject_role": "admission_owner",
+      "object_role": "execution_authority",
+      "route": "slice-boundary",
+      "group": "execution"
+    },
+    {
+      "id": "cb5",
+      "subject": "S1C-2 paper work",
+      "relation": "must leave untouched",
+      "object": "production connector services and graphify-out",
+      "evidence": "git status scoped review before gate",
+      "confidence": 1.0,
+      "subject_role": "paper_scope",
+      "object_role": "runtime_state",
+      "route": "slice-boundary",
+      "group": "nonmutation"
+    }
+  ]
+}

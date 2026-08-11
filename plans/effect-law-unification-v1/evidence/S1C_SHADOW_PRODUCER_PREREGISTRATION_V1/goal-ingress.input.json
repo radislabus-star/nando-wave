@@ -1,0 +1,105 @@
+{
+  "task_id": "s1c2-goal-ingress",
+  "domain": "code",
+  "query": "Does the S1C-2 paper contract keep goal authority exact, pre-action, source-neutral, and fail-closed when ordinary traffic has no typed goal?",
+  "triads": [
+    {
+      "id": "g1",
+      "subject": "S1C-2 exact goal",
+      "relation": "must freeze before",
+      "object": "evaluate_pre_action",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:165-184",
+      "confidence": 1.0,
+      "subject_role": "goal_evidence",
+      "object_role": "decision_evaluator",
+      "route": "goal-ingress",
+      "group": "temporal"
+    },
+    {
+      "id": "g2",
+      "subject": "eligible goal ingress",
+      "relation": "is limited to",
+      "object": "three exact pre-action typed source classes",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:167-184",
+      "confidence": 1.0,
+      "subject_role": "ingress_allowlist",
+      "object_role": "typed_sources",
+      "route": "goal-ingress",
+      "group": "allowlist"
+    },
+    {
+      "id": "g3",
+      "subject": "goal binder",
+      "relation": "must not depend on",
+      "object": "free text rank selected action outcome or future",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:186-202",
+      "confidence": 1.0,
+      "subject_role": "binder",
+      "object_role": "forbidden_features",
+      "route": "goal-ingress",
+      "group": "denylist"
+    },
+    {
+      "id": "g4",
+      "subject": "missing exact goal",
+      "relation": "produces",
+      "object": "MISSING_EXACT_GOAL without evidence evaluation or write",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:204-217",
+      "confidence": 1.0,
+      "subject_role": "missing_surface",
+      "object_role": "terminal_censor",
+      "route": "goal-ingress",
+      "group": "fail-closed"
+    }
+  ],
+  "candidate_triads": [
+    {
+      "id": "cg1",
+      "subject": "S1C-2 exact goal",
+      "relation": "must freeze before",
+      "object": "evaluate_pre_action",
+      "evidence": "crates/nando-operator-learning/src/grounded_decision/pre_action.rs:344-393",
+      "confidence": 1.0,
+      "subject_role": "goal_evidence",
+      "object_role": "decision_evaluator",
+      "route": "goal-ingress",
+      "group": "temporal"
+    },
+    {
+      "id": "cg2",
+      "subject": "eligible goal ingress",
+      "relation": "is limited to",
+      "object": "three exact pre-action typed source classes",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:25-27",
+      "confidence": 1.0,
+      "subject_role": "ingress_allowlist",
+      "object_role": "typed_sources",
+      "route": "goal-ingress",
+      "group": "allowlist"
+    },
+    {
+      "id": "cg3",
+      "subject": "goal binder",
+      "relation": "must not depend on",
+      "object": "free text rank selected action outcome or future",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:25-27",
+      "confidence": 1.0,
+      "subject_role": "binder",
+      "object_role": "forbidden_features",
+      "route": "goal-ingress",
+      "group": "denylist"
+    },
+    {
+      "id": "cg4",
+      "subject": "missing exact goal",
+      "relation": "produces",
+      "object": "MISSING_EXACT_GOAL without evidence evaluation or write",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:33-33,72-77",
+      "confidence": 1.0,
+      "subject_role": "missing_surface",
+      "object_role": "terminal_censor",
+      "route": "goal-ingress",
+      "group": "fail-closed"
+    }
+  ]
+}

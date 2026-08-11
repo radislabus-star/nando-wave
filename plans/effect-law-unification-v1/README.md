@@ -20,6 +20,12 @@ S1C pre-action owner paper freeze, adversarial review, and verification:
 - [`S1C_PRE_ACTION_DECISION_OWNER_CRITIQUE_V1.md`](S1C_PRE_ACTION_DECISION_OWNER_CRITIQUE_V1.md)
 - [`S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md`](S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md)
 
+S1C-2 shadow-producer paper freeze, adversarial review, and verification:
+
+- [`S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md`](S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md)
+- [`S1C_SHADOW_PRODUCER_CRITIQUE_V1.md`](S1C_SHADOW_PRODUCER_CRITIQUE_V1.md)
+- [`S1C_SHADOW_PRODUCER_VERIFICATION_2026-08-11.md`](S1C_SHADOW_PRODUCER_VERIFICATION_2026-08-11.md)
+
 The forward contract keeps K1 operational laws, K2 grounded meanings, and the
 historical W1/W2/W3 Wave representation layers in separate namespaces. It does
 not rewrite or promote any frozen evidence receipt in this directory. K2 meaning
@@ -27,8 +33,9 @@ is goal-conditioned decision evidence, not a latent alias for one verified
 transition.
 
 The Grounded Meaning document is a paper-first preregistration. Its current
-ordered boundary is `S1A PASS -> S1B EMPTY -> S1C-0 PASS -> S1C-1 NEXT`. S1C-0
-is documentation authority only; runtime capture, S2 baselines, hidden model
+ordered boundary is
+`S1A PASS -> S1B EMPTY -> S1C-0 PASS -> S1C-1 PASS -> S1C-2 PREREGISTERED`.
+S1C-1 is accepted source only; runtime capture, S2 baselines, hidden model
 training, and K2 claims remain forbidden until later S1C slices produce a
 nonempty, alternative-bearing, lineage-independent natural decision surface.
 

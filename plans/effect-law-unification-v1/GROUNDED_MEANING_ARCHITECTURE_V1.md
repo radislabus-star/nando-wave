@@ -1,6 +1,6 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1B PASS / S1C-0 PASS / S1C-1 NEXT`
+Status: `CANONICAL PAPER PLAN / S0-S1B PASS / S1C-0 PASS / S1C-1 PASS / S1C-2 PREREGISTERED`
 
 Plan date: `2026-08-11`
 
@@ -24,7 +24,10 @@ adversarial review, and its verification receipt are:
 
 - `S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md`;
 - `S1C_PRE_ACTION_DECISION_OWNER_CRITIQUE_V1.md`;
-- `S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md`.
+- `S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md`;
+- `S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md`;
+- `S1C_SHADOW_PRODUCER_CRITIQUE_V1.md`;
+- `S1C_SHADOW_PRODUCER_VERIFICATION_2026-08-11.md`.
 
 Owners:
 
@@ -387,7 +390,7 @@ Exit evidence:
 
 ### S1C. Pre-Action Decision-Contract Owner
 
-Status: `S1C-0 PASS / S1C-1 NEXT / RUNTIME NOT IMPLEMENTED`
+Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 SOURCE NEXT / RUNTIME NOT ACTIVATED`
 
 Purpose: create the missing evidence before action without changing action
 authority.
@@ -745,7 +748,8 @@ S0 paper architecture               PASS
 S1A transition projection           PASS
 S1B decision census                 PASS / EMPTY_DECISION_SURFACE
 S1C-0 pre-action owner freeze       PASS
-S1C-1 pure contracts and parity     NEXT / NOT IMPLEMENTED
+S1C-1 pure contracts and parity     PASS / SOURCE ONLY
+S1C-2 shadow producer               PREREGISTERED / SOURCE NEXT
 S2 frozen baselines                 BLOCKED
 S3 hidden representation            BLOCKED
 S4 evaluation                       BLOCKED
@@ -754,10 +758,11 @@ S6 K2 product                       BLOCKED
 K2 execution authority              false
 ```
 
-The next permissible engineering action is only `S1C-1`: implement the frozen
-pure contracts, prepared-evaluation split, journal, temporal negatives, and
-current/candidate parity tests from the S1C preregistration. Deployment, model
-training, and K2 claims remain forbidden.
+The next permissible engineering action is only the preregistered `S1C-2`
+source slice: implement the false-by-default shadow producer around the existing
+prepared evaluation and durable journal, then run its frozen source gates.
+Deployment, capture activation, model training, phase mutation, and K2 claims
+remain forbidden.
 
 Structural review packets:
 

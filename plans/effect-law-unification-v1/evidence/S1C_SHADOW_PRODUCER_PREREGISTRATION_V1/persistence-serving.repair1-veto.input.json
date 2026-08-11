@@ -1,0 +1,129 @@
+{
+  "task_id": "s1c2-persistence-serving",
+  "domain": "code",
+  "query": "Does the S1C-2 persistence route require real sync and recovery while keeping all shadow failures independent from serving?",
+  "triads": [
+    {
+      "id": "p1",
+      "subject": "S1C evidence append",
+      "relation": "becomes durable only after",
+      "object": "framed ledger sync",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:337-361",
+      "confidence": 1.0,
+      "subject_role": "evidence_write",
+      "object_role": "durability_boundary",
+      "route": "persistence-serving",
+      "group": "durability"
+    },
+    {
+      "id": "p2",
+      "subject": "grounded decision recovery",
+      "relation": "accepts only",
+      "object": "precommit then selected action then satisfaction joins",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:348-365",
+      "confidence": 1.0,
+      "subject_role": "recovery_owner",
+      "object_role": "ordered_join",
+      "route": "persistence-serving",
+      "group": "recovery"
+    },
+    {
+      "id": "p3",
+      "subject": "shadow persistence failure",
+      "relation": "must not change",
+      "object": "HTTP decision bytes local accept or fallback",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:131-163,283-296",
+      "confidence": 1.0,
+      "subject_role": "failure_route",
+      "object_role": "serving_output",
+      "route": "persistence-serving",
+      "group": "serving"
+    },
+    {
+      "id": "p4",
+      "subject": "grounded decision journal",
+      "relation": "persists zero",
+      "object": "raw request session provider response or package payload bytes",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:367-369",
+      "confidence": 1.0,
+      "subject_role": "journal_owner",
+      "object_role": "raw_payload",
+      "route": "persistence-serving",
+      "group": "privacy"
+    },
+    {
+      "id": "p5",
+      "subject": "all grounded decision ledgers",
+      "relation": "share",
+      "object": "one 2 GiB quota and frozen latency budgets",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:401-421",
+      "confidence": 1.0,
+      "subject_role": "resource_owner",
+      "object_role": "resource_budget",
+      "route": "persistence-serving",
+      "group": "resources"
+    }
+  ],
+  "candidate_triads": [
+    {
+      "id": "cp1",
+      "subject": "S1C evidence append",
+      "relation": "becomes durable only after",
+      "object": "append and ledger sync",
+      "evidence": "crates/nando-transition-serving/src/grounded_decision_capture.rs:71-118",
+      "confidence": 1.0,
+      "subject_role": "evidence_write",
+      "object_role": "durability_boundary",
+      "route": "persistence-serving",
+      "group": "durability"
+    },
+    {
+      "id": "cp2",
+      "subject": "grounded decision recovery",
+      "relation": "accepts only",
+      "object": "precommit then selected action then satisfaction joins",
+      "evidence": "crates/nando-transition-serving/src/grounded_decision_capture.rs:46-60,121-129",
+      "confidence": 1.0,
+      "subject_role": "recovery_owner",
+      "object_role": "ordered_join",
+      "route": "persistence-serving",
+      "group": "recovery"
+    },
+    {
+      "id": "cp3",
+      "subject": "shadow persistence failure",
+      "relation": "must not change",
+      "object": "HTTP decision bytes local accept or fallback",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:28-35",
+      "confidence": 1.0,
+      "subject_role": "failure_route",
+      "object_role": "serving_output",
+      "route": "persistence-serving",
+      "group": "serving"
+    },
+    {
+      "id": "cp4",
+      "subject": "grounded decision journal",
+      "relation": "persists zero",
+      "object": "raw request session provider response or package payload bytes",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:367-369",
+      "confidence": 1.0,
+      "subject_role": "journal_owner",
+      "object_role": "raw_payload",
+      "route": "persistence-serving",
+      "group": "privacy"
+    },
+    {
+      "id": "cp5",
+      "subject": "all grounded decision ledgers",
+      "relation": "share",
+      "object": "one 2 GiB quota and frozen latency budgets",
+      "evidence": "crates/nando-transition-serving/src/grounded_decision_capture.rs:11-14",
+      "confidence": 1.0,
+      "subject_role": "resource_owner",
+      "object_role": "resource_budget",
+      "route": "persistence-serving",
+      "group": "resources"
+    }
+  ]
+}

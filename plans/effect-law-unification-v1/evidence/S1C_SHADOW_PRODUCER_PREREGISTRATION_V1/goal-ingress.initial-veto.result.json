@@ -1,0 +1,516 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.1-rust",
+  "core_version": "sparse-triad-v6.1-trusted-proof",
+  "wave_dim": 1024,
+  "task_id": "s1c2-goal-ingress",
+  "domain": "code",
+  "complexity_score": 27,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "g1",
+    "g2",
+    "g3",
+    "g4"
+  ],
+  "weak_triads": [
+    "cg1",
+    "cg2",
+    "cg3",
+    "cg4"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [],
+    "reversed_hits": [],
+    "token_overlap": {
+      "cg1": 0.0,
+      "cg2": 0.0714,
+      "cg3": 0.0,
+      "cg4": 0.0
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "wave_summary": {
+    "scores": {
+      "cg1": 0.0379,
+      "cg2": -0.024,
+      "cg3": -0.0619,
+      "cg4": -0.0299
+    },
+    "source_self_score": 0.4891,
+    "stable": [],
+    "weak": [
+      "cg1",
+      "cg2",
+      "cg3",
+      "cg4"
+    ],
+    "weak_details": {
+      "cg1": {
+        "nearest_source": "g2",
+        "nearest_source_score": 0.0977,
+        "score": 0.0379,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "cg2": {
+        "nearest_source": "g1",
+        "nearest_source_score": 0.0,
+        "score": -0.024,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "cg3": {
+        "nearest_source": "g3",
+        "nearest_source_score": 0.0,
+        "score": -0.0619,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "cg4": {
+        "nearest_source": "g1",
+        "nearest_source_score": 0.0313,
+        "score": -0.0299,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "allowlist": "fail-closed",
+      "denylist": "denylist",
+      "fail-closed": "temporal",
+      "temporal": "allowlist"
+    },
+    "scores": {
+      "allowlist": 0.0,
+      "denylist": 0.0,
+      "fail-closed": 0.0313,
+      "temporal": 0.0977
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "allowlist": 1,
+      "denylist": 1,
+      "fail-closed": 1,
+      "temporal": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.5044,
+      "norm": 64.56,
+      "triads": 4
+    },
+    "core_version": "sparse-triad-v6.1-trusted-proof",
+    "dominant_source_group": {
+      "allowlist": "fail-closed",
+      "denylist": "denylist",
+      "fail-closed": "temporal",
+      "temporal": "allowlist"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "allowlist": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denylist": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-closed": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "temporal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "allowlist": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denylist": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-closed": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "temporal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "allowlist": {
+        "dominant_score": 0.0,
+        "dominant_source_group": "fail-closed",
+        "exact_source_groups": []
+      },
+      "denylist": {
+        "dominant_score": 0.0,
+        "dominant_source_group": "denylist",
+        "exact_source_groups": []
+      },
+      "fail-closed": {
+        "dominant_score": 0.0313,
+        "dominant_source_group": "temporal",
+        "exact_source_groups": []
+      },
+      "temporal": {
+        "dominant_score": 0.0977,
+        "dominant_source_group": "allowlist",
+        "exact_source_groups": []
+      }
+    },
+    "interference_matrix": {
+      "allowlist": {
+        "allowlist": -0.0039,
+        "denylist": -0.043,
+        "fail-closed": 0.0,
+        "temporal": 0.0
+      },
+      "denylist": {
+        "allowlist": -0.0156,
+        "denylist": 0.0,
+        "fail-closed": -0.0352,
+        "temporal": -0.0703
+      },
+      "fail-closed": {
+        "allowlist": -0.043,
+        "denylist": -0.0195,
+        "fail-closed": -0.0273,
+        "temporal": 0.0313
+      },
+      "temporal": {
+        "allowlist": 0.0977,
+        "denylist": -0.043,
+        "fail-closed": -0.0273,
+        "temporal": 0.0469
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "allowlist": {
+          "gravity": 1.0,
+          "owner": "allowlist",
+          "owners": {
+            "allowlist": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "denylist": {
+          "gravity": 1.0,
+          "owner": "denylist",
+          "owners": {
+            "denylist": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "fail-closed": {
+          "gravity": 1.0,
+          "owner": "fail-closed",
+          "owners": {
+            "fail-closed": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "temporal": {
+          "gravity": 1.0,
+          "owner": "temporal",
+          "owners": {
+            "temporal": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "goal-ingress": {
+          "gravity": 0.25,
+          "owner": "allowlist",
+          "owners": {
+            "allowlist": 2,
+            "denylist": 2,
+            "fail-closed": 2,
+            "temporal": 2
+          },
+          "support": 2,
+          "total": 8
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "allowlist"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "denylist"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "fail-closed"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "temporal"
+      }
+    ],
+    "repair_tasks": [
+      {
+        "candidate_group": "allowlist",
+        "dominant_source_group": "fail-closed",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "denylist",
+        "dominant_source_group": "denylist",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "fail-closed",
+        "dominant_source_group": "temporal",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0313,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "temporal",
+        "dominant_source_group": "allowlist",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0977,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      }
+    ],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "goal-ingress": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [],
+          "evidence_paths": [
+            "crates/nando-operator-learning/src/grounded_decision/pre_action.rs:344-393",
+            "s1c_shadow_producer_critique_v1.md:25-27",
+            "s1c_shadow_producer_critique_v1.md:33-33,72-77",
+            "s1c_shadow_producer_preregistration_v1.md:165-184",
+            "s1c_shadow_producer_preregistration_v1.md:167-184",
+            "s1c_shadow_producer_preregistration_v1.md:186-202",
+            "s1c_shadow_producer_preregistration_v1.md:204-217"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "allowlist",
+            "denylist",
+            "fail-closed",
+            "temporal"
+          ],
+          "scopes": [
+            "goal-ingress"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "goal-ingress": {
+          "norm": 64.56,
+          "self_coherence": 0.5044,
+          "triads": 4
+        }
+      },
+      "interference_matrix": {
+        "goal-ingress": {
+          "goal-ingress": -0.0386
+        }
+      },
+      "source": {
+        "goal-ingress": {
+          "norm": 62.6099,
+          "self_coherence": 0.4891,
+          "triads": 4
+        }
+      }
+    },
+    "source_group_sizes": {
+      "allowlist": 1,
+      "denylist": 1,
+      "fail-closed": 1,
+      "temporal": 1
+    },
+    "stable_groups": [],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "allowlist"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "denylist"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "fail-closed"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "temporal"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 4,
+    "repair_queue": [
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "allowlist"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "denylist"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "fail-closed"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "temporal"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate triad has weak composite-mode support."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\nRecheck or remove weak candidate triads:\n- cg1: score=0.0379, nearest_source=g2, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- cg2: score=-0.024, nearest_source=g1, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- cg3: score=-0.0619, nearest_source=g3, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- cg4: score=-0.0299, nearest_source=g1, why=candidate triad does not resonate with the composite source memory above the stability threshold",
+  "trace_path": "/tmp/nanda-structural-gate/s1c2-goal-ingress.trace.json"
+}

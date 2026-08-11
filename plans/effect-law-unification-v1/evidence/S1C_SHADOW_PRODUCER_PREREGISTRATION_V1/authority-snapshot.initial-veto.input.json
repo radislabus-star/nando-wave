@@ -1,0 +1,105 @@
+{
+  "task_id": "s1c2-authority-snapshot",
+  "domain": "code",
+  "query": "Does the S1C-2 paper repair the current executor-only cache with one atomic executor and K1 authority snapshot while preserving external admission authority?",
+  "triads": [
+    {
+      "id": "a1",
+      "subject": "off-path refresh owner",
+      "relation": "constructs",
+      "object": "one executor K1 index and authority-root snapshot",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:219-236",
+      "confidence": 1.0,
+      "subject_role": "refresh_owner",
+      "object_role": "atomic_snapshot",
+      "route": "authority-snapshot",
+      "group": "publication"
+    },
+    {
+      "id": "a2",
+      "subject": "authority input fingerprints",
+      "relation": "must match",
+      "object": "before and after snapshot construction",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:228-239",
+      "confidence": 1.0,
+      "subject_role": "identity_guard",
+      "object_role": "coherent_epoch",
+      "route": "authority-snapshot",
+      "group": "identity"
+    },
+    {
+      "id": "a3",
+      "subject": "request thread",
+      "relation": "clones under one read lock",
+      "object": "matching executor and K1 index",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:241-247",
+      "confidence": 1.0,
+      "subject_role": "request_owner",
+      "object_role": "atomic_snapshot",
+      "route": "authority-snapshot",
+      "group": "request"
+    },
+    {
+      "id": "a4",
+      "subject": "external response admission",
+      "relation": "remains",
+      "object": "the only execution authority",
+      "evidence": "S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md:241-251",
+      "confidence": 1.0,
+      "subject_role": "admission_owner",
+      "object_role": "execution_authority",
+      "route": "authority-snapshot",
+      "group": "authority"
+    }
+  ],
+  "candidate_triads": [
+    {
+      "id": "ca1",
+      "subject": "current ResponseExecutorCache",
+      "relation": "contains only",
+      "object": "executor without K1ActionIndexV1",
+      "evidence": "crates/nando-transition-serving/src/lib.rs:501-510",
+      "confidence": 1.0,
+      "subject_role": "current_blocker",
+      "object_role": "incomplete_snapshot",
+      "route": "authority-snapshot",
+      "group": "publication"
+    },
+    {
+      "id": "ca2",
+      "subject": "accepted atomic repair",
+      "relation": "replaces",
+      "object": "executor-only cache with one coherent snapshot",
+      "evidence": "S1C_SHADOW_PRODUCER_CRITIQUE_V1.md:27-30",
+      "confidence": 1.0,
+      "subject_role": "refresh_owner",
+      "object_role": "atomic_snapshot",
+      "route": "authority-snapshot",
+      "group": "identity"
+    },
+    {
+      "id": "ca3",
+      "subject": "current off-path refresh",
+      "relation": "already fingerprints",
+      "object": "registry and admission inputs before cache publication",
+      "evidence": "crates/nando-transition-serving/src/lib.rs:6718-6839",
+      "confidence": 1.0,
+      "subject_role": "request_owner",
+      "object_role": "atomic_snapshot",
+      "route": "authority-snapshot",
+      "group": "request"
+    },
+    {
+      "id": "ca4",
+      "subject": "ResponseExecutor build_k1_action_index_v1",
+      "relation": "validates against",
+      "object": "registry admission certification and K1 gate roots",
+      "evidence": "crates/nando-response-actor/src/package.rs:780-863",
+      "confidence": 1.0,
+      "subject_role": "admission_owner",
+      "object_role": "execution_authority",
+      "route": "authority-snapshot",
+      "group": "authority"
+    }
+  ]
+}
