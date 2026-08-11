@@ -1,0 +1,16 @@
+
+running 1 test
+test performance::full_generation_shadow_latency_stays_within_traffic_budget ... F7E_LATENCY matched_p99_ns=1047534 no_match_p99_ns=331210 hard_max_ns=1169828 samples=4096
+
+thread 'performance::full_generation_shadow_latency_stays_within_traffic_budget' (2411601) panicked at crates/nando-transition-serving/tests/f7_generation_shadow_v3/performance.rs:66:5:
+matched p99 exceeded 1 ms
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    performance::full_generation_shadow_latency_stays_within_traffic_budget
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 5.52s
+

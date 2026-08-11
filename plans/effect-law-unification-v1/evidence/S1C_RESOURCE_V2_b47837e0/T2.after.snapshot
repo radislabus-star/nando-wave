@@ -1,0 +1,24 @@
+label=T2.after
+2026-08-11T15:37:33,571754187+03:00
+loadavg=1.40 1.63 1.78 2/497 2411346
+unit=nando-transport-gateway.service
+MainPID=682430
+NRestarts=0
+ActiveState=active
+unit=nando-transition-serving.service
+MainPID=165670
+NRestarts=0
+ActiveState=active
+unit=nando-response-learning.service
+MainPID=369456
+NRestarts=0
+ActiveState=active
+unit=nando-gateway-control.service
+MainPID=1035203
+NRestarts=0
+ActiveState=active
+unit=nando-operator-certification-authority.service
+MainPID=164668
+NRestarts=0
+ActiveState=active
+{"ok":true,"mode":"CPU","admission_verdict":"PASS","transition_false_accepts":0,"response_runtime_parity_mismatches":null,"response_active_profiles":2}

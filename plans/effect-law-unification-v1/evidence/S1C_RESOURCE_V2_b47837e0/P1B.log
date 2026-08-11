@@ -1,0 +1,7 @@
+
+running 1 test
+test performance::full_generation_shadow_latency_stays_within_traffic_budget ... F7E_LATENCY matched_p99_ns=657341 no_match_p99_ns=199997 hard_max_ns=817196 samples=4096
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.54s
+

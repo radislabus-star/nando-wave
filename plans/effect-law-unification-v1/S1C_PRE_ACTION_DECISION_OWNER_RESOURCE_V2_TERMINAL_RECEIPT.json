@@ -1,0 +1,116 @@
+{
+  "schema": "nando.s1c1-resource-v2.terminal-receipt.v1",
+  "recorded_at": "2026-08-11T15:59:10.017805878+03:00",
+  "verdict": "INVALID_ENVIRONMENT",
+  "reason": "precommitted_verifier_rejects_frozen_git_sha1_protocol_identity",
+  "protocol": {
+    "commit": "b47837e0870b7df2501b6e25fe182d4dccc9bff5",
+    "document": "plans/effect-law-unification-v1/S1C_PRE_ACTION_DECISION_OWNER_RESOURCE_PROTOCOL_V2.md",
+    "document_sha256": "12dfe428a463ea0716983932f2722823e87ac92adaac64845d08464c88a00ba2",
+    "source_manifest_root": "aa046add5048987c744ca25db89d1510d5f99105305d72bcfc4bed7be805b6b2"
+  },
+  "candidate_identity": {
+    "tracked_diff_sha256": "283d566c531b87f16dde62f77f97a752fd1ccdabefa425c4453f396a47ea24f1",
+    "pre_action_rs_sha256": "3a22c7e2f7ba679f0294cc19fab460d28113f8dce5b5ec05fa8c88df2dfff3e9",
+    "pre_action_tests_rs_sha256": "879336edfaf0f837c503351a9184ff768b06c31f4e3b4069e180117f635b2615",
+    "grounded_decision_capture_rs_sha256": "10aaf8ba40e0152ea205934729521adc76384b7a890acd2a8fc1c0f1e3f50486",
+    "identity_drift": false
+  },
+  "measurement_capture": {
+    "remote_host": "e@192.168.3.94",
+    "runner_directory": "/tmp/s1c1-v2-b47837e0",
+    "runner_directory_rule": "first_8_hex_characters_of_protocol_commit",
+    "started_at": "2026-08-11T15:37:19.734160372+03:00",
+    "finished_at": "2026-08-11T15:38:04.654104267+03:00",
+    "boot_id": "5e35be95-c789-4ce9-b74e-3d42c3b81a3a",
+    "schedule": [
+      "T1",
+      "P1B",
+      "P1C",
+      "T2",
+      "P2C",
+      "P2B",
+      "T3",
+      "P3B",
+      "P3C"
+    ],
+    "required_outputs": 9,
+    "present_outputs": 9,
+    "missing_outputs": [],
+    "fixed_two_second_gaps_observed": true,
+    "binary_hashes_match_protocol": true,
+    "test_names_match_protocol": true,
+    "sample_counts_match_protocol": true,
+    "production_pid_or_restart_drift": false,
+    "raw_evidence_copy": "plans/effect-law-unification-v1/evidence/S1C_RESOURCE_V2_b47837e0",
+    "raw_evidence_files": 38,
+    "raw_evidence_manifest_sha256": "6dfbc3fc0858054f508f114916df63e781e1120ad62d247eef9a5f8522ac8ce3"
+  },
+  "connector_survival": {
+    "before": {
+      "observed_at": "2026-08-11T15:36:42.179596933+03:00",
+      "main_pid": 2919,
+      "nrestarts": 0,
+      "active": true,
+      "route_receipt_failures": 0
+    },
+    "after": {
+      "observed_at": "2026-08-11T15:59:10.017805878+03:00",
+      "main_pid": 2919,
+      "nrestarts": 0,
+      "active": true,
+      "route_receipt_failures": 0
+    },
+    "survived": true
+  },
+  "measurements": {
+    "path": "plans/effect-law-unification-v1/S1C_PRE_ACTION_DECISION_OWNER_RESOURCE_V2_MEASUREMENTS.json",
+    "sha256": "9ca92edd68a4ad09f5200684b81fe1de4a1606b1f962ca6e13ce1b2de98322a8",
+    "observed_non_authoritative_summary": {
+      "targeted_absolute_passes": 3,
+      "targeted_runs": 3,
+      "baseline_inherited_absolute_passes": 1,
+      "candidate_inherited_absolute_passes": 2,
+      "inherited_runs_per_side": 3
+    }
+  },
+  "precommitted_verifier": {
+    "path": "ops/remote-backend/verify_s1c1_resource_v2.py",
+    "sha256": "1f1c10cc873bf6f4c12bb499979632798155996be684e49fa48fd88dd454bf5a",
+    "exit_code": 2,
+    "stdout_sha256": "45f485fc47188199204d068c7ae072c301dbc0c10558b0c524d715ed7c85dcb8",
+    "output": {
+      "schema": "nando.s1c1-resource-v2.verdict.v1",
+      "verdict": "INVALID_ENVIRONMENT",
+      "reason": "protocol_commit_invalid",
+      "authority_ready": false,
+      "deployment_allowed": false
+    },
+    "contract_mismatch": {
+      "frozen_protocol_identity": "40_hex_git_sha1",
+      "runner_identity": "40_hex_git_sha1",
+      "verifier_accepts": "64_hex_root_only",
+      "repair_requires": "V3_and_new_post_change_watermark"
+    }
+  },
+  "authority": {
+    "s1c1_resource_pass": false,
+    "implementation_commit_allowed": false,
+    "s1c2_allowed": false,
+    "deployment_allowed": false,
+    "rerun_allowed_under_v2": false,
+    "v1_f8d_verdict_unchanged": "VETO"
+  },
+  "production": {
+    "deployment_performed": false,
+    "service_modified": false,
+    "service_restarted": false,
+    "graphify_out_modified": false
+  },
+  "postmortem": {
+    "initial_false_missing_evidence_conclusion": "search_used_7_hex_character_directory_b47837e",
+    "actual_runner_directory": "8_hex_character_directory_b47837e0",
+    "measurement_rerun_performed": false,
+    "replacement_output_created": false
+  }
+}
