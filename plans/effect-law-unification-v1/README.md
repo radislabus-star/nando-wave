@@ -14,6 +14,12 @@ Adversarial review and accepted repairs:
 Paper-plan verification receipt:
 [`GROUNDED_MEANING_PLAN_VERIFICATION_2026-08-11.md`](GROUNDED_MEANING_PLAN_VERIFICATION_2026-08-11.md).
 
+S1C pre-action owner paper freeze, adversarial review, and verification:
+
+- [`S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md`](S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md)
+- [`S1C_PRE_ACTION_DECISION_OWNER_CRITIQUE_V1.md`](S1C_PRE_ACTION_DECISION_OWNER_CRITIQUE_V1.md)
+- [`S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md`](S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md)
+
 The forward contract keeps K1 operational laws, K2 grounded meanings, and the
 historical W1/W2/W3 Wave representation layers in separate namespaces. It does
 not rewrite or promote any frozen evidence receipt in this directory. K2 meaning
@@ -21,10 +27,10 @@ is goal-conditioned decision evidence, not a latent alias for one verified
 transition.
 
 The Grounded Meaning document is a paper-first preregistration. Its current
-ordered boundary is `S1A PASS -> S1B EMPTY -> S1C NEXT`. S2 baselines, hidden
-model training, and K2 claims are forbidden until S1C produces a nonempty,
-lineage-independent natural decision surface. The critique records why waiting
-on the old archive cannot create that surface.
+ordered boundary is `S1A PASS -> S1B EMPTY -> S1C-0 PASS -> S1C-1 NEXT`. S1C-0
+is documentation authority only; runtime capture, S2 baselines, hidden model
+training, and K2 claims remain forbidden until later S1C slices produce a
+nonempty, alternative-bearing, lineage-independent natural decision surface.
 
 This directory contains one migration ladder and its immutable checkpoint
 evidence. Read the ladder in order; do not infer current authority from the

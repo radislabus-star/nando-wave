@@ -1,12 +1,12 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1B PASS / S1C NEXT`
+Status: `CANONICAL PAPER PLAN / S0-S1B PASS / S1C-0 PASS / S1C-1 NEXT`
 
 Plan date: `2026-08-11`
 
 Revision: `PRE-ACTION DECISION GROUNDING`
 
-Plan structure gate: `PASS / SPLIT ROUTES 2 OF 2 / AUTHORITY FALSE`
+Plan structure gate: `PASS / S1C-0 SPLIT ROUTES 7 OF 7 / AUTHORITY FALSE`
 
 Implementation authority: `FALSE`
 
@@ -19,7 +19,12 @@ Architectural authority remains `ARCHITECTURE_CANON.md`. Product execution and
 economics remain owned by
 `plans/nando-live-cpu-savings-v1/NANDO_LIVE_CPU_SAVINGS_MASTER_PLAN.md`.
 The critical review and accepted repairs for this plan are recorded in
-`GROUNDED_MEANING_PLAN_CRITIQUE_V1.md`.
+`GROUNDED_MEANING_PLAN_CRITIQUE_V1.md`. The exact S1C route freeze, its
+adversarial review, and its verification receipt are:
+
+- `S1C_PRE_ACTION_DECISION_OWNER_PREREGISTRATION_V1.md`;
+- `S1C_PRE_ACTION_DECISION_OWNER_CRITIQUE_V1.md`;
+- `S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md`.
 
 Owners:
 
@@ -298,11 +303,14 @@ episode is `MISSING_EXACT_GOAL` and remains `DYNAMICS_ONLY`.
 
 ### 6.3 Available Actions
 
-External admission owns which K1 packages are permitted to execute. A separate
-deterministic applicability evaluator owns which admitted packages are
-applicable under the frozen observation. `AvailableActionContractsV1` freezes
-that complete set, plus `ABSTAIN`, before ranking. A meaningful alternative is
-a nonselected applicable K1 action, not a renamed copy and not only `ABSTAIN`.
+External admission owns which packages are permitted to execute. The latest
+anchored certification projection separately owns which of those packages are
+K1 epistemic units. A deterministic applicability evaluator owns which
+admitted, K1-eligible packages are applicable under the frozen observation.
+`AvailableActionContractsV1` freezes their complete package-neutral semantic
+quotient, plus `ABSTAIN`. A meaningful alternative is a nonselected applicable
+K1 action, not a renamed implementation, a product-only package, or only
+`ABSTAIN`.
 
 ### 6.4 Decision Episode
 
@@ -379,7 +387,7 @@ Exit evidence:
 
 ### S1C. Pre-Action Decision-Contract Owner
 
-Status: `NEXT / NOT IMPLEMENTED`
+Status: `S1C-0 PASS / S1C-1 NEXT / RUNTIME NOT IMPLEMENTED`
 
 Purpose: create the missing evidence before action without changing action
 authority.
@@ -390,11 +398,11 @@ Logical route:
 ordinary pre-action observation
 -> source-neutral goal binder
 -> exact goal predicate + frozen horizon
--> current external-admission registry snapshot
--> deterministic applicability evaluation under the same observation
--> complete applicable K1 action set + ABSTAIN
+-> atomic admitted-registry + anchored-certification snapshot
+-> one deterministic applicability evaluation under the same observation
+-> complete package-neutral applicable K1 action set + ABSTAIN
 -> atomic durable DecisionContractPrecommitV1
--> existing action selection and execution
+-> consume the same prepared selection and execute
 -> selected-action binding
 -> independent verified consequence at horizon
 -> GoalSatisfactionReceiptV1
@@ -404,18 +412,23 @@ ordinary pre-action observation
 Ownership boundary:
 
 - pure contracts stay in `nando-operator-learning::grounded_decision`;
-- the runtime producer attaches at the existing pre-action decision boundary,
-  before candidate ranking or action selection;
+- the exact goal freezes at the existing pre-action decision boundary before
+  applicability evaluation;
+- applicability and current top-8 ranking run once inside an opaque prepared
+  evaluation; no selected action is published before durable precommit;
 - external admission remains the source of admitted-package truth;
+- the anchored certification ledger remains the source of K1 eligibility;
 - the frozen deterministic applicability evaluator owns applicability truth;
 - actor plus independent verifier remain consequence truth;
 - the cold census joins receipts and cannot create them retroactively.
 
 `DecisionContractPrecommitV1` must bind the observation, typed goal, constraints,
-horizon, admission registry revision/root, applicability evaluator schema/root,
-complete available-action root, feature exclusions, sequence, and durable write
-receipt. Reconstructing a different available set from the same commitment is a
-hard identity failure.
+horizon, admission registry revision/root, certification revision/root,
+applicability evaluator schema/root, complete available-action root, feature
+exclusions, sequence, and journal contract. Its durability receipt is a
+deterministic projection of the synced framed record coordinates; it is not a
+self-referential field. Reconstructing a different available set from the same
+commitment is a hard identity failure.
 
 S1C is split before code:
 
@@ -450,11 +463,11 @@ S1C exit gate:
 S1C terminal outcomes:
 
 ```text
-PASS                        valid natural decision episodes exist
+VETO                        leakage, authority drift, or runtime regression
 EMPTY_GOAL_SURFACE          no pre-action exact goal exists
 EMPTY_ALTERNATIVE_SURFACE   no meaningful action alternative exists
-INSUFFICIENT_LINEAGES       episodes exist but cannot support a split
-VETO                        leakage, authority drift, or runtime regression
+INSUFFICIENT_LINEAGES       fewer than two independent decision lineages
+PASS                        alternative-bearing episodes in two lineages
 ```
 
 No S2 work starts unless S1C is PASS and at least two independent decision
@@ -731,7 +744,8 @@ Law Lab substrate                   CAPABILITY PASS / RUNTIME OFF
 S0 paper architecture               PASS
 S1A transition projection           PASS
 S1B decision census                 PASS / EMPTY_DECISION_SURFACE
-S1C pre-action owner                NOT IMPLEMENTED
+S1C-0 pre-action owner freeze       PASS
+S1C-1 pure contracts and parity     NEXT / NOT IMPLEMENTED
 S2 frozen baselines                 BLOCKED
 S3 hidden representation            BLOCKED
 S4 evaluation                       BLOCKED
@@ -740,10 +754,10 @@ S6 K2 product                       BLOCKED
 K2 execution authority              false
 ```
 
-The next permissible engineering action is only `S1C-0`: freeze the exact
-pre-action insertion point, allowlist/denylist, persistence protocol, budgets,
-test oracle, and rollback boundary. No model training and no K2 claim are
-permitted before natural decision episodes pass the S1C and S2 gates.
+The next permissible engineering action is only `S1C-1`: implement the frozen
+pure contracts, prepared-evaluation split, journal, temporal negatives, and
+current/candidate parity tests from the S1C preregistration. Deployment, model
+training, and K2 claims remain forbidden.
 
 Structural review packets:
 
