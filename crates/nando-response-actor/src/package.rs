@@ -24,10 +24,12 @@ use crate::{
     execute_response, verify_response_independently,
 };
 
-use nando_operator_admission::OperatorCertificationLedgerV1;
+use nando_operator_admission::{OperatorCertificationEntryV1, OperatorCertificationLedgerV1};
+use nando_operator_learning::multi_source::K1ConsequenceTypeV1;
 use nando_operator_learning::{
     AvailableActionContractsV1, DecisionAuthoritySnapshotV1, K1ActionContractProjectionV1,
-    OpaqueActionExecutionBindingV1,
+    MAX_DECISION_ACTION_BINDINGS_V1, OpaqueActionExecutionBindingV1,
+    opaque_action_execution_binding_set_root_v1,
 };
 
 #[cfg(test)]
@@ -588,6 +590,24 @@ pub struct RoutedResponseExecution {
     pub exact_actor_checks: usize,
     pub phase_margin_micro: Option<i64>,
     verified: Option<IndependentlyVerifiedExecution>,
+    k1_capture: Option<K1ExecutedActionCaptureV1>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct K1ExecutedActionCaptureV1 {
+    pub selected_action_contract_root_sha256: String,
+    pub opaque_execution_binding_root_sha256: String,
+    pub verifier_contract_root_sha256: String,
+    pub consequence_type: K1ConsequenceTypeV1,
+    pub observed_consequence_root_sha256: String,
+    pub independent_runtime_verification_root_sha256: String,
+}
+
+impl RoutedResponseExecution {
+    #[must_use]
+    pub const fn k1_capture(&self) -> Option<&K1ExecutedActionCaptureV1> {
+        self.k1_capture.as_ref()
+    }
 }
 
 pub const RESPONSE_PRE_ACTION_EVALUATOR_SCHEMA_V1: &str = "nando.response-pre-action-evaluator.v1";
@@ -608,6 +628,7 @@ pub enum PreparedK1EvidenceV1 {
         authority_snapshot_root_sha256: String,
         available_actions: AvailableActionContractsV1,
         opaque_execution_binding_set_root_sha256: String,
+        opaque_execution_binding_roots_sha256: Vec<String>,
     },
     Censored(PreparedK1EvidenceCensorV1),
 }
@@ -653,6 +674,7 @@ pub struct K1ActionIndexV1 {
     authority_snapshot: DecisionAuthoritySnapshotV1,
     abstain_contract_root_sha256: String,
     entries: BTreeMap<String, K1ActionIndexEntryV1>,
+    incomplete_package_ids: BTreeSet<String>,
 }
 
 impl K1ActionIndexV1 {
@@ -661,9 +683,24 @@ impl K1ActionIndexV1 {
         abstain_contract_root_sha256: String,
         entries: Vec<K1ActionIndexEntryV1>,
     ) -> Result<Self, &'static str> {
+        Self::new_with_incomplete(
+            authority_snapshot,
+            abstain_contract_root_sha256,
+            entries,
+            BTreeSet::new(),
+        )
+    }
+
+    fn new_with_incomplete(
+        authority_snapshot: DecisionAuthoritySnapshotV1,
+        abstain_contract_root_sha256: String,
+        entries: Vec<K1ActionIndexEntryV1>,
+        incomplete_package_ids: BTreeSet<String>,
+    ) -> Result<Self, &'static str> {
         authority_snapshot.validate()?;
         if !valid_nonzero_sha256(&abstain_contract_root_sha256)
             || entries.len() > MAX_K1_ACTION_INDEX_ENTRIES_V1
+            || incomplete_package_ids.len() > MAX_K1_ACTION_INDEX_ENTRIES_V1
         {
             return Err("k1_action_index_invalid");
         }
@@ -688,11 +725,30 @@ impl K1ActionIndexV1 {
             authority_snapshot,
             abstain_contract_root_sha256,
             entries: by_package,
+            incomplete_package_ids,
         })
     }
 
     fn entry(&self, package_id: &str) -> Option<&K1ActionIndexEntryV1> {
         self.entries.get(package_id)
+    }
+
+    #[must_use]
+    pub const fn authority_snapshot(&self) -> &DecisionAuthoritySnapshotV1 {
+        &self.authority_snapshot
+    }
+
+    #[must_use]
+    pub fn capture_material(
+        &self,
+        action_contract_root_sha256: &str,
+        execution_binding_root_sha256: &str,
+    ) -> Option<(K1ActionContractProjectionV1, OpaqueActionExecutionBindingV1)> {
+        self.entries.values().find_map(|entry| {
+            (entry.projection.action_contract_root_sha256 == action_contract_root_sha256
+                && entry.execution_binding.binding_root_sha256 == execution_binding_root_sha256)
+                .then(|| (entry.projection.clone(), entry.execution_binding.clone()))
+        })
     }
 }
 
@@ -700,6 +756,7 @@ struct PreparedResponseCandidate<'a> {
     margin: i64,
     package: &'a ResponsePackage,
     crystallized_binding: Option<BoundCrystallizedOperator>,
+    k1_entry: Option<&'a K1ActionIndexEntryV1>,
 }
 
 enum PreparedResponsePlan<'a> {
@@ -860,6 +917,80 @@ impl ResponseExecutor {
             }
         }
         K1ActionIndexV1::new(authority_snapshot, abstain_contract_root_sha256, entries)
+    }
+
+    /// Builds the immutable capture snapshot from the executor's own admitted
+    /// package set and one already anchored certification ledger.
+    pub fn build_certified_k1_action_index_v1(
+        &self,
+        certification_ledger: &OperatorCertificationLedgerV1,
+    ) -> Result<(DecisionAuthoritySnapshotV1, K1ActionIndexV1), &'static str> {
+        certification_ledger.validate()?;
+        let vocabulary_gate = certification_ledger.k1_vocabulary_gate()?;
+        let runtime_authority = self
+            .authority
+            .as_ref()
+            .ok_or("k1_action_index_execution_authority_missing")?;
+        let authority_snapshot = DecisionAuthoritySnapshotV1::seal(
+            self.schema.clone(),
+            self.revision,
+            self.registry_root_sha256.clone(),
+            runtime_authority.admission_sha256.clone(),
+            certification_ledger.revision,
+            certification_ledger.ledger_root_sha256.clone(),
+            vocabulary_gate.gate_root_sha256,
+            crate::response_runtime_contract_sha256(),
+        )?;
+        let latest = certification_ledger
+            .latest_entries()
+            .into_iter()
+            .map(|entry| (entry.package_id.as_str(), entry))
+            .collect::<BTreeMap<_, _>>();
+        let mut entries = Vec::new();
+        let mut incomplete_package_ids = BTreeSet::new();
+        for package in &self.packages {
+            let Some(certification) = latest.get(package.package_id.as_str()).copied() else {
+                continue;
+            };
+            if !certification.k1_unit_eligible {
+                continue;
+            }
+            let material = (|| {
+                let projection = certified_action_projection_v1(package, certification)?;
+                let admitted = runtime_authority
+                    .packages
+                    .get(&package.package_id)
+                    .ok_or("k1_action_index_admission_binding_missing")?;
+                let execution_binding = OpaqueActionExecutionBindingV1::seal(
+                    projection.action_contract_root_sha256.clone(),
+                    crate::response_execution_payload_digest(package)?,
+                    admitted_package_binding_root_v1(admitted)?,
+                    certification.entry_root_sha256.clone(),
+                    authority_snapshot.response_registry_root_sha256.clone(),
+                    authority_snapshot.response_registry_revision,
+                    authority_snapshot.certification_ledger_root_sha256.clone(),
+                    authority_snapshot.certification_ledger_revision,
+                )?;
+                K1ActionIndexEntryV1::new(package.package_id.clone(), projection, execution_binding)
+            })();
+            match material {
+                Ok(entry) => entries.push(entry),
+                Err(_) => {
+                    incomplete_package_ids.insert(package.package_id.clone());
+                }
+            }
+        }
+        let abstain_contract_root_sha256 = canonical_json_sha256(&(
+            "nando.k1-abstain-action-contract.v1",
+            crate::response_runtime_contract_sha256(),
+        ))?;
+        let index = K1ActionIndexV1::new_with_incomplete(
+            authority_snapshot.clone(),
+            abstain_contract_root_sha256,
+            entries,
+            incomplete_package_ids,
+        )?;
+        Ok((authority_snapshot, index))
     }
 
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -1086,7 +1217,7 @@ impl ResponseExecutor {
         &'a self,
         request_text: &'a str,
         provider_payload: &'a Value,
-        k1_index: &K1ActionIndexV1,
+        k1_index: &'a K1ActionIndexV1,
     ) -> PreparedResponseEvaluation<'a> {
         self.prepare_inner(request_text, provider_payload, true, Some(k1_index))
     }
@@ -1199,6 +1330,7 @@ impl ResponseExecutor {
             exact_actor_checks: 1,
             phase_margin_micro: (control != ResponsePhaseControlV1::NoPhase).then_some(margin),
             verified: None,
+            k1_capture: None,
         }
     }
 
@@ -1244,7 +1376,7 @@ impl ResponseExecutor {
         request_text: &'a str,
         provider_payload: &'a Value,
         require_authority: bool,
-        k1_index: Option<&K1ActionIndexV1>,
+        k1_index: Option<&'a K1ActionIndexV1>,
     ) -> PreparedResponseEvaluation<'a> {
         let (request_identity_root_sha256, provider_identity_root_sha256) = match k1_index {
             Some(_) => (
@@ -1285,6 +1417,7 @@ impl ResponseExecutor {
         let mut k1_action_roots = BTreeSet::new();
         let mut k1_binding_roots = BTreeSet::new();
         let mut k1_capacity_exhausted = false;
+        let mut k1_projection_incomplete = false;
         for package in &self.packages {
             if !routing_predicates_match_counts(&package.routing_predicates, &context_counts) {
                 continue;
@@ -1323,6 +1456,7 @@ impl ResponseExecutor {
                         &mut k1_action_roots,
                         &mut k1_binding_roots,
                         &mut k1_capacity_exhausted,
+                        &mut k1_projection_incomplete,
                     );
                     insert_top_response_candidate(
                         &mut ranked,
@@ -1330,6 +1464,8 @@ impl ResponseExecutor {
                             margin,
                             package,
                             crystallized_binding: Some(bound),
+                            k1_entry: effective_k1_index
+                                .and_then(|index| index.entry(&package.package_id)),
                         },
                     );
                 }
@@ -1445,6 +1581,7 @@ impl ResponseExecutor {
                     &mut k1_action_roots,
                     &mut k1_binding_roots,
                     &mut k1_capacity_exhausted,
+                    &mut k1_projection_incomplete,
                 );
                 insert_top_response_candidate(
                     &mut ranked,
@@ -1452,6 +1589,8 @@ impl ResponseExecutor {
                         margin,
                         package,
                         crystallized_binding: None,
+                        k1_entry: effective_k1_index
+                            .and_then(|index| index.entry(&package.package_id)),
                     },
                 );
             }
@@ -1462,6 +1601,7 @@ impl ResponseExecutor {
             k1_action_roots,
             k1_binding_roots,
             k1_capacity_exhausted,
+            k1_projection_incomplete,
         );
         let Some(top_margin) = ranked[0].as_ref().map(|candidate| candidate.margin) else {
             return PreparedResponseEvaluation {
@@ -1540,6 +1680,7 @@ impl ResponseExecutor {
             margin: top_margin,
             package,
             crystallized_binding,
+            k1_entry,
         } = candidate;
         let (execution_status, execution_reason, execution_response, independently_verified) =
             if let Some(bound) = crystallized_binding {
@@ -1611,6 +1752,43 @@ impl ResponseExecutor {
         } else {
             None
         };
+        let k1_capture = k1_entry.and_then(|entry| {
+            let verified = verified.as_ref()?;
+            let independent_runtime_verification_root_sha256 = canonical_json_sha256(&(
+                "nando.k1-independent-runtime-verification.v1",
+                self.snapshot_root_sha256.as_str(),
+                entry.projection.action_contract_root_sha256.as_str(),
+                entry.execution_binding.binding_root_sha256.as_str(),
+                verified.authority.admission_sha256.as_str(),
+                verified.authority.registry_sha256.as_str(),
+                verified.authority.execution_payload_sha256.as_str(),
+                verified.authority.actor_program_sha256.as_str(),
+                verified
+                    .authority
+                    .independent_verifier_program_sha256
+                    .as_str(),
+                verified.provider_evidence_sha256.as_str(),
+                verified.actor_output_sha256.as_str(),
+            ))
+            .ok()?;
+            Some(K1ExecutedActionCaptureV1 {
+                selected_action_contract_root_sha256: entry
+                    .projection
+                    .action_contract_root_sha256
+                    .clone(),
+                opaque_execution_binding_root_sha256: entry
+                    .execution_binding
+                    .binding_root_sha256
+                    .clone(),
+                verifier_contract_root_sha256: entry
+                    .projection
+                    .verifier_contract_root_sha256
+                    .clone(),
+                consequence_type: entry.projection.consequence_type,
+                observed_consequence_root_sha256: verified.actor_output_sha256.clone(),
+                independent_runtime_verification_root_sha256,
+            })
+        });
         RoutedResponseExecution {
             status: execution_status,
             reason: execution_reason,
@@ -1622,7 +1800,137 @@ impl ResponseExecutor {
             exact_actor_checks: 1,
             phase_margin_micro: Some(top_margin),
             verified,
+            k1_capture,
         }
+    }
+}
+
+fn certified_action_projection_v1(
+    package: &ResponsePackage,
+    certification: &OperatorCertificationEntryV1,
+) -> Result<K1ActionContractProjectionV1, &'static str> {
+    package.validate()?;
+    certification.validate()?;
+    if package.package_id != certification.package_id || !certification.k1_unit_eligible {
+        return Err("k1_action_projection_certification_mismatch");
+    }
+    let adaptive = package
+        .proof
+        .adaptive_identification
+        .as_ref()
+        .ok_or("k1_action_projection_semantic_class_missing")?;
+    adaptive.validate()?;
+    let adaptive_value =
+        serde_json::to_value(adaptive).map_err(|_| "k1_action_projection_adaptive_encode")?;
+    let root_field = |name: &str| {
+        adaptive_value
+            .get(name)
+            .and_then(Value::as_str)
+            .filter(|root| valid_nonzero_sha256(root))
+            .map(str::to_owned)
+            .ok_or("k1_action_projection_adaptive_root_missing")
+    };
+    let program_semantic_class_id_sha256 = root_field("semantic_class_id_sha256")?;
+    let applicability_contract_root_sha256 = root_field("applicability_scope_root_sha256")?;
+    let verifier = package
+        .verifier
+        .as_ref()
+        .ok_or("k1_action_projection_verifier_missing")?;
+    K1ActionContractProjectionV1::seal(
+        certification.semantic_law_id_sha256.clone(),
+        certification.role_topology_id_sha256.clone(),
+        program_semantic_class_id_sha256,
+        certification.semantic_law_id_sha256.clone(),
+        applicability_contract_root_sha256,
+        crate::response_independent_verifier_program_digest(verifier)?,
+        response_program_pinned_callee_set_root_v1(&package.program)?,
+        response_program_consequence_type_v1(&package.program),
+    )
+}
+
+fn response_program_pinned_callee_set_root_v1(
+    program: &ResponseProgram,
+) -> Result<String, &'static str> {
+    fn collect(program: &ResponseProgram, callees: &mut Vec<String>) {
+        match &program.operation {
+            ResponseOperation::UniqueConsensus { variants, .. } => {
+                for variant in variants {
+                    collect(&variant.program, callees);
+                }
+            }
+            ResponseOperation::AdvancePlan { function_name }
+            | ResponseOperation::FunctionCallFromRoles { function_name, .. }
+            | ResponseOperation::WaitOnYieldedCell { function_name, .. }
+            | ResponseOperation::WaitOnAnyYieldedCell { function_name, .. }
+            | ResponseOperation::WaitOnYieldedSurfaces { function_name, .. } => {
+                callees.push(function_name.clone());
+            }
+            ResponseOperation::CustomToolCallFromRoles {
+                custom_tool_name,
+                inner_tool_name,
+                ..
+            } => {
+                callees.push(custom_tool_name.clone());
+                callees.push(inner_tool_name.clone());
+            }
+            ResponseOperation::ProjectSelectedValue { .. }
+            | ResponseOperation::ProjectStatus { .. }
+            | ResponseOperation::ComposeCollection { .. }
+            | ResponseOperation::CopyAfterPrefix { .. }
+            | ResponseOperation::TestResultSummary { .. } => {}
+        }
+    }
+    let mut callees = Vec::new();
+    collect(program, &mut callees);
+    callees.sort_unstable();
+    callees.dedup();
+    canonical_json_sha256(&("nando.response-pinned-callee-set.v1", callees))
+}
+
+fn response_program_consequence_type_v1(program: &ResponseProgram) -> K1ConsequenceTypeV1 {
+    match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => {
+            let mut types = variants
+                .iter()
+                .map(|variant| response_program_consequence_type_v1(&variant.program));
+            let Some(first) = types.next() else {
+                return K1ConsequenceTypeV1::Record;
+            };
+            if types.all(|value| value == first) {
+                first
+            } else {
+                K1ConsequenceTypeV1::Record
+            }
+        }
+        ResponseOperation::ProjectSelectedValue { renderer, .. } => {
+            if matches!(renderer, crate::CollectionOutputRenderer::Direct) {
+                K1ConsequenceTypeV1::Scalar
+            } else {
+                K1ConsequenceTypeV1::RenderedSequence
+            }
+        }
+        ResponseOperation::ProjectStatus { renderer, .. } => {
+            if matches!(renderer, crate::CollectionOutputRenderer::Direct) {
+                K1ConsequenceTypeV1::Boolean
+            } else {
+                K1ConsequenceTypeV1::RenderedSequence
+            }
+        }
+        ResponseOperation::ComposeCollection { renderer, .. } => {
+            if matches!(renderer, crate::CollectionOutputRenderer::Direct) {
+                K1ConsequenceTypeV1::Collection
+            } else {
+                K1ConsequenceTypeV1::RenderedSequence
+            }
+        }
+        ResponseOperation::CopyAfterPrefix { .. } => K1ConsequenceTypeV1::Scalar,
+        ResponseOperation::TestResultSummary { .. }
+        | ResponseOperation::AdvancePlan { .. }
+        | ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. }
+        | ResponseOperation::WaitOnYieldedCell { .. }
+        | ResponseOperation::WaitOnAnyYieldedCell { .. }
+        | ResponseOperation::WaitOnYieldedSurfaces { .. } => K1ConsequenceTypeV1::Record,
     }
 }
 
@@ -1632,8 +1940,15 @@ fn record_applicable_k1_action(
     action_roots: &mut BTreeSet<String>,
     binding_roots: &mut BTreeSet<String>,
     capacity_exhausted: &mut bool,
+    projection_incomplete: &mut bool,
 ) {
-    let Some(entry) = k1_index.and_then(|index| index.entry(&package.package_id)) else {
+    let Some(index) = k1_index else {
+        return;
+    };
+    let Some(entry) = index.entry(&package.package_id) else {
+        if index.incomplete_package_ids.contains(&package.package_id) {
+            *projection_incomplete = true;
+        }
         return;
     };
     let action_root = &entry.projection.action_contract_root_sha256;
@@ -1642,7 +1957,7 @@ fn record_applicable_k1_action(
         return;
     }
     action_roots.insert(action_root.clone());
-    if binding_roots.len() >= MAX_K1_ACTION_INDEX_ENTRIES_V1
+    if binding_roots.len() >= MAX_DECISION_ACTION_BINDINGS_V1
         && !binding_roots.contains(&entry.execution_binding.binding_root_sha256)
     {
         *capacity_exhausted = true;
@@ -1657,6 +1972,7 @@ fn finalize_prepared_k1_evidence(
     action_roots: BTreeSet<String>,
     binding_roots: BTreeSet<String>,
     capacity_exhausted: bool,
+    projection_incomplete: bool,
 ) -> PreparedK1EvidenceV1 {
     let Some(index) = k1_index else {
         return PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::CaptureDisabled);
@@ -1668,6 +1984,11 @@ fn finalize_prepared_k1_evidence(
     }
     if capacity_exhausted {
         return PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::CapacityExhausted);
+    }
+    if projection_incomplete {
+        return PreparedK1EvidenceV1::Censored(
+            PreparedK1EvidenceCensorV1::ActionProjectionIncomplete,
+        );
     }
     if action_roots.is_empty() {
         return PreparedK1EvidenceV1::Censored(PreparedK1EvidenceCensorV1::NoApplicableK1Action);
@@ -1684,21 +2005,20 @@ fn finalize_prepared_k1_evidence(
         }
     };
     let binding_roots = binding_roots.into_iter().collect::<Vec<_>>();
-    let opaque_execution_binding_set_root_sha256 = match canonical_json_sha256(&(
-        "nando.opaque-action-execution-binding-set.v1",
-        &binding_roots,
-    )) {
-        Ok(root) => root,
-        Err(_) => {
-            return PreparedK1EvidenceV1::Censored(
-                PreparedK1EvidenceCensorV1::ActionProjectionIncomplete,
-            );
-        }
-    };
+    let opaque_execution_binding_set_root_sha256 =
+        match opaque_action_execution_binding_set_root_v1(binding_roots.clone()) {
+            Ok(root) => root,
+            Err(_) => {
+                return PreparedK1EvidenceV1::Censored(
+                    PreparedK1EvidenceCensorV1::ActionProjectionIncomplete,
+                );
+            }
+        };
     PreparedK1EvidenceV1::Ready {
         authority_snapshot_root_sha256: index.authority_snapshot.snapshot_root_sha256.clone(),
         available_actions,
         opaque_execution_binding_set_root_sha256,
+        opaque_execution_binding_roots_sha256: binding_roots,
     }
 }
 
@@ -2414,6 +2734,7 @@ fn rejected(reason: impl Into<String>) -> RoutedResponseExecution {
         exact_actor_checks: 0,
         phase_margin_micro: None,
         verified: None,
+        k1_capture: None,
     }
 }
 
@@ -2891,7 +3212,9 @@ mod tests {
         assert!(prepared.request_identity_root_sha256().is_some());
         assert!(prepared.provider_identity_root_sha256().is_some());
         let evidence = prepared.k1_evidence().clone();
-        let direct = executor.execute_prepared(prepared);
+        let mut direct = executor.execute_prepared(prepared);
+        assert!(direct.k1_capture.is_some());
+        direct.k1_capture = None;
         assert_eq!(direct, compatibility);
         let PreparedK1EvidenceV1::Ready {
             authority_snapshot_root_sha256,
@@ -2965,6 +3288,80 @@ mod tests {
                 vec![entry],
             ),
             Err("k1_action_index_execution_payload_mismatch")
+        );
+    }
+
+    #[test]
+    fn certified_projection_and_execution_binding_share_one_authority_snapshot() {
+        let mut package = adaptive_request_last_token_package();
+        package.anti_centers = vec![stable_atom_id("intent:ordinary_question")];
+        let package_id = package.package_id.clone();
+        let semantic_law = digest_root("certified-projection-law");
+        let topology = digest_root("certified-projection-topology");
+        let expected_projection = K1ActionContractProjectionV1::seal(
+            semantic_law,
+            topology,
+            "22".repeat(32),
+            digest_root("certified-projection-law"),
+            "33".repeat(32),
+            crate::response_independent_verifier_program_digest(
+                package.verifier.as_ref().expect("verifier"),
+            )
+            .expect("verifier digest"),
+            response_program_pinned_callee_set_root_v1(&package.program).expect("callee set"),
+            response_program_consequence_type_v1(&package.program),
+        )
+        .expect("expected projection");
+        let ledger = k1_certification_ledger(&package_id, &expected_projection);
+        let certification = ledger
+            .latest_entries()
+            .into_iter()
+            .find(|entry| entry.package_id == package_id)
+            .expect("certification");
+        assert_eq!(
+            certified_action_projection_v1(&package, certification).expect("projection"),
+            expected_projection
+        );
+        let (executor, _) = authorized_executor(181, vec![package]);
+        let (authority, index) = executor
+            .build_certified_k1_action_index_v1(&ledger)
+            .expect("certified index");
+        let entry = index.entry(&package_id).expect("K1 entry");
+        assert_eq!(entry.projection, expected_projection);
+        assert_eq!(
+            entry.execution_binding.response_registry_root_sha256,
+            authority.response_registry_root_sha256
+        );
+        assert_eq!(
+            entry.execution_binding.certification_ledger_root_sha256,
+            authority.certification_ledger_root_sha256
+        );
+        assert_eq!(
+            index.authority_snapshot().snapshot_root_sha256,
+            authority.snapshot_root_sha256
+        );
+    }
+
+    #[test]
+    fn collection_projection_consequence_type_tracks_the_renderer() {
+        let direct = ResponseProgram::compose_collection(
+            Vec::new(),
+            ValueProjectionFormat::CanonicalJson,
+            "completed",
+        );
+        assert_eq!(
+            response_program_consequence_type_v1(&direct),
+            K1ConsequenceTypeV1::Collection
+        );
+
+        let rendered =
+            direct.with_collection_renderer(crate::CollectionOutputRenderer::RenderTemplate {
+                prefix: "items: ".to_owned(),
+                suffix: String::new(),
+            });
+        assert_eq!(
+            response_program_consequence_type_v1(&rendered),
+            K1ConsequenceTypeV1::RenderedSequence
         );
     }
 

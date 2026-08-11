@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::multi_source::K1ConsequenceTypeV1;
 
-use super::{PreActionGoalBindingReceiptV1, TypedGoalContractV1};
+use super::{
+    AvailableActionContractsV1, GoalSatisfactionReceiptV1, PreActionGoalBindingReceiptV1,
+    TypedGoalContractV1,
+};
 
 pub const TYPED_GOAL_PREDICATE_ARTIFACT_SCHEMA_V1: &str = "nando.typed-goal-predicate-artifact.v1";
 pub const K1_ACTION_CONTRACT_PROJECTION_SCHEMA_V1: &str = "nando.k1-action-contract-projection.v1";
@@ -15,9 +18,64 @@ pub const DECISION_CONTRACT_DURABILITY_RECEIPT_SCHEMA_V1: &str =
     "nando.decision-contract-durability-receipt.v1";
 pub const SELECTED_ACTION_BINDING_RECEIPT_SCHEMA_V1: &str =
     "nando.selected-action-binding-receipt.v1";
+pub const DURABLE_SELECTED_ACTION_BINDING_SCHEMA_V1: &str =
+    "nando.durable-selected-action-binding.v1";
+pub const DURABLE_GOAL_SATISFACTION_SCHEMA_V1: &str = "nando.durable-goal-satisfaction.v1";
+pub const OPAQUE_ACTION_EXECUTION_BINDING_SET_SCHEMA_V1: &str =
+    "nando.opaque-action-execution-binding-set.v1";
 
 pub const MAX_TYPED_GOAL_PREDICATE_BYTES_V1: usize = 4 * 1024;
 pub const MAX_DECISION_PRECOMMIT_BYTES_V1: usize = 32 * 1024;
+pub const MAX_DECISION_ACTION_BINDINGS_V1: usize = 256;
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GroundedDecisionShadowCensorV1 {
+    CaptureDisabled,
+    IneligibleTrafficProvenance,
+    MissingExactGoal,
+    GoalInputInvalid,
+    AuthoritySnapshotUnavailable,
+    AuthoritySnapshotMismatch,
+    NoApplicableK1Action,
+    ActionProjectionIncomplete,
+    ActionCapacityExhausted,
+    PrecommitSealFailed,
+    PrecommitSyncFailed,
+    SelectedActionNotK1,
+    SelectedActionBindingFailed,
+    SelectedActionSyncFailed,
+    TerminalConsequenceUnavailable,
+    IndependentVerifierUnavailable,
+    GoalPredicateVerificationFailed,
+    SatisfactionSyncFailed,
+}
+
+impl GroundedDecisionShadowCensorV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::CaptureDisabled => "CAPTURE_DISABLED",
+            Self::IneligibleTrafficProvenance => "INELIGIBLE_TRAFFIC_PROVENANCE",
+            Self::MissingExactGoal => "MISSING_EXACT_GOAL",
+            Self::GoalInputInvalid => "GOAL_INPUT_INVALID",
+            Self::AuthoritySnapshotUnavailable => "AUTHORITY_SNAPSHOT_UNAVAILABLE",
+            Self::AuthoritySnapshotMismatch => "AUTHORITY_SNAPSHOT_MISMATCH",
+            Self::NoApplicableK1Action => "NO_APPLICABLE_K1_ACTION",
+            Self::ActionProjectionIncomplete => "ACTION_PROJECTION_INCOMPLETE",
+            Self::ActionCapacityExhausted => "ACTION_CAPACITY_EXHAUSTED",
+            Self::PrecommitSealFailed => "PRECOMMIT_SEAL_FAILED",
+            Self::PrecommitSyncFailed => "PRECOMMIT_SYNC_FAILED",
+            Self::SelectedActionNotK1 => "SELECTED_ACTION_NOT_K1",
+            Self::SelectedActionBindingFailed => "SELECTED_ACTION_BINDING_FAILED",
+            Self::SelectedActionSyncFailed => "SELECTED_ACTION_SYNC_FAILED",
+            Self::TerminalConsequenceUnavailable => "TERMINAL_CONSEQUENCE_UNAVAILABLE",
+            Self::IndependentVerifierUnavailable => "INDEPENDENT_VERIFIER_UNAVAILABLE",
+            Self::GoalPredicateVerificationFailed => "GOAL_PREDICATE_VERIFICATION_FAILED",
+            Self::SatisfactionSyncFailed => "SATISFACTION_SYNC_FAILED",
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -754,6 +812,268 @@ impl SelectedActionBindingReceiptV1 {
             self.process_epoch_root_sha256.as_str(),
         ))
     }
+}
+
+pub fn opaque_action_execution_binding_set_root_v1(
+    mut binding_roots_sha256: Vec<String>,
+) -> Result<String, &'static str> {
+    binding_roots_sha256.sort_unstable();
+    binding_roots_sha256.dedup();
+    if binding_roots_sha256.is_empty()
+        || binding_roots_sha256.len() > MAX_DECISION_ACTION_BINDINGS_V1
+        || binding_roots_sha256
+            .iter()
+            .any(|root| !valid_nonzero_sha256(root))
+    {
+        return Err("opaque_action_execution_binding_set_invalid");
+    }
+    canonical_json_sha256(&(
+        OPAQUE_ACTION_EXECUTION_BINDING_SET_SCHEMA_V1,
+        &binding_roots_sha256,
+    ))
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DurableSelectedActionBindingV1 {
+    pub schema: String,
+    pub record_root_sha256: String,
+    pub receipt: SelectedActionBindingReceiptV1,
+    pub action_projection: K1ActionContractProjectionV1,
+    pub execution_binding: OpaqueActionExecutionBindingV1,
+    pub available_actions: AvailableActionContractsV1,
+    pub opaque_execution_binding_roots_sha256: Vec<String>,
+    pub observed_consequence_root_sha256: String,
+}
+
+impl DurableSelectedActionBindingV1 {
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal(
+        precommit: &DecisionContractPrecommitV1,
+        receipt: SelectedActionBindingReceiptV1,
+        action_projection: K1ActionContractProjectionV1,
+        execution_binding: OpaqueActionExecutionBindingV1,
+        available_actions: AvailableActionContractsV1,
+        mut opaque_execution_binding_roots_sha256: Vec<String>,
+        observed_consequence_root_sha256: String,
+    ) -> Result<Self, &'static str> {
+        opaque_execution_binding_roots_sha256.sort_unstable();
+        opaque_execution_binding_roots_sha256.dedup();
+        let mut record = Self {
+            schema: DURABLE_SELECTED_ACTION_BINDING_SCHEMA_V1.to_owned(),
+            record_root_sha256: String::new(),
+            receipt,
+            action_projection,
+            execution_binding,
+            available_actions,
+            opaque_execution_binding_roots_sha256,
+            observed_consequence_root_sha256,
+        };
+        record.validate_join(precommit)?;
+        record.record_root_sha256 = record.expected_root()?;
+        record.validate_join(precommit)?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> Result<(), &'static str> {
+        self.receipt.validate()?;
+        self.action_projection.validate()?;
+        self.execution_binding.validate()?;
+        self.available_actions.validate()?;
+        if self.schema != DURABLE_SELECTED_ACTION_BINDING_SCHEMA_V1
+            || !valid_nonzero_sha256(&self.record_root_sha256)
+            || !valid_nonzero_sha256(&self.observed_consequence_root_sha256)
+            || self.action_projection.action_contract_root_sha256
+                != self.execution_binding.action_contract_root_sha256
+            || self.receipt.selected_action_contract_root_sha256
+                != self.action_projection.action_contract_root_sha256
+            || self.receipt.opaque_execution_binding_root_sha256
+                != self.execution_binding.binding_root_sha256
+            || !self
+                .available_actions
+                .action_contract_roots_sha256
+                .contains(&self.action_projection.action_contract_root_sha256)
+            || !self
+                .opaque_execution_binding_roots_sha256
+                .contains(&self.execution_binding.binding_root_sha256)
+            || opaque_action_execution_binding_set_root_v1(
+                self.opaque_execution_binding_roots_sha256.clone(),
+            )
+            .is_err()
+            || self.expected_root()? != self.record_root_sha256
+        {
+            return Err("durable_selected_action_binding_invalid");
+        }
+        Ok(())
+    }
+
+    pub fn validate_join(
+        &self,
+        precommit: &DecisionContractPrecommitV1,
+    ) -> Result<(), &'static str> {
+        precommit.validate()?;
+        if !self.record_root_sha256.is_empty() {
+            self.validate()?;
+        } else {
+            self.receipt.validate()?;
+            self.action_projection.validate()?;
+            self.execution_binding.validate()?;
+            self.available_actions.validate()?;
+        }
+        let binding_set_root = opaque_action_execution_binding_set_root_v1(
+            self.opaque_execution_binding_roots_sha256.clone(),
+        )?;
+        if self.receipt.precommit_root_sha256 != precommit.precommit_root_sha256
+            || self.receipt.process_epoch_root_sha256 != precommit.process_epoch_root_sha256
+            || self.available_actions.contracts_root_sha256
+                != precommit.available_action_contracts_root_sha256
+            || binding_set_root != precommit.opaque_execution_binding_set_root_sha256
+            || self.execution_binding.response_registry_root_sha256
+                != precommit.response_registry_root_sha256
+            || self.execution_binding.response_registry_revision
+                != precommit.response_registry_revision
+            || self.execution_binding.certification_ledger_root_sha256
+                != precommit.certification_ledger_root_sha256
+            || self.execution_binding.certification_ledger_revision
+                != precommit.certification_ledger_revision
+        {
+            return Err("durable_selected_action_binding_join_invalid");
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> Result<String, &'static str> {
+        canonical_json_sha256(&(
+            DURABLE_SELECTED_ACTION_BINDING_SCHEMA_V1,
+            self.receipt.receipt_root_sha256.as_str(),
+            self.action_projection.action_contract_root_sha256.as_str(),
+            self.execution_binding.binding_root_sha256.as_str(),
+            self.available_actions.contracts_root_sha256.as_str(),
+            &self.opaque_execution_binding_roots_sha256,
+            self.observed_consequence_root_sha256.as_str(),
+        ))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DurableGoalSatisfactionV1 {
+    pub schema: String,
+    pub record_root_sha256: String,
+    pub precommit_root_sha256: String,
+    pub selected_action_receipt_root_sha256: String,
+    pub goal_contract: TypedGoalContractV1,
+    pub predicate_artifact: TypedGoalPredicateArtifactV1,
+    pub receipt: GoalSatisfactionReceiptV1,
+}
+
+impl DurableGoalSatisfactionV1 {
+    pub fn seal(
+        precommit: &DecisionContractPrecommitV1,
+        selected: &DurableSelectedActionBindingV1,
+        goal_contract: TypedGoalContractV1,
+        predicate_artifact: TypedGoalPredicateArtifactV1,
+        receipt: GoalSatisfactionReceiptV1,
+    ) -> Result<Self, &'static str> {
+        let mut record = Self {
+            schema: DURABLE_GOAL_SATISFACTION_SCHEMA_V1.to_owned(),
+            record_root_sha256: String::new(),
+            precommit_root_sha256: precommit.precommit_root_sha256.clone(),
+            selected_action_receipt_root_sha256: selected.receipt.receipt_root_sha256.clone(),
+            goal_contract,
+            predicate_artifact,
+            receipt,
+        };
+        record.validate_join(precommit, selected)?;
+        record.record_root_sha256 = record.expected_root()?;
+        record.validate_join(precommit, selected)?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> Result<(), &'static str> {
+        self.goal_contract.validate()?;
+        self.predicate_artifact.validate()?;
+        self.receipt.validate()?;
+        if self.schema != DURABLE_GOAL_SATISFACTION_SCHEMA_V1
+            || !roots_valid([
+                self.record_root_sha256.as_str(),
+                self.precommit_root_sha256.as_str(),
+                self.selected_action_receipt_root_sha256.as_str(),
+            ])
+            || self.goal_contract.typed_success_predicate_root_sha256
+                != self.predicate_artifact.artifact_root_sha256
+            || self.receipt.goal_contract_root_sha256
+                != self.goal_contract.goal_contract_root_sha256
+            || self.receipt.outcome_horizon_contract_root_sha256
+                != self.goal_contract.outcome_horizon_contract_root_sha256
+            || self.expected_root()? != self.record_root_sha256
+        {
+            return Err("durable_goal_satisfaction_invalid");
+        }
+        Ok(())
+    }
+
+    pub fn validate_join(
+        &self,
+        precommit: &DecisionContractPrecommitV1,
+        selected: &DurableSelectedActionBindingV1,
+    ) -> Result<(), &'static str> {
+        precommit.validate()?;
+        selected.validate_join(precommit)?;
+        if !self.record_root_sha256.is_empty() {
+            self.validate()?;
+        } else {
+            self.goal_contract.validate()?;
+            self.predicate_artifact.validate()?;
+            self.receipt.validate()?;
+        }
+        let expected_satisfied = verify_exact_goal_predicate_v1(
+            &self.predicate_artifact,
+            selected.action_projection.consequence_type,
+            &selected.action_projection.verifier_contract_root_sha256,
+            &selected.observed_consequence_root_sha256,
+        )?;
+        if self.precommit_root_sha256 != precommit.precommit_root_sha256
+            || self.selected_action_receipt_root_sha256 != selected.receipt.receipt_root_sha256
+            || self.goal_contract.goal_contract_root_sha256
+                != precommit.typed_goal_contract_root_sha256
+            || self.receipt.observed_consequence_root_sha256
+                != selected.observed_consequence_root_sha256
+            || self.receipt.independent_verifier_root_sha256
+                != selected.receipt.runtime_verification_receipt_root_sha256
+            || self.receipt.satisfied != expected_satisfied
+        {
+            return Err("durable_goal_satisfaction_join_invalid");
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> Result<String, &'static str> {
+        canonical_json_sha256(&(
+            DURABLE_GOAL_SATISFACTION_SCHEMA_V1,
+            self.precommit_root_sha256.as_str(),
+            self.selected_action_receipt_root_sha256.as_str(),
+            self.goal_contract.goal_contract_root_sha256.as_str(),
+            self.predicate_artifact.artifact_root_sha256.as_str(),
+            self.receipt.receipt_root_sha256.as_str(),
+        ))
+    }
+}
+
+pub fn verify_exact_goal_predicate_v1(
+    predicate: &TypedGoalPredicateArtifactV1,
+    observed_consequence_type: K1ConsequenceTypeV1,
+    verifier_contract_root_sha256: &str,
+    observed_consequence_root_sha256: &str,
+) -> Result<bool, &'static str> {
+    predicate.validate()?;
+    if observed_consequence_type != predicate.consequence_type
+        || verifier_contract_root_sha256 != predicate.independent_verifier_contract_root_sha256
+        || !valid_nonzero_sha256(observed_consequence_root_sha256)
+    {
+        return Err("exact_goal_predicate_verification_invalid");
+    }
+    Ok(predicate.typed_target_root_sha256 == observed_consequence_root_sha256)
 }
 
 fn comparator_matches_type(

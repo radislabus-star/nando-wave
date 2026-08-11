@@ -65,11 +65,19 @@ use nando_expression_runtime::ExpressionRuntime;
 use nando_operator_admission::{
     RuntimePackageRevocationLedgerV1, RuntimePackageRevocationV1, finalize_post_verifier_receipt,
 };
-use nando_operator_kernel::{RelationFrame, RuntimeProjectionV3, Sha256CommitmentV3};
+use nando_operator_kernel::{
+    RelationFrame, RuntimeProjectionV3, Sha256CommitmentV3, canonical_json_sha256,
+    valid_nonzero_sha256,
+};
 use nando_operator_learning::{
-    EvidencePolicyV1, LearningRequestStructureInputV1, LearningRequestStructureV1,
-    OnlineCollectionConfig, OnlineCollectionStatus, OpportunityBridgeEventV1, ReducibilityClass,
-    is_source_neutral_relation_frame,
+    AvailableActionContractsV1, DecisionContractDurabilityReceiptV1,
+    DecisionContractPrecommitInputV1, DecisionContractPrecommitV1, DurableGoalSatisfactionV1,
+    DurableSelectedActionBindingV1, EvidencePolicyV1, ExactPreActionGoalInputV1,
+    GoalSatisfactionReceiptV1, GroundedDecisionShadowCensorV1, LearningRequestStructureInputV1,
+    LearningRequestStructureV1, OnlineCollectionConfig, OnlineCollectionStatus,
+    OpportunityBridgeEventV1, ReducibilityClass, TypedGoalContractV1, TypedGoalPredicateArtifactV1,
+    bind_exact_pre_action_goal_v1, is_source_neutral_relation_frame,
+    verify_exact_goal_predicate_v1,
 };
 use nando_operator_proof::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
 use nando_operator_runtime::{
@@ -77,10 +85,13 @@ use nando_operator_runtime::{
     response_pre_action_context_atom_ids,
 };
 use nando_response_actor::{
-    CrystallizedCollectionAdmissionCandidateV1, ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1,
-    OnlineAdmissionCandidateBundle, OnlineCollectionMiner, OnlineResponseMinerReport,
-    OnlineResponseStream, OnlineResponseTailConfig, ResponseExecutor, ResponsePackageState,
-    ResponseRegistry, response_execution_payload_digest, response_runtime_contract_sha256,
+    CrystallizedCollectionAdmissionCandidateV1, K1ActionIndexV1,
+    ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1, OnlineAdmissionCandidateBundle,
+    OnlineCollectionMiner, OnlineResponseMinerReport, OnlineResponseStream,
+    OnlineResponseTailConfig, PreparedK1EvidenceCensorV1, PreparedK1EvidenceV1,
+    PreparedResponseEvaluation, RESPONSE_PRE_ACTION_EVALUATOR_SCHEMA_V1, ResponseExecutor,
+    ResponsePackageState, ResponseRegistry, RoutedResponseExecution,
+    response_execution_payload_digest, response_runtime_contract_sha256,
 };
 use nando_transition_inducer::{
     LIVE_GROUNDED_TRACE_SCHEMA, LIVE_TRANSITION_REQUEST_SCHEMA, LiveTransitionExecutor,
@@ -97,7 +108,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -211,6 +222,8 @@ pub struct ServingConfig {
     pub operator_certification_authority_public_key_path: PathBuf,
     pub operator_cleanup_verifier_public_key_path: PathBuf,
     pub operator_cleanup_receipts_path: PathBuf,
+    pub grounded_decision_shadow_enabled: bool,
+    pub grounded_decision_journal_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -488,6 +501,12 @@ impl ServingConfig {
                 "NANDO_OPERATOR_CLEANUP_RECEIPTS",
                 "/var/lib/nando-wave-cleanup-receipts-v1",
             ),
+            grounded_decision_shadow_enabled: env_flag("NANDO_GROUNDED_DECISION_SHADOW_ENABLED"),
+            grounded_decision_journal_path: env_path_join(
+                "NANDO_GROUNDED_DECISION_JOURNAL",
+                &state_dir,
+                "grounded-meaning-v1/decision-contract-precommits-v1",
+            ),
         })
     }
 }
@@ -500,13 +519,36 @@ struct ExecutorCache {
 
 struct ResponseExecutorCache {
     executor: Option<Arc<ResponseExecutor>>,
+    decision_snapshot: Option<Arc<ResponseDecisionSnapshotV1>>,
     ready: bool,
     gate_build_sha256: String,
     runtime_build_sha256: String,
-    input_fingerprint: Option<(u64, u128, u64, u128)>,
+    input_fingerprint: Option<ResponseAuthorityInputFingerprintV1>,
     embedded_candidate_revision: u64,
     admission_expires_at_unix: u64,
     last_error: String,
+    decision_snapshot_error: String,
+}
+
+#[derive(Clone)]
+struct ResponseDecisionSnapshotV1 {
+    executor: Arc<ResponseExecutor>,
+    k1_index: Arc<K1ActionIndexV1>,
+    authority_snapshot_root_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ResponseAuthorityInputFingerprintV1 {
+    registry_bytes: u64,
+    registry_modified_nanos: u128,
+    registry_sha256: String,
+    admission_bytes: u64,
+    admission_modified_nanos: u128,
+    admission_sha256: String,
+    certification_journal_sha256: Option<String>,
+    certification_anchor_sha256: Option<String>,
+    certification_public_key_sha256: Option<String>,
+    runtime_contract_sha256: String,
 }
 
 struct ExpressionShadowCache {
@@ -531,6 +573,7 @@ impl Default for ResponseExecutorCache {
     fn default() -> Self {
         Self {
             executor: None,
+            decision_snapshot: None,
             ready: false,
             gate_build_sha256: String::new(),
             runtime_build_sha256: String::new(),
@@ -538,6 +581,7 @@ impl Default for ResponseExecutorCache {
             embedded_candidate_revision: 0,
             admission_expires_at_unix: 0,
             last_error: "not_loaded".into(),
+            decision_snapshot_error: "not_loaded".into(),
         }
     }
 }
@@ -728,6 +772,47 @@ fn trace_id_digest(trace_id: &str) -> [u8; 32] {
     Sha256::digest(trace_id.as_bytes()).into()
 }
 
+struct GroundedDecisionShadowRuntimeV1 {
+    journal: Mutex<grounded_decision_capture::GroundedDecisionPrecommitJournalV1>,
+    process_epoch_root_sha256: String,
+    monotonic_origin: Instant,
+    censors: Mutex<BTreeMap<GroundedDecisionShadowCensorV1, u64>>,
+}
+
+impl GroundedDecisionShadowRuntimeV1 {
+    fn open(path: &Path) -> Result<Self, String> {
+        let epoch_material = format!(
+            "nando-grounded-decision-process-epoch:{}:{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        Ok(Self {
+            journal: Mutex::new(
+                grounded_decision_capture::GroundedDecisionPrecommitJournalV1::open(path)?,
+            ),
+            process_epoch_root_sha256: sha256_bytes(epoch_material.as_bytes()),
+            monotonic_origin: Instant::now(),
+            censors: Mutex::new(BTreeMap::new()),
+        })
+    }
+
+    fn monotonic_nanos(&self) -> u64 {
+        u64::try_from(self.monotonic_origin.elapsed().as_nanos())
+            .unwrap_or(u64::MAX)
+            .max(1)
+    }
+
+    fn record_censor(&self, censor: GroundedDecisionShadowCensorV1) {
+        if let Ok(mut censors) = self.censors.lock() {
+            let count = censors.entry(censor).or_default();
+            *count = count.saturating_add(1);
+        }
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     config: Arc<ServingConfig>,
@@ -777,6 +862,7 @@ struct AppState {
     k1_natural_scheduler_report:
         Arc<RwLock<Option<k1_natural_scheduler_runtime::K1NaturalSchedulerRuntimeReportV1>>>,
     k1_structural_frontier_source_root: Arc<RwLock<Option<String>>>,
+    grounded_decision_shadow: Option<Arc<GroundedDecisionShadowRuntimeV1>>,
 }
 
 #[derive(Default)]
@@ -1033,6 +1119,17 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     } else {
         None
     };
+    let grounded_decision_shadow = if config.grounded_decision_shadow_enabled {
+        match GroundedDecisionShadowRuntimeV1::open(&config.grounded_decision_journal_path) {
+            Ok(runtime) => Some(Arc::new(runtime)),
+            Err(error) => {
+                eprintln!("nando-grounded-decision shadow unavailable: {error}");
+                None
+            }
+        }
+    } else {
+        None
+    };
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -1073,6 +1170,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         k1_mechanism_watch_report: Arc::new(RwLock::new(None)),
         k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
         k1_structural_frontier_source_root: Arc::new(RwLock::new(None)),
+        grounded_decision_shadow,
     };
     if state.config.multi_source_research_enabled {
         validate_ms3_scientific_denominator_link(&state)?;
@@ -4689,9 +4787,11 @@ async fn report_false_accept(State(state): State<AppState>, body: Bytes) -> Resp
     };
     if let Ok(mut cache) = state.response_cache.write() {
         cache.executor = None;
+        cache.decision_snapshot = None;
         cache.ready = false;
         cache.admission_expires_at_unix = 0;
         cache.last_error = "runtime_false_accept_reported".to_owned();
+        cache.decision_snapshot_error = "parent_authority_revoked".to_owned();
     }
     let _ = state
         .live_economics
@@ -4814,6 +4914,92 @@ async fn openai_chat(State(state): State<AppState>, headers: HeaderMap, body: By
     handle_openai(state, headers, body, Projection::ChatCompletions)
 }
 
+const EXACT_PRE_ACTION_GOAL_ENVELOPE_SCHEMA_V1: &str = "nando.exact-pre-action-goal-envelope.v1";
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ExactPreActionGoalEnvelopeV1 {
+    schema: String,
+    predicate_artifact: TypedGoalPredicateArtifactV1,
+    pre_action_goal_evidence_root_sha256: String,
+    outcome_horizon_contract_root_sha256: String,
+    observation_mask_root_sha256: String,
+    feature_exclusion_root_sha256: String,
+    binder_schema_root_sha256: String,
+    independent_binder_root_sha256: String,
+    constraint_contract_root_sha256: String,
+}
+
+struct GroundedDecisionGoalIngressV1 {
+    exact_goal_input: ExactPreActionGoalInputV1,
+    constraint_contract_root_sha256: String,
+    pre_action_topology_root_sha256: String,
+}
+
+fn exact_pre_action_goal_ingress_v1(
+    headers: &HeaderMap,
+    payload: &Value,
+    request_root_sha256: &str,
+    capture_receipt: Option<&nando_operator_learning::ProviderRequestCaptureReceiptV3>,
+    pre_action_topology_root_sha256: Option<&str>,
+) -> Result<Option<GroundedDecisionGoalIngressV1>, GroundedDecisionShadowCensorV1> {
+    let Some(envelope_value) = payload.pointer("/metadata/nando_exact_pre_action_goal_v1") else {
+        return Ok(None);
+    };
+    let envelope_root = header_text(headers, "x-nando-exact-goal-envelope-sha256")
+        .filter(|root| valid_nonzero_sha256(root))
+        .ok_or(GroundedDecisionShadowCensorV1::GoalInputInvalid)?;
+    if canonical_json_sha256(envelope_value).ok().as_deref() != Some(envelope_root) {
+        return Err(GroundedDecisionShadowCensorV1::GoalInputInvalid);
+    }
+    let envelope: ExactPreActionGoalEnvelopeV1 = serde_json::from_value(envelope_value.clone())
+        .map_err(|_| GroundedDecisionShadowCensorV1::GoalInputInvalid)?;
+    envelope
+        .predicate_artifact
+        .validate()
+        .map_err(|_| GroundedDecisionShadowCensorV1::GoalInputInvalid)?;
+    if envelope.schema != EXACT_PRE_ACTION_GOAL_ENVELOPE_SCHEMA_V1
+        || ![
+            envelope.pre_action_goal_evidence_root_sha256.as_str(),
+            envelope.outcome_horizon_contract_root_sha256.as_str(),
+            envelope.observation_mask_root_sha256.as_str(),
+            envelope.feature_exclusion_root_sha256.as_str(),
+            envelope.binder_schema_root_sha256.as_str(),
+            envelope.independent_binder_root_sha256.as_str(),
+            envelope.constraint_contract_root_sha256.as_str(),
+        ]
+        .into_iter()
+        .all(valid_nonzero_sha256)
+    {
+        return Err(GroundedDecisionShadowCensorV1::GoalInputInvalid);
+    }
+    let capture_receipt =
+        capture_receipt.ok_or(GroundedDecisionShadowCensorV1::IneligibleTrafficProvenance)?;
+    if capture_receipt.request_root_sha256().to_hex() != request_root_sha256 {
+        return Err(GroundedDecisionShadowCensorV1::IneligibleTrafficProvenance);
+    }
+    let pre_action_topology_root_sha256 = pre_action_topology_root_sha256
+        .filter(|root| valid_nonzero_sha256(root))
+        .ok_or(GroundedDecisionShadowCensorV1::IneligibleTrafficProvenance)?;
+    let frozen_at_sequence = capture_receipt.capture_sequence();
+    Ok(Some(GroundedDecisionGoalIngressV1 {
+        exact_goal_input: ExactPreActionGoalInputV1 {
+            predicate_artifact: envelope.predicate_artifact,
+            pre_action_goal_evidence_root_sha256: envelope.pre_action_goal_evidence_root_sha256,
+            outcome_horizon_contract_root_sha256: envelope.outcome_horizon_contract_root_sha256,
+            observation_mask_root_sha256: envelope.observation_mask_root_sha256,
+            feature_exclusion_root_sha256: envelope.feature_exclusion_root_sha256,
+            binder_schema_root_sha256: envelope.binder_schema_root_sha256,
+            pre_action_observation_root_sha256: capture_receipt.receipt_sha256().to_hex(),
+            independent_binder_root_sha256: envelope.independent_binder_root_sha256,
+            frozen_at_sequence,
+            action_selection_not_before_sequence: frozen_at_sequence.saturating_add(2),
+        },
+        constraint_contract_root_sha256: envelope.constraint_contract_root_sha256,
+        pre_action_topology_root_sha256: pre_action_topology_root_sha256.to_owned(),
+    }))
+}
+
 async fn fallback_unknown(State(state): State<AppState>) -> Response {
     fallback(&state, "unsupported_worker_route")
 }
@@ -4862,15 +5048,19 @@ fn handle_openai(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     // Controlled probes may exercise runtime, but must never become natural evidence.
-    if natural_evidence_eligible
-        && let Some(capture_receipt) = capture_provider_request(
-            &state,
-            request_identity.session_lineage_root(),
-            &request_hash,
-            projection,
-            request_streaming,
-        )
-    {
+    let provider_capture_receipt = natural_evidence_eligible
+        .then(|| {
+            capture_provider_request(
+                &state,
+                request_identity.session_lineage_root(),
+                &request_hash,
+                projection,
+                request_streaming,
+            )
+        })
+        .flatten();
+    let mut grounded_decision_topology_root_sha256 = None;
+    if let Some(capture_receipt) = provider_capture_receipt.clone() {
         let structure = LearningRequestStructureV1::new(LearningRequestStructureInputV1 {
             client_intent_id_sha256: request_identity.turn_intent_sha256().to_owned(),
             session_identity_sha256s: request_identity.session_identity_sha256s().to_vec(),
@@ -4912,6 +5102,8 @@ fn handle_openai(
                     );
                     match commit {
                         Ok(commit) => {
+                            grounded_decision_topology_root_sha256 =
+                                Some(commit.commitment_root_sha256.clone());
                             write_event(
                                 &state,
                                 json!({
@@ -4988,6 +5180,29 @@ fn handle_openai(
         Projection::ChatCompletions => normalized_chat_payload.as_ref(),
         Projection::TransitionApi | Projection::Responses => Some(&payload),
     };
+    let grounded_decision_goal = state.grounded_decision_shadow.as_ref().and_then(|runtime| {
+        if !natural_evidence_eligible {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::IneligibleTrafficProvenance);
+            return None;
+        }
+        match exact_pre_action_goal_ingress_v1(
+            &headers,
+            &payload,
+            &request_hash,
+            provider_capture_receipt.as_ref(),
+            grounded_decision_topology_root_sha256.as_deref(),
+        ) {
+            Ok(Some(goal)) => Some(goal),
+            Ok(None) => {
+                runtime.record_censor(GroundedDecisionShadowCensorV1::MissingExactGoal);
+                None
+            }
+            Err(censor) => {
+                runtime.record_censor(censor);
+                None
+            }
+        }
+    });
     if let Some(actor_payload) = actor_payload
         && let Some(response) = try_response_actor(
             &state,
@@ -4999,6 +5214,7 @@ fn handle_openai(
             projection,
             input_tokens,
             Some(traffic_source),
+            grounded_decision_goal,
         )
     {
         return response;
@@ -5169,6 +5385,146 @@ fn submit_operator_generation_shadow(
         });
 }
 
+struct PendingGroundedDecisionCaptureV1 {
+    snapshot: Arc<ResponseDecisionSnapshotV1>,
+    precommit: DecisionContractPrecommitV1,
+    precommit_durability_receipt: DecisionContractDurabilityReceiptV1,
+    goal_contract: TypedGoalContractV1,
+    predicate_artifact: TypedGoalPredicateArtifactV1,
+    available_actions: AvailableActionContractsV1,
+    opaque_execution_binding_roots_sha256: Vec<String>,
+}
+
+fn prepared_k1_censor_v1(censor: PreparedK1EvidenceCensorV1) -> GroundedDecisionShadowCensorV1 {
+    match censor {
+        PreparedK1EvidenceCensorV1::CaptureDisabled => {
+            GroundedDecisionShadowCensorV1::CaptureDisabled
+        }
+        PreparedK1EvidenceCensorV1::AuthoritySnapshotMismatch => {
+            GroundedDecisionShadowCensorV1::AuthoritySnapshotMismatch
+        }
+        PreparedK1EvidenceCensorV1::NoApplicableK1Action => {
+            GroundedDecisionShadowCensorV1::NoApplicableK1Action
+        }
+        PreparedK1EvidenceCensorV1::ActionProjectionIncomplete => {
+            GroundedDecisionShadowCensorV1::ActionProjectionIncomplete
+        }
+        PreparedK1EvidenceCensorV1::CapacityExhausted => {
+            GroundedDecisionShadowCensorV1::ActionCapacityExhausted
+        }
+    }
+}
+
+fn finalize_grounded_decision_capture_v1(
+    runtime: &GroundedDecisionShadowRuntimeV1,
+    pending: PendingGroundedDecisionCaptureV1,
+    execution: &RoutedResponseExecution,
+) {
+    if pending.precommit_durability_receipt.validate().is_err()
+        || pending.precommit_durability_receipt.precommit_root_sha256
+            != pending.precommit.precommit_root_sha256
+    {
+        runtime.record_censor(GroundedDecisionShadowCensorV1::PrecommitSyncFailed);
+        return;
+    }
+    let Some(capture) = execution.k1_capture() else {
+        runtime.record_censor(if execution.reason.contains("independent_verifier") {
+            GroundedDecisionShadowCensorV1::IndependentVerifierUnavailable
+        } else {
+            GroundedDecisionShadowCensorV1::TerminalConsequenceUnavailable
+        });
+        return;
+    };
+    let Some((action_projection, execution_binding)) = pending.snapshot.k1_index.capture_material(
+        &capture.selected_action_contract_root_sha256,
+        &capture.opaque_execution_binding_root_sha256,
+    ) else {
+        runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionNotK1);
+        return;
+    };
+    let selected_receipt = match nando_operator_learning::SelectedActionBindingReceiptV1::seal(
+        &pending.precommit,
+        capture.selected_action_contract_root_sha256.clone(),
+        capture.opaque_execution_binding_root_sha256.clone(),
+        capture.independent_runtime_verification_root_sha256.clone(),
+        pending.precommit.action_selection_not_before_sequence,
+        runtime.monotonic_nanos(),
+        runtime.process_epoch_root_sha256.clone(),
+    ) {
+        Ok(receipt) => receipt,
+        Err(_) => {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionBindingFailed);
+            return;
+        }
+    };
+    let selected = match DurableSelectedActionBindingV1::seal(
+        &pending.precommit,
+        selected_receipt,
+        action_projection,
+        execution_binding,
+        pending.available_actions,
+        pending.opaque_execution_binding_roots_sha256,
+        capture.observed_consequence_root_sha256.clone(),
+    ) {
+        Ok(selected) => selected,
+        Err(_) => {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionBindingFailed);
+            return;
+        }
+    };
+    let mut journal = match runtime.journal.lock() {
+        Ok(journal) => journal,
+        Err(_) => {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionSyncFailed);
+            return;
+        }
+    };
+    if journal.append_selected_action(&selected).is_err() {
+        runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionSyncFailed);
+        return;
+    }
+    let satisfied = match verify_exact_goal_predicate_v1(
+        &pending.predicate_artifact,
+        capture.consequence_type,
+        &capture.verifier_contract_root_sha256,
+        &capture.observed_consequence_root_sha256,
+    ) {
+        Ok(satisfied) => satisfied,
+        Err(_) => {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed);
+            return;
+        }
+    };
+    let satisfaction_receipt = match GoalSatisfactionReceiptV1::seal(
+        &pending.goal_contract,
+        capture.observed_consequence_root_sha256.clone(),
+        capture.independent_runtime_verification_root_sha256.clone(),
+        satisfied,
+    ) {
+        Ok(receipt) => receipt,
+        Err(_) => {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed);
+            return;
+        }
+    };
+    let satisfaction = match DurableGoalSatisfactionV1::seal(
+        &pending.precommit,
+        &selected,
+        pending.goal_contract,
+        pending.predicate_artifact,
+        satisfaction_receipt,
+    ) {
+        Ok(satisfaction) => satisfaction,
+        Err(_) => {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed);
+            return;
+        }
+    };
+    if journal.append_goal_satisfaction(&satisfaction).is_err() {
+        runtime.record_censor(GroundedDecisionShadowCensorV1::SatisfactionSyncFailed);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn try_response_actor(
     state: &AppState,
@@ -5180,6 +5536,7 @@ fn try_response_actor(
     projection: Projection,
     input_tokens: u64,
     traffic_source_header: Option<&str>,
+    grounded_decision_goal: Option<GroundedDecisionGoalIngressV1>,
 ) -> Option<Response> {
     if !projection.avoids_upstream_llm_call() {
         return None;
@@ -5205,7 +5562,7 @@ fn try_response_actor(
         );
         return None;
     }
-    let (executor, runtime_build_sha256) = {
+    let (executor, runtime_build_sha256, decision_snapshot) = {
         let cache = match state.response_cache.read() {
             Ok(cache) => cache,
             Err(_) => {
@@ -5252,8 +5609,120 @@ fn try_response_actor(
             );
             return None;
         }
-        (executor, cache.runtime_build_sha256.clone())
+        (
+            executor,
+            cache.runtime_build_sha256.clone(),
+            cache.decision_snapshot.clone(),
+        )
     };
+    let mut pending_grounded_decision = None;
+    let mut prepared_execution: Option<PreparedResponseEvaluation<'_>> = None;
+    if let (Some(runtime), Some(goal)) = (
+        state.grounded_decision_shadow.as_ref(),
+        grounded_decision_goal,
+    ) {
+        if decision_snapshot.is_none() {
+            runtime.record_censor(GroundedDecisionShadowCensorV1::AuthoritySnapshotUnavailable);
+        }
+        if let Some(snapshot) = decision_snapshot.as_ref() {
+            if !Arc::ptr_eq(&executor, &snapshot.executor)
+                || snapshot.authority_snapshot_root_sha256
+                    != snapshot.k1_index.authority_snapshot().snapshot_root_sha256
+            {
+                runtime.record_censor(GroundedDecisionShadowCensorV1::AuthoritySnapshotMismatch);
+            } else {
+                let prepared =
+                    executor.evaluate_pre_action(request_text, payload, snapshot.k1_index.as_ref());
+                let evidence = prepared.k1_evidence().clone();
+                let bound_goal = bind_exact_pre_action_goal_v1(goal.exact_goal_input);
+                match (evidence, bound_goal) {
+                    (
+                        PreparedK1EvidenceV1::Ready {
+                            authority_snapshot_root_sha256,
+                            available_actions,
+                            opaque_execution_binding_set_root_sha256,
+                            opaque_execution_binding_roots_sha256,
+                        },
+                        Ok(bound_goal),
+                    ) if authority_snapshot_root_sha256
+                        == snapshot.authority_snapshot_root_sha256 =>
+                    {
+                        let precommit =
+                            DecisionContractPrecommitV1::seal(DecisionContractPrecommitInputV1 {
+                                request_event_identity_root_sha256: sha256_bytes(
+                                    request_event_id.as_bytes(),
+                                ),
+                                process_epoch_root_sha256: runtime
+                                    .process_epoch_root_sha256
+                                    .clone(),
+                                pre_action_observation_root_sha256: bound_goal
+                                    .binding_receipt
+                                    .pre_action_observation_root_sha256
+                                    .clone(),
+                                pre_action_topology_root_sha256: goal
+                                    .pre_action_topology_root_sha256,
+                                goal_contract: bound_goal.goal_contract.clone(),
+                                goal_binding_receipt: bound_goal.binding_receipt,
+                                constraint_contract_root_sha256: goal
+                                    .constraint_contract_root_sha256,
+                                authority_snapshot: snapshot.k1_index.authority_snapshot().clone(),
+                                applicability_evaluator_schema:
+                                    RESPONSE_PRE_ACTION_EVALUATOR_SCHEMA_V1.to_owned(),
+                                available_action_contracts_root_sha256: available_actions
+                                    .contracts_root_sha256
+                                    .clone(),
+                                opaque_execution_binding_set_root_sha256,
+                                journal_sequence: bound_goal
+                                    .goal_contract
+                                    .frozen_at_sequence
+                                    .saturating_add(1),
+                                action_selection_not_before_sequence: bound_goal
+                                    .goal_contract
+                                    .frozen_at_sequence
+                                    .saturating_add(2),
+                                precommit_monotonic_nanos: runtime.monotonic_nanos(),
+                            });
+                        match precommit {
+                            Ok(precommit) => {
+                                let persisted = runtime.journal.lock().map_or_else(
+                                    |_| Err("grounded_decision_journal_lock_poisoned".to_owned()),
+                                    |mut journal| journal.append_precommit(&precommit),
+                                );
+                                match persisted {
+                                    Ok(precommit_durability_receipt) => {
+                                        pending_grounded_decision =
+                                            Some(PendingGroundedDecisionCaptureV1 {
+                                                snapshot: snapshot.clone(),
+                                                precommit,
+                                                precommit_durability_receipt,
+                                                goal_contract: bound_goal.goal_contract,
+                                                predicate_artifact: bound_goal.predicate_artifact,
+                                                available_actions,
+                                                opaque_execution_binding_roots_sha256,
+                                            });
+                                    }
+                                    Err(_) => runtime.record_censor(
+                                        GroundedDecisionShadowCensorV1::PrecommitSyncFailed,
+                                    ),
+                                }
+                            }
+                            Err(_) => runtime
+                                .record_censor(GroundedDecisionShadowCensorV1::PrecommitSealFailed),
+                        }
+                    }
+                    (PreparedK1EvidenceV1::Ready { .. }, Ok(_)) => runtime
+                        .record_censor(GroundedDecisionShadowCensorV1::AuthoritySnapshotMismatch),
+                    (PreparedK1EvidenceV1::Censored(censor), _) => {
+                        runtime.record_censor(prepared_k1_censor_v1(censor));
+                    }
+                    (_, Err(_)) => {
+                        runtime.record_censor(GroundedDecisionShadowCensorV1::GoalInputInvalid);
+                    }
+                }
+                prepared_execution = Some(prepared);
+            }
+        }
+    }
     if let Some(writer) = &state.ms4_exact_wave_precommit_writer {
         let request_event_id_sha256 = sha256_bytes(request_event_id.as_bytes());
         let turn_intent_id_sha256 =
@@ -5279,7 +5748,16 @@ fn try_response_actor(
             eprintln!("ms4_exact_wave_precommit_error={}", bounded_reason(&error));
         }
     }
-    let execution = executor.execute(request_text, payload);
+    let execution = prepared_execution.map_or_else(
+        || executor.execute(request_text, payload),
+        |prepared| executor.execute_prepared(prepared),
+    );
+    if let (Some(runtime), Some(pending)) = (
+        state.grounded_decision_shadow.as_ref(),
+        pending_grounded_decision,
+    ) {
+        finalize_grounded_decision_capture_v1(runtime, pending, &execution);
+    }
     if execution.status != ResponseExecutionStatus::Executed {
         let decidability = classify_cpu_decidability(request_text, payload);
         record_response_actor_fallback_with_decidability(
@@ -5961,6 +6439,7 @@ fn refresh_embedded_response_admission(state: &AppState) -> Result<bool, String>
         .write()
         .map_err(|_| "response_cache_lock_poisoned")?;
     cache.executor = Some(Arc::new(executor));
+    cache.decision_snapshot = None;
     cache.ready = true;
     cache.gate_build_sha256 = gate_sha256;
     cache.runtime_build_sha256 = runtime_sha256;
@@ -5968,6 +6447,7 @@ fn refresh_embedded_response_admission(state: &AppState) -> Result<bool, String>
     cache.embedded_candidate_revision = revision;
     cache.admission_expires_at_unix = now.saturating_add(state.config.admission_max_age_seconds);
     cache.last_error.clear();
+    cache.decision_snapshot_error = "embedded_authority_has_no_capture_snapshot".to_owned();
     Ok(true)
 }
 
@@ -6037,11 +6517,13 @@ fn discard_stale_embedded_authority_metadata(state: &AppState) -> Result<(), Str
 fn revoke_embedded_response_authority(state: &AppState, reason: &str) -> Result<(), String> {
     if let Ok(mut cache) = state.response_cache.write() {
         cache.executor = None;
+        cache.decision_snapshot = None;
         cache.ready = false;
         cache.input_fingerprint = None;
         cache.embedded_candidate_revision = 0;
         cache.admission_expires_at_unix = 0;
         cache.last_error = reason.to_owned();
+        cache.decision_snapshot_error = "parent_authority_revoked".to_owned();
     }
     remove_generated_authority_file(&state.config.admission_path)?;
     remove_generated_authority_file(&state.config.response_registry_path)?;
@@ -6715,6 +7197,16 @@ fn policy_status(config: &ServingConfig) -> PolicyStatus {
     }
 }
 
+struct LoadedResponseAuthorityV1 {
+    executor: Arc<ResponseExecutor>,
+    decision_snapshot: Option<Arc<ResponseDecisionSnapshotV1>>,
+    decision_snapshot_error: String,
+    gate_build_sha256: String,
+    runtime_build_sha256: String,
+    input_fingerprint: ResponseAuthorityInputFingerprintV1,
+    admission_expires_at_unix: u64,
+}
+
 fn refresh_response_executor(state: &AppState) {
     let fingerprint = response_authority_input_fingerprint(state);
     let now = unix_now();
@@ -6737,7 +7229,45 @@ fn refresh_response_executor(state: &AppState) {
             return;
         }
     }
-    let load = || -> Result<(ResponseExecutor, String, String, u64), String> {
+    match load_response_authority_v1(state, renewal_margin) {
+        Ok(loaded) => {
+            if let Ok(mut cache) = state.response_cache.write() {
+                cache.executor = Some(loaded.executor);
+                cache.decision_snapshot = loaded.decision_snapshot;
+                cache.ready = true;
+                cache.gate_build_sha256 = loaded.gate_build_sha256;
+                cache.runtime_build_sha256 = loaded.runtime_build_sha256;
+                cache.input_fingerprint = Some(loaded.input_fingerprint);
+                cache.admission_expires_at_unix = loaded.admission_expires_at_unix;
+                cache.last_error.clear();
+                cache.decision_snapshot_error = loaded.decision_snapshot_error;
+            }
+        }
+        Err(error) => {
+            if let Ok(mut cache) = state.response_cache.write() {
+                let bounded_error = bounded_reason(&error);
+                let should_log = cache.input_fingerprint != fingerprint.as_ref().ok().cloned()
+                    || cache.last_error != bounded_error;
+                cache.executor = None;
+                cache.decision_snapshot = None;
+                cache.ready = false;
+                cache.input_fingerprint = fingerprint.ok();
+                cache.last_error = bounded_error;
+                cache.decision_snapshot_error = "parent_authority_unavailable".to_owned();
+                if should_log {
+                    eprintln!("nando-response-authority refresh: {error}");
+                }
+            }
+        }
+    }
+}
+
+fn load_response_authority_v1(
+    state: &AppState,
+    renewal_margin: u64,
+) -> Result<LoadedResponseAuthorityV1, String> {
+    for attempt in 0..2 {
+        let fingerprint_before = response_authority_input_fingerprint(state)?;
         let registry = fs::read(&state.config.response_registry_path)
             .map_err(|error| format!("response_registry_read:{error}"))?;
         let admission = fs::read(&state.config.admission_path)
@@ -6770,7 +7300,7 @@ fn refresh_response_executor(state: &AppState) {
             cached_runtime_sha256
         };
         let now = unix_now();
-        ResponseExecutor::from_authorized_json(
+        let executor = match ResponseExecutor::from_authorized_json(
             &registry,
             &admission,
             &state.config.project_id,
@@ -6778,82 +7308,94 @@ fn refresh_response_executor(state: &AppState) {
             &runtime_build_sha256,
             now,
             state.config.admission_max_age_seconds,
-        )
-        .and_then(|executor| {
-            if now.saturating_add(renewal_margin) < admission_expires_at_unix {
-                return Ok((executor, admission_expires_at_unix));
+        ) {
+            Ok(executor) if now.saturating_add(renewal_margin) < admission_expires_at_unix => {
+                executor
             }
-            renew_admission_timestamps(
-                &state.config.admission_path,
-                &admission,
-                now,
-                state.config.admission_max_age_seconds,
-            )?;
-            Ok((
-                executor,
-                now.saturating_add(state.config.admission_max_age_seconds),
-            ))
-        })
-        .or_else(|error| {
-            if error != "response_admission_stale" && error != "response_admission_expired" {
-                return Err(error);
-            }
-            let executor = ResponseExecutor::from_revalidated_authorized_json(
-                &registry,
-                &admission,
-                &state.config.project_id,
-                &gate_build_sha256,
-                &runtime_build_sha256,
-                now,
-                state.config.admission_max_age_seconds,
-            )?;
-            renew_admission_timestamps(
-                &state.config.admission_path,
-                &admission,
-                now,
-                state.config.admission_max_age_seconds,
-            )?;
-            Ok((
-                executor,
-                now.saturating_add(state.config.admission_max_age_seconds),
-            ))
-        })
-        .map(|(executor, expires_at_unix)| {
-            (
-                executor,
-                gate_build_sha256,
-                runtime_build_sha256,
-                expires_at_unix,
-            )
-        })
-    };
-    match load() {
-        Ok((executor, gate_build_sha256, runtime_build_sha256, expires_at_unix)) => {
-            if let Ok(mut cache) = state.response_cache.write() {
-                cache.executor = Some(Arc::new(executor));
-                cache.ready = true;
-                cache.gate_build_sha256 = gate_build_sha256;
-                cache.runtime_build_sha256 = runtime_build_sha256;
-                cache.input_fingerprint = response_authority_input_fingerprint(state).ok();
-                cache.admission_expires_at_unix = expires_at_unix;
-                cache.last_error.clear();
-            }
-        }
-        Err(error) => {
-            if let Ok(mut cache) = state.response_cache.write() {
-                let bounded_error = bounded_reason(&error);
-                let should_log = cache.input_fingerprint != fingerprint.as_ref().ok().cloned()
-                    || cache.last_error != bounded_error;
-                cache.executor = None;
-                cache.ready = false;
-                cache.input_fingerprint = fingerprint.ok();
-                cache.last_error = bounded_error;
-                if should_log {
-                    eprintln!("nando-response-authority refresh: {error}");
+            Ok(_) => {
+                renew_admission_timestamps(
+                    &state.config.admission_path,
+                    &admission,
+                    now,
+                    state.config.admission_max_age_seconds,
+                )?;
+                if attempt == 0 {
+                    continue;
                 }
+                return Err("response_admission_changed_during_snapshot".to_owned());
             }
+            Err(error)
+                if error == "response_admission_stale" || error == "response_admission_expired" =>
+            {
+                ResponseExecutor::from_revalidated_authorized_json(
+                    &registry,
+                    &admission,
+                    &state.config.project_id,
+                    &gate_build_sha256,
+                    &runtime_build_sha256,
+                    now,
+                    state.config.admission_max_age_seconds,
+                )?;
+                renew_admission_timestamps(
+                    &state.config.admission_path,
+                    &admission,
+                    now,
+                    state.config.admission_max_age_seconds,
+                )?;
+                if attempt == 0 {
+                    continue;
+                }
+                return Err("response_admission_changed_during_snapshot".to_owned());
+            }
+            Err(error) => return Err(error.to_owned()),
+        };
+        let executor = Arc::new(executor);
+        let (decision_snapshot, decision_snapshot_error) =
+            match build_response_decision_snapshot_v1(state, &executor) {
+                Ok(snapshot) => (Some(snapshot), String::new()),
+                Err(error) => (None, bounded_reason(&error)),
+            };
+        let fingerprint_after = response_authority_input_fingerprint(state)?;
+        if fingerprint_before != fingerprint_after {
+            if attempt == 0 {
+                continue;
+            }
+            return Err("response_authority_input_torn".to_owned());
         }
+        return Ok(LoadedResponseAuthorityV1 {
+            executor,
+            decision_snapshot,
+            decision_snapshot_error,
+            gate_build_sha256,
+            runtime_build_sha256,
+            input_fingerprint: fingerprint_after,
+            admission_expires_at_unix,
+        });
     }
+    Err("response_authority_input_torn".to_owned())
+}
+
+fn build_response_decision_snapshot_v1(
+    state: &AppState,
+    executor: &Arc<ResponseExecutor>,
+) -> Result<Arc<ResponseDecisionSnapshotV1>, String> {
+    if state.grounded_decision_shadow.is_none() {
+        return Err("grounded_decision_capture_disabled".to_owned());
+    }
+    let certification_ledger =
+        operator_certification::restore_anchored_ledger(&state.operator_certification_config)?;
+    let (authority_snapshot, k1_index) = executor
+        .build_certified_k1_action_index_v1(&certification_ledger)
+        .map_err(str::to_owned)?;
+    if authority_snapshot.snapshot_root_sha256 != k1_index.authority_snapshot().snapshot_root_sha256
+    {
+        return Err("response_decision_snapshot_root_mismatch".to_owned());
+    }
+    Ok(Arc::new(ResponseDecisionSnapshotV1 {
+        executor: executor.clone(),
+        k1_index: Arc::new(k1_index),
+        authority_snapshot_root_sha256: authority_snapshot.snapshot_root_sha256,
+    }))
 }
 
 fn renew_admission_timestamps(
@@ -6904,7 +7446,7 @@ fn renew_admission_timestamps(
 
 fn response_authority_input_fingerprint(
     state: &AppState,
-) -> Result<(u64, u128, u64, u128), String> {
+) -> Result<ResponseAuthorityInputFingerprintV1, String> {
     let metadata = |path: &Path| -> Result<(u64, u128), String> {
         let metadata = fs::metadata(path).map_err(|error| format!("metadata:{error}"))?;
         let modified = metadata
@@ -6917,7 +7459,74 @@ fn response_authority_input_fingerprint(
     };
     let registry = metadata(&state.config.response_registry_path)?;
     let admission = metadata(&state.config.admission_path)?;
-    Ok((registry.0, registry.1, admission.0, admission.1))
+    let capture_enabled = state.grounded_decision_shadow.is_some();
+    Ok(ResponseAuthorityInputFingerprintV1 {
+        registry_bytes: registry.0,
+        registry_modified_nanos: registry.1,
+        registry_sha256: sha256_file_streaming(&state.config.response_registry_path)?,
+        admission_bytes: admission.0,
+        admission_modified_nanos: admission.1,
+        admission_sha256: sha256_file_streaming(&state.config.admission_path)?,
+        certification_journal_sha256: capture_enabled
+            .then(|| {
+                certification_journal_fingerprint_v1(&state.operator_certification_config.root)
+            })
+            .transpose()?
+            .flatten(),
+        certification_anchor_sha256: capture_enabled
+            .then(|| optional_file_sha256_v1(&state.operator_certification_config.anchor_path))
+            .transpose()?
+            .flatten(),
+        certification_public_key_sha256: capture_enabled
+            .then(|| {
+                optional_file_sha256_v1(
+                    &state
+                        .operator_certification_config
+                        .authority_public_key_path,
+                )
+            })
+            .transpose()?
+            .flatten(),
+        runtime_contract_sha256: response_runtime_contract_sha256(),
+    })
+}
+
+fn optional_file_sha256_v1(path: &Path) -> Result<Option<String>, String> {
+    match sha256_file_streaming(path) {
+        Ok(root) => Ok(Some(root)),
+        Err(_) if !path.exists() => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn certification_journal_fingerprint_v1(root: &Path) -> Result<Option<String>, String> {
+    let directory = root.join("operator-certification-journal-v1");
+    let mut paths = match fs::read_dir(&directory) {
+        Ok(entries) => entries
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("operator_certification_fingerprint_list:{error}"))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!("operator_certification_fingerprint_open:{error}"));
+        }
+    };
+    paths.sort();
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.operator-certification-journal-fingerprint.v1\0");
+    for path in paths {
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            return Err("operator_certification_fingerprint_unknown_file".to_owned());
+        }
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| "operator_certification_fingerprint_name_invalid".to_owned())?;
+        hasher.update((name.len() as u64).to_le_bytes());
+        hasher.update(name.as_bytes());
+        hasher.update(sha256_file_streaming(&path)?.as_bytes());
+    }
+    Ok(Some(format!("{:x}", hasher.finalize())))
 }
 
 fn response_cache_status(state: &AppState) -> (bool, u64, usize, String) {
@@ -8375,6 +8984,8 @@ mod tests {
                 .join("certification-authority.pub"),
             operator_cleanup_verifier_public_key_path: root.join("cleanup-verifier.pub"),
             operator_cleanup_receipts_path: root.join("cleanup-receipts"),
+            grounded_decision_shadow_enabled: false,
+            grounded_decision_journal_path: root.join("grounded-decision-journal"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -8464,6 +9075,7 @@ mod tests {
             k1_mechanism_watch_report: Arc::new(RwLock::new(None)),
             k1_natural_scheduler_report: Arc::new(RwLock::new(None)),
             k1_structural_frontier_source_root: Arc::new(RwLock::new(None)),
+            grounded_decision_shadow: None,
         };
         refresh_response_executor(&state);
         state
@@ -8545,6 +9157,7 @@ mod tests {
             .read()
             .expect("response cache")
             .input_fingerprint
+            .clone()
             .expect("negative fingerprint");
         refresh_response_executor(&state);
         let unchanged = state.response_cache.read().expect("response cache");
@@ -8601,6 +9214,263 @@ mod tests {
         assert!(cache.admission_expires_at_unix <= unix_now());
         assert!(cache.last_error.is_empty());
         fs::remove_dir_all(&root).expect("cleanup test root");
+    }
+
+    fn exact_goal_ingress_fixture() -> (
+        HeaderMap,
+        Value,
+        String,
+        nando_operator_learning::ProviderRequestCaptureReceiptV3,
+        String,
+    ) {
+        use nando_operator_learning::{
+            ProviderRequestCaptureInputV3, TypedGoalComparatorV1, seal_provider_request_capture_v3,
+        };
+
+        let request_root = Sha256CommitmentV3::digest_bytes(b"s1c-exact-goal-request");
+        let request_root_sha256 = request_root.to_hex();
+        let topology_root_sha256 = sha256_bytes(b"s1c-exact-goal-topology");
+        let predicate = TypedGoalPredicateArtifactV1::seal(
+            TypedGoalComparatorV1::TypedValueRootEquals,
+            nando_operator_learning::multi_source::K1ConsequenceTypeV1::Scalar,
+            sha256_bytes(b"s1c-goal-target"),
+            sha256_bytes(b"s1c-goal-verifier"),
+        )
+        .expect("predicate");
+        let envelope = ExactPreActionGoalEnvelopeV1 {
+            schema: EXACT_PRE_ACTION_GOAL_ENVELOPE_SCHEMA_V1.to_owned(),
+            predicate_artifact: predicate,
+            pre_action_goal_evidence_root_sha256: sha256_bytes(b"s1c-goal-evidence"),
+            outcome_horizon_contract_root_sha256: sha256_bytes(b"s1c-goal-horizon"),
+            observation_mask_root_sha256: sha256_bytes(b"s1c-goal-mask"),
+            feature_exclusion_root_sha256: sha256_bytes(b"s1c-goal-exclusions"),
+            binder_schema_root_sha256: sha256_bytes(b"s1c-goal-binder-schema"),
+            independent_binder_root_sha256: sha256_bytes(b"s1c-goal-binder"),
+            constraint_contract_root_sha256: sha256_bytes(b"s1c-goal-constraints"),
+        };
+        let envelope_value = serde_json::to_value(envelope).expect("envelope");
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-nando-exact-goal-envelope-sha256",
+            HeaderValue::from_str(&canonical_json_sha256(&envelope_value).expect("envelope root"))
+                .expect("header"),
+        );
+        let payload = json!({
+            "metadata": {
+                "nando_exact_pre_action_goal_v1": envelope_value
+            }
+        });
+        let capture = seal_provider_request_capture_v3(ProviderRequestCaptureInputV3 {
+            capture_sequence: 1,
+            capture_epoch_root: Sha256CommitmentV3::digest_bytes(b"s1c-capture-epoch"),
+            lineage_root_sha256: Sha256CommitmentV3::digest_bytes(b"s1c-lineage"),
+            request_root_sha256: request_root,
+            projection: RuntimeProjectionV3::Responses,
+            streaming: false,
+            observed_at_unix_ms: 1,
+        })
+        .expect("capture");
+        (
+            headers,
+            payload,
+            request_root_sha256,
+            capture,
+            topology_root_sha256,
+        )
+    }
+
+    #[test]
+    fn exact_goal_ingress_is_allowlisted_and_rejects_text_or_action_hints() {
+        let (headers, payload, request_root, capture, topology_root) = exact_goal_ingress_fixture();
+        let accepted = exact_pre_action_goal_ingress_v1(
+            &headers,
+            &payload,
+            &request_root,
+            Some(&capture),
+            Some(&topology_root),
+        )
+        .expect("ingress")
+        .expect("goal");
+        assert_eq!(accepted.pre_action_topology_root_sha256, topology_root);
+
+        for forbidden in [
+            "request_text_sha256",
+            "selected_package_id",
+            "actor_output_sha256",
+        ] {
+            let mut forged = payload.clone();
+            forged["metadata"]["nando_exact_pre_action_goal_v1"][forbidden] =
+                Value::String(sha256_bytes(forbidden.as_bytes()));
+            let envelope = forged
+                .pointer("/metadata/nando_exact_pre_action_goal_v1")
+                .expect("envelope");
+            let mut forged_headers = HeaderMap::new();
+            forged_headers.insert(
+                "x-nando-exact-goal-envelope-sha256",
+                HeaderValue::from_str(
+                    &canonical_json_sha256(envelope).expect("forged envelope root"),
+                )
+                .expect("header"),
+            );
+            assert_eq!(
+                exact_pre_action_goal_ingress_v1(
+                    &forged_headers,
+                    &forged,
+                    &request_root,
+                    Some(&capture),
+                    Some(&topology_root),
+                )
+                .err(),
+                Some(GroundedDecisionShadowCensorV1::GoalInputInvalid)
+            );
+        }
+        assert_eq!(
+            exact_pre_action_goal_ingress_v1(
+                &headers,
+                &payload,
+                &sha256_bytes(b"foreign-request"),
+                Some(&capture),
+                Some(&topology_root),
+            )
+            .err(),
+            Some(GroundedDecisionShadowCensorV1::IneligibleTrafficProvenance)
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_goal_adds_no_journal_record_and_preserves_serving_bytes() {
+        let root = env::temp_dir().join(format!(
+            "nando-serving-s1c-missing-goal-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let mut state = project_status_test_state(&root, &registry_path);
+        let journal_path = root.join("grounded-decision-journal");
+        state.grounded_decision_shadow = Some(Arc::new(
+            GroundedDecisionShadowRuntimeV1::open(&journal_path).expect("shadow runtime"),
+        ));
+        let journal_bytes = || {
+            fs::read_dir(&journal_path)
+                .expect("journal directory")
+                .filter_map(Result::ok)
+                .filter_map(|entry| entry.metadata().ok())
+                .filter(|metadata| metadata.is_file())
+                .map(|metadata| metadata.len())
+                .sum::<u64>()
+        };
+        let before = journal_bytes();
+        let payload = json!({
+            "model":"project-status-test",
+            "input":[{"type":"function_call_output","call_id":"status-0","output":"{\"exit_code\":0}"}]
+        });
+        let (status, _, body) = responses_call(&state, &payload).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(
+            serde_json::from_str::<Value>(&body)
+                .expect("response")
+                .get("output_text"),
+            Some(&json!("success"))
+        );
+        assert_eq!(journal_bytes(), before);
+        assert_eq!(
+            state
+                .grounded_decision_shadow
+                .as_ref()
+                .expect("runtime")
+                .censors
+                .lock()
+                .expect("censors")
+                .get(&GroundedDecisionShadowCensorV1::MissingExactGoal),
+            Some(&1)
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn missing_k1_snapshot_preserves_parent_executor_and_fingerprints_all_inputs() {
+        let root = env::temp_dir().join(format!(
+            "nando-serving-s1c-missing-snapshot-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let mut state = project_status_test_state(&root, &registry_path);
+        state.grounded_decision_shadow = Some(Arc::new(
+            GroundedDecisionShadowRuntimeV1::open(&root.join("grounded-decision-journal"))
+                .expect("shadow runtime"),
+        ));
+        *state.response_cache.write().expect("cache") = ResponseExecutorCache::default();
+        refresh_response_executor(&state);
+        let first = state.response_cache.read().expect("cache");
+        assert!(first.ready, "{}", first.last_error);
+        assert!(first.executor.is_some());
+        assert!(first.decision_snapshot.is_none());
+        assert!(!first.decision_snapshot_error.is_empty());
+        let first_fingerprint = first.input_fingerprint.clone().expect("fingerprint");
+        assert_eq!(
+            first_fingerprint.registry_sha256,
+            sha256_file_streaming(&state.config.response_registry_path).expect("registry digest")
+        );
+        assert_eq!(
+            first_fingerprint.admission_sha256,
+            sha256_file_streaming(&state.config.admission_path).expect("admission digest")
+        );
+        drop(first);
+
+        let original_registry = fs::read(&state.config.response_registry_path).expect("registry");
+        let mut same_length_registry = original_registry.clone();
+        let changed = same_length_registry.first_mut().expect("nonempty registry");
+        *changed ^= 1;
+        fs::write(&state.config.response_registry_path, &same_length_registry)
+            .expect("same-length registry mutation");
+        let content_changed_fingerprint =
+            response_authority_input_fingerprint(&state).expect("content fingerprint");
+        assert_eq!(
+            content_changed_fingerprint.registry_bytes,
+            first_fingerprint.registry_bytes
+        );
+        assert_ne!(
+            content_changed_fingerprint.registry_sha256,
+            first_fingerprint.registry_sha256
+        );
+        fs::write(&state.config.response_registry_path, original_registry)
+            .expect("restore registry");
+
+        let certification = &state.operator_certification_config;
+        let journal = certification.root.join("operator-certification-journal-v1");
+        fs::create_dir_all(&journal).expect("certification journal");
+        fs::write(journal.join("00000000000000000001.json"), b"signed-event-a")
+            .expect("journal event");
+        ensure_parent(&certification.anchor_path).expect("anchor parent");
+        fs::write(&certification.anchor_path, b"anchor-a").expect("anchor");
+        fs::write(&certification.authority_public_key_path, b"public-key-a").expect("public key");
+        let second_fingerprint = response_authority_input_fingerprint(&state).expect("fingerprint");
+        assert_ne!(second_fingerprint, first_fingerprint);
+        assert!(second_fingerprint.certification_journal_sha256.is_some());
+        assert!(second_fingerprint.certification_anchor_sha256.is_some());
+        assert!(second_fingerprint.certification_public_key_sha256.is_some());
+        assert_eq!(
+            second_fingerprint.runtime_contract_sha256,
+            response_runtime_contract_sha256()
+        );
+        fs::write(journal.join("00000000000000000001.json"), b"signed-event-b")
+            .expect("mutated journal event");
+        assert_ne!(
+            response_authority_input_fingerprint(&state).expect("mutated fingerprint"),
+            second_fingerprint
+        );
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[cfg(any())]
