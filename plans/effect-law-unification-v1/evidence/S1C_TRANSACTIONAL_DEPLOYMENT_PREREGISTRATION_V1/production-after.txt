@@ -1,0 +1,15 @@
+captured_at_utc=2026-08-11T20:56:08Z
+nando-transition-serving.service 165670/0/active/running
+nando-response-learning.service 369456/0/active/running
+nando-gateway-control.service 1035203/0/active/running
+nando-operator-certification-authority.service 164668/0/active/running
+nando-transport-gateway.service 682430/0/active/running
+6ad63428f0cbbe96b539db2d63844403c697dec5041a91652b37857bb653ea58  /opt/nando-wave/bin/nando-transition-serving
+6e9d2fe41b1db95f94768d1ab41dffce1f15be92e2f774832c7fe392bb77b135  /etc/systemd/system/nando-transition-serving.service
+5c019cebbde083f963c03619ff1d938786f5b4ec58730dddd5b34adeb33cce31  /etc/nando-wave/phase-center.env
+cb2e33bdd2c9959b2c975e9585eb60927f9827327f6a74af6ade92b9b19486f5  /etc/nando-wave/roles/transition-serving.env
+d40b7262ff6d744a393b0fc03a5d06610d01728aa2f4603199ca8567189ec88f  /etc/nando-wave/authority.env
+deployment_receipt_root=785450d76037410d96baade19c2b6bb7f0fb24c6be034e2166be5533c7dd985b
+grounded_decision_journal=ABSENT
+{"ok":true,"service":"nando-transition-serving","mode":"CPU","admission_verdict":"PASS","response_effective_local_accept_enabled":true,"response_active_profiles":2,"transition_false_accepts":0,"requests":18383,"local_accepts":10764}
+{"ok":true,"service":"nando-gateway-control","mode":"CPU","cpu_allowed":true}
