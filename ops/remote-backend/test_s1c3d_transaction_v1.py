@@ -185,6 +185,19 @@ class WrapperTests(unittest.TestCase):
             self.assertLess(compile_gate, side_effect, marker)
             self.assertLess(push_gate, side_effect, marker)
 
+    def test_launcher_arms_terminal_recovery_before_mirroring_preparation(self) -> None:
+        source = (Path(wrapper.__file__).resolve().parent / "run_s1c3d_transaction_v1.sh").read_text()
+        prepare = source.split("prepare_code=$?", 1)[1].split(
+            "PYTHONPATH=ops/remote-backend python3 ops/remote-backend/verify_s1c3d_transaction_v1.py verify",
+            1,
+        )[0]
+        self.assertLess(prepare.index("rollback_armed=true"), prepare.index("mirror_remote"))
+        emergency = source.split("emergency_rollback()", 1)[1].split(
+            "trap cleanup EXIT", 1
+        )[0]
+        self.assertIn("state == RESOURCE_VETO", emergency)
+        self.assertIn("seal_resource_veto", emergency)
+
     def test_launcher_shell_syntax(self) -> None:
         completed = subprocess.run(
             ["bash", "-n", str(Path(wrapper.__file__).resolve().parent / "run_s1c3d_transaction_v1.sh")],

@@ -112,8 +112,33 @@ abort_predeployment() {
   ssh "$remote" \
     "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/s1c3d_transaction_v1.py' abort-predeployment \
       --transaction-directory '$remote_transaction' --reason '$reason'" \
-    > "$local_dir/predeployment-abort.json" 2>&1 || true
-  mirror_remote || true
+    > "$local_dir/predeployment-abort.json" 2>&1
+  mirror_remote
+}
+
+seal_resource_veto() {
+  mirror_remote
+  PYTHONPATH=ops/remote-backend python3 ops/remote-backend/verify_s1c3d_transaction_v1.py verify \
+    "$local_dir/remote-mirror" \
+    --implementation-freeze "$local_dir/remote-mirror/implementation-freeze.json" \
+    > "$local_dir/s1c3d-terminal.local.json"
+  scp -q "$local_dir/s1c3d-terminal.local.json" \
+    "$remote:$remote_upload/terminal-verification.json"
+  ssh "$remote" \
+    "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/verify_s1c3d_transaction_v1.py' verify \
+      '$remote_transaction' --implementation-freeze '$remote_transaction/implementation-freeze.json' \
+      --recorded-verification '$remote_upload/terminal-verification.json'" \
+    > "$local_dir/s1c3d-terminal.remote.json"
+  cmp "$local_dir/s1c3d-terminal.local.json" "$local_dir/s1c3d-terminal.remote.json"
+  scp -q "$local_dir/s1c3d-terminal.local.json" \
+    "$remote:$remote_upload/terminal-envelope.json"
+  ssh "$remote" \
+    "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/s1c3d_transaction_v1.py' seal-resource-veto \
+      --transaction-directory '$remote_transaction' \
+      --terminal-verification '$remote_upload/terminal-verification.json' \
+      --authority-envelope '$remote_upload/terminal-envelope.json'" \
+    > "$local_dir/terminal-seal-result.json"
+  mirror_remote
 }
 
 emergency_rollback() {
@@ -125,7 +150,11 @@ emergency_rollback() {
     state=$(ssh "$remote" "sudo -n jq -r .state '$remote_transaction/transaction-state.json'" 2>/dev/null)
     if [[ $state == PREPARED ]]; then
       abort_predeployment orchestrator_interrupted_before_mutation
-      state=PREFLIGHT_FAILURE
+      state=$(ssh "$remote" "sudo -n jq -r .state '$remote_transaction/transaction-state.json'" 2>/dev/null)
+    fi
+    if [[ $state == RESOURCE_VETO ]]; then
+      seal_resource_veto
+      state=$(ssh "$remote" "sudo -n jq -r .state '$remote_transaction/transaction-state.json'" 2>/dev/null)
     fi
     if [[ $state == ROLLBACK_ARMED || $state == FINALIZE_PENDING || \
           $state == FINAL_VERIFICATION_PENDING ]]; then
@@ -214,32 +243,16 @@ ssh "$remote" \
   > "$local_dir/prepare-result.json" 2> "$local_dir/prepare-error.json"
 prepare_code=$?
 set -e
+rollback_armed=true
+trap emergency_rollback EXIT INT TERM HUP
 mirror_remote
 cp "$work/connector-before.json" "$local_dir/connector-before.json"
 if [[ $prepare_code -ne 0 ]]; then
   state=$(ssh "$remote" "sudo -n jq -r .state '$remote_transaction/transaction-state.json'" 2>/dev/null || printf UNKNOWN)
   if [[ $state == RESOURCE_VETO ]]; then
-    PYTHONPATH=ops/remote-backend python3 ops/remote-backend/verify_s1c3d_transaction_v1.py verify \
-      "$local_dir/remote-mirror" \
-      --implementation-freeze "$local_dir/remote-mirror/implementation-freeze.json" \
-      > "$local_dir/s1c3d-terminal.local.json"
-    scp -q "$local_dir/s1c3d-terminal.local.json" \
-      "$remote:$remote_upload/terminal-verification.json"
-    ssh "$remote" \
-      "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/verify_s1c3d_transaction_v1.py' verify \
-        '$remote_transaction' --implementation-freeze '$remote_transaction/implementation-freeze.json' \
-        --recorded-verification '$remote_upload/terminal-verification.json'" \
-      > "$local_dir/s1c3d-terminal.remote.json"
-    cmp "$local_dir/s1c3d-terminal.local.json" "$local_dir/s1c3d-terminal.remote.json"
-    scp -q "$local_dir/s1c3d-terminal.local.json" \
-      "$remote:$remote_upload/terminal-envelope.json"
-    ssh "$remote" \
-      "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/s1c3d_transaction_v1.py' seal-resource-veto \
-        --transaction-directory '$remote_transaction' \
-        --terminal-verification '$remote_upload/terminal-verification.json' \
-        --authority-envelope '$remote_upload/terminal-envelope.json'" \
-      > "$local_dir/terminal-seal-result.json"
-    mirror_remote
+    seal_resource_veto
+    rollback_armed=false
+    trap cleanup EXIT
     verdict=$(jq -er .verdict "$local_dir/remote-mirror/s1c3d-state.json")
     printf 'transaction_directory=%s\nlocal_evidence=%s\n' "$remote_transaction" "$local_dir"
     printf 'verdict=%s production_mutation=no\n' "$verdict"
@@ -268,8 +281,6 @@ jq -e '.valid == true and .authority == true and .scientific_authority == false 
    .verdict == "S1C3D_PREPARATION_PASS_WITH_OPTIMIZATION_WATCH")' \
   "$local_dir/s1c3d-predeployment.local.json" >/dev/null
 
-rollback_armed=true
-trap emergency_rollback EXIT INT TERM HUP
 scp -q "$local_dir/s1c3d-predeployment.local.json" \
   "$remote:$remote_upload/predeployment-envelope.json"
 set +e
