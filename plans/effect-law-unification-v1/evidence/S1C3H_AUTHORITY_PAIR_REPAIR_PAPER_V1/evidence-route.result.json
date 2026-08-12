@@ -1,0 +1,746 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c3h-evidence-boundary-route-v1",
+  "domain": "code",
+  "complexity_score": 36,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c9",
+    "c10",
+    "c11",
+    "c12",
+    "c13",
+    "c14"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c9",
+      "c10",
+      "c11",
+      "c12",
+      "c13",
+      "c14"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.15,
+      "c10": 0.15,
+      "c11": 0.15,
+      "c12": 0.15,
+      "c13": 0.15,
+      "c14": 0.15,
+      "c9": 0.15
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 14,
+    "missing_triads": [
+      "t1",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "c1",
+      "c9",
+      "c10",
+      "c11",
+      "c12",
+      "c13",
+      "c14"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3339,
+      "c10": 0.3504,
+      "c11": 0.3841,
+      "c12": 0.3474,
+      "c13": 0.3841,
+      "c14": 0.4111,
+      "c9": 0.3976
+    },
+    "source_self_score": 0.3727,
+    "stable": [
+      "c1",
+      "c9",
+      "c10",
+      "c11",
+      "c12",
+      "c13",
+      "c14"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "capture-route": "capture-route",
+      "engineering-repair-lifecycle": "engineering-repair-lifecycle",
+      "installation-claim": "installation-claim",
+      "journal-preservation": "journal-preservation",
+      "natural-evidence-boundary": "natural-evidence-boundary",
+      "prior-attempt-provenance": "prior-attempt-provenance",
+      "s1c4-census": "s1c4-census"
+    },
+    "scores": {
+      "capture-route": 1.0,
+      "engineering-repair-lifecycle": 1.0,
+      "installation-claim": 1.0,
+      "journal-preservation": 1.0,
+      "natural-evidence-boundary": 1.0,
+      "prior-attempt-provenance": 1.0,
+      "s1c4-census": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "capture-route": 1,
+      "engineering-repair-lifecycle": 1,
+      "installation-claim": 1,
+      "journal-preservation": 1,
+      "natural-evidence-boundary": 1,
+      "prior-attempt-provenance": 1,
+      "s1c4-census": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3727,
+      "norm": 83.4745,
+      "triads": 7
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "capture-route": "capture-route",
+      "engineering-repair-lifecycle": "engineering-repair-lifecycle",
+      "installation-claim": "installation-claim",
+      "journal-preservation": "journal-preservation",
+      "natural-evidence-boundary": "natural-evidence-boundary",
+      "prior-attempt-provenance": "prior-attempt-provenance",
+      "s1c4-census": "s1c4-census"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "capture-route": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "engineering-repair-lifecycle": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "installation-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "journal-preservation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "natural-evidence-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "prior-attempt-provenance": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "s1c4-census": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "capture-route": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "engineering-repair-lifecycle": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "installation-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "journal-preservation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "natural-evidence-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "prior-attempt-provenance": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "s1c4-census": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "capture-route": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "capture-route",
+        "exact_source_groups": [
+          "capture-route"
+        ]
+      },
+      "engineering-repair-lifecycle": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "engineering-repair-lifecycle",
+        "exact_source_groups": [
+          "engineering-repair-lifecycle"
+        ]
+      },
+      "installation-claim": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "installation-claim",
+        "exact_source_groups": [
+          "installation-claim"
+        ]
+      },
+      "journal-preservation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "journal-preservation",
+        "exact_source_groups": [
+          "journal-preservation"
+        ]
+      },
+      "natural-evidence-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "natural-evidence-boundary",
+        "exact_source_groups": [
+          "natural-evidence-boundary"
+        ]
+      },
+      "prior-attempt-provenance": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "prior-attempt-provenance",
+        "exact_source_groups": [
+          "prior-attempt-provenance"
+        ]
+      },
+      "s1c4-census": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "s1c4-census",
+        "exact_source_groups": [
+          "s1c4-census"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "capture-route": {
+        "capture-route": 1.0,
+        "engineering-repair-lifecycle": -0.0254,
+        "installation-claim": -0.0254,
+        "journal-preservation": -0.0176,
+        "natural-evidence-boundary": -0.0898,
+        "prior-attempt-provenance": 0.0,
+        "s1c4-census": 0.0293
+      },
+      "engineering-repair-lifecycle": {
+        "capture-route": -0.0254,
+        "engineering-repair-lifecycle": 1.0,
+        "installation-claim": 0.0078,
+        "journal-preservation": 0.0547,
+        "natural-evidence-boundary": -0.0449,
+        "prior-attempt-provenance": -0.041,
+        "s1c4-census": 0.0508
+      },
+      "installation-claim": {
+        "capture-route": -0.0254,
+        "engineering-repair-lifecycle": 0.0078,
+        "installation-claim": 1.0,
+        "journal-preservation": -0.0039,
+        "natural-evidence-boundary": 0.0215,
+        "prior-attempt-provenance": -0.0137,
+        "s1c4-census": 0.0156
+      },
+      "journal-preservation": {
+        "capture-route": -0.0176,
+        "engineering-repair-lifecycle": 0.0547,
+        "installation-claim": -0.0039,
+        "journal-preservation": 1.0,
+        "natural-evidence-boundary": -0.0137,
+        "prior-attempt-provenance": -0.0059,
+        "s1c4-census": 0.0234
+      },
+      "natural-evidence-boundary": {
+        "capture-route": -0.0898,
+        "engineering-repair-lifecycle": -0.0449,
+        "installation-claim": 0.0215,
+        "journal-preservation": -0.0137,
+        "natural-evidence-boundary": 1.0,
+        "prior-attempt-provenance": 0.0273,
+        "s1c4-census": 0.0059
+      },
+      "prior-attempt-provenance": {
+        "capture-route": 0.0,
+        "engineering-repair-lifecycle": -0.041,
+        "installation-claim": -0.0137,
+        "journal-preservation": -0.0059,
+        "natural-evidence-boundary": 0.0273,
+        "prior-attempt-provenance": 1.0,
+        "s1c4-census": -0.0527
+      },
+      "s1c4-census": {
+        "capture-route": 0.0293,
+        "engineering-repair-lifecycle": 0.0508,
+        "installation-claim": 0.0156,
+        "journal-preservation": 0.0234,
+        "natural-evidence-boundary": 0.0059,
+        "prior-attempt-provenance": -0.0527,
+        "s1c4-census": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "capture-route": {
+          "gravity": 1.0,
+          "owner": "s1c owner",
+          "owners": {
+            "s1c owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "engineering-repair-lifecycle": {
+          "gravity": 1.0,
+          "owner": "repair lifecycle owner",
+          "owners": {
+            "repair lifecycle owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "installation-claim": {
+          "gravity": 1.0,
+          "owner": "installation claim owner",
+          "owners": {
+            "installation claim owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "journal-preservation": {
+          "gravity": 1.0,
+          "owner": "s1c journal owner",
+          "owners": {
+            "s1c journal owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "natural-evidence-boundary": {
+          "gravity": 1.0,
+          "owner": "natural evidence owner",
+          "owners": {
+            "natural evidence owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "prior-attempt-provenance": {
+          "gravity": 1.0,
+          "owner": "attempt ledger owner",
+          "owners": {
+            "attempt ledger owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "s1c4-census": {
+          "gravity": 1.0,
+          "owner": "census owner",
+          "owners": {
+            "census owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.5,
+          "owner": "installation claim owner",
+          "owners": {
+            "installation claim owner": 2,
+            "natural evidence owner": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "provenance": {
+          "gravity": 0.5,
+          "owner": "attempt ledger owner",
+          "owners": {
+            "attempt ledger owner": 2,
+            "repair lifecycle owner": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "rollback": {
+          "gravity": 1.0,
+          "owner": "s1c journal owner",
+          "owners": {
+            "s1c journal owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "science": {
+          "gravity": 0.5,
+          "owner": "census owner",
+          "owners": {
+            "census owner": 2,
+            "s1c owner": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "deployment receipt",
+            "post-install append cursor"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c12",
+            "candidate_answer:c13",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:113",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:122"
+          ],
+          "layers": [
+            "science"
+          ],
+          "outputs": [
+            "immutable suffix",
+            "no k2 claim"
+          ],
+          "owners": [
+            "installation claim owner",
+            "natural evidence owner"
+          ],
+          "scopes": [
+            "claim boundary",
+            "science"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "provenance": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "exact blocker",
+            "new transaction identity"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c10",
+            "candidate_answer:c11",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:107",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:110"
+          ],
+          "layers": [
+            "evidence",
+            "operations"
+          ],
+          "outputs": [
+            "no relabel",
+            "separately rooted transaction"
+          ],
+          "owners": [
+            "attempt ledger owner",
+            "repair lifecycle owner"
+          ],
+          "scopes": [
+            "engineering only",
+            "evidence"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "rollback": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "frozen cursor"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c9",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:97"
+          ],
+          "layers": [
+            "evidence"
+          ],
+          "outputs": [
+            "byte-preserved records"
+          ],
+          "owners": [
+            "s1c journal owner"
+          ],
+          "scopes": [
+            "scientific future"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "science": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "natural journal suffix",
+            "ordinary pre-action boundary"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "candidate_answer:c14",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:143",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:9"
+          ],
+          "layers": [
+            "evidence",
+            "science"
+          ],
+          "outputs": [
+            "append-only receipts",
+            "collecting"
+          ],
+          "owners": [
+            "census owner",
+            "s1c owner"
+          ],
+          "scopes": [
+            "evidence only",
+            "science"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 45.7384,
+          "self_coherence": 0.7147,
+          "triads": 2
+        },
+        "provenance": {
+          "norm": 44.317,
+          "self_coherence": 0.6925,
+          "triads": 2
+        },
+        "rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "science": {
+          "norm": 45.913,
+          "self_coherence": 0.7174,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "provenance": -0.0118,
+          "rollback": -0.0123,
+          "science": -0.0457
+        },
+        "provenance": {
+          "authority": -0.0118,
+          "provenance": 1.0,
+          "rollback": 0.0353,
+          "science": -0.0138
+        },
+        "rollback": {
+          "authority": -0.0123,
+          "provenance": 0.0353,
+          "rollback": 1.0,
+          "science": 0.0041
+        },
+        "science": {
+          "authority": -0.0457,
+          "provenance": -0.0138,
+          "rollback": 0.0041,
+          "science": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 45.7384,
+          "self_coherence": 0.7147,
+          "triads": 2
+        },
+        "provenance": {
+          "norm": 44.317,
+          "self_coherence": 0.6925,
+          "triads": 2
+        },
+        "rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "science": {
+          "norm": 45.913,
+          "self_coherence": 0.7174,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "capture-route": 1,
+      "engineering-repair-lifecycle": 1,
+      "installation-claim": 1,
+      "journal-preservation": 1,
+      "natural-evidence-boundary": 1,
+      "prior-attempt-provenance": 1,
+      "s1c4-census": 1
+    },
+    "stable_groups": [
+      "capture-route",
+      "engineering-repair-lifecycle",
+      "installation-claim",
+      "journal-preservation",
+      "natural-evidence-boundary",
+      "prior-attempt-provenance",
+      "s1c4-census"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c3h-evidence-boundary-route-v1.trace.json"
+}

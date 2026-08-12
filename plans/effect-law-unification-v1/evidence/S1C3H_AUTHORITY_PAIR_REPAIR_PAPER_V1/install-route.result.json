@@ -1,0 +1,744 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c3h-authority-pair-install-route-v1",
+  "domain": "code",
+  "complexity_score": 36,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c2": 0.1429,
+      "c3": 0.1429,
+      "c4": 0.1429,
+      "c5": 0.1429,
+      "c6": 0.1429,
+      "c7": 0.1429,
+      "c8": 0.1429
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 14,
+    "missing_triads": [
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c2": 0.3826,
+      "c3": 0.3894,
+      "c4": 0.3743,
+      "c5": 0.3418,
+      "c6": 0.4045,
+      "c7": 0.366,
+      "c8": 0.3244
+    },
+    "source_self_score": 0.369,
+    "stable": [
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "authority-consumer": "authority-consumer",
+      "authority-producer": "authority-producer",
+      "authority-stage": "authority-stage",
+      "complete-rollback": "complete-rollback",
+      "historical-s1c3g": "historical-s1c3g",
+      "installation-unit": "installation-unit",
+      "production-install": "production-install"
+    },
+    "scores": {
+      "authority-consumer": 1.0,
+      "authority-producer": 1.0,
+      "authority-stage": 1.0,
+      "complete-rollback": 1.0,
+      "historical-s1c3g": 1.0,
+      "installation-unit": 1.0,
+      "production-install": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "authority-consumer": 1,
+      "authority-producer": 1,
+      "authority-stage": 1,
+      "complete-rollback": 1,
+      "historical-s1c3g": 1,
+      "installation-unit": 1,
+      "production-install": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.369,
+      "norm": 82.6559,
+      "triads": 7
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "authority-consumer": "authority-consumer",
+      "authority-producer": "authority-producer",
+      "authority-stage": "authority-stage",
+      "complete-rollback": "complete-rollback",
+      "historical-s1c3g": "historical-s1c3g",
+      "installation-unit": "installation-unit",
+      "production-install": "production-install"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "authority-consumer": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority-producer": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority-stage": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "complete-rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "historical-s1c3g": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "installation-unit": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "production-install": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "authority-consumer": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority-producer": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority-stage": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "complete-rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "historical-s1c3g": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "installation-unit": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "production-install": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "authority-consumer": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "authority-consumer",
+        "exact_source_groups": [
+          "authority-consumer"
+        ]
+      },
+      "authority-producer": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "authority-producer",
+        "exact_source_groups": [
+          "authority-producer"
+        ]
+      },
+      "authority-stage": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "authority-stage",
+        "exact_source_groups": [
+          "authority-stage"
+        ]
+      },
+      "complete-rollback": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "complete-rollback",
+        "exact_source_groups": [
+          "complete-rollback"
+        ]
+      },
+      "historical-s1c3g": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "historical-s1c3g",
+        "exact_source_groups": [
+          "historical-s1c3g"
+        ]
+      },
+      "installation-unit": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "installation-unit",
+        "exact_source_groups": [
+          "installation-unit"
+        ]
+      },
+      "production-install": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "production-install",
+        "exact_source_groups": [
+          "production-install"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "authority-consumer": {
+        "authority-consumer": 1.0,
+        "authority-producer": -0.0391,
+        "authority-stage": 0.0078,
+        "complete-rollback": 0.0234,
+        "historical-s1c3g": -0.0254,
+        "installation-unit": 0.0098,
+        "production-install": -0.0098
+      },
+      "authority-producer": {
+        "authority-consumer": -0.0391,
+        "authority-producer": 1.0,
+        "authority-stage": 0.0195,
+        "complete-rollback": 0.0117,
+        "historical-s1c3g": 0.0254,
+        "installation-unit": 0.0176,
+        "production-install": -0.0293
+      },
+      "authority-stage": {
+        "authority-consumer": 0.0078,
+        "authority-producer": 0.0195,
+        "authority-stage": 1.0,
+        "complete-rollback": -0.0234,
+        "historical-s1c3g": 0.0527,
+        "installation-unit": -0.0176,
+        "production-install": 0.0059
+      },
+      "complete-rollback": {
+        "authority-consumer": 0.0234,
+        "authority-producer": 0.0117,
+        "authority-stage": -0.0234,
+        "complete-rollback": 1.0,
+        "historical-s1c3g": -0.0566,
+        "installation-unit": -0.0762,
+        "production-install": -0.041
+      },
+      "historical-s1c3g": {
+        "authority-consumer": -0.0254,
+        "authority-producer": 0.0254,
+        "authority-stage": 0.0527,
+        "complete-rollback": -0.0566,
+        "historical-s1c3g": 1.0,
+        "installation-unit": -0.0391,
+        "production-install": 0.0313
+      },
+      "installation-unit": {
+        "authority-consumer": 0.0098,
+        "authority-producer": 0.0176,
+        "authority-stage": -0.0176,
+        "complete-rollback": -0.0762,
+        "historical-s1c3g": -0.0391,
+        "installation-unit": 1.0,
+        "production-install": -0.0117
+      },
+      "production-install": {
+        "authority-consumer": -0.0098,
+        "authority-producer": -0.0293,
+        "authority-stage": 0.0059,
+        "complete-rollback": -0.041,
+        "historical-s1c3g": 0.0313,
+        "installation-unit": -0.0117,
+        "production-install": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "authority-consumer": {
+          "gravity": 1.0,
+          "owner": "transition serving owner",
+          "owners": {
+            "transition serving owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "authority-producer": {
+          "gravity": 1.0,
+          "owner": "response admission owner",
+          "owners": {
+            "response admission owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "authority-stage": {
+          "gravity": 1.0,
+          "owner": "s1c-3h preparation owner",
+          "owners": {
+            "s1c-3h preparation owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "complete-rollback": {
+          "gravity": 1.0,
+          "owner": "s1c-3h rollback owner",
+          "owners": {
+            "s1c-3h rollback owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "historical-s1c3g": {
+          "gravity": 1.0,
+          "owner": "s1c-3g evidence owner",
+          "owners": {
+            "s1c-3g evidence owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "installation-unit": {
+          "gravity": 1.0,
+          "owner": "s1c-3h installer",
+          "owners": {
+            "s1c-3h installer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "production-install": {
+          "gravity": 1.0,
+          "owner": "s1c-3h transaction owner",
+          "owners": {
+            "s1c-3h transaction owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.5,
+          "owner": "response admission owner",
+          "owners": {
+            "response admission owner": 2,
+            "transition serving owner": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "deployment": {
+          "gravity": 0.3333,
+          "owner": "s1c-3g evidence owner",
+          "owners": {
+            "s1c-3g evidence owner": 2,
+            "s1c-3h installer": 2,
+            "s1c-3h transaction owner": 2
+          },
+          "support": 2,
+          "total": 6
+        },
+        "preparation": {
+          "gravity": 1.0,
+          "owner": "s1c-3h preparation owner",
+          "owners": {
+            "s1c-3h preparation owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "rollback": {
+          "gravity": 1.0,
+          "owner": "s1c-3h rollback owner",
+          "owners": {
+            "s1c-3h rollback owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "controller receipt",
+            "startup refresh"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c3",
+            "candidate_answer:c4",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:25",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:26"
+          ],
+          "layers": [
+            "runtime"
+          ],
+          "outputs": [
+            "fail closed",
+            "old digest"
+          ],
+          "owners": [
+            "response admission owner",
+            "transition serving owner"
+          ],
+          "scopes": [
+            "production baseline",
+            "production safety"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "deployment": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [
+            "staged candidate",
+            "terminal receipt",
+            "verified staging"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c2",
+            "candidate_answer:c5",
+            "candidate_answer:c7",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:24",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:38",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:63"
+          ],
+          "layers": [
+            "operations"
+          ],
+          "outputs": [
+            "bounded restart",
+            "one unit",
+            "rollback pass"
+          ],
+          "owners": [
+            "s1c-3g evidence owner",
+            "s1c-3h installer",
+            "s1c-3h transaction owner"
+          ],
+          "scopes": [
+            "historical evidence",
+            "production",
+            "production safety"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        },
+        "preparation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "copied immutable inputs"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c6",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:53"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "frozen pass packet"
+          ],
+          "owners": [
+            "s1c-3h preparation owner"
+          ],
+          "scopes": [
+            "deployment only"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "rollback": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "durable rollback directory"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c8",
+            "plans/effect-law-unification-v1/s1c3h_authority_pair_installation_preregistration_v1.md:95"
+          ],
+          "layers": [
+            "operations"
+          ],
+          "outputs": [
+            "old pair ready"
+          ],
+          "owners": [
+            "s1c-3h rollback owner"
+          ],
+          "scopes": [
+            "production safety"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 44.3621,
+          "self_coherence": 0.6932,
+          "triads": 2
+        },
+        "deployment": {
+          "norm": 55.0636,
+          "self_coherence": 0.5736,
+          "triads": 3
+        },
+        "preparation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "deployment": -0.0049,
+          "preparation": 0.0197,
+          "rollback": 0.0254
+        },
+        "deployment": {
+          "authority": -0.0049,
+          "deployment": 1.0,
+          "preparation": 0.0238,
+          "rollback": -0.101
+        },
+        "preparation": {
+          "authority": 0.0197,
+          "deployment": 0.0238,
+          "preparation": 1.0,
+          "rollback": -0.0234
+        },
+        "rollback": {
+          "authority": 0.0254,
+          "deployment": -0.101,
+          "preparation": -0.0234,
+          "rollback": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 44.3621,
+          "self_coherence": 0.6932,
+          "triads": 2
+        },
+        "deployment": {
+          "norm": 55.0636,
+          "self_coherence": 0.5736,
+          "triads": 3
+        },
+        "preparation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "authority-consumer": 1,
+      "authority-producer": 1,
+      "authority-stage": 1,
+      "complete-rollback": 1,
+      "historical-s1c3g": 1,
+      "installation-unit": 1,
+      "production-install": 1
+    },
+    "stable_groups": [
+      "authority-consumer",
+      "authority-producer",
+      "authority-stage",
+      "complete-rollback",
+      "historical-s1c3g",
+      "installation-unit",
+      "production-install"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c3h-authority-pair-install-route-v1.trace.json"
+}

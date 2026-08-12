@@ -1,6 +1,6 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-3G TERMINAL ROLLBACK PASS / S1C-4 CLOSED`
+Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-3H AUTHORITY-PAIR REPAIR FROZEN / S1C-4 CLOSED`
 
 Plan date: `2026-08-11`
 
@@ -34,6 +34,8 @@ adversarial review, and its verification receipt are:
 - `S1C3G_STABLE_HEALTH_PROJECTION_PREREGISTRATION_V1.md`;
 - `S1C3G_STABLE_HEALTH_PROJECTION_CRITIQUE_V1.md`;
 - `S1C3G_CAPTURE_INSTALLATION_TERMINAL_REPORT_2026-08-12.md`.
+- `S1C3H_AUTHORITY_PAIR_INSTALLATION_PREREGISTRATION_V1.md`;
+- `S1C3H_AUTHORITY_PAIR_INSTALLATION_CRITIQUE_V1.md`.
 
 Owners:
 
@@ -396,7 +398,7 @@ Exit evidence:
 
 ### S1C. Pre-Action Decision-Contract Owner
 
-Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 PASS / S1C-3G TERMINAL ROLLBACK PASS / CAPTURE NOT INSTALLED`
+Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 PASS / S1C-3G TERMINAL ROLLBACK PASS / S1C-3H REPAIR FROZEN / CAPTURE NOT INSTALLED`
 
 Purpose: create the missing evidence before action without changing action
 authority.
@@ -450,6 +452,7 @@ S1C-3 transactional deployment and restart parity
   S1C-3C consumed terminal RESOURCE_VETO attempt; never rerun
   S1C-3D through S1C-3F separately rooted terminal repairs; never rerun
   S1C-3G consumed terminal ROLLBACK PASS attempt; never rerun
+  S1C-3H separately rooted runtime-authority compatibility repair
 S1C-4 natural append-cursor census
 ```
 
@@ -520,6 +523,16 @@ final S1C-3G attempt ended `S1C3G_ROLLBACK_PASS`: baseline was restored, capture
 was not installed, and S1C-4 stayed closed. Installation PASS remains the only
 route that can open S1C-4 at a new post-install append cursor, and it grants no
 scientific authority by itself.
+
+S1C-3G changed the response runtime contract but its transaction installed only
+`nando-transition-serving` and its environment. The unchanged
+`nando-response-admission` continued to issue the old runtime digest, so the
+candidate correctly failed closed before the recorder ran. S1C-3H is a new
+engineering repair, not a retry or reinterpretation of S1C-3G. It installs and
+rolls back the complete runtime-authority compatibility unit and persists
+candidate diagnostics before rollback. Failed engineering installations may be
+repaired under new committed bytes, preflight, and transaction identities;
+natural post-install evidence may never be retried or manufactured.
 
 No S2 work starts unless S1C is PASS and at least two independent decision
 lineages exist. A composition/equivalence claim additionally requires at least
@@ -806,6 +819,7 @@ S1C-3C authority envelope           UNSEALED / AUTHORITY FALSE
 S1C-3D through S1C-3F               TERMINAL / IMMUTABLE
 S1C-3G stable health projection     TERMINAL ROLLBACK PASS
 S1C-3G attempt consumed             true
+S1C-3H authority-pair repair        FROZEN BEFORE IMPLEMENTATION
 S1C production capture              NOT INSTALLED
 S1C-4 natural census                CLOSED
 S2 frozen baselines                 BLOCKED
@@ -816,12 +830,14 @@ S6 K2 product                       BLOCKED
 K2 execution authority              false
 ```
 
-S1C-3B through S1C-3G may not be launched again. Their one-attempt budgets are
-consumed and their evidence remains immutable. Any successor requires a new
-preregistration and implementation preflight. Until a separately rooted route
-installs capture, S1C-4 stays closed. Targeted or synthetic natural traffic,
-model training, phase mutation, automatic S2 activation, and K2 claims remain
-forbidden.
+S1C-3B through S1C-3G may not be launched again. Their evidence remains
+immutable. S1C-3H is the separately rooted successor with a new preregistration
+and implementation preflight. Engineering repairs may continue under new
+immutable transaction identities until the instrument is installed or an
+unrecoverable product-safety blocker is proved. This never permits retrying or
+manufacturing natural evidence. Until capture is installed, S1C-4 stays closed.
+Targeted or synthetic natural traffic, model training, phase mutation,
+automatic S2 activation, and K2 claims remain forbidden.
 
 Structural review packets:
 
