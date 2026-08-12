@@ -220,6 +220,7 @@ S1C-3B production mutation                       false
 S1C-3C successor attempt                         TERMINAL RESOURCE_VETO
 S1C-3C remote attempts                           1 / 1 CONSUMED
 S1C-3C authority envelope                        UNSEALED / AUTHORITY FALSE
+S1C-3D engineering repair                        PAPER OPEN / NOT DEPLOYED
 S1C production capture                           NOT INSTALLED
 S1C-4 natural decision census                    CLOSED
 S2 grounded meaning                              BLOCKED
@@ -329,6 +330,13 @@ Therefore the operational outcome is `RESOURCE_VETO`, but the authority envelope
 is `UNSEALED`, `authority=false`, capture remains uninstalled, S1C-4 remains
 closed, and no rerun is authorized. The authority-free postmortem root is
 `5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd`.
+
+The consumed S1C-3C identity remains closed. A separately rooted S1C-3D
+engineering repair is open on paper: it must bind both parity oracles to one
+read-only authority snapshot, keep correctness and the 20 ms hard safety
+ceiling fail-closed, and report deviations from the 5 ms p99 target as
+optimization watches. It may open S1C-4 only after an independently verified
+installation and a new post-install append cursor.
 
 ## 7. Completed Ownership Repair
 

@@ -1,6 +1,6 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3B TERMINAL / S1C-3C TERMINAL RESOURCE_VETO`
+Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3C TERMINAL / S1C-3D ENGINEERING REPAIR OPEN`
 
 Plan date: `2026-08-11`
 
@@ -445,6 +445,7 @@ S1C-2 shadow producer with authority=false
 S1C-3 transactional deployment and restart parity
   S1C-3B consumed terminal attempt; never rerun
   S1C-3C consumed terminal RESOURCE_VETO attempt; never rerun
+  S1C-3D separately rooted engineering repair; old evidence remains immutable
 S1C-4 natural append-cursor census
 ```
 
@@ -485,7 +486,8 @@ agree before timestamp creation, evidence-directory creation, SSH, or remote
 lock acquisition. It retains the same frozen resource thresholds, candidate,
 ordinary-load denominator, rollback boundary, and scientific non-authority.
 Exactly one S1C-3C remote transaction is allowed after every implementation
-byte is committed and pushed. There is no automatic S1C-3D.
+byte is committed and pushed. There is no automatic continuation from its
+result; a later repair requires a separately rooted preregistration.
 
 That transaction is now consumed. The resource mechanism recorded two
 settlement-p99 failures (`5.097076 ms` and `6.104611 ms`, limit `5 ms`) and
@@ -506,6 +508,14 @@ S2                        BLOCKED
 An authority-free postmortem may verify and report that exact frozen attempt,
 but it cannot grant preregistered authority, repair the consumed attempt, or
 authorize another transaction.
+
+S1C-3D is not another S1C-3C observation. It is a separately preregistered
+engineering route that repairs parity snapshot access and separates the 5 ms
+optimization target from the existing 20 ms hard safety ceiling. Every
+candidate identity receives at most one production mutation attempt; later
+repairs require a new immutable identity and preserve all earlier receipts.
+Installation PASS opens S1C-4 only at a new post-install append cursor and
+grants no scientific authority by itself.
 
 No S2 work starts unless S1C is PASS and at least two independent decision
 lineages exist. A composition/equivalence claim additionally requires at least
@@ -790,6 +800,7 @@ S1C production capture              NOT INSTALLED
 S1C-3C successor                    TERMINAL RESOURCE_VETO
 S1C-3C remote attempts              1 / 1 CONSUMED
 S1C-3C authority envelope           UNSEALED / AUTHORITY FALSE
+S1C-3D engineering repair           PAPER OPEN / NOT DEPLOYED
 S1C-4 natural census                CLOSED
 S2 frozen baselines                 BLOCKED
 S3 hidden representation            BLOCKED
@@ -800,11 +811,11 @@ K2 execution authority              false
 ```
 
 Neither S1C-3B nor S1C-3C may be launched again. Their one-attempt budgets are
-consumed, production capture remains uninstalled, and S1C-4 stays closed. The
-only permissible follow-up for this route is authority-free preservation and
-reporting of the terminal evidence. Targeted or synthetic traffic, model
-training, phase mutation, automatic S2 activation, and K2 claims remain
-forbidden.
+consumed and their evidence remains immutable. S1C-3D may proceed only as the
+separately rooted engineering repair defined by its preregistration and
+critique. Until that route installs capture, S1C-4 stays closed. Targeted or
+synthetic natural traffic, model training, phase mutation, automatic S2
+activation, and K2 claims remain forbidden.
 
 Structural review packets:
 
