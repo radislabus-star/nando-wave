@@ -1872,15 +1872,16 @@ fn grounded_decision_snapshot(report: &Value) -> Value {
 
 fn s1c3_operational_snapshot(report: &Value) -> Value {
     let valid = report.get("schema").and_then(Value::as_str)
-        == Some("nando.s1c3-operational-status.v1")
+        == Some("nando.s1c3b-terminal-status.v1")
         && report.get("transaction_id").and_then(Value::as_str)
-            == Some("20260812T051022Z-75223baaa495-s1c3v7")
-        && report.get("verdict").and_then(Value::as_str)
-            == Some("INVALID_ENVIRONMENT_QUIESCENCE_TIMEOUT")
-        && report.get("blocker").and_then(Value::as_str) == Some("quiescence_window_not_observed")
-        && report.get("quiescence_root_sha256").and_then(Value::as_str)
-            == Some("726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b")
+            == Some("20260812T093629Z-36ffc0cbf56b-s1c3b-v1")
+        && report.get("verdict").and_then(Value::as_str) == Some("PREFLIGHT_FAILURE")
+        && report.get("blocker").and_then(Value::as_str) == Some("idle_metric_schema_mismatch")
         && report.get("capture_installed").and_then(Value::as_bool) == Some(false)
+        && report.get("production_mutation").and_then(Value::as_bool) == Some(false)
+        && report.get("attempt_consumed").and_then(Value::as_bool) == Some(true)
+        && report.get("resource_verdict").is_some_and(Value::is_null)
+        && report.get("deployment_verdict").is_some_and(Value::is_null)
         && report.get("s1c4_started").and_then(Value::as_bool) == Some(false)
         && report.get("authority_ready").and_then(Value::as_bool) == Some(false)
         && report
@@ -1891,16 +1892,14 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
             .get("phase_mutation_allowed")
             .and_then(Value::as_bool)
             == Some(false)
-        && report.get("attempted_intervals").and_then(Value::as_u64) == Some(1_750)
         && report
-            .pointer("/longest_eligible_streaks/4")
-            .and_then(Value::as_u64)
-            == Some(14)
+            .get("local_evidence_manifest_sha256")
+            .and_then(Value::as_str)
+            == Some("45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26")
         && report
-            .pointer("/longest_eligible_streaks/6")
-            .and_then(Value::as_u64)
-            == Some(16)
-        && report.get("required_intervals").and_then(Value::as_u64) == Some(30);
+            .get("remote_evidence_manifest_sha256")
+            .and_then(Value::as_str)
+            == Some("908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42");
     if !valid {
         return json!({
             "available": false,
@@ -1919,14 +1918,16 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
         "verdict": report.get("verdict"),
         "blocker": report.get("blocker"),
         "capture_installed": false,
+        "production_mutation": false,
+        "attempt_consumed": true,
+        "resource_verdict": Value::Null,
+        "deployment_verdict": Value::Null,
         "s1c4_started": false,
         "authority_ready": false,
         "model_training_allowed": false,
         "phase_mutation_allowed": false,
-        "attempted_intervals": 1_750,
-        "required_intervals": 30,
-        "longest_eligible_streaks": {"4": 14, "6": 16},
-        "quiescence_root_sha256": "726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b",
+        "local_evidence_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
+        "remote_evidence_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
     })
 }
 
@@ -2545,19 +2546,21 @@ mod tests {
     #[test]
     fn dashboard_s1c3_status_is_exact_and_fail_closed() {
         let report = json!({
-            "schema": "nando.s1c3-operational-status.v1",
-            "transaction_id": "20260812T051022Z-75223baaa495-s1c3v7",
-            "verdict": "INVALID_ENVIRONMENT_QUIESCENCE_TIMEOUT",
-            "blocker": "quiescence_window_not_observed",
-            "quiescence_root_sha256": "726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b",
+            "schema": "nando.s1c3b-terminal-status.v1",
+            "transaction_id": "20260812T093629Z-36ffc0cbf56b-s1c3b-v1",
+            "verdict": "PREFLIGHT_FAILURE",
+            "blocker": "idle_metric_schema_mismatch",
             "capture_installed": false,
+            "production_mutation": false,
+            "attempt_consumed": true,
+            "resource_verdict": null,
+            "deployment_verdict": null,
             "s1c4_started": false,
             "authority_ready": false,
             "model_training_allowed": false,
             "phase_mutation_allowed": false,
-            "attempted_intervals": 1_750,
-            "required_intervals": 30,
-            "longest_eligible_streaks": {"4": 14, "6": 16},
+            "local_evidence_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
+            "remote_evidence_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
         });
         let snapshot = s1c3_operational_snapshot(&report);
         assert_eq!(snapshot["available"], true);
@@ -2572,20 +2575,34 @@ mod tests {
         assert_eq!(rejected["capture_installed"], false);
         assert_eq!(rejected["authority_ready"], false);
 
+        forged["capture_installed"] = json!(false);
+        forged["production_mutation"] = json!(true);
+        let rejected = s1c3_operational_snapshot(&forged);
+        assert_eq!(rejected["available"], false);
+        assert_eq!(rejected["capture_installed"], false);
+
+        forged["production_mutation"] = json!(false);
+        forged["resource_verdict"] = json!("S1C3B_RESOURCE_VETO");
+        let rejected = s1c3_operational_snapshot(&forged);
+        assert_eq!(rejected["available"], false);
+        assert_eq!(rejected["authority_ready"], false);
+
         let mut forged = json!({
-            "schema": "nando.s1c3-operational-status.v1",
-            "transaction_id": "20260812T051022Z-75223baaa495-s1c3v7",
-            "verdict": "INVALID_ENVIRONMENT_QUIESCENCE_TIMEOUT",
+            "schema": "nando.s1c3b-terminal-status.v1",
+            "transaction_id": "20260812T093629Z-36ffc0cbf56b-s1c3b-v1",
+            "verdict": "PREFLIGHT_FAILURE",
             "blocker": "latency_budget_exceeded",
-            "quiescence_root_sha256": "726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b",
             "capture_installed": false,
+            "production_mutation": false,
+            "attempt_consumed": true,
+            "resource_verdict": null,
+            "deployment_verdict": null,
             "s1c4_started": false,
             "authority_ready": false,
             "model_training_allowed": false,
             "phase_mutation_allowed": false,
-            "attempted_intervals": 1_750,
-            "required_intervals": 30,
-            "longest_eligible_streaks": {"4": 14, "6": 16},
+            "local_evidence_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
+            "remote_evidence_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
         });
         let rejected = s1c3_operational_snapshot(&forged);
         assert_eq!(rejected["available"], false);
@@ -2594,10 +2611,10 @@ mod tests {
             "s1c3_operational_status_missing_or_invalid"
         );
 
-        forged["blocker"] = json!("quiescence_window_not_observed");
+        forged["blocker"] = json!("idle_metric_schema_mismatch");
         let accepted = s1c3_operational_snapshot(&forged);
         assert_eq!(accepted["available"], true);
-        assert_eq!(accepted["blocker"], "quiescence_window_not_observed");
+        assert_eq!(accepted["blocker"], "idle_metric_schema_mismatch");
     }
 
     #[test]

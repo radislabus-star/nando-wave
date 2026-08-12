@@ -1,0 +1,25 @@
+{
+  "local": {
+    "bytes": 230792,
+    "files": 40,
+    "normalized_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
+    "path": "plans/effect-law-unification-v1/evidence/S1C3B_PRODUCTION_LOAD_ATTEMPT_V1/20260812T093629Z-36ffc0cbf56b-s1c3b-v1"
+  },
+  "local_only_files": [
+    "bundle-verify.txt",
+    "connector-after.json",
+    "connector-before.json",
+    "prepare-error.json",
+    "prepare-result.json"
+  ],
+  "remote": {
+    "bytes": 229242,
+    "files": 35,
+    "normalized_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
+    "path": "/var/lib/nando-wave/deployments/20260812T093629Z-36ffc0cbf56b-s1c3b-v1"
+  },
+  "schema": "nando.s1c3b-postmortem-evidence-manifest.v1",
+  "shared_byte_mismatches": 0,
+  "shared_files": 35,
+  "transaction_id": "20260812T093629Z-36ffc0cbf56b-s1c3b-v1"
+}

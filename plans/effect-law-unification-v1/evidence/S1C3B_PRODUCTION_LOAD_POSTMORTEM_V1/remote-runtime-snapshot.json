@@ -1,0 +1,14 @@
+{
+  "gateway_control_binary_sha256": "49850a3ada420e6ab482d82ba8aa4273ed3f1136b3b5ee8877cab8ceec771ecf",
+  "observed_at": "2026-08-12T10:05:23Z",
+  "schema": "nando.s1c3b-postmortem-remote-runtime.v1",
+  "services": {
+    "nando-gateway-control.service": {"active": true, "main_pid": 4034438, "nrestarts": 0},
+    "nando-operator-certification-authority.service": {"active": true, "main_pid": 164668, "nrestarts": 0},
+    "nando-response-learning.service": {"active": true, "main_pid": 369456, "nrestarts": 0},
+    "nando-transition-serving.service": {"active": true, "main_pid": 165670, "nrestarts": 0},
+    "nando-transport-gateway.service": {"active": true, "main_pid": 682430, "nrestarts": 0}
+  },
+  "transition_config_sha256": "cb2e33bdd2c9959b2c975e9585eb60927f9827327f6a74af6ade92b9b19486f5",
+  "transition_serving_binary_sha256": "6ad63428f0cbbe96b539db2d63844403c697dec5041a91652b37857bb653ea58"
+}

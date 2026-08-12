@@ -1,0 +1,5 @@
+S1C3B_AFFINITY pid=194186 cpus=4 executable_sha256=01edc850b3ad382037ec0e15344f82d4366310faf37fbc2f4cff510a5a7ddc4c
+
+thread 'main' (194186) panicked at src/main.rs:9:39:
+registry: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

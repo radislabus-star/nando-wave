@@ -1,0 +1,1 @@
+{"create_fsync_unlink_pass": true, "directory_fsync_pass": true, "probe_gid": 1000, "probe_mode_octal": "0600", "probe_uid": 1000, "writer_gid": 1000, "writer_uid": 1000}

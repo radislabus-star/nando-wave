@@ -1,0 +1,10 @@
+{
+  "active_state": "active",
+  "command_sha256": "b15c3be52621009e754a3dbffbe25253de85f2600cbff825694b61f4e60afdb1",
+  "label": "after",
+  "main_pid": 2919,
+  "nrestarts": 0,
+  "observed_at": "2026-08-12T12:46:51,721229931+03:00",
+  "route_receipt_failures": 0,
+  "schema": "nando.s1c3b-connector-snapshot.v1"
+}

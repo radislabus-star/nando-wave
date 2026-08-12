@@ -782,6 +782,42 @@ class SyntheticTransaction:
 
 
 class ExecutorTests(unittest.TestCase):
+    def test_idle_metric_uses_observed_log_schema(self) -> None:
+        observed = (
+            "S1C3B_AFFINITY pid=192678 cpus=4 "
+            "executable_sha256=a9815a44be57e0732fb5c1d304f6ac4acc119447e630c2503e40807708fe8efb\n"
+            "S1C_IDLE_CPU elapsed_ticks=0 ticks_per_second=100 "
+            "percent_of_one_core=0.000000\n"
+        )
+        completed = subprocess.CompletedProcess([], 0, stdout=b"")
+        command = {"observed_affinity": [executor.MEASUREMENT_CPU]}
+        with mock.patch.object(
+            executor,
+            "run_measured",
+            return_value=(completed, observed, command),
+        ):
+            row = executor.test_metric(
+                Path("/bin/true"),
+                Path("/tmp"),
+                executor.IDLE_TEST,
+                "idle",
+                executor.IDLE_RE,
+                executor.IDLE_METRIC_FIELDS,
+                Path("/tmp"),
+                180,
+                object(),
+                Path("/bin/true"),
+            )
+
+        self.assertEqual(
+            row["metrics"],
+            {
+                "elapsed_ticks": 0,
+                "ticks_per_second": 100,
+                "percent_of_one_core": 0.0,
+            },
+        )
+
     def test_measurement_labels_freeze_round_order(self) -> None:
         self.assertEqual(
             executor.MEASUREMENT_LABELS[:5],

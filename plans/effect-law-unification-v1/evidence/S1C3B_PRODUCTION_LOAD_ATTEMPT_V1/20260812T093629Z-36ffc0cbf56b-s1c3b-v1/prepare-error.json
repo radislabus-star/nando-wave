@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/e/.cache/20260812T093629Z-36ffc0cbf56b-s1c3b-v1-upload/s1c3b_remote_transaction_v1.py", line 1471, in <module>
+    raise SystemExit(main())
+  File "/home/e/.cache/20260812T093629Z-36ffc0cbf56b-s1c3b-v1-upload/s1c3b_remote_transaction_v1.py", line 1463, in main
+    return prepare(args)
+  File "/home/e/.cache/20260812T093629Z-36ffc0cbf56b-s1c3b-v1-upload/s1c3b_remote_transaction_v1.py", line 949, in prepare
+    resource, parity = evaluate_measurement(
+  File "/home/e/.cache/20260812T093629Z-36ffc0cbf56b-s1c3b-v1-upload/s1c3b_remote_transaction_v1.py", line 778, in evaluate_measurement
+    elif idle["metrics"]["percent_of_one_core"] > 0.25:
+KeyError: 'percent_of_one_core'

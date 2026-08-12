@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.12-control-v13";
+const DASHBOARD_BUILD: &str = "2026.08.12-control-v14";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -455,14 +455,14 @@ const TEMPLATE: &str = r#"
         <strong id="decision-status" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
       <div class="law-body operational-boundary" aria-label="S1C operational boundary">
-        <p class="discovery-label">S1C · operational capture</p>
+        <p class="discovery-label">S1C-3B · production capture</p>
         <p class="law-counts vocabulary-slots">
           <span>capture <b id="s1c-capture">—</b></span>
-          <span>V7 <b id="s1c-verdict">—</b></span>
-          <span>quiet streak <b id="s1c-streak">—</b></span>
+          <span>attempt <b id="s1c-verdict">—</b></span>
+          <span>production <b id="s1c-production">—</b></span>
           <span>S1C-4 <b id="s1c4-state">—</b></span>
         </p>
-        <p class="law-blocker"><span>Operational blocker:</span> <b id="s1c-blocker">—</b>.</p>
+        <p class="law-blocker"><span>Terminal boundary:</span> <b id="s1c-blocker">—</b>.</p>
       </div>
       <div class="law-body">
         <p class="law-counts vocabulary-slots">
@@ -644,12 +644,12 @@ const TEMPLATE: &str = r#"
     text("decision-blocker", readable(decision.blocker));
     const s1cAvailable = s1c.available === true;
     text("s1c-capture", s1cAvailable && s1c.capture_installed ? "INSTALLED" : "NOT INSTALLED");
-    text("s1c-verdict", s1cAvailable ? "TERMINAL TIMEOUT" : "STATUS UNAVAILABLE");
-    text("s1c-streak", s1cAvailable
-      ? `${number.format(s1c.longest_eligible_streaks?.["4"] || 0)}/${number.format(s1c.required_intervals || 0)} · ${number.format(s1c.longest_eligible_streaks?.["6"] || 0)}/${number.format(s1c.required_intervals || 0)}`
-      : "—");
-    text("s1c4-state", s1cAvailable && s1c.s1c4_started ? "STARTED" : "NOT STARTED");
-    text("s1c-blocker", s1cAvailable ? "mini-PC не дал 30 последовательных тихих интервалов за 1 800 с" : "status sidecar отсутствует или невалиден");
+    text("s1c-verdict", s1cAvailable ? "TERMINAL · PREFLIGHT FAILURE" : "STATUS UNAVAILABLE");
+    text("s1c-production", s1cAvailable && !s1c.production_mutation ? "UNCHANGED" : "UNKNOWN");
+    text("s1c4-state", s1cAvailable && s1c.s1c4_started ? "STARTED" : "CLOSED");
+    text("s1c-blocker", s1cAvailable
+      ? "implementation metric-schema defect · attempt consumed · no resource or deployment verdict"
+      : "status sidecar отсутствует или невалиден");
 
     const current = {
       ingressTokens: ingress.input_tokens || 0,
@@ -764,12 +764,14 @@ mod tests {
         assert!(html.contains("verified ordinary CPU"));
         assert!(html.contains("K2 · decision evidence"));
         assert!(html.contains("S1A transition projection → S1B decision census"));
-        assert!(html.contains("S1C · operational capture"));
+        assert!(html.contains("S1C-3B · production capture"));
         assert!(html.contains("id=\"s1c-capture\""));
         assert!(html.contains("id=\"s1c-verdict\""));
-        assert!(html.contains("id=\"s1c-streak\""));
+        assert!(html.contains("id=\"s1c-production\""));
         assert!(html.contains("id=\"s1c4-state\""));
         assert!(html.contains("id=\"s1c-blocker\""));
+        assert!(html.contains("TERMINAL · PREFLIGHT FAILURE"));
+        assert!(html.contains("no resource or deployment verdict"));
         assert!(html.contains("id=\"decision-scanned\""));
         assert!(html.contains("id=\"decision-projected\""));
         assert!(html.contains("id=\"transition-censors\""));

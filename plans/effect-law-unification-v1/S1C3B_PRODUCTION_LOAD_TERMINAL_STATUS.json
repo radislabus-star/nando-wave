@@ -1,0 +1,17 @@
+{
+  "attempt_consumed": true,
+  "authority_ready": false,
+  "blocker": "idle_metric_schema_mismatch",
+  "capture_installed": false,
+  "deployment_verdict": null,
+  "local_evidence_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
+  "model_training_allowed": false,
+  "phase_mutation_allowed": false,
+  "production_mutation": false,
+  "remote_evidence_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
+  "resource_verdict": null,
+  "s1c4_started": false,
+  "schema": "nando.s1c3b-terminal-status.v1",
+  "transaction_id": "20260812T093629Z-36ffc0cbf56b-s1c3b-v1",
+  "verdict": "PREFLIGHT_FAILURE"
+}

@@ -65,6 +65,7 @@ ROUND_COUNT = 3
 
 HOT_TEST = legacy.HOT_TEST
 IDLE_TEST = legacy.IDLE_TEST
+IDLE_METRIC_FIELDS = ("elapsed_ticks", "ticks_per_second", "percent_of_one_core")
 SINGLE_SYNC_TEST = legacy.SINGLE_SYNC_TEST
 THREE_SYNC_TEST = legacy.THREE_SYNC_TEST
 HOT_RE = legacy.HOT_RE
@@ -724,7 +725,7 @@ def evaluate_measurement(
 
     idle = test_metric(
         harnesses["response-actor"], source, IDLE_TEST, "idle", IDLE_RE,
-        ("elapsed_ticks", "ticks_per_second", "percent_micros"), evidence, 180, monitor, wrapper,
+        IDLE_METRIC_FIELDS, evidence, 180, monitor, wrapper,
     )
     rss_rows = [
         measure_rss_mode(candidate_binary, config, False, work, evidence, monitor, wrapper, 19871),

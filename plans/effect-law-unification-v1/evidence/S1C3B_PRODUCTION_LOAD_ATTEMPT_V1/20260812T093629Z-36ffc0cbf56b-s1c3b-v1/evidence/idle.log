@@ -1,0 +1,8 @@
+S1C3B_AFFINITY pid=192678 cpus=4 executable_sha256=a9815a44be57e0732fb5c1d304f6ac4acc119447e630c2503e40807708fe8efb
+
+running 1 test
+test package::tests::capture_disabled_executor_has_no_sustained_idle_cpu_work ... S1C_IDLE_CPU elapsed_ticks=0 ticks_per_second=100 percent_of_one_core=0.000000
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 386 filtered out; finished in 60.00s
+

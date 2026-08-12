@@ -1,0 +1,4 @@
+The bundle contains this ref:
+86a00acb3403877917b9de901bf7bd62994e51d4 refs/heads/k1-topology-quotient-v2-20260810
+The bundle records a complete history.
+The bundle uses this hash algorithm: sha1

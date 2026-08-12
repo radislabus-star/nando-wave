@@ -1,0 +1,17 @@
+S1C3B_AFFINITY pid=192616 cpus=4 executable_sha256=2d0a267e3d0955626ff711a3f1670a772a70103a3f9843a346684eff9aa7500b
+
+running 1 test
+test grounded_decision_capture::tests::three_ledger_sync_path_stays_within_eligible_budget ... S1C3_STAGE_SYNC_LATENCY precommit_p99_ns=3797202 precommit_hard_max_ns=3933825 settlement_p99_ns=6456852 settlement_hard_max_ns=9300024 episode_p99_ns=8701137 episode_hard_max_ns=11941887 records=256
+
+thread 'grounded_decision_capture::tests::three_ledger_sync_path_stays_within_eligible_budget' (192618) panicked at crates/nando-transition-serving/src/grounded_decision_capture.rs:828:9:
+settlement sync p99 exceeded 5 ms
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    grounded_decision_capture::tests::three_ledger_sync_path_stays_within_eligible_budget
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 312 filtered out; finished in 1.42s
+

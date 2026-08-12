@@ -1,0 +1,8 @@
+S1C3B_AFFINITY pid=192309 cpus=4 executable_sha256=a9815a44be57e0732fb5c1d304f6ac4acc119447e630c2503e40807708fe8efb
+
+running 1 test
+test package::tests::capture_disabled_compatibility_latency_stays_within_hot_budget ... S1C_HOT_LATENCY matched_p99_ns=21120 no_goal_p99_ns=1193 hard_max_ns=31106 samples=4096
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 386 filtered out; finished in 0.08s
+
