@@ -40,9 +40,11 @@ The final V4 freeze must prove:
 
 ```text
 diff outside cfg(test)                         0
-release binary SHA-256
-  bff56756ee310344aa759b357e64dee2b8a8a75202d427dd3c3d54add78f8614
-release binary bytes vs V3 candidate           IDENTICAL
+changed files below crates/                    exactly one
+production projection SHA-256
+  10b2856687c0e22c47e43754d2a05ffa82641002b11d70d42edca1e4c797c316
+release binary size vs V3 candidate            IDENTICAL
+ELF runtime section dimensions                 IDENTICAL
 Cargo.lock SHA-256
   0c4afa1a2b78cb6c4723d955ad56df5638de7a277f5f954970ae75c455b0aec1
 candidate config SHA-256
@@ -51,6 +53,11 @@ candidate config SHA-256
 
 Candidate commit and tree are frozen only after that bounded test-only change
 is committed. No remote attempt is authorized by this draft alone.
+
+Rust release artifacts bind crate source fingerprints into ELF metadata, so a
+test-only source change is not expected to retain the whole-file SHA-256. The
+transaction still freezes the exact built candidate hash before any metric and
+binds it through the executable set, preparation, install, and final receipt.
 
 ## 3. Stage-Correct Durability Gate
 

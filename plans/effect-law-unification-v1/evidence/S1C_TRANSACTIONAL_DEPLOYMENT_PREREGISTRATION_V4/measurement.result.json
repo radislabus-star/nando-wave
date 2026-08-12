@@ -112,15 +112,15 @@
   "quality_ready": false,
   "wave_summary": {
     "scores": {
-      "c1": 0.3606,
-      "c2": 0.3539,
-      "c3": 0.3899,
-      "c4": 0.3561,
-      "c5": 0.3636,
-      "c6": 0.3967,
-      "c7": 0.3787
+      "c1": 0.3638,
+      "c2": 0.3571,
+      "c3": 0.369,
+      "c4": 0.369,
+      "c5": 0.3728,
+      "c6": 0.4011,
+      "c7": 0.3817
     },
-    "source_self_score": 0.3714,
+    "source_self_score": 0.3735,
     "stable": [
       "c1",
       "c2",
@@ -147,8 +147,8 @@
       "s1c3-v4": 7
     },
     "candidate_superposition": {
-      "avg_triad_coherence": 0.3714,
-      "norm": 83.1865,
+      "avg_triad_coherence": 0.3735,
+      "norm": 83.666,
       "triads": 7
     },
     "core_version": "sparse-triad-v6.2-quality-gates",
@@ -159,15 +159,15 @@
     "group_centroids": {
       "candidate": {
         "s1c3-v4": {
-          "norm": 83.1865,
-          "self_coherence": 0.3714,
+          "norm": 83.666,
+          "self_coherence": 0.3735,
           "triads": 7
         }
       },
       "source": {
         "s1c3-v4": {
-          "norm": 83.1865,
-          "self_coherence": 0.3714,
+          "norm": 83.666,
+          "self_coherence": 0.3735,
           "triads": 7
         }
       }
@@ -427,35 +427,35 @@
       "interference_matrix": {
         "authority": {
           "authority": 1.0,
-          "candidate": 0.0,
+          "candidate": 0.0176,
           "epistemic": -0.0547,
           "measurement": 0.0419,
           "provenance": 0.0156
         },
         "candidate": {
-          "authority": 0.0,
+          "authority": 0.0176,
           "candidate": 1.0,
-          "epistemic": -0.0039,
-          "measurement": -0.0093,
-          "provenance": -0.0547
+          "epistemic": 0.0098,
+          "measurement": -0.0221,
+          "provenance": -0.0254
         },
         "epistemic": {
           "authority": -0.0547,
-          "candidate": -0.0039,
+          "candidate": 0.0098,
           "epistemic": 1.0,
           "measurement": 0.0186,
           "provenance": 0.0117
         },
         "measurement": {
           "authority": 0.0419,
-          "candidate": -0.0093,
+          "candidate": -0.0221,
           "epistemic": 0.0186,
           "measurement": 1.0,
           "provenance": -0.0163
         },
         "provenance": {
           "authority": 0.0156,
-          "candidate": -0.0547,
+          "candidate": -0.0254,
           "epistemic": 0.0117,
           "measurement": -0.0163,
           "provenance": 1.0
