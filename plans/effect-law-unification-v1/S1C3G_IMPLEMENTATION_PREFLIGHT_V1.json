@@ -1,0 +1,377 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "s1c3g-stable-health-projection",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "decision-precommit-segment",
+      "kind": "file",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "expect": {
+        "size_bytes": 4,
+        "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+        "prefix_hex": "4e544631",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "goal-satisfaction-segment",
+      "kind": "file",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "expect": {
+        "size_bytes": 4,
+        "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+        "prefix_hex": "4e544631",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "selected-action-segment",
+      "kind": "file",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "expect": {
+        "size_bytes": 4,
+        "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+        "prefix_hex": "4e544631",
+        "mode": "0600"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "read-baseline",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "install-candidate",
+        "kind": "atomic_binary_config_install"
+      },
+      {
+        "id": "restart-transition",
+        "kind": "transition_service_restart"
+      },
+      {
+        "id": "observe-hot-health",
+        "kind": "http_get_health",
+        "comparison_id": "hot-health-projection"
+      },
+      {
+        "id": "observe-cpu-health",
+        "kind": "http_get_health",
+        "comparison_id": "cpu-health-projection"
+      },
+      {
+        "id": "observe-control-health",
+        "kind": "http_get_health",
+        "comparison_id": "control-health-projection"
+      },
+      {
+        "id": "observe-gateway-health",
+        "kind": "http_get_health",
+        "comparison_id": "gateway-health-projection"
+      }
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "journal_mutation",
+      "nginx_restart",
+      "connector_restart",
+      "scientific_authority_grant"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "s1c3f-parent-executor",
+      "path": "/tmp/nanda-s1c3g-preflight/s1c3f_remote_transaction_v1.py",
+      "sha256": "baecf65e5ee356a1ab4696387769cfd9184c9ba6640d174ab70ae95002970de0",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "generated_traffic",
+          "regex": "(/v1/responses|method=[\\\"']POST|route_probe\\s*=\\s*base\\.route_probe)"
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "(write_fixture|synthetic_traffic|generated_fixture)"
+        },
+        {
+          "effect": "journal_mutation",
+          "regex": "(JOURNAL\\.(unlink|rmdir|rename)|open\\([^\\n]*JOURNAL[^\\n]*(wb|ab)|truncate\\([^\\n]*JOURNAL)"
+        },
+        {
+          "effect": "nginx_restart",
+          "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*nginx"
+        },
+        {
+          "effect": "connector_restart",
+          "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*connector"
+        },
+        {
+          "effect": "scientific_authority_grant",
+          "regex": "[\\\"']scientific_authority[\\\"']\\s*:\\s*True"
+        }
+      ]
+    }
+  ],
+  "runtime_comparisons": [
+    {
+      "id": "hot-health-projection",
+      "source": "GET http://127.0.0.1:18789/health",
+      "comparison": "exact_stable_projection",
+      "stable_fields": [
+        "semantic.ok",
+        "semantic.service",
+        "semantic.mode",
+        "semantic.admission_verdict",
+        "semantic.response_executor_cache_ready",
+        "semantic.response_active_profiles"
+      ],
+      "expected_to_change_fields": [],
+      "observed_not_compared_fields": [
+        "raw_sha256",
+        "semantic.transition_active_profiles",
+        "remaining_dynamic_fields"
+      ],
+      "reason": "preserve local hot serving and admission without comparing dynamic telemetry",
+      "test_id": "stable-projection-unit"
+    },
+    {
+      "id": "cpu-health-projection",
+      "source": "GET http://192.168.3.94:8787/cpu-health",
+      "comparison": "exact_stable_projection",
+      "stable_fields": [
+        "semantic.ok",
+        "semantic.service",
+        "semantic.mode",
+        "semantic.admission_verdict",
+        "semantic.response_executor_cache_ready",
+        "semantic.response_active_profiles"
+      ],
+      "expected_to_change_fields": [],
+      "observed_not_compared_fields": [
+        "raw_sha256",
+        "semantic.transition_active_profiles",
+        "remaining_dynamic_fields"
+      ],
+      "reason": "preserve routed CPU serving and require parity with the local hot projection",
+      "test_id": "stable-projection-unit"
+    },
+    {
+      "id": "control-health-projection",
+      "source": "GET http://127.0.0.1:18788/health",
+      "comparison": "exact_stable_projection",
+      "stable_fields": [
+        "semantic.ok",
+        "semantic.service",
+        "semantic.mode"
+      ],
+      "expected_to_change_fields": [],
+      "observed_not_compared_fields": [
+        "raw_sha256",
+        "cpu_allowed",
+        "transport_dependency",
+        "unpublished_fields"
+      ],
+      "reason": "preserve the control endpoint contract without inventing transition fields",
+      "test_id": "stable-projection-unit"
+    },
+    {
+      "id": "gateway-health-projection",
+      "source": "GET http://192.168.3.94:8787/health",
+      "comparison": "exact_stable_projection",
+      "stable_fields": [
+        "semantic.ok",
+        "semantic.service"
+      ],
+      "expected_to_change_fields": [],
+      "observed_not_compared_fields": [
+        "raw_sha256",
+        "transport",
+        "python_transport",
+        "scope",
+        "unpublished_fields"
+      ],
+      "reason": "preserve gateway route identity without comparing gateway telemetry as serving state",
+      "test_id": "stable-projection-unit"
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "id": "decision-precommit-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "decision-precommit-segment"
+    },
+    {
+      "id": "goal-satisfaction-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "goal-satisfaction-segment"
+    },
+    {
+      "id": "selected-action-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "selected-action-segment"
+    }
+  ],
+  "state_machine": {
+    "initial_state": "NEW",
+    "terminal_states": [
+      "PASS",
+      "PREFLIGHT_FAILURE",
+      "ROLLBACK_PASS",
+      "VETO"
+    ],
+    "steps": [
+      {
+        "id": "prepare",
+        "from": "NEW",
+        "to": "PREPARED",
+        "mutates": true,
+        "failure_state": "PREFLIGHT_FAILURE",
+        "cleanup": "seal failure receipt and leave production untouched",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "prepare-copy-fault"
+      },
+      {
+        "id": "execute",
+        "from": "PREPARED",
+        "to": "FINALIZE_PENDING",
+        "mutates": true,
+        "failure_state": "ROLLBACK_PASS",
+        "cleanup": "restore baseline binary and config while preserving natural suffix",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "execute-rollback-fault"
+      },
+      {
+        "id": "finalize",
+        "from": "FINALIZE_PENDING",
+        "to": "PASS",
+        "mutates": true,
+        "failure_state": "VETO",
+        "cleanup": "connector veto invokes rollback before terminal sealing",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "finalize-veto-fault"
+      }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "endpoint-owned-stable-projection",
+      "statement": "each endpoint exposes and compares only its frozen stable fields",
+      "test_id": "stable-projection-unit"
+    },
+    {
+      "id": "dual-comparison-owner-parity",
+      "statement": "health semantic parity and route receipt parity use the same pure projection",
+      "test_id": "dual-owner-parity"
+    },
+    {
+      "id": "natural-suffix-preserved",
+      "statement": "rollback preserves frozen prefixes and all valid naturally arriving suffix frames",
+      "test_id": "ledger-prefix-parity"
+    },
+    {
+      "id": "read-only-route-receipt",
+      "statement": "route evidence uses GET health snapshots and creates no ordinary request",
+      "test_id": "route-read-only"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "projection-schema-identity",
+      "producer": "S1C3G executor stable projection",
+      "consumer": "S1C3G independent verifier frozen projection schema",
+      "comparison": "exact endpoint labels URLs and stable field lists",
+      "test_id": "projection-verifier-parity"
+    },
+    {
+      "id": "verifier-byte-identity",
+      "producer": "local verifier output",
+      "consumer": "remote verifier output",
+      "comparison": "byte identity before execute and seal",
+      "test_id": "verifier-parity"
+    },
+    {
+      "id": "schema-identity",
+      "producer": "S1C3G executor receipts",
+      "consumer": "S1C3G independent verifier",
+      "comparison": "exact S1C3G schemas verdicts roots and state filename",
+      "test_id": "schema-parity"
+    }
+  ],
+  "tests": [
+    {
+      "id": "prepare-copy-fault",
+      "kind": "fault_injection",
+      "expected": "terminal PREFLIGHT_FAILURE and no production mutation"
+    },
+    {
+      "id": "execute-rollback-fault",
+      "kind": "fault_injection",
+      "expected": "ROLLBACK_PASS with exact baseline pair and ledger prefix suffix preservation"
+    },
+    {
+      "id": "finalize-veto-fault",
+      "kind": "fault_injection",
+      "expected": "connector veto rolls back and seals VETO"
+    },
+    {
+      "id": "stable-projection-unit",
+      "kind": "unit",
+      "expected": "exact endpoint projections pass and whole object raw hash missing key and wrong endpoint variants fail"
+    },
+    {
+      "id": "dual-owner-parity",
+      "kind": "parity",
+      "expected": "semantic health and route receipt paths call the same projection owner"
+    },
+    {
+      "id": "ledger-prefix-parity",
+      "kind": "parity",
+      "expected": "existing prefix and natural suffix survive rollback byte-identically"
+    },
+    {
+      "id": "route-read-only",
+      "kind": "unit",
+      "expected": "no POST or responses endpoint exists in the active route receipt owner"
+    },
+    {
+      "id": "projection-verifier-parity",
+      "kind": "parity",
+      "expected": "executor and independent verifier bind identical endpoint projection schemas"
+    },
+    {
+      "id": "verifier-parity",
+      "kind": "parity",
+      "expected": "local and remote verifier JSON bytes are identical"
+    },
+    {
+      "id": "schema-parity",
+      "kind": "parity",
+      "expected": "all terminal files expose only S1C3G namespace"
+    }
+  ]
+}
