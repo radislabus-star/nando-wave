@@ -1,6 +1,6 @@
 # S1C Transactional Deployment Preregistration V5
 
-Status: `DESIGN FROZEN / NO DEPLOYMENT / PAPER VERIFICATION PENDING`
+Status: `DESIGN FROZEN / PAPER VERIFICATION PASS / ONE V5 ATTEMPT AUTHORIZED`
 
 Date: `2026-08-12 Europe/Tallinn`
 
