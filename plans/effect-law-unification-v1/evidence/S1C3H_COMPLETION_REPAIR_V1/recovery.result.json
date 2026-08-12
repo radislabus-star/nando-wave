@@ -1,0 +1,927 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c3h-completion-repair-v1",
+  "domain": "code",
+  "complexity_score": 49,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8",
+    "c9",
+    "c10"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1,
+      "c10": 0.1,
+      "c2": 0.1,
+      "c4": 0.1,
+      "c5": 0.1,
+      "c6": 0.1,
+      "c7": 0.1,
+      "c8": 0.1,
+      "c9": 0.1
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 19,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "c1",
+      "c2",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3612,
+      "c10": 0.3353,
+      "c2": 0.3292,
+      "c4": 0.3181,
+      "c5": 0.3304,
+      "c6": 0.3168,
+      "c7": 0.307,
+      "c8": 0.3107,
+      "c9": 0.2848
+    },
+    "source_self_score": 0.3168,
+    "stable": [
+      "c1",
+      "c2",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "attempt-order": "attempt-order",
+      "connector-scope": "connector-scope",
+      "deterministic-renewal": "deterministic-renewal",
+      "fail-closed-oneshot": "fail-closed-oneshot",
+      "intentional-stop": "intentional-stop",
+      "oneshot-race": "oneshot-race",
+      "recovery-claim": "recovery-claim",
+      "research-claim": "research-claim",
+      "terminal-seal": "terminal-seal"
+    },
+    "scores": {
+      "attempt-order": 1.0,
+      "connector-scope": 1.0,
+      "deterministic-renewal": 1.0,
+      "fail-closed-oneshot": 1.0,
+      "intentional-stop": 1.0,
+      "oneshot-race": 1.0,
+      "recovery-claim": 1.0,
+      "research-claim": 1.0,
+      "terminal-seal": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "attempt-order": 1,
+      "connector-scope": 1,
+      "deterministic-renewal": 1,
+      "fail-closed-oneshot": 1,
+      "intentional-stop": 1,
+      "oneshot-race": 1,
+      "recovery-claim": 1,
+      "research-claim": 1,
+      "terminal-seal": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3388,
+      "norm": 97.5705,
+      "triads": 9
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "attempt-order": "attempt-order",
+      "connector-scope": "connector-scope",
+      "deterministic-renewal": "deterministic-renewal",
+      "fail-closed-oneshot": "fail-closed-oneshot",
+      "intentional-stop": "intentional-stop",
+      "oneshot-race": "oneshot-race",
+      "recovery-claim": "recovery-claim",
+      "research-claim": "research-claim",
+      "terminal-seal": "terminal-seal"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "attempt-order": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "connector-scope": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deterministic-renewal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-closed-oneshot": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "intentional-stop": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oneshot-race": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "recovery-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "research-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-seal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "attempt-order": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "connector-scope": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deterministic-renewal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "diagnostic-retention": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-closed-oneshot": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "intentional-stop": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oneshot-race": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "recovery-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "research-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-seal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "attempt-order": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "attempt-order",
+        "exact_source_groups": [
+          "attempt-order"
+        ]
+      },
+      "connector-scope": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "connector-scope",
+        "exact_source_groups": [
+          "connector-scope"
+        ]
+      },
+      "deterministic-renewal": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "deterministic-renewal",
+        "exact_source_groups": [
+          "deterministic-renewal"
+        ]
+      },
+      "fail-closed-oneshot": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "fail-closed-oneshot",
+        "exact_source_groups": [
+          "fail-closed-oneshot"
+        ]
+      },
+      "intentional-stop": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "intentional-stop",
+        "exact_source_groups": [
+          "intentional-stop"
+        ]
+      },
+      "oneshot-race": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "oneshot-race",
+        "exact_source_groups": [
+          "oneshot-race"
+        ]
+      },
+      "recovery-claim": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "recovery-claim",
+        "exact_source_groups": [
+          "recovery-claim"
+        ]
+      },
+      "research-claim": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "research-claim",
+        "exact_source_groups": [
+          "research-claim"
+        ]
+      },
+      "terminal-seal": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-seal",
+        "exact_source_groups": [
+          "terminal-seal"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "attempt-order": {
+        "attempt-order": 1.0,
+        "connector-scope": 0.0156,
+        "deterministic-renewal": 0.041,
+        "diagnostic-retention": -0.0078,
+        "fail-closed-oneshot": -0.043,
+        "intentional-stop": -0.0039,
+        "oneshot-race": 0.0195,
+        "recovery-claim": -0.0117,
+        "research-claim": -0.043,
+        "terminal-seal": 0.0059
+      },
+      "connector-scope": {
+        "attempt-order": 0.0156,
+        "connector-scope": 1.0,
+        "deterministic-renewal": -0.0293,
+        "diagnostic-retention": -0.0508,
+        "fail-closed-oneshot": 0.0078,
+        "intentional-stop": 0.0195,
+        "oneshot-race": -0.0156,
+        "recovery-claim": -0.0352,
+        "research-claim": 0.0508,
+        "terminal-seal": 0.0449
+      },
+      "deterministic-renewal": {
+        "attempt-order": 0.041,
+        "connector-scope": -0.0293,
+        "deterministic-renewal": 1.0,
+        "diagnostic-retention": -0.0098,
+        "fail-closed-oneshot": 0.041,
+        "intentional-stop": -0.0098,
+        "oneshot-race": 0.0371,
+        "recovery-claim": -0.002,
+        "research-claim": -0.0176,
+        "terminal-seal": 0.0117
+      },
+      "fail-closed-oneshot": {
+        "attempt-order": -0.043,
+        "connector-scope": 0.0078,
+        "deterministic-renewal": 0.041,
+        "diagnostic-retention": -0.0117,
+        "fail-closed-oneshot": 1.0,
+        "intentional-stop": -0.0313,
+        "oneshot-race": 0.0586,
+        "recovery-claim": -0.0156,
+        "research-claim": 0.0,
+        "terminal-seal": 0.0371
+      },
+      "intentional-stop": {
+        "attempt-order": -0.0039,
+        "connector-scope": 0.0195,
+        "deterministic-renewal": -0.0098,
+        "diagnostic-retention": -0.0547,
+        "fail-closed-oneshot": -0.0313,
+        "intentional-stop": 1.0,
+        "oneshot-race": 0.0,
+        "recovery-claim": -0.0156,
+        "research-claim": -0.0078,
+        "terminal-seal": 0.0059
+      },
+      "oneshot-race": {
+        "attempt-order": 0.0195,
+        "connector-scope": -0.0156,
+        "deterministic-renewal": 0.0371,
+        "diagnostic-retention": 0.0469,
+        "fail-closed-oneshot": 0.0586,
+        "intentional-stop": 0.0,
+        "oneshot-race": 1.0,
+        "recovery-claim": 0.0156,
+        "research-claim": -0.0117,
+        "terminal-seal": -0.0059
+      },
+      "recovery-claim": {
+        "attempt-order": -0.0117,
+        "connector-scope": -0.0352,
+        "deterministic-renewal": -0.002,
+        "diagnostic-retention": 0.0195,
+        "fail-closed-oneshot": -0.0156,
+        "intentional-stop": -0.0156,
+        "oneshot-race": 0.0156,
+        "recovery-claim": 1.0,
+        "research-claim": 0.0664,
+        "terminal-seal": -0.0176
+      },
+      "research-claim": {
+        "attempt-order": -0.043,
+        "connector-scope": 0.0508,
+        "deterministic-renewal": -0.0176,
+        "diagnostic-retention": -0.0391,
+        "fail-closed-oneshot": 0.0,
+        "intentional-stop": -0.0078,
+        "oneshot-race": -0.0117,
+        "recovery-claim": 0.0664,
+        "research-claim": 1.0,
+        "terminal-seal": -0.0137
+      },
+      "terminal-seal": {
+        "attempt-order": 0.0059,
+        "connector-scope": 0.0449,
+        "deterministic-renewal": 0.0117,
+        "diagnostic-retention": -0.0215,
+        "fail-closed-oneshot": 0.0371,
+        "intentional-stop": 0.0059,
+        "oneshot-race": -0.0059,
+        "recovery-claim": -0.0176,
+        "research-claim": -0.0137,
+        "terminal-seal": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "attempt-order": {
+          "gravity": 1.0,
+          "owner": "orchestrator",
+          "owners": {
+            "orchestrator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "connector-scope": {
+          "gravity": 1.0,
+          "owner": "s1c-3h recovery",
+          "owners": {
+            "s1c-3h recovery": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "deterministic-renewal": {
+          "gravity": 1.0,
+          "owner": "s1c-3h installer",
+          "owners": {
+            "s1c-3h installer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "diagnostic-retention": {
+          "gravity": 1.0,
+          "owner": "s1c-3h transaction",
+          "owners": {
+            "s1c-3h transaction": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "fail-closed-oneshot": {
+          "gravity": 1.0,
+          "owner": "s1c-3h installer",
+          "owners": {
+            "s1c-3h installer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "intentional-stop": {
+          "gravity": 1.0,
+          "owner": "s1c-3h installer",
+          "owners": {
+            "s1c-3h installer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "oneshot-race": {
+          "gravity": 1.0,
+          "owner": "s1c-3h installer",
+          "owners": {
+            "s1c-3h installer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "recovery-claim": {
+          "gravity": 1.0,
+          "owner": "independent verifier",
+          "owners": {
+            "independent verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "research-claim": {
+          "gravity": 1.0,
+          "owner": "s1c owner",
+          "owners": {
+            "s1c owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "terminal-seal": {
+          "gravity": 1.0,
+          "owner": "s1c-3h recovery",
+          "owners": {
+            "s1c-3h recovery": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "chronology": {
+          "gravity": 1.0,
+          "owner": "orchestrator",
+          "owners": {
+            "orchestrator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "installation": {
+          "gravity": 1.0,
+          "owner": "s1c-3h installer",
+          "owners": {
+            "s1c-3h installer": 8
+          },
+          "support": 8,
+          "total": 8
+        },
+        "recovery": {
+          "gravity": 0.6667,
+          "owner": "s1c-3h recovery",
+          "owners": {
+            "independent verifier": 2,
+            "s1c-3h recovery": 4
+          },
+          "support": 4,
+          "total": 6
+        },
+        "research": {
+          "gravity": 1.0,
+          "owner": "s1c owner",
+          "owners": {
+            "s1c owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "rollback": {
+          "gravity": 1.0,
+          "owner": "s1c-3h transaction",
+          "owners": {
+            "s1c-3h transaction": 1
+          },
+          "support": 1,
+          "total": 1
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "chronology": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "run_s1c3h_transaction_v1"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c7",
+            "plans/effect-law-unification-v1/s1c3h_completion_repair_v1.md"
+          ],
+          "layers": [
+            "operations"
+          ],
+          "outputs": [
+            "one active attempt"
+          ],
+          "owners": [
+            "orchestrator"
+          ],
+          "scopes": [
+            "deployment"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "installation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [
+            "pause_authority_triggers",
+            "renew_authority_and_restore_triggers",
+            "require_trigger_state_restored",
+            "wait_for_oneshots"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "candidate_answer:c10",
+            "candidate_answer:c2",
+            "candidate_answer:c9",
+            "ops/remote-backend/s1c3h_remote_transaction_v1.py"
+          ],
+          "layers": [
+            "authority",
+            "operations",
+            "safety"
+          ],
+          "outputs": [
+            "clean inactive baseline",
+            "pass or veto",
+            "renewed compatible authority",
+            "stable trigger evidence"
+          ],
+          "owners": [
+            "s1c-3h installer"
+          ],
+          "scopes": [
+            "deployment"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        },
+        "recovery": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [
+            "recover_interrupted",
+            "seal_interrupted_recovery",
+            "verify_interrupted_recovery"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c4",
+            "candidate_answer:c5",
+            "candidate_answer:c6",
+            "ops/remote-backend/s1c3h_remote_transaction_v1.py",
+            "ops/remote-backend/verify_s1c3h_transaction_v1.py"
+          ],
+          "layers": [
+            "authority",
+            "proof",
+            "science"
+          ],
+          "outputs": [
+            "immutable complete",
+            "recovery pass",
+            "scoped verdict"
+          ],
+          "owners": [
+            "independent verifier",
+            "s1c-3h recovery"
+          ],
+          "scopes": [
+            "claim",
+            "historical attempt"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        },
+        "research": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "installed runtime"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c8",
+            "plans/effect-law-unification-v1/s1c3h_completion_repair_v1.md"
+          ],
+          "layers": [
+            "science"
+          ],
+          "outputs": [
+            "collecting only"
+          ],
+          "owners": [
+            "s1c owner"
+          ],
+          "scopes": [
+            "science"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "rollback": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "existing_candidate_diagnostic"
+          ],
+          "evidence_paths": [
+            "ops/remote-backend/s1c3h_remote_transaction_v1.py"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "preserved root"
+          ],
+          "owners": [
+            "s1c-3h transaction"
+          ],
+          "scopes": [
+            "failure"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "chronology": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "installation": {
+          "norm": 65.5134,
+          "self_coherence": 0.5118,
+          "triads": 4
+        },
+        "recovery": {
+          "norm": 55.2811,
+          "self_coherence": 0.5758,
+          "triads": 3
+        },
+        "research": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "chronology": {
+          "chronology": 1.0,
+          "installation": 0.0067,
+          "recovery": 0.0057,
+          "research": -0.043,
+          "rollback": -0.0078
+        },
+        "installation": {
+          "chronology": 0.0067,
+          "installation": 1.0,
+          "recovery": 0.0039,
+          "research": -0.0181,
+          "rollback": -0.0143
+        },
+        "recovery": {
+          "chronology": 0.0057,
+          "installation": 0.0039,
+          "recovery": 1.0,
+          "research": 0.0599,
+          "rollback": -0.0305
+        },
+        "research": {
+          "chronology": -0.043,
+          "installation": -0.0181,
+          "recovery": 0.0599,
+          "research": 1.0,
+          "rollback": -0.0391
+        }
+      },
+      "source": {
+        "chronology": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "installation": {
+          "norm": 65.5134,
+          "self_coherence": 0.5118,
+          "triads": 4
+        },
+        "recovery": {
+          "norm": 55.2811,
+          "self_coherence": 0.5758,
+          "triads": 3
+        },
+        "research": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "attempt-order": 1,
+      "connector-scope": 1,
+      "deterministic-renewal": 1,
+      "diagnostic-retention": 1,
+      "fail-closed-oneshot": 1,
+      "intentional-stop": 1,
+      "oneshot-race": 1,
+      "recovery-claim": 1,
+      "research-claim": 1,
+      "terminal-seal": 1
+    },
+    "stable_groups": [
+      "attempt-order",
+      "connector-scope",
+      "deterministic-renewal",
+      "fail-closed-oneshot",
+      "intentional-stop",
+      "oneshot-race",
+      "recovery-claim",
+      "research-claim",
+      "terminal-seal"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c3h-completion-repair-v1.trace.json"
+}

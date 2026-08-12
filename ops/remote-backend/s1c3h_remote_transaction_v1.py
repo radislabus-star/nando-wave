@@ -68,6 +68,8 @@ PENDING_SCHEMA = "nando.s1c3h-pending-receipt.v1"
 RECEIPT_SCHEMA = "nando.s1c3h-deployment-receipt.v1"
 STATE_SCHEMA = "nando.s1c3h-state.v1"
 DIAGNOSTIC_SCHEMA = "nando.s1c3h-candidate-diagnostic.v1"
+RECOVERY_RECEIPT_SCHEMA = "nando.s1c3h-interrupted-recovery-receipt.v1"
+RECOVERY_VERIFICATION_SCHEMA = "nando.s1c3h-interrupted-recovery-verification.v1"
 TRANSACTION_RE = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{12}-s1c3h-v1$")
 EXECUTION_STAGING_PARENT = STATE_DIR / ".s1c3h-authority-staging-v1"
 
@@ -252,7 +254,23 @@ def pair_identity(transition: Path, authority: Path) -> dict[str, Any]:
 
 def unit_state(unit: str) -> dict[str, Any]:
     completed = subprocess.run(
-        ["systemctl", "show", unit, "-p", "ActiveState", "-p", "SubState", "-p", "MainPID", "-p", "NRestarts"],
+        [
+            "systemctl",
+            "show",
+            unit,
+            "-p",
+            "ActiveState",
+            "-p",
+            "SubState",
+            "-p",
+            "MainPID",
+            "-p",
+            "NRestarts",
+            "-p",
+            "Result",
+            "-p",
+            "ExecMainStatus",
+        ],
         check=True,
         capture_output=True,
         timeout=10,
@@ -267,6 +285,8 @@ def unit_state(unit: str) -> dict[str, Any]:
         "sub_state": fields.get("SubState", ""),
         "main_pid": int(fields.get("MainPID", "0")),
         "nrestarts": int(fields.get("NRestarts", "-1")),
+        "result": fields.get("Result", ""),
+        "exec_main_status": int(fields.get("ExecMainStatus", "-1")),
     }
 
 
@@ -316,6 +336,11 @@ def pause_authority_triggers() -> None:
     for unit in (*TRIGGER_UNITS, *ONESHOT_UNITS):
         if unit_state(unit)["active_state"] not in {"inactive", "failed"}:
             raise GateFailure(f"s1c3h_trigger_not_stopped:{unit}")
+    for unit in ONESHOT_UNITS:
+        systemctl("reset-failed", unit, check=False)
+        state = unit_state(unit)
+        if state["active_state"] != "inactive":
+            raise GateFailure(f"s1c3h_oneshot_reset_failed:{unit}:{state}")
 
 
 def restore_authority_triggers(before: dict[str, dict[str, Any]]) -> None:
@@ -329,19 +354,52 @@ def restore_authority_triggers(before: dict[str, dict[str, Any]]) -> None:
             raise GateFailure(f"s1c3h_trigger_restore:{unit}:{actual}:{expected}")
 
 
-def require_trigger_state_restored(before: dict[str, dict[str, Any]]) -> None:
-    after = trigger_snapshot()
-    for unit in (*TRIGGER_UNITS, *ONESHOT_UNITS):
+def renew_authority_and_restore_triggers(
+    before: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    completed: dict[str, dict[str, Any]] = {}
+    for unit in ONESHOT_UNITS:
+        systemctl("start", unit)
+        completed[unit] = unit_state(unit)
+        state = completed[unit]
+        if (
+            state["active_state"] != "inactive"
+            or state["result"] != "success"
+            or state["exec_main_status"] != 0
+        ):
+            raise GateFailure(f"s1c3h_oneshot_renewal_failed:{unit}:{state}")
+    restore_authority_triggers(before)
+    after = {
+        **{unit: unit_state(unit) for unit in TRIGGER_UNITS},
+        **completed,
+    }
+    require_trigger_state_restored(before, after)
+    return after
+
+
+def require_trigger_state_restored(
+    before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]]
+) -> None:
+    for unit in TRIGGER_UNITS:
         if after[unit]["active_state"] != before[unit]["active_state"]:
             raise GateFailure(f"s1c3h_trigger_final_state:{unit}")
+    for unit in ONESHOT_UNITS:
+        state = after[unit]
+        if (
+            state["active_state"] != "inactive"
+            or state["result"] != "success"
+            or state["exec_main_status"] != 0
+        ):
+            raise GateFailure(f"s1c3h_oneshot_final_state:{unit}:{state}")
 
 
-def wait_for_oneshots(timeout: float = 30.0) -> None:
+def wait_for_oneshots(timeout: float = 30.0) -> dict[str, dict[str, Any]]:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        states = [unit_state(unit)["active_state"] for unit in ONESHOT_UNITS]
+        snapshot = trigger_snapshot()
+        states = [snapshot[unit]["active_state"] for unit in ONESHOT_UNITS]
         if all(state in {"inactive", "failed"} for state in states):
-            return
+            return snapshot
         time.sleep(0.2)
     raise GateFailure("s1c3h_oneshot_settle_timeout")
 
@@ -901,7 +959,26 @@ def verify_predeployment(root: Path, path: Path) -> dict[str, Any]:
     return value
 
 
+def existing_candidate_diagnostic(root: Path) -> dict[str, Any] | None:
+    path = root / "candidate-diagnostic.json"
+    if not path.exists():
+        return None
+    if not path.is_file() or path.is_symlink():
+        raise GateFailure("s1c3h_candidate_diagnostic_file")
+    value = read_json(path)
+    if (
+        value.get("schema") != DIAGNOSTIC_SCHEMA
+        or value.get("diagnostic_root_sha256")
+        != sha256_bytes(canonical_bytes(value, "diagnostic_root_sha256"))
+    ):
+        raise GateFailure("s1c3h_candidate_diagnostic_root")
+    return value
+
+
 def persist_candidate_diagnostic(root: Path, stage: str, error: str) -> dict[str, Any]:
+    existing = existing_candidate_diagnostic(root)
+    if existing is not None:
+        return existing
     health: dict[str, Any]
     try:
         health = {
@@ -955,6 +1032,9 @@ def persist_candidate_diagnostic(root: Path, stage: str, error: str) -> dict[str
 def persist_minimal_diagnostic(
     root: Path, stage: str, error: str, diagnostic_error: str
 ) -> dict[str, Any]:
+    existing = existing_candidate_diagnostic(root)
+    if existing is not None:
+        return existing
     value = rooted(
         {
             "schema": DIAGNOSTIC_SCHEMA,
@@ -1015,9 +1095,9 @@ def rollback(root: Path, reason: str, diagnostic: dict[str, Any] | None = None) 
     if state != "ROLLBACK_ARMED":
         systemctl("start", TRANSITION_UNIT)
     services_after, health_after = wait_for_runtime(BASELINE_RUNTIME_CONTRACT)
-    restore_authority_triggers(preparation["triggers_before"])
-    wait_for_oneshots()
-    require_trigger_state_restored(preparation["triggers_before"])
+    triggers_after = renew_authority_and_restore_triggers(
+        preparation["triggers_before"]
+    )
     services_survival, health_survival = wait_for_runtime(BASELINE_RUNTIME_CONTRACT)
     journal_after = journal_snapshot(preparation["baseline"]["journal"])
     require_prefix_preserved(preparation["baseline"]["journal"], journal_after)
@@ -1036,7 +1116,7 @@ def rollback(root: Path, reason: str, diagnostic: dict[str, Any] | None = None) 
             "services_survival": services_survival,
             "health_after": health_after,
             "health_survival": health_survival,
-            "triggers_after": trigger_snapshot(),
+            "triggers_after": triggers_after,
             "journal_after": journal_after,
             "economics": economics,
             "nginx_pid_after": nginx_pid(),
@@ -1111,9 +1191,9 @@ def execute(args: argparse.Namespace) -> int:
         }
         if {key: environment.get(key) for key in expected_environment} != expected_environment:
             raise GateFailure("s1c3h_capture_environment")
-        restore_authority_triggers(preparation["triggers_before"])
-        wait_for_oneshots()
-        require_trigger_state_restored(preparation["triggers_before"])
+        renew_authority_and_restore_triggers(
+            preparation["triggers_before"]
+        )
         stage = "triggers_restored"
         fault_after(stage)
         opening_expiry = staged["admission_expires_at_unix"]
@@ -1147,9 +1227,9 @@ def execute(args: argparse.Namespace) -> int:
         snapshot_compatibility(installed_snapshot_path)
         installed_snapshot = verify_compatibility_snapshot(installed_snapshot_path)
         installed_unit = snapshot_installed_unit(root)
-        restore_authority_triggers(preparation["triggers_before"])
-        wait_for_oneshots()
-        require_trigger_state_restored(preparation["triggers_before"])
+        triggers_after = renew_authority_and_restore_triggers(
+            preparation["triggers_before"]
+        )
         stage = "installed_authority_snapshotted"
         journal_after = journal_snapshot(preparation["baseline"]["journal"])
         require_prefix_preserved(preparation["baseline"]["journal"], journal_after)
@@ -1173,7 +1253,7 @@ def execute(args: argparse.Namespace) -> int:
                 "services_survival": services_survival,
                 "health_after": health_after,
                 "health_survival": health_survival,
-                "triggers_after": trigger_snapshot(),
+                "triggers_after": triggers_after,
                 "authority_renewal": {
                     "opening_expires_at_unix": opening_expiry,
                     "renewed_expires_at_unix": renewed_admission["expires_at_unix"],
@@ -1381,6 +1461,143 @@ def seal(args: argparse.Namespace) -> int:
     return 0
 
 
+def recover_interrupted(args: argparse.Namespace) -> int:
+    root = Path(args.transaction_directory)
+    transaction = read_json(root / "transaction-state.json")
+    state = transaction.get("state")
+    if state not in {
+        "ROLLBACK_ARMED",
+        "MUTATION_STARTED",
+        "AUTHORITY_INSTALLED",
+        "RUNTIME_INSTALLED",
+        "ROLLBACK_PENDING",
+    }:
+        raise GateFailure(f"s1c3h_interrupted_recovery_state:{state}")
+    if not re.fullmatch(r"[0-9a-f]{40}", args.repair_source_commit):
+        raise GateFailure("s1c3h_repair_source_commit")
+    if not re.fullmatch(r"[0-9a-f]{40}", args.repair_source_tree):
+        raise GateFailure("s1c3h_repair_source_tree")
+    preparation = read_json(root / "preparation.json")
+    production = verify_current_production()
+    services = service_snapshot()
+    for unit, opening in preparation["services_before"].items():
+        current = services.get(unit, {})
+        if current.get("active_state") != "active":
+            raise GateFailure(f"s1c3h_recovery_service_inactive:{unit}")
+        if current.get("nrestarts") != opening.get("nrestarts"):
+            raise GateFailure(f"s1c3h_recovery_service_restarts:{unit}")
+    health = stable_health()
+    health_contract(health, BASELINE_RUNTIME_CONTRACT)
+    triggers = stable_trigger_baseline()
+    economics = economics_snapshot()
+    if economics != {"false_accepts": 0, "runtime_parity_mismatches": 0}:
+        raise GateFailure("s1c3h_recovery_economics")
+    current_nginx_pid = nginx_pid()
+    if current_nginx_pid != preparation["nginx_pid_before"]:
+        raise GateFailure("s1c3h_recovery_nginx_pid")
+    diagnostic = existing_candidate_diagnostic(root)
+    if diagnostic is None:
+        raise GateFailure("s1c3h_recovery_diagnostic_missing")
+    receipt = rooted(
+        {
+            "schema": RECOVERY_RECEIPT_SCHEMA,
+            "transaction_id": preparation["transaction_id"],
+            "verdict": "S1C3H_INTERRUPTED_RECOVERY_PASS",
+            "repair_source": {
+                "commit": args.repair_source_commit,
+                "tree": args.repair_source_tree,
+            },
+            "preparation_root_sha256": preparation["preparation_root_sha256"],
+            "recovered_from_state": state,
+            "production_pair": production["pair"],
+            "production_config_sha256": sha256_file(TRANSITION_CONFIG),
+            "services": services,
+            "health": health,
+            "triggers": triggers,
+            "journal": production["journal"],
+            "economics": economics,
+            "nginx_pid_before": preparation["nginx_pid_before"],
+            "nginx_pid_after": current_nginx_pid,
+            "connector_survival": "UNKNOWN_MISSING_ORIGINAL_BEFORE_ARTIFACT",
+            "diagnostic_root_sha256": diagnostic["diagnostic_root_sha256"],
+            "diagnostic_scope": args.diagnostic_scope,
+            "capture_installed": False,
+            "scientific_authority": False,
+            "observed_at_unix": int(time.time()),
+        },
+        "recovery_receipt_root_sha256",
+    )
+    write_json(root / "interrupted-recovery-receipt.json", receipt, 0o400)
+    write_json(
+        root / "transaction-state.json",
+        {
+            "schema": STATE_SCHEMA,
+            "state": "RECOVERY_VERIFICATION_PENDING",
+            "transaction_id": preparation["transaction_id"],
+        },
+        0o600,
+    )
+    fsync_directory(root)
+    return 0
+
+
+def seal_interrupted_recovery(args: argparse.Namespace) -> int:
+    root = Path(args.transaction_directory)
+    state = read_json(root / "transaction-state.json").get("state")
+    if state != "RECOVERY_VERIFICATION_PENDING":
+        raise GateFailure(f"s1c3h_recovery_seal_state:{state}")
+    receipt = read_json(root / "interrupted-recovery-receipt.json")
+    verification = read_json(Path(args.recovery_verification))
+    if verification.get("recovery_verification_root_sha256") != sha256_bytes(
+        canonical_bytes(verification, "recovery_verification_root_sha256")
+    ):
+        raise GateFailure("s1c3h_recovery_verification_root")
+    if (
+        verification.get("schema") != RECOVERY_VERIFICATION_SCHEMA
+        or verification.get("valid") is not True
+        or verification.get("authority") is not True
+        or verification.get("verdict") != receipt.get("verdict")
+        or verification.get("recovery_receipt_root_sha256")
+        != receipt.get("recovery_receipt_root_sha256")
+    ):
+        raise GateFailure("s1c3h_recovery_verification_mismatch")
+    shutil.copy2(
+        Path(args.recovery_verification), root / "interrupted-recovery-verification.json"
+    )
+    os.chmod(root / "interrupted-recovery-verification.json", 0o400)
+    terminal = rooted(
+        {
+            "schema": STATE_SCHEMA,
+            "state": "COMPLETE",
+            "transaction_id": receipt["transaction_id"],
+            "verdict": receipt["verdict"],
+            "recovery_receipt_root_sha256": receipt[
+                "recovery_receipt_root_sha256"
+            ],
+            "recovery_verification_root_sha256": verification[
+                "recovery_verification_root_sha256"
+            ],
+            "connector_survival": receipt["connector_survival"],
+            "capture_installed": False,
+            "scientific_authority": False,
+        },
+        "state_root_sha256",
+    )
+    write_json(root / "s1c3h-state.json", terminal, 0o400)
+    write_json(
+        root / "transaction-state.json",
+        {
+            "schema": STATE_SCHEMA,
+            "state": "COMPLETE",
+            "transaction_id": receipt["transaction_id"],
+        },
+        0o600,
+    )
+    remove_directory(execution_staging(root))
+    fsync_directory(root)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1408,6 +1625,21 @@ def main() -> int:
     abort_parser = commands.add_parser("abort-predeployment")
     abort_parser.add_argument("--transaction-directory", required=True)
     abort_parser.add_argument("--reason", required=True)
+    recovery_parser = commands.add_parser("recover-interrupted")
+    recovery_parser.add_argument("--transaction-directory", required=True)
+    recovery_parser.add_argument("--repair-source-commit", required=True)
+    recovery_parser.add_argument("--repair-source-tree", required=True)
+    recovery_parser.add_argument(
+        "--diagnostic-scope",
+        required=True,
+        choices=(
+            "PRIMARY_FAILURE_PRESERVED",
+            "RECOVERY_DIAGNOSTIC_ONLY_PRIMARY_FAILURE_WAS_OVERWRITTEN",
+        ),
+    )
+    recovery_seal_parser = commands.add_parser("seal-interrupted-recovery")
+    recovery_seal_parser.add_argument("--transaction-directory", required=True)
+    recovery_seal_parser.add_argument("--recovery-verification", required=True)
     args = parser.parse_args()
     if args.command == "prepare":
         return prepare(args)
@@ -1424,6 +1656,10 @@ def main() -> int:
             return finalize(args)
         if args.command == "seal":
             return seal(args)
+        if args.command == "recover-interrupted":
+            return recover_interrupted(args)
+        if args.command == "seal-interrupted-recovery":
+            return seal_interrupted_recovery(args)
         return abort_predeployment(args)
     finally:
         os.close(descriptor)

@@ -52,6 +52,17 @@ COMPATIBILITY_FILES = (
     "response-authority-sidecar-current-v2.json",
     "response-registry.json",
 )
+TRIGGER_UNITS = (
+    "nando-response-admission.path",
+    "nando-response-admission.timer",
+    "nando-live-transition-gate.path",
+    "nando-live-transition-gate.timer",
+)
+ONESHOT_UNITS = (
+    "nando-response-admission.service",
+    "nando-live-transition-gate.service",
+)
+RECOVERY_RECEIPT_SCHEMA = "nando.s1c3h-interrupted-recovery-receipt.v1"
 
 
 class InvalidReceipt(ValueError):
@@ -278,8 +289,18 @@ def verify_preparation(directory: Path, freeze: dict[str, Any]) -> tuple[dict[st
 def verify_triggers(before: Any, after: Any) -> None:
     require(isinstance(before, dict) and isinstance(after, dict), "triggers")
     exact(set(after), set(before), "trigger_set")
-    for unit, row in before.items():
-        exact(after[unit].get("active_state"), row.get("active_state"), f"trigger:{unit}")
+    exact(set(before), set((*TRIGGER_UNITS, *ONESHOT_UNITS)), "trigger_units")
+    for unit in TRIGGER_UNITS:
+        exact(
+            after[unit].get("active_state"),
+            before[unit].get("active_state"),
+            f"trigger:{unit}",
+        )
+    for unit in ONESHOT_UNITS:
+        row = after[unit]
+        exact(row.get("active_state"), "inactive", f"oneshot_state:{unit}")
+        exact(row.get("result"), "success", f"oneshot_result:{unit}")
+        exact(row.get("exec_main_status"), 0, f"oneshot_status:{unit}")
 
 
 def verify_services(preparation: dict[str, Any], receipt: dict[str, Any], deployed: bool) -> None:
@@ -406,6 +427,116 @@ def verify(directory: Path, freeze_path: Path, predeployment: bool) -> dict[str,
     return value
 
 
+def verify_interrupted_recovery(
+    directory: Path, expected_source_commit: str, expected_source_tree: str
+) -> dict[str, Any]:
+    receipt = load_json(directory / "interrupted-recovery-receipt.json")
+    verify_root(receipt, "recovery_receipt_root_sha256", "recovery_receipt")
+    exact(receipt.get("schema"), RECOVERY_RECEIPT_SCHEMA, "recovery_schema")
+    exact(receipt.get("verdict"), "S1C3H_INTERRUPTED_RECOVERY_PASS", "recovery_verdict")
+    exact(
+        receipt.get("repair_source"),
+        {"commit": expected_source_commit, "tree": expected_source_tree},
+        "recovery_source",
+    )
+    preparation = load_json(directory / "preparation.json")
+    verify_root(preparation, "preparation_root_sha256", "preparation")
+    exact(
+        receipt.get("preparation_root_sha256"),
+        preparation["preparation_root_sha256"],
+        "recovery_preparation",
+    )
+    diagnostic = load_json(directory / "candidate-diagnostic.json")
+    verify_root(diagnostic, "diagnostic_root_sha256", "diagnostic")
+    exact(
+        receipt.get("diagnostic_root_sha256"),
+        diagnostic["diagnostic_root_sha256"],
+        "recovery_diagnostic",
+    )
+    pair = receipt.get("production_pair")
+    require(isinstance(pair, dict), "recovery_pair")
+    exact(pair.get("transition_sha256"), BASELINE_TRANSITION_SHA256, "recovery_transition")
+    exact(pair.get("authority_sha256"), BASELINE_AUTHORITY_SHA256, "recovery_authority")
+    exact(
+        pair.get("transition_runtime_contract_sha256"),
+        BASELINE_RUNTIME_CONTRACT,
+        "recovery_contract",
+    )
+    exact(pair.get("authority_runtime_contract_sha256"), BASELINE_RUNTIME_CONTRACT, "recovery_authority_contract")
+    exact(pair.get("pair_contract_equal"), True, "recovery_pair_equal")
+    exact(receipt.get("production_config_sha256"), BASELINE_CONFIG_SHA256, "recovery_config")
+    services = receipt.get("services")
+    require(isinstance(services, dict), "recovery_services")
+    for unit, opening in preparation.get("services_before", {}).items():
+        current = services.get(unit)
+        require(isinstance(current, dict), f"recovery_service:{unit}")
+        exact(current.get("active_state"), "active", f"recovery_service_active:{unit}")
+        exact(current.get("nrestarts"), opening.get("nrestarts"), f"recovery_service_restarts:{unit}")
+    verify_triggers(preparation.get("triggers_before"), receipt.get("triggers"))
+    recovery_journal = receipt.get("journal")
+    opening_journal = preparation["baseline"]["journal"]
+    if recovery_journal != opening_journal:
+        parent.parent.verify_runtime_journal(
+            recovery_journal, opening_journal, "recovery_journal"
+        )
+    exact(receipt.get("economics"), {"false_accepts": 0, "runtime_parity_mismatches": 0}, "recovery_economics")
+    exact(receipt.get("nginx_pid_before"), preparation.get("nginx_pid_before"), "recovery_nginx_before")
+    exact(receipt.get("nginx_pid_after"), preparation.get("nginx_pid_before"), "recovery_nginx_after")
+    exact(receipt.get("connector_survival"), "UNKNOWN_MISSING_ORIGINAL_BEFORE_ARTIFACT", "recovery_connector_scope")
+    require(
+        receipt.get("diagnostic_scope")
+        in {
+            "PRIMARY_FAILURE_PRESERVED",
+            "RECOVERY_DIAGNOSTIC_ONLY_PRIMARY_FAILURE_WAS_OVERWRITTEN",
+        },
+        "recovery_diagnostic_scope",
+    )
+    exact(receipt.get("capture_installed"), False, "recovery_capture")
+    exact(receipt.get("scientific_authority"), False, "recovery_science")
+    health = receipt.get("health", {})
+    require(isinstance(health, dict), "recovery_health")
+    for label in ("hot", "cpu"):
+        stable = health.get(label, {}).get("stable", {})
+        exact(stable.get("ok"), True, f"recovery_health_ok:{label}")
+        exact(stable.get("mode"), "CPU", f"recovery_health_mode:{label}")
+        exact(stable.get("admission_verdict"), "PASS", f"recovery_health_admission:{label}")
+        exact(stable.get("response_active_profiles"), 2, f"recovery_health_profiles:{label}")
+        exact(stable.get("response_executor_cache_ready"), True, f"recovery_health_cache:{label}")
+    terminal_path = directory / "s1c3h-state.json"
+    if terminal_path.exists():
+        terminal = load_json(terminal_path)
+        verify_root(terminal, "state_root_sha256", "recovery_terminal")
+        exact(terminal.get("state"), "COMPLETE", "recovery_terminal_state")
+        exact(terminal.get("verdict"), receipt["verdict"], "recovery_terminal_verdict")
+        exact(
+            terminal.get("recovery_receipt_root_sha256"),
+            receipt["recovery_receipt_root_sha256"],
+            "recovery_terminal_receipt",
+        )
+        exact(
+            terminal.get("connector_survival"),
+            receipt["connector_survival"],
+            "recovery_terminal_connector",
+        )
+        exact(terminal.get("capture_installed"), False, "recovery_terminal_capture")
+        exact(
+            terminal.get("scientific_authority"),
+            False,
+            "recovery_terminal_science",
+        )
+    value = {
+        "schema": "nando.s1c3h-interrupted-recovery-verification.v1",
+        "valid": True,
+        "authority": True,
+        "verdict": receipt["verdict"],
+        "recovery_receipt_root_sha256": receipt["recovery_receipt_root_sha256"],
+        "capture_installed": False,
+        "scientific_authority": False,
+    }
+    value["recovery_verification_root_sha256"] = digest_bytes(canonical_bytes(value))
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -420,13 +551,21 @@ def main() -> int:
     check.add_argument("directory", type=Path)
     check.add_argument("--implementation-freeze", type=Path, required=True)
     check.add_argument("--predeployment", action="store_true")
+    recovery = commands.add_parser("verify-interrupted-recovery")
+    recovery.add_argument("directory", type=Path)
+    recovery.add_argument("--expected-source-commit", required=True)
+    recovery.add_argument("--expected-source-tree", required=True)
     args = parser.parse_args()
     if args.command == "create-freeze":
         value = create_freeze(args.source_commit, args.source_tree, Path(__file__).resolve().parent)
     elif args.command == "create-build-receipt":
         value = create_build_receipt(args.transition, args.authority, args.config)
-    else:
+    elif args.command == "verify":
         value = verify(args.directory, args.implementation_freeze, args.predeployment)
+    else:
+        value = verify_interrupted_recovery(
+            args.directory, args.expected_source_commit, args.expected_source_tree
+        )
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
     return 0
 

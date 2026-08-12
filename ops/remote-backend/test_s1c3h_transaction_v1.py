@@ -118,6 +118,151 @@ assert callable(module.http_json)
         ):
             self.assertEqual(executor.stable_trigger_baseline(timeout=1.0), quiet)
 
+    def test_pause_clears_only_intentional_oneshot_stop_failures(self) -> None:
+        calls: list[tuple[str, str]] = []
+
+        def control(action: str, unit: str, check: bool = True) -> None:
+            del check
+            calls.append((action, unit))
+
+        def state(unit: str) -> dict[str, object]:
+            self.assertIn(unit, (*executor.TRIGGER_UNITS, *executor.ONESHOT_UNITS))
+            return {
+                "active_state": "inactive",
+                "result": "success",
+                "exec_main_status": 0,
+            }
+
+        with (
+            mock.patch.object(executor, "systemctl", side_effect=control),
+            mock.patch.object(executor, "unit_state", side_effect=state),
+        ):
+            executor.pause_authority_triggers()
+        reset_calls = [call for call in calls if call[0] == "reset-failed"]
+        self.assertEqual(
+            reset_calls,
+            [("reset-failed", unit) for unit in executor.ONESHOT_UNITS],
+        )
+        first_reset = calls.index(reset_calls[0])
+        self.assertTrue(all(action == "stop" for action, _ in calls[:first_reset]))
+
+    def test_restored_trigger_uses_settled_snapshot_without_second_read(self) -> None:
+        before = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{unit: {"active_state": "inactive"} for unit in executor.ONESHOT_UNITS},
+        }
+        settled = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{
+                unit: {
+                    "active_state": "inactive",
+                    "result": "success",
+                    "exec_main_status": 0,
+                }
+                for unit in executor.ONESHOT_UNITS
+            },
+        }
+        retriggered = {
+            **settled,
+            executor.ONESHOT_UNITS[1]: {
+                "active_state": "activating",
+                "result": "success",
+                "exec_main_status": 0,
+            },
+        }
+        with mock.patch.object(
+            executor, "trigger_snapshot", side_effect=[settled, retriggered]
+        ) as snapshot:
+            observed = executor.wait_for_oneshots()
+            executor.require_trigger_state_restored(before, observed)
+        snapshot.assert_called_once_with()
+
+    def test_restored_trigger_rejects_failed_oneshot(self) -> None:
+        before = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{unit: {"active_state": "inactive"} for unit in executor.ONESHOT_UNITS},
+        }
+        after = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{
+                unit: {
+                    "active_state": "inactive",
+                    "result": "success",
+                    "exec_main_status": 0,
+                }
+                for unit in executor.ONESHOT_UNITS
+            },
+        }
+        after[executor.ONESHOT_UNITS[0]] = {
+            "active_state": "failed",
+            "result": "exit-code",
+            "exec_main_status": 1,
+        }
+        with (
+            self.assertRaisesRegex(executor.GateFailure, "s1c3h_oneshot_final_state"),
+        ):
+            executor.require_trigger_state_restored(before, after)
+
+    def test_authority_renews_before_background_triggers_resume(self) -> None:
+        before = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{unit: {"active_state": "inactive"} for unit in executor.ONESHOT_UNITS},
+        }
+        completed = {
+            "active_state": "inactive",
+            "result": "success",
+            "exec_main_status": 0,
+        }
+        calls: list[tuple[str, str]] = []
+
+        def control(action: str, unit: str, check: bool = True) -> None:
+            del check
+            calls.append((action, unit))
+
+        def state(unit: str) -> dict[str, object]:
+            if unit in executor.TRIGGER_UNITS:
+                return {"active_state": "active"}
+            return completed
+
+        with (
+            mock.patch.object(executor, "systemctl", side_effect=control),
+            mock.patch.object(executor, "unit_state", side_effect=state),
+        ):
+            after = executor.renew_authority_and_restore_triggers(before)
+        self.assertEqual(
+            calls[: len(executor.ONESHOT_UNITS)],
+            [("start", unit) for unit in executor.ONESHOT_UNITS],
+        )
+        self.assertEqual(
+            calls[len(executor.ONESHOT_UNITS) :],
+            [("start", unit) for unit in executor.TRIGGER_UNITS],
+        )
+        self.assertEqual(after[executor.ONESHOT_UNITS[0]], completed)
+
+    def test_failed_explicit_authority_renewal_does_not_restore_triggers(self) -> None:
+        before = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{unit: {"active_state": "inactive"} for unit in executor.ONESHOT_UNITS},
+        }
+        failed = {
+            "active_state": "failed",
+            "result": "exit-code",
+            "exec_main_status": 1,
+        }
+        calls: list[tuple[str, str]] = []
+
+        def control(action: str, unit: str, check: bool = True) -> None:
+            del check
+            calls.append((action, unit))
+
+        with (
+            mock.patch.object(executor, "systemctl", side_effect=control),
+            mock.patch.object(executor, "unit_state", return_value=failed),
+            self.assertRaisesRegex(executor.GateFailure, "oneshot_renewal_failed"),
+        ):
+            executor.renew_authority_and_restore_triggers(before)
+        self.assertEqual(calls, [("start", executor.ONESHOT_UNITS[0])])
+
     def test_execution_staging_is_not_below_root_only_e_can_traverse(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -252,6 +397,87 @@ class CompatibilitySnapshotTests(unittest.TestCase):
 
 
 class TransactionStateTests(unittest.TestCase):
+    def test_interrupted_recovery_requires_primary_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executor.write_json(
+                root / "transaction-state.json", {"state": "RUNTIME_INSTALLED"}, 0o600
+            )
+            executor.write_json(
+                root / "preparation.json",
+                {
+                    "transaction_id": "test",
+                    "services_before": {},
+                    "triggers_before": {},
+                    "nginx_pid_before": 1,
+                    "preparation_root_sha256": "a" * 64,
+                },
+                0o400,
+            )
+            args = SimpleNamespace(
+                transaction_directory=str(root),
+                repair_source_commit="b" * 40,
+                repair_source_tree="c" * 40,
+                diagnostic_scope="PRIMARY_FAILURE_PRESERVED",
+            )
+            production = {"pair": {"pair_contract_equal": True}, "journal": {}}
+            with (
+                mock.patch.object(executor, "verify_current_production", return_value=production),
+                mock.patch.object(executor, "service_snapshot", return_value={}),
+                mock.patch.object(executor, "stable_health", return_value={}),
+                mock.patch.object(executor, "health_contract"),
+                mock.patch.object(executor, "stable_trigger_baseline", return_value={}),
+                mock.patch.object(
+                    executor,
+                    "economics_snapshot",
+                    return_value={"false_accepts": 0, "runtime_parity_mismatches": 0},
+                ),
+                mock.patch.object(executor, "nginx_pid", return_value=1),
+                mock.patch.object(executor, "existing_candidate_diagnostic", return_value=None),
+                self.assertRaisesRegex(executor.GateFailure, "diagnostic_missing"),
+            ):
+                executor.recover_interrupted(args)
+
+    def test_interrupted_recovery_seal_requires_independent_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executor.write_json(
+                root / "transaction-state.json",
+                {"state": "RECOVERY_VERIFICATION_PENDING"},
+                0o600,
+            )
+            receipt = executor.rooted(
+                {
+                    "transaction_id": "test",
+                    "verdict": "S1C3H_INTERRUPTED_RECOVERY_PASS",
+                    "connector_survival": "UNKNOWN_MISSING_ORIGINAL_BEFORE_ARTIFACT",
+                },
+                "recovery_receipt_root_sha256",
+            )
+            executor.write_json(root / "interrupted-recovery-receipt.json", receipt, 0o400)
+            verification = root / "verification.json"
+            executor.write_json(
+                verification,
+                {
+                    "schema": executor.RECOVERY_VERIFICATION_SCHEMA,
+                    "valid": True,
+                    "authority": True,
+                    "verdict": receipt["verdict"],
+                    "recovery_receipt_root_sha256": "d" * 64,
+                    "recovery_verification_root_sha256": "e" * 64,
+                },
+                0o400,
+            )
+            with self.assertRaisesRegex(
+                executor.GateFailure, "recovery_verification_root"
+            ):
+                executor.seal_interrupted_recovery(
+                    SimpleNamespace(
+                        transaction_directory=str(root),
+                        recovery_verification=str(verification),
+                    )
+                )
+
     def test_preflight_failure_seals_with_verified_unchanged_production(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -338,6 +564,34 @@ class TransactionStateTests(unittest.TestCase):
                 executor.execute(args)
             self.assertEqual(order, ["diagnostic", "rollback"])
 
+    def test_first_rooted_diagnostic_survives_repeated_rollback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = executor.rooted(
+                {
+                    "schema": executor.DIAGNOSTIC_SCHEMA,
+                    "stage": "triggers_restored",
+                    "error": "original_failure",
+                    "observed_at_unix": 1,
+                },
+                "diagnostic_root_sha256",
+            )
+            executor.write_json(root / "candidate-diagnostic.json", original, 0o400)
+            original_bytes = (root / "candidate-diagnostic.json").read_bytes()
+            with (
+                mock.patch.object(executor, "stable_health") as health,
+                mock.patch.object(executor, "journal_snapshot") as journal,
+            ):
+                observed = executor.persist_candidate_diagnostic(
+                    root, "manual_rollback:RUNTIME_INSTALLED", "later_failure"
+                )
+            self.assertEqual(observed, original)
+            self.assertEqual(
+                (root / "candidate-diagnostic.json").read_bytes(), original_bytes
+            )
+            health.assert_not_called()
+            journal.assert_not_called()
+
     def test_pre_mutation_rollback_does_not_rewrite_production(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -364,9 +618,9 @@ class TransactionStateTests(unittest.TestCase):
                 mock.patch.object(executor, "pause_authority_triggers"),
                 mock.patch.object(executor, "pair_identity", return_value=pair),
                 mock.patch.object(executor, "wait_for_runtime", return_value=({}, {})),
-                mock.patch.object(executor, "restore_authority_triggers"),
-                mock.patch.object(executor, "wait_for_oneshots"),
-                mock.patch.object(executor, "require_trigger_state_restored"),
+                mock.patch.object(
+                    executor, "renew_authority_and_restore_triggers", return_value={}
+                ),
                 mock.patch.object(executor, "journal_snapshot", return_value=journal),
                 mock.patch.object(executor, "require_prefix_preserved"),
                 mock.patch.object(executor, "economics_snapshot", return_value={"false_accepts": 0, "runtime_parity_mismatches": 0}),
@@ -446,9 +700,11 @@ class TransactionStateTests(unittest.TestCase):
                     mock.patch.object(executor, "pause_authority_triggers"),
                     mock.patch.object(executor, "systemctl"),
                     mock.patch.object(executor, "wait_for_runtime", return_value=({}, {})),
-                    mock.patch.object(executor, "restore_authority_triggers"),
-                    mock.patch.object(executor, "wait_for_oneshots"),
-                    mock.patch.object(executor, "require_trigger_state_restored"),
+                    mock.patch.object(
+                        executor,
+                        "renew_authority_and_restore_triggers",
+                        return_value={},
+                    ),
                     mock.patch.object(executor, "journal_snapshot", return_value=journal),
                     mock.patch.object(executor, "require_prefix_preserved"),
                     mock.patch.object(executor, "economics_snapshot", return_value={"false_accepts": 0, "runtime_parity_mismatches": 0}),
@@ -492,6 +748,201 @@ class TransactionStateTests(unittest.TestCase):
 
 
 class VerifierTests(unittest.TestCase):
+    def interrupted_recovery_fixture(self, root: Path) -> tuple[str, str]:
+        source_commit = "a" * 40
+        source_tree = "b" * 40
+        preparation = {
+            "schema": "nando.s1c3h-preparation.v1",
+            "transaction_id": "20260812T211329Z-570609bdef03-s1c3h-v1",
+            "services_before": {},
+            "triggers_before": {
+                **{unit: {"active_state": "active"} for unit in verifier.TRIGGER_UNITS},
+                **{unit: {"active_state": "inactive"} for unit in verifier.ONESHOT_UNITS},
+            },
+            "baseline": {"journal": {}},
+            "nginx_pid_before": 1,
+        }
+        preparation["preparation_root_sha256"] = verifier.digest_bytes(
+            verifier.canonical_bytes(preparation)
+        )
+        executor.write_json(root / "preparation.json", preparation, 0o400)
+        diagnostic = {
+            "schema": executor.DIAGNOSTIC_SCHEMA,
+            "stage": "manual_rollback:RUNTIME_INSTALLED",
+        }
+        diagnostic["diagnostic_root_sha256"] = verifier.digest_bytes(
+            verifier.canonical_bytes(diagnostic)
+        )
+        executor.write_json(root / "candidate-diagnostic.json", diagnostic, 0o400)
+        pair = {
+            "transition_sha256": verifier.BASELINE_TRANSITION_SHA256,
+            "authority_sha256": verifier.BASELINE_AUTHORITY_SHA256,
+            "transition_runtime_contract_sha256": verifier.BASELINE_RUNTIME_CONTRACT,
+            "authority_runtime_contract_sha256": verifier.BASELINE_RUNTIME_CONTRACT,
+            "pair_contract_equal": True,
+        }
+        triggers = {
+            **{unit: {"active_state": "active"} for unit in verifier.TRIGGER_UNITS},
+            **{
+                unit: {
+                    "active_state": "inactive",
+                    "result": "success",
+                    "exec_main_status": 0,
+                }
+                for unit in verifier.ONESHOT_UNITS
+            },
+        }
+        health = {
+            label: {
+                "stable": {
+                    "ok": True,
+                    "mode": "CPU",
+                    "admission_verdict": "PASS",
+                    "response_active_profiles": 2,
+                    "response_executor_cache_ready": True,
+                }
+            }
+            for label in ("hot", "cpu")
+        }
+        receipt = {
+            "schema": verifier.RECOVERY_RECEIPT_SCHEMA,
+            "transaction_id": preparation["transaction_id"],
+            "verdict": "S1C3H_INTERRUPTED_RECOVERY_PASS",
+            "repair_source": {"commit": source_commit, "tree": source_tree},
+            "preparation_root_sha256": preparation["preparation_root_sha256"],
+            "recovered_from_state": "RUNTIME_INSTALLED",
+            "production_pair": pair,
+            "production_config_sha256": verifier.BASELINE_CONFIG_SHA256,
+            "services": {},
+            "health": health,
+            "triggers": triggers,
+            "journal": {},
+            "economics": {"false_accepts": 0, "runtime_parity_mismatches": 0},
+            "nginx_pid_before": 1,
+            "nginx_pid_after": 1,
+            "connector_survival": "UNKNOWN_MISSING_ORIGINAL_BEFORE_ARTIFACT",
+            "diagnostic_root_sha256": diagnostic["diagnostic_root_sha256"],
+            "diagnostic_scope": "RECOVERY_DIAGNOSTIC_ONLY_PRIMARY_FAILURE_WAS_OVERWRITTEN",
+            "capture_installed": False,
+            "scientific_authority": False,
+        }
+        receipt["recovery_receipt_root_sha256"] = verifier.digest_bytes(
+            verifier.canonical_bytes(receipt)
+        )
+        executor.write_json(root / "interrupted-recovery-receipt.json", receipt, 0o400)
+        return source_commit, source_tree
+
+    def test_interrupted_recovery_verifier_preserves_unknown_connector_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, tree = self.interrupted_recovery_fixture(root)
+            with mock.patch.object(verifier.parent.parent, "verify_runtime_journal"):
+                result = verifier.verify_interrupted_recovery(root, commit, tree)
+            self.assertEqual(result["verdict"], "S1C3H_INTERRUPTED_RECOVERY_PASS")
+            self.assertFalse(result["capture_installed"])
+
+    def test_interrupted_recovery_verifier_rejects_connector_backfill(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, tree = self.interrupted_recovery_fixture(root)
+            receipt = json.loads(
+                (root / "interrupted-recovery-receipt.json").read_text()
+            )
+            receipt["connector_survival"] = "PASS"
+            receipt["recovery_receipt_root_sha256"] = verifier.digest_bytes(
+                verifier.canonical_bytes(receipt, "recovery_receipt_root_sha256")
+            )
+            executor.write_json(root / "interrupted-recovery-receipt.json", receipt, 0o400)
+            with (
+                mock.patch.object(verifier.parent.parent, "verify_runtime_journal"),
+                self.assertRaisesRegex(verifier.InvalidReceipt, "recovery_connector_scope"),
+            ):
+                verifier.verify_interrupted_recovery(root, commit, tree)
+
+    def test_interrupted_recovery_verifier_rejects_unproved_journal_change(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, tree = self.interrupted_recovery_fixture(root)
+            receipt = json.loads(
+                (root / "interrupted-recovery-receipt.json").read_text()
+            )
+            receipt["journal"] = {"changed": True}
+            receipt["recovery_receipt_root_sha256"] = verifier.digest_bytes(
+                verifier.canonical_bytes(receipt, "recovery_receipt_root_sha256")
+            )
+            executor.write_json(root / "interrupted-recovery-receipt.json", receipt, 0o400)
+            with (
+                mock.patch.object(
+                    verifier.parent.parent,
+                    "verify_runtime_journal",
+                    side_effect=verifier.InvalidReceipt("missing_prefix_proof"),
+                ),
+                self.assertRaisesRegex(verifier.InvalidReceipt, "missing_prefix_proof"),
+            ):
+                verifier.verify_interrupted_recovery(root, commit, tree)
+
+    def test_interrupted_recovery_verifier_rejects_nonterminal_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, tree = self.interrupted_recovery_fixture(root)
+            terminal = {
+                "state": "RECOVERY_VERIFICATION_PENDING",
+                "verdict": "S1C3H_INTERRUPTED_RECOVERY_PASS",
+            }
+            terminal["state_root_sha256"] = verifier.digest_bytes(
+                verifier.canonical_bytes(terminal)
+            )
+            executor.write_json(root / "s1c3h-state.json", terminal, 0o400)
+            with (
+                mock.patch.object(verifier.parent.parent, "verify_runtime_journal"),
+                self.assertRaisesRegex(verifier.InvalidReceipt, "recovery_terminal_state"),
+            ):
+                verifier.verify_interrupted_recovery(root, commit, tree)
+
+    def test_trigger_verifier_accepts_settled_oneshot_snapshot(self) -> None:
+        before = {
+            **{unit: {"active_state": "active"} for unit in verifier.TRIGGER_UNITS},
+            **{unit: {"active_state": "inactive"} for unit in verifier.ONESHOT_UNITS},
+        }
+        after = {
+            **{unit: {"active_state": "active"} for unit in verifier.TRIGGER_UNITS},
+            verifier.ONESHOT_UNITS[0]: {
+                "active_state": "inactive",
+                "result": "success",
+                "exec_main_status": 0,
+            },
+            verifier.ONESHOT_UNITS[1]: {
+                "active_state": "inactive",
+                "result": "success",
+                "exec_main_status": 0,
+            },
+        }
+        verifier.verify_triggers(before, after)
+
+    def test_trigger_verifier_rejects_failed_oneshot(self) -> None:
+        before = {
+            **{unit: {"active_state": "active"} for unit in verifier.TRIGGER_UNITS},
+            **{unit: {"active_state": "inactive"} for unit in verifier.ONESHOT_UNITS},
+        }
+        after = {
+            **{unit: {"active_state": "active"} for unit in verifier.TRIGGER_UNITS},
+            **{
+                unit: {
+                    "active_state": "inactive",
+                    "result": "success",
+                    "exec_main_status": 0,
+                }
+                for unit in verifier.ONESHOT_UNITS
+            },
+        }
+        after[verifier.ONESHOT_UNITS[0]] = {
+            "active_state": "failed",
+            "result": "exit-code",
+            "exec_main_status": 1,
+        }
+        with self.assertRaisesRegex(verifier.InvalidReceipt, "oneshot_state"):
+            verifier.verify_triggers(before, after)
+
     def test_snapshot_verifier_ignores_transport_owner_rewrite_but_binds_record(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
