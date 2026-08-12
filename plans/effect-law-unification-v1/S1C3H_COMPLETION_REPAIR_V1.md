@@ -43,6 +43,12 @@ Attempt `20260812T220528Z-05de910f9529-s1c3h-v1` showed that
 and a restored timer may not have started a replacement invocation yet.
 Therefore neither cleared state nor timer timing is accepted as renewal proof.
 
+Attempt `20260812T222021Z-a4f27ca36873-s1c3h-v1` completed the candidate
+runtime check, but the local orchestrator inherited restrictive modes from the
+first remote evidence mirror and could not replace that mirror for final
+verification. Remote evidence modes remain immutable; only the local transport
+copy is normalized to owner-writable bytes before refresh.
+
 This is an installer observation race and evidence-retention defect. It is not
 a negative result for decision capture or grounded meaning.
 
@@ -64,6 +70,11 @@ restored. Reset-failed and timer timing never substitute for this renewal.
 
 The first valid rooted candidate diagnostic is immutable. Recovery may bind to
 it but cannot overwrite it or its startup log.
+
+Every local evidence mirror must discard remote ownership and mode metadata.
+Refreshing a mirror first makes the prior local copy owner-writable, then
+replaces it. This normalization is transport-only and cannot mutate the remote
+transaction directory or its receipt modes.
 
 The interrupted attempt must be terminally sealed by a separately rooted
 recovery receipt. That receipt may prove the old production pair is restored,

@@ -5,7 +5,7 @@
   "wave_dim": 1024,
   "task_id": "s1c3h-completion-repair-v1",
   "domain": "code",
-  "complexity_score": 49,
+  "complexity_score": 52,
   "mandatory_gate": true,
   "limits": [],
   "stable_triads": [
@@ -16,8 +16,8 @@
     "c6",
     "c7",
     "c8",
-    "c9",
-    "c10"
+    "c10",
+    "c11"
   ],
   "weak_triads": [],
   "conflicts": [],
@@ -40,20 +40,20 @@
       "c6",
       "c7",
       "c8",
-      "c9",
-      "c10"
+      "c10",
+      "c11"
     ],
     "reversed_hits": [],
     "token_overlap": {
-      "c1": 0.1,
-      "c10": 0.1,
-      "c2": 0.1,
-      "c4": 0.1,
-      "c5": 0.1,
-      "c6": 0.1,
-      "c7": 0.1,
-      "c8": 0.1,
-      "c9": 0.1
+      "c1": 0.0909,
+      "c10": 0.0909,
+      "c11": 0.0909,
+      "c2": 0.0909,
+      "c4": 0.0909,
+      "c5": 0.0909,
+      "c6": 0.0909,
+      "c7": 0.0909,
+      "c8": 0.0909
     }
   },
   "trusted_proof": {
@@ -85,7 +85,7 @@
     "verdict": "NOT_REQUESTED",
     "complete": false,
     "checked": 0,
-    "total": 19,
+    "total": 20,
     "missing_triads": [
       "t1",
       "t2",
@@ -97,6 +97,7 @@
       "t8",
       "t9",
       "t10",
+      "t11",
       "c1",
       "c2",
       "c4",
@@ -104,8 +105,8 @@
       "c6",
       "c7",
       "c8",
-      "c9",
-      "c10"
+      "c10",
+      "c11"
     ],
     "issues": []
   },
@@ -123,17 +124,17 @@
   "quality_ready": false,
   "wave_summary": {
     "scores": {
-      "c1": 0.3612,
-      "c10": 0.3353,
-      "c2": 0.3292,
-      "c4": 0.3181,
-      "c5": 0.3304,
-      "c6": 0.3168,
-      "c7": 0.307,
-      "c8": 0.3107,
-      "c9": 0.2848
+      "c1": 0.3341,
+      "c10": 0.3288,
+      "c11": 0.3042,
+      "c2": 0.313,
+      "c4": 0.3224,
+      "c5": 0.3077,
+      "c6": 0.3012,
+      "c7": 0.293,
+      "c8": 0.3048
     },
-    "source_self_score": 0.3168,
+    "source_self_score": 0.3024,
     "stable": [
       "c1",
       "c2",
@@ -142,8 +143,8 @@
       "c6",
       "c7",
       "c8",
-      "c9",
-      "c10"
+      "c10",
+      "c11"
     ],
     "weak": [],
     "weak_details": {}
@@ -154,7 +155,7 @@
       "connector-scope": "connector-scope",
       "deterministic-renewal": "deterministic-renewal",
       "fail-closed-oneshot": "fail-closed-oneshot",
-      "intentional-stop": "intentional-stop",
+      "mirror-lifecycle": "mirror-lifecycle",
       "oneshot-race": "oneshot-race",
       "recovery-claim": "recovery-claim",
       "research-claim": "research-claim",
@@ -165,7 +166,7 @@
       "connector-scope": 1.0,
       "deterministic-renewal": 1.0,
       "fail-closed-oneshot": 1.0,
-      "intentional-stop": 1.0,
+      "mirror-lifecycle": 1.0,
       "oneshot-race": 1.0,
       "recovery-claim": 1.0,
       "research-claim": 1.0,
@@ -179,15 +180,15 @@
       "connector-scope": 1,
       "deterministic-renewal": 1,
       "fail-closed-oneshot": 1,
-      "intentional-stop": 1,
+      "mirror-lifecycle": 1,
       "oneshot-race": 1,
       "recovery-claim": 1,
       "research-claim": 1,
       "terminal-seal": 1
     },
     "candidate_superposition": {
-      "avg_triad_coherence": 0.3388,
-      "norm": 97.5705,
+      "avg_triad_coherence": 0.3427,
+      "norm": 98.7117,
       "triads": 9
     },
     "core_version": "sparse-triad-v6.2-quality-gates",
@@ -196,7 +197,7 @@
       "connector-scope": "connector-scope",
       "deterministic-renewal": "deterministic-renewal",
       "fail-closed-oneshot": "fail-closed-oneshot",
-      "intentional-stop": "intentional-stop",
+      "mirror-lifecycle": "mirror-lifecycle",
       "oneshot-race": "oneshot-race",
       "recovery-claim": "recovery-claim",
       "research-claim": "research-claim",
@@ -225,7 +226,7 @@
           "self_coherence": 1.0,
           "triads": 1
         },
-        "intentional-stop": {
+        "mirror-lifecycle": {
           "norm": 32.0,
           "self_coherence": 1.0,
           "triads": 1
@@ -282,6 +283,11 @@
           "self_coherence": 1.0,
           "triads": 1
         },
+        "mirror-lifecycle": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
         "oneshot-race": {
           "norm": 32.0,
           "self_coherence": 1.0,
@@ -333,11 +339,11 @@
           "fail-closed-oneshot"
         ]
       },
-      "intentional-stop": {
+      "mirror-lifecycle": {
         "dominant_score": 1.0,
-        "dominant_source_group": "intentional-stop",
+        "dominant_source_group": "mirror-lifecycle",
         "exact_source_groups": [
-          "intentional-stop"
+          "mirror-lifecycle"
         ]
       },
       "oneshot-race": {
@@ -377,6 +383,7 @@
         "diagnostic-retention": -0.0078,
         "fail-closed-oneshot": -0.043,
         "intentional-stop": -0.0039,
+        "mirror-lifecycle": 0.002,
         "oneshot-race": 0.0195,
         "recovery-claim": -0.0117,
         "research-claim": -0.043,
@@ -389,6 +396,7 @@
         "diagnostic-retention": -0.0508,
         "fail-closed-oneshot": 0.0078,
         "intentional-stop": 0.0195,
+        "mirror-lifecycle": 0.0645,
         "oneshot-race": -0.0156,
         "recovery-claim": -0.0352,
         "research-claim": 0.0508,
@@ -401,6 +409,7 @@
         "diagnostic-retention": -0.0098,
         "fail-closed-oneshot": 0.041,
         "intentional-stop": -0.0098,
+        "mirror-lifecycle": 0.0313,
         "oneshot-race": 0.0371,
         "recovery-claim": -0.002,
         "research-claim": -0.0176,
@@ -413,22 +422,24 @@
         "diagnostic-retention": -0.0117,
         "fail-closed-oneshot": 1.0,
         "intentional-stop": -0.0313,
+        "mirror-lifecycle": -0.002,
         "oneshot-race": 0.0586,
         "recovery-claim": -0.0156,
         "research-claim": 0.0,
         "terminal-seal": 0.0371
       },
-      "intentional-stop": {
-        "attempt-order": -0.0039,
-        "connector-scope": 0.0195,
-        "deterministic-renewal": -0.0098,
-        "diagnostic-retention": -0.0547,
-        "fail-closed-oneshot": -0.0313,
-        "intentional-stop": 1.0,
-        "oneshot-race": 0.0,
-        "recovery-claim": -0.0156,
-        "research-claim": -0.0078,
-        "terminal-seal": 0.0059
+      "mirror-lifecycle": {
+        "attempt-order": 0.002,
+        "connector-scope": 0.0645,
+        "deterministic-renewal": 0.0313,
+        "diagnostic-retention": -0.0254,
+        "fail-closed-oneshot": -0.002,
+        "intentional-stop": -0.0293,
+        "mirror-lifecycle": 1.0,
+        "oneshot-race": -0.0332,
+        "recovery-claim": -0.002,
+        "research-claim": 0.0293,
+        "terminal-seal": -0.0234
       },
       "oneshot-race": {
         "attempt-order": 0.0195,
@@ -437,6 +448,7 @@
         "diagnostic-retention": 0.0469,
         "fail-closed-oneshot": 0.0586,
         "intentional-stop": 0.0,
+        "mirror-lifecycle": -0.0332,
         "oneshot-race": 1.0,
         "recovery-claim": 0.0156,
         "research-claim": -0.0117,
@@ -449,6 +461,7 @@
         "diagnostic-retention": 0.0195,
         "fail-closed-oneshot": -0.0156,
         "intentional-stop": -0.0156,
+        "mirror-lifecycle": -0.002,
         "oneshot-race": 0.0156,
         "recovery-claim": 1.0,
         "research-claim": 0.0664,
@@ -461,6 +474,7 @@
         "diagnostic-retention": -0.0391,
         "fail-closed-oneshot": 0.0,
         "intentional-stop": -0.0078,
+        "mirror-lifecycle": 0.0293,
         "oneshot-race": -0.0117,
         "recovery-claim": 0.0664,
         "research-claim": 1.0,
@@ -473,6 +487,7 @@
         "diagnostic-retention": -0.0215,
         "fail-closed-oneshot": 0.0371,
         "intentional-stop": 0.0059,
+        "mirror-lifecycle": -0.0234,
         "oneshot-race": -0.0059,
         "recovery-claim": -0.0176,
         "research-claim": -0.0137,
@@ -542,7 +557,16 @@
           "gravity": 1.0,
           "owner": "s1c-3h installer",
           "owners": {
-            "s1c-3h installer": 2
+            "s1c-3h installer": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "mirror-lifecycle": {
+          "gravity": 1.0,
+          "owner": "s1c-3h orchestrator",
+          "owners": {
+            "s1c-3h orchestrator": 2
           },
           "support": 2,
           "total": 2
@@ -598,20 +622,21 @@
           "gravity": 1.0,
           "owner": "s1c-3h installer",
           "owners": {
-            "s1c-3h installer": 8
+            "s1c-3h installer": 7
           },
-          "support": 8,
-          "total": 8
+          "support": 7,
+          "total": 7
         },
         "recovery": {
-          "gravity": 0.6667,
+          "gravity": 0.5,
           "owner": "s1c-3h recovery",
           "owners": {
             "independent verifier": 2,
+            "s1c-3h orchestrator": 2,
             "s1c-3h recovery": 4
           },
           "support": 4,
-          "total": 6
+          "total": 8
         },
         "research": {
           "gravity": 1.0,
@@ -665,7 +690,7 @@
         },
         "installation": {
           "avg_confidence": 1.0,
-          "candidate_triads": 4,
+          "candidate_triads": 3,
           "entrypoints": [
             "pause_authority_triggers",
             "renew_authority_and_restore_triggers",
@@ -676,7 +701,6 @@
             "candidate_answer:c1",
             "candidate_answer:c10",
             "candidate_answer:c2",
-            "candidate_answer:c9",
             "ops/remote-backend/s1c3h_remote_transaction_v1.py"
           ],
           "layers": [
@@ -697,43 +721,50 @@
             "deployment"
           ],
           "source_triads": 4,
-          "triads": 8
+          "triads": 7
         },
         "recovery": {
           "avg_confidence": 1.0,
-          "candidate_triads": 3,
+          "candidate_triads": 4,
           "entrypoints": [
+            "mirror_remote",
             "recover_interrupted",
             "seal_interrupted_recovery",
             "verify_interrupted_recovery"
           ],
           "evidence_paths": [
+            "candidate_answer:c11",
             "candidate_answer:c4",
             "candidate_answer:c5",
             "candidate_answer:c6",
+            "ops/remote-backend/run_s1c3h_transaction_v1.sh",
             "ops/remote-backend/s1c3h_remote_transaction_v1.py",
             "ops/remote-backend/verify_s1c3h_transaction_v1.py"
           ],
           "layers": [
             "authority",
+            "operations",
             "proof",
             "science"
           ],
           "outputs": [
             "immutable complete",
             "recovery pass",
+            "repeatable local verification copy",
             "scoped verdict"
           ],
           "owners": [
             "independent verifier",
+            "s1c-3h orchestrator",
             "s1c-3h recovery"
           ],
           "scopes": [
             "claim",
-            "historical attempt"
+            "historical attempt",
+            "local evidence only"
           ],
-          "source_triads": 3,
-          "triads": 6
+          "source_triads": 4,
+          "triads": 8
         },
         "research": {
           "avg_confidence": 1.0,
@@ -794,14 +825,14 @@
           "triads": 1
         },
         "installation": {
-          "norm": 65.5134,
-          "self_coherence": 0.5118,
-          "triads": 4
+          "norm": 57.8965,
+          "self_coherence": 0.6031,
+          "triads": 3
         },
         "recovery": {
-          "norm": 55.2811,
-          "self_coherence": 0.5758,
-          "triads": 3
+          "norm": 64.4981,
+          "self_coherence": 0.5039,
+          "triads": 4
         },
         "research": {
           "norm": 32.0,
@@ -813,28 +844,28 @@
         "chronology": {
           "chronology": 1.0,
           "installation": 0.0067,
-          "recovery": 0.0057,
+          "recovery": 0.0058,
           "research": -0.043,
           "rollback": -0.0078
         },
         "installation": {
-          "chronology": 0.0067,
-          "installation": 1.0,
-          "recovery": 0.0039,
-          "research": -0.0181,
-          "rollback": -0.0143
+          "chronology": 0.0097,
+          "installation": 0.8727,
+          "recovery": 0.0,
+          "research": -0.0162,
+          "rollback": 0.014
         },
         "recovery": {
-          "chronology": 0.0057,
-          "installation": 0.0039,
+          "chronology": 0.0058,
+          "installation": -0.0047,
           "recovery": 1.0,
-          "research": 0.0599,
-          "rollback": -0.0305
+          "research": 0.0659,
+          "rollback": -0.0388
         },
         "research": {
           "chronology": -0.043,
           "installation": -0.0181,
-          "recovery": 0.0599,
+          "recovery": 0.0659,
           "research": 1.0,
           "rollback": -0.0391
         }
@@ -851,9 +882,9 @@
           "triads": 4
         },
         "recovery": {
-          "norm": 55.2811,
-          "self_coherence": 0.5758,
-          "triads": 3
+          "norm": 64.4981,
+          "self_coherence": 0.5039,
+          "triads": 4
         },
         "research": {
           "norm": 32.0,
@@ -874,6 +905,7 @@
       "diagnostic-retention": 1,
       "fail-closed-oneshot": 1,
       "intentional-stop": 1,
+      "mirror-lifecycle": 1,
       "oneshot-race": 1,
       "recovery-claim": 1,
       "research-claim": 1,
@@ -884,7 +916,7 @@
       "connector-scope",
       "deterministic-renewal",
       "fail-closed-oneshot",
-      "intentional-stop",
+      "mirror-lifecycle",
       "oneshot-race",
       "recovery-claim",
       "research-claim",

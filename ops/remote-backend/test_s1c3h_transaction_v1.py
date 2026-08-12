@@ -968,6 +968,12 @@ class VerifierTests(unittest.TestCase):
         for name in verifier.IMPLEMENTATION_FILES[:3]:
             self.assertTrue((directory / name).is_file())
 
+    def test_wrapper_keeps_repeated_local_mirrors_writable(self) -> None:
+        source = Path(__file__).with_name("run_s1c3h_transaction_v1.sh").read_text()
+        mirror = source[source.index("mirror_remote() {") : source.index("\n}\n", source.index("mirror_remote() {"))]
+        self.assertIn('chmod -R u+rwX "$local_dir/remote-mirror"', mirror)
+        self.assertIn("--no-same-owner --no-same-permissions --mode=u+rwX", mirror)
+
     def test_mixed_pair_build_receipt_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

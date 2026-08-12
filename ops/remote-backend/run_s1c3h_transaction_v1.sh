@@ -96,10 +96,14 @@ connector_snapshot() {
 }
 
 mirror_remote() {
+  if [[ -d $local_dir/remote-mirror ]]; then
+    chmod -R u+rwX "$local_dir/remote-mirror"
+  fi
   rm -rf "$local_dir/remote-mirror"
   mkdir -p "$local_dir/remote-mirror"
   ssh "$remote" "sudo -n tar --exclude=rollback --exclude=.mutation.lock -C '$remote_transaction' -cf - ." |
-    tar -C "$local_dir/remote-mirror" -xf -
+    tar --no-same-owner --no-same-permissions --mode=u+rwX \
+      -C "$local_dir/remote-mirror" -xf -
 }
 
 finish_rollback() {
