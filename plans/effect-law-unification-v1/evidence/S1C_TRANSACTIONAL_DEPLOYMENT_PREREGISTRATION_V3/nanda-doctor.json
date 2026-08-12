@@ -1,0 +1,31 @@
+{
+  "checks": {
+    "field_state_machine": true,
+    "noisy_query_watch": true,
+    "route_trap_focused": true
+  },
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "healthy": true,
+  "mode": "doctor",
+  "noisy": {
+    "field_action": "SPLIT_OR_QUERY",
+    "field_safe_to_answer": false,
+    "field_state": "FIELD_CONTESTED",
+    "peak_margin": 0.0251,
+    "safe_to_answer": false,
+    "state": "WATCH",
+    "top": "certification"
+  },
+  "route_trap": {
+    "field_action": "ANSWER_WITH_SUPPORT",
+    "field_safe_to_answer": true,
+    "field_state": "FIELD_FOCUSED",
+    "lexical_baseline_top": "customs",
+    "peak_margin": 0.0567,
+    "safe_to_answer": true,
+    "state": "FOCUSED",
+    "top": "certification",
+    "wins_over_lexical_baseline": true
+  },
+  "wave_dim": 1024
+}
