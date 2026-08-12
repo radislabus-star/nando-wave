@@ -1,0 +1,509 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "s1c3h-authority-pair-installation",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "baseline-transition-binary",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c3h-preflight/opt/nando-wave/bin/nando-transition-serving",
+      "expect": {
+        "size_bytes": 61564176,
+        "sha256": "6ad63428f0cbbe96b539db2d63844403c697dec5041a91652b37857bb653ea58",
+        "mode": "0755"
+      }
+    },
+    {
+      "id": "baseline-authority-binary",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c3h-preflight/opt/nando-wave/bin/nando-response-admission",
+      "expect": {
+        "size_bytes": 21279376,
+        "sha256": "634f4aaeadeb5815ea1bf67a5ea76d63aae782dae63f8505d40f810e21ad2c3a",
+        "mode": "0755"
+      }
+    },
+    {
+      "id": "baseline-transition-config",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c3h-preflight/etc/nando-wave/roles/transition-serving.env",
+      "expect": {
+        "size_bytes": 1441,
+        "sha256": "cb2e33bdd2c9959b2c975e9585eb60927f9827327f6a74af6ade92b9b19486f5",
+        "mode": "0644"
+      }
+    },
+    {
+      "id": "decision-precommit-segment",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c3h-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "expect": {
+        "size_bytes": 4,
+        "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+        "prefix_hex": "4e544631",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "goal-satisfaction-segment",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c3h-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "expect": {
+        "size_bytes": 4,
+        "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+        "prefix_hex": "4e544631",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "selected-action-segment",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c3h-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "expect": {
+        "size_bytes": 4,
+        "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+        "prefix_hex": "4e544631",
+        "mode": "0600"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "build-pair",
+        "kind": "release_build_from_one_commit"
+      },
+      {
+        "id": "pause-authority-triggers",
+        "kind": "bounded_systemd_trigger_stop"
+      },
+      {
+        "id": "install-authority",
+        "kind": "atomic_authority_binary_install"
+      },
+      {
+        "id": "publish-authority-sidecars",
+        "kind": "controller_owned_atomic_sidecar_generation"
+      },
+      {
+        "id": "publish-final-admission",
+        "kind": "composite_gate_owned_atomic_admission"
+      },
+      {
+        "id": "install-runtime",
+        "kind": "atomic_runtime_binary_config_install"
+      },
+      {
+        "id": "restart-transition",
+        "kind": "transition_service_restart"
+      },
+      {
+        "id": "resume-authority-triggers",
+        "kind": "restore_exact_systemd_trigger_state"
+      },
+      {
+        "id": "observe-health",
+        "kind": "http_get_health",
+        "comparison_id": "serving-health"
+      }
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "post_hoc_goal",
+      "journal_truncation",
+      "journal_deletion",
+      "nginx_restart",
+      "connector_restart",
+      "phase_mutation",
+      "scientific_authority_grant"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "composite-gate-owner",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/ops/phase-center-test-server/bin/nando-live-transition-gate",
+      "sha256": "dc6de8d8c3619363b38d80122343919f29938c25f387c67c0f732e6e3be4142e",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "generated_traffic",
+          "regex": "(/v1/responses|method=[\\\"']POST)"
+        },
+        {
+          "effect": "scientific_authority_grant",
+          "regex": "[\\\"']scientific_authority[\\\"']\\s*:\\s*true"
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "(write_fixture|synthetic_traffic|generated_fixture)"
+        },
+        {
+          "effect": "post_hoc_goal",
+          "regex": "(post_hoc_goal|infer_goal_from_(selected|outcome))"
+        },
+        {
+          "effect": "journal_deletion",
+          "regex": "(JOURNAL\\.(unlink|rmdir)|remove_(file|dir)[^\\n]*JOURNAL)"
+        },
+        {
+          "effect": "nginx_restart",
+          "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*nginx"
+        },
+        {
+          "effect": "connector_restart",
+          "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*connector"
+        },
+        {
+          "effect": "phase_mutation",
+          "regex": "(phase_(center|memory).*(write|mutate)|mutate_phase)"
+        }
+      ]
+    },
+    {
+      "id": "prior-transaction-owner",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/ops/remote-backend/s1c3g_remote_transaction_v1.py",
+      "sha256": "d388d65a82b20649dc6dd5d874380cc15bd9b49a76161ae90930861dbb3fc216",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "generated_traffic",
+          "regex": "(/v1/responses|method=[\\\"']POST)"
+        },
+        {
+          "effect": "journal_truncation",
+          "regex": "JOURNAL\\.(unlink|rmdir|rename)"
+        },
+        {
+          "effect": "journal_deletion",
+          "regex": "(JOURNAL\\.(unlink|rmdir)|remove_(file|dir)[^\\n]*JOURNAL)"
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "(write_fixture|synthetic_traffic|generated_fixture)"
+        },
+        {
+          "effect": "post_hoc_goal",
+          "regex": "(post_hoc_goal|infer_goal_from_(selected|outcome))"
+        },
+        {
+          "effect": "nginx_restart",
+          "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*nginx"
+        },
+        {
+          "effect": "connector_restart",
+          "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*connector"
+        },
+        {
+          "effect": "phase_mutation",
+          "regex": "(phase_(center|memory).*(write|mutate)|mutate_phase)"
+        },
+        {
+          "effect": "scientific_authority_grant",
+          "regex": "[\\\"']scientific_authority[\\\"']\\s*:\\s*True"
+        }
+      ]
+    }
+  ],
+  "runtime_comparisons": [
+    {
+      "id": "serving-health",
+      "source": "GET local and routed cpu health",
+      "comparison": "exact_stable_projection",
+      "stable_fields": [
+        "ok",
+        "service",
+        "mode",
+        "admission_verdict",
+        "response_executor_cache_ready",
+        "response_active_profiles"
+      ],
+      "expected_to_change_fields": [
+        "response_runtime_contract_sha256",
+        "response_admission_expires_at_unix",
+        "process_pid"
+      ],
+      "observed_not_compared_fields": [
+        "dynamic counters",
+        "timestamps",
+        "raw response hash"
+      ],
+      "reason": "preserve serving semantics while installing the new compatible runtime contract",
+      "test_id": "stable-health-projection"
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "id": "decision-precommit-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "decision-precommit-segment"
+    },
+    {
+      "id": "goal-satisfaction-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "goal-satisfaction-segment"
+    },
+    {
+      "id": "selected-action-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "selected-action-segment"
+    }
+  ],
+  "state_machine": {
+    "initial_state": "NEW",
+    "terminal_states": [
+      "PASS",
+      "PREFLIGHT_FAILURE",
+      "ROLLBACK_PASS",
+      "VETO"
+    ],
+    "steps": [
+      {
+        "id": "prepare",
+        "from": "NEW",
+        "to": "PREPARED",
+        "mutates": true,
+        "failure_state": "PREFLIGHT_FAILURE",
+        "cleanup": "seal diagnostic and leave production untouched",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "prepare-copy-fault"
+      },
+      {
+        "id": "stage-candidate",
+        "from": "PREPARED",
+        "to": "STAGED",
+        "mutates": true,
+        "failure_state": "PREFLIGHT_FAILURE",
+        "cleanup": "remove only unreferenced transaction staging and leave production untouched",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "stage-authority-fault"
+      },
+      {
+        "id": "arm-rollback",
+        "from": "STAGED",
+        "to": "ROLLBACK_ARMED",
+        "mutates": true,
+        "failure_state": "PREFLIGHT_FAILURE",
+        "cleanup": "leave production untouched and preserve durable backups",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "rollback-arm-fault"
+      },
+      {
+        "id": "install-authority-unit",
+        "from": "ROLLBACK_ARMED",
+        "to": "AUTHORITY_INSTALLED",
+        "mutates": true,
+        "failure_state": "ROLLBACK_PASS",
+        "cleanup": "persist candidate diagnostics then restore complete old compatibility unit",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "authority-install-fault"
+      },
+      {
+        "id": "install-runtime-unit",
+        "from": "AUTHORITY_INSTALLED",
+        "to": "RUNTIME_INSTALLED",
+        "mutates": true,
+        "failure_state": "ROLLBACK_PASS",
+        "cleanup": "persist candidate diagnostics then restore complete old compatibility unit",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "runtime-install-fault"
+      },
+      {
+        "id": "survival",
+        "from": "RUNTIME_INSTALLED",
+        "to": "FINALIZE_PENDING",
+        "mutates": true,
+        "failure_state": "ROLLBACK_PASS",
+        "cleanup": "persist candidate health and startup logs then restore complete old compatibility unit",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "survival-fault"
+      },
+      {
+        "id": "finalize",
+        "from": "FINALIZE_PENDING",
+        "to": "PASS",
+        "mutates": true,
+        "failure_state": "VETO",
+        "cleanup": "connector or final verifier veto invokes complete rollback before sealing",
+        "preserves": [
+          "decision-precommit-ledger",
+          "goal-satisfaction-ledger",
+          "selected-action-ledger"
+        ],
+        "test_id": "finalize-veto-fault"
+      }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "pair-contract-identity",
+      "statement": "installed transition and response-admission binaries report the same runtime contract digest",
+      "test_id": "pair-contract-parity"
+    },
+    {
+      "id": "admission-contract-identity",
+      "statement": "final admission response authority runtime digest equals the installed pair digest",
+      "test_id": "admission-contract-parity"
+    },
+    {
+      "id": "mixed-pair-fail-closed",
+      "statement": "no mixed runtime-authority state can satisfy installation PASS",
+      "test_id": "mixed-pair-negative"
+    },
+    {
+      "id": "diagnostic-before-rollback",
+      "statement": "candidate stage health and logs are durably written before rollback starts",
+      "test_id": "diagnostic-order"
+    },
+    {
+      "id": "natural-suffix-preserved",
+      "statement": "rollback preserves frozen prefixes and all valid naturally arriving suffix records",
+      "test_id": "ledger-prefix-parity"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "source-pair-identity",
+      "producer": "candidate transition and response-admission release builds",
+      "consumer": "transaction preparation and final verifier",
+      "comparison": "same Git commit plus executable SHA and runtime contract SHA",
+      "test_id": "pair-contract-parity"
+    },
+    {
+      "id": "controller-gate-identity",
+      "producer": "candidate response-admission sidecar generation",
+      "consumer": "candidate composite gate final admission",
+      "comparison": "exact registry root revision package set and runtime digest",
+      "test_id": "admission-contract-parity"
+    },
+    {
+      "id": "rollback-unit-identity",
+      "producer": "durable pre-mutation rollback directory",
+      "consumer": "rollback installer and final rollback verifier",
+      "comparison": "exact file manifest and old pair runtime digest",
+      "test_id": "rollback-unit-parity"
+    },
+    {
+      "id": "verifier-byte-identity",
+      "producer": "local independent verifier result",
+      "consumer": "remote independent verifier result",
+      "comparison": "canonical JSON byte identity",
+      "test_id": "verifier-parity"
+    }
+  ],
+  "tests": [
+    {
+      "id": "prepare-copy-fault",
+      "kind": "fault_injection",
+      "expected": "PREFLIGHT_FAILURE and no production mutation"
+    },
+    {
+      "id": "stage-authority-fault",
+      "kind": "fault_injection",
+      "expected": "PREFLIGHT_FAILURE and no production mutation"
+    },
+    {
+      "id": "rollback-arm-fault",
+      "kind": "fault_injection",
+      "expected": "PREFLIGHT_FAILURE with complete durable backups or no production mutation"
+    },
+    {
+      "id": "authority-install-fault",
+      "kind": "fault_injection",
+      "expected": "ROLLBACK_PASS with complete old unit READY"
+    },
+    {
+      "id": "runtime-install-fault",
+      "kind": "fault_injection",
+      "expected": "ROLLBACK_PASS with complete old unit READY"
+    },
+    {
+      "id": "survival-fault",
+      "kind": "fault_injection",
+      "expected": "candidate diagnostics persisted before complete rollback"
+    },
+    {
+      "id": "finalize-veto-fault",
+      "kind": "fault_injection",
+      "expected": "connector or verifier VETO completes rollback before terminal seal"
+    },
+    {
+      "id": "pair-contract-parity",
+      "kind": "parity",
+      "expected": "both candidate and installed binaries report one exact runtime digest"
+    },
+    {
+      "id": "admission-contract-parity",
+      "kind": "parity",
+      "expected": "sidecars final admission and installed pair share registry and runtime identity"
+    },
+    {
+      "id": "mixed-pair-negative",
+      "kind": "unit",
+      "expected": "every old-new pair permutation fails verification"
+    },
+    {
+      "id": "diagnostic-order",
+      "kind": "unit",
+      "expected": "diagnostic fsync precedes the first rollback mutation"
+    },
+    {
+      "id": "ledger-prefix-parity",
+      "kind": "parity",
+      "expected": "frozen prefix and valid natural suffix remain byte-identical"
+    },
+    {
+      "id": "stable-health-projection",
+      "kind": "unit",
+      "expected": "READY two-profile serving passes and authority or cache changes fail"
+    },
+    {
+      "id": "rollback-fault-matrix",
+      "kind": "fault_injection",
+      "expected": "every mutating step restores the complete old unit"
+    },
+    {
+      "id": "rollback-unit-parity",
+      "kind": "parity",
+      "expected": "rollback backups installed bytes final hashes and old runtime digest are identical"
+    },
+    {
+      "id": "verifier-parity",
+      "kind": "parity",
+      "expected": "local and remote verifier JSON bytes are identical"
+    }
+  ]
+}

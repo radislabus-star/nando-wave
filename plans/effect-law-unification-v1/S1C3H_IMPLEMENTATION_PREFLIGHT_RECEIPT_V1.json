@@ -1,0 +1,119 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "baseline-transition-binary",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/tmp/nanda-s1c3h-preflight/opt/nando-wave/bin/nando-transition-serving",
+      "sha256": "6ad63428f0cbbe96b539db2d63844403c697dec5041a91652b37857bb653ea58",
+      "size_bytes": 61564176
+    },
+    {
+      "exists": true,
+      "id": "baseline-authority-binary",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/tmp/nanda-s1c3h-preflight/opt/nando-wave/bin/nando-response-admission",
+      "sha256": "634f4aaeadeb5815ea1bf67a5ea76d63aae782dae63f8505d40f810e21ad2c3a",
+      "size_bytes": 21279376
+    },
+    {
+      "exists": true,
+      "id": "baseline-transition-config",
+      "kind": "file",
+      "mode": "0644",
+      "path": "/tmp/nanda-s1c3h-preflight/etc/nando-wave/roles/transition-serving.env",
+      "sha256": "cb2e33bdd2c9959b2c975e9585eb60927f9827327f6a74af6ade92b9b19486f5",
+      "size_bytes": 1441
+    },
+    {
+      "exists": true,
+      "id": "decision-precommit-segment",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c3h-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    },
+    {
+      "exists": true,
+      "id": "goal-satisfaction-segment",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c3h-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    },
+    {
+      "exists": true,
+      "id": "selected-action-segment",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c3h-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 6,
+    "forbidden_side_effect_kinds": [
+      "connector_restart",
+      "generated_traffic",
+      "journal_deletion",
+      "journal_truncation",
+      "nginx_restart",
+      "phase_mutation",
+      "post_hoc_goal",
+      "scientific_authority_grant",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 4,
+    "invariants": 5,
+    "planned_side_effect_kinds": [
+      "atomic_authority_binary_install",
+      "atomic_runtime_binary_config_install",
+      "bounded_systemd_trigger_stop",
+      "composite_gate_owned_atomic_admission",
+      "controller_owned_atomic_sidecar_generation",
+      "http_get_health",
+      "release_build_from_one_commit",
+      "restore_exact_systemd_trigger_state",
+      "transition_service_restart"
+    ],
+    "preserved_artifacts": 3,
+    "runtime_comparisons": 1,
+    "source_checks": 2,
+    "tests": 16
+  },
+  "manifest_sha256": "888771f707480c5eca957726b42a1fe962d9eabdbbebce6d6c5ce4ae389b0cd9",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "composite-gate-owner",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/ops/phase-center-test-server/bin/nando-live-transition-gate",
+      "sha256": "dc6de8d8c3619363b38d80122343919f29938c25f387c67c0f732e6e3be4142e",
+      "size_bytes": 53221
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "prior-transaction-owner",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/ops/remote-backend/s1c3g_remote_transaction_v1.py",
+      "sha256": "d388d65a82b20649dc6dd5d874380cc15bd9b49a76161ae90930861dbb3fc216",
+      "size_bytes": 19385
+    }
+  ],
+  "task_id": "s1c3h-authority-pair-installation",
+  "verdict": "READY_TO_IMPLEMENT"
+}
