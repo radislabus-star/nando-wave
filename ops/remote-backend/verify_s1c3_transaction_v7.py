@@ -253,12 +253,9 @@ def verify_cmdline_observation(value: Any, label: str) -> dict[str, Any]:
     require(isinstance(value, dict), f"{label}_not_object")
     status = value.get("status")
     if status == "VALUE":
-        require_field_set(value, {"status", "payload_hex"}, label)
-        require(isinstance(value["payload_hex"], str), f"{label}_payload_invalid")
-        try:
-            bytes.fromhex(value["payload_hex"])
-        except ValueError as error:
-            raise InvalidReceipt(f"{label}_payload_invalid") from error
+        require_field_set(value, {"status", "byte_count", "sha256"}, label)
+        require_nonnegative_int(value["byte_count"], f"{label}_byte_count")
+        require_hash(value["sha256"], f"{label}_sha256")
     elif status in {"ENOENT", "PERMISSION_DENIED"}:
         require_field_set(value, {"status"}, label)
     elif status == "OS_ERROR":
@@ -315,7 +312,15 @@ def independently_classify_process(row: dict[str, Any], label: str) -> dict[str,
         "executable_basename": None,
         "forbidden_names": [],
     }
-    if opening_observation["status"] != "VALUE":
+    if (
+        opening_observation["status"] == "ENOENT"
+        and closing_observation["status"] == "ENOENT"
+    ):
+        result.update({
+            "classification": PROVEN_NON_EXECUTING,
+            "reason": "PID_VANISHED",
+        })
+    elif opening_observation["status"] != "VALUE":
         result["reason"] = f"opening_stat_{opening_observation['status'].lower()}"
     else:
         opening = opening_observation["parsed"]
@@ -376,8 +381,10 @@ def independently_classify_process(row: dict[str, Any], label: str) -> dict[str,
                             except ValueError:
                                 result["reason"] = "auxiliary_malformed"
                             else:
-                                cmdline = bytes.fromhex(cmdline_observation["payload_hex"])
-                                if exe_observation["status"] == "VALUE":
+                                count = cmdline_observation["byte_count"]
+                                if count == 0 and cmdline_observation["sha256"] != digest(b""):
+                                    result["reason"] = "cmdline_empty_hash_mismatch"
+                                elif exe_observation["status"] == "VALUE":
                                     basename = exe_observation["basename"]
                                     forbidden = sorted(
                                         {opening["comm"], closing["comm"], basename}
@@ -391,7 +398,7 @@ def independently_classify_process(row: dict[str, Any], label: str) -> dict[str,
                                     })
                                 elif exe_observation["status"] != "ENOENT":
                                     result["reason"] = f"exe_{exe_observation['status'].lower()}"
-                                elif kthread and not cmdline:
+                                elif kthread and count == 0:
                                     result.update({
                                         "classification": PROVEN_NON_EXECUTING,
                                         "reason": "STABLE_KERNEL_THREAD",

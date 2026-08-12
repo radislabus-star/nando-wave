@@ -120,7 +120,8 @@ def process_observation(
         "status": {"status": "VALUE", "kthread_line": f"Kthread:\t{kthread}"},
         "cmdline": {
             "status": "VALUE",
-            "payload_hex": cmdline.hex(),
+            "byte_count": len(cmdline),
+            "sha256": verifier.digest(cmdline),
         },
         "exe": (
             {"status": "VALUE", "target": exe, "basename": os.path.basename(exe)}
@@ -941,6 +942,24 @@ class TransactionVerifierTests(unittest.TestCase):
         self.assertEqual(snapshot["summary"]["proven_vanished_count"], 1)
         self.assertEqual(snapshot["summary"]["unresolved_process_count"], 0)
         verifier.verify_process_snapshot(snapshot, "vanished")
+
+    def test_pid_vanished_before_opening_stat_is_non_executing(self) -> None:
+        row = process_observation()
+        row["opening_stat"] = {"status": "ENOENT"}
+        row["status"] = {"status": "ENOENT"}
+        row["cmdline"] = {"status": "ENOENT"}
+        row["exe"] = {"status": "ENOENT"}
+        row["closing_stat"] = {"status": "ENOENT"}
+        snapshot = process_snapshot([row])
+        self.assertEqual(snapshot["summary"]["proven_vanished_count"], 1)
+        self.assertEqual(snapshot["summary"]["unresolved_process_count"], 0)
+        verifier.verify_process_snapshot(snapshot, "vanished_before_opening")
+
+    def test_opening_missing_but_closing_present_is_unresolved(self) -> None:
+        row = process_observation()
+        row["opening_stat"] = {"status": "ENOENT"}
+        self.install_process_snapshot(0, [row])
+        self.assert_invalid("quiescence_sample_0_blockers_mismatch")
 
     def test_stable_zombie_is_non_executing(self) -> None:
         row = process_observation(opening_state="Z", closing_state="Z")

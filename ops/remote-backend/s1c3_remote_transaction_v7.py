@@ -601,7 +601,8 @@ def read_cmdline_observation(path: Path) -> dict[str, Any]:
         return observation_error(error)
     return {
         "status": "VALUE",
-        "payload_hex": payload.hex(),
+        "byte_count": len(payload),
+        "sha256": sha256_bytes(payload),
     }
 
 
@@ -639,6 +640,15 @@ def classify_process_observation(observation: dict[str, Any]) -> dict[str, Any]:
         "executable_basename": None,
         "forbidden_names": [],
     }
+    if (
+        opening_observation.get("status") == "ENOENT"
+        and closing_observation.get("status") == "ENOENT"
+    ):
+        result.update({
+            "classification": PROVEN_NON_EXECUTING,
+            "reason": "PID_VANISHED",
+        })
+        return result
     if opening_observation.get("status") != "VALUE":
         result["reason"] = f"opening_stat_{opening_observation.get('status', 'MISSING').lower()}"
         return result
@@ -712,9 +722,16 @@ def classify_process_observation(observation: dict[str, Any]) -> dict[str, Any]:
         return result
     try:
         kthread = parse_kthread_line(status_observation["kthread_line"])
-        cmdline = bytes.fromhex(cmdline_observation["payload_hex"])
+        cmdline_bytes = cmdline_observation["byte_count"]
+        cmdline_hash = cmdline_observation["sha256"]
     except (KeyError, TypeError, ValueError):
         result["reason"] = "auxiliary_malformed"
+        return result
+    if not isinstance(cmdline_bytes, int) or cmdline_bytes < 0:
+        result["reason"] = "cmdline_shape_invalid"
+        return result
+    if cmdline_bytes == 0 and cmdline_hash != sha256_bytes(b""):
+        result["reason"] = "cmdline_empty_hash_mismatch"
         return result
 
     if exe_observation.get("status") == "VALUE":
@@ -736,7 +753,7 @@ def classify_process_observation(observation: dict[str, Any]) -> dict[str, Any]:
     if exe_observation.get("status") != "ENOENT":
         result["reason"] = f"exe_{exe_observation.get('status', 'MISSING').lower()}"
         return result
-    if kthread and not cmdline:
+    if kthread and cmdline_bytes == 0:
         result.update({
             "classification": PROVEN_NON_EXECUTING,
             "reason": "STABLE_KERNEL_THREAD",
