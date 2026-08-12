@@ -1,0 +1,70 @@
+{
+  "api_projection": {
+    "api_projection_sha256": "cfb6e65f15fe02008dbadf61fef6b18bea166382af5ff60b2b0957a52119d4a6",
+    "authority_envelope": "ROLLBACK_SEALED",
+    "authority_ready": false,
+    "baseline_restored": true,
+    "blocker": "post_install_stable_route_projection_mismatch_before_survival",
+    "capture_installed": false,
+    "dashboard_build": "2026.08.12-control-v17",
+    "diagnostic_causality": "PROXIMATE_ONLY_NOT_PROVED_CAUSE",
+    "rerun_allowed": false,
+    "s1c4_state": "CLOSED",
+    "scientific_authority": false,
+    "stage": "S1C-3G",
+    "startup_diagnostic": "response_authority_runtime_build_mismatch",
+    "verdict": "S1C3G_ROLLBACK_PASS"
+  },
+  "dashboard_source_commit": "54a2b2a69d9d0232150047b75f0e84e774160906",
+  "deployed_at": "2026-08-12T18:31:49Z",
+  "deployment_directory": "/var/lib/nando-wave/deployments/20260812T182750Z-54a2b2a69d9d-control-v17",
+  "installed": {
+    "gateway_control_sha256": "862c9587dab08c542c1a5effb5591fd8ef15a0b34e17ce253dfd73dd8923ae1e",
+    "sidecar_file_sha256": "375073f761d5b2eb4a5ef8609e96566075840f5be227d137214fae8120fe9753",
+    "terminal_status_root_sha256": "180ccb0e04748c9246a2d2316c85aa8b6aa6426ae8350576526dc8fc5c385745"
+  },
+  "receipt_root_sha256": "19a701ff78846e88ea77b769d42f7e91b8fe74168d7f8c7b40c986269fb2c2e3",
+  "runtime": {
+    "connector_pid": 2919,
+    "false_accepts": 0,
+    "gateway_control_pid_after": 986562,
+    "gateway_control_pid_before": 433679,
+    "nginx_pid": 682430,
+    "remote_service_restarts": 0,
+    "route_receipt_failures": 0,
+    "runtime_parity_failures": 0,
+    "transition_serving_pid": 950239
+  },
+  "schema": "nando.s1c3g-terminal-dashboard-deployment.v1",
+  "terminal_transaction_id": "20260812T180143Z-1369da0a49ef-s1c3g-v1",
+  "ui": {
+    "browser_tab_closed": true,
+    "console_or_page_errors": 0,
+    "desktop": {
+      "client_width": 1440,
+      "horizontal_overflow": false,
+      "screenshot_sha256": "1aafcc2aade0dd645de96e02b618d4b5975c09fcc281ca6050ca5910b15f68eb",
+      "viewport_height": 1000,
+      "viewport_width": 1440
+    },
+    "mobile": {
+      "client_width": 390,
+      "horizontal_overflow": false,
+      "screenshot_sha256": "9887eae58903f3513803caa153c86dadc61be9d46ed323839d88e07a0ccbf136",
+      "viewport_height": 844,
+      "viewport_width": 390
+    },
+    "required_terminal_labels_present": 4,
+    "required_terminal_labels_total": 4,
+    "visually_inspected": true
+  },
+  "verification": {
+    "cargo_fmt": "PASS",
+    "gateway_control_tests_passed": 58,
+    "gateway_control_tests_total": 58,
+    "git_diff_check": "PASS",
+    "strict_scoped_clippy": "PASS",
+    "structural_gate_routes_passed": 4,
+    "structural_gate_routes_total": 4
+  }
+}
