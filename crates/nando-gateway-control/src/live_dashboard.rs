@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.11-control-v12";
+const DASHBOARD_BUILD: &str = "2026.08.12-control-v13";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -343,6 +343,7 @@ const TEMPLATE: &str = r#"
 .control-v6 .law-verdict.good { color:var(--green); }
 .control-v6 .law-verdict.bad { color:var(--red); }
 .control-v6 .law-body { padding:18px 0 20px; }
+.control-v6 .operational-boundary { border-bottom:1px solid var(--line); }
 .control-v6 .law-counts { display:flex; flex-wrap:wrap; gap:7px 24px; margin:0; color:#c9cfd2; font-size:12px; line-height:1.5; }
 .control-v6 .law-counts span { white-space:nowrap; }
 .control-v6 .law-counts b { color:#f0f3f4; font-size:15px; font-weight:720; }
@@ -453,6 +454,16 @@ const TEMPLATE: &str = r#"
         <div class="law-title"><h2 id="k2-title">K2 · decision evidence</h2><span>S1A transition projection → S1B decision census</span></div>
         <strong id="decision-status" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
+      <div class="law-body operational-boundary" aria-label="S1C operational boundary">
+        <p class="discovery-label">S1C · operational capture</p>
+        <p class="law-counts vocabulary-slots">
+          <span>capture <b id="s1c-capture">—</b></span>
+          <span>V7 <b id="s1c-verdict">—</b></span>
+          <span>quiet streak <b id="s1c-streak">—</b></span>
+          <span>S1C-4 <b id="s1c4-state">—</b></span>
+        </p>
+        <p class="law-blocker"><span>Operational blocker:</span> <b id="s1c-blocker">—</b>.</p>
+      </div>
       <div class="law-body">
         <p class="law-counts vocabulary-slots">
           <span>durable CPU completions <b id="decision-scanned">—</b></span>
@@ -546,6 +557,7 @@ const TEMPLATE: &str = r#"
     const safety = snapshot.safety || {};
     const k1 = snapshot.k1 || {};
     const decision = snapshot.k2_decision_evidence || {};
+    const s1c = snapshot.s1c3_operational || {};
     sourceGeneratedAt = snapshot.generated_at_unix || 0;
 
     text("ingress-total", number.format(ingress.input_tokens || 0));
@@ -630,6 +642,14 @@ const TEMPLATE: &str = r#"
     text("decision-episodes", decisionAvailable ? number.format(decision.decision_episodes || 0) : "—");
     text("decision-stage", !decisionAvailable ? "UNKNOWN" : `S1A PASS · S1B ${readable(decision.verdict)}`);
     text("decision-blocker", readable(decision.blocker));
+    const s1cAvailable = s1c.available === true;
+    text("s1c-capture", s1cAvailable && s1c.capture_installed ? "INSTALLED" : "NOT INSTALLED");
+    text("s1c-verdict", s1cAvailable ? "TERMINAL TIMEOUT" : "STATUS UNAVAILABLE");
+    text("s1c-streak", s1cAvailable
+      ? `${number.format(s1c.longest_eligible_streaks?.["4"] || 0)}/${number.format(s1c.required_intervals || 0)} · ${number.format(s1c.longest_eligible_streaks?.["6"] || 0)}/${number.format(s1c.required_intervals || 0)}`
+      : "—");
+    text("s1c4-state", s1cAvailable && s1c.s1c4_started ? "STARTED" : "NOT STARTED");
+    text("s1c-blocker", s1cAvailable ? "mini-PC не дал 30 последовательных тихих интервалов за 1 800 с" : "status sidecar отсутствует или невалиден");
 
     const current = {
       ingressTokens: ingress.input_tokens || 0,
@@ -744,6 +764,12 @@ mod tests {
         assert!(html.contains("verified ordinary CPU"));
         assert!(html.contains("K2 · decision evidence"));
         assert!(html.contains("S1A transition projection → S1B decision census"));
+        assert!(html.contains("S1C · operational capture"));
+        assert!(html.contains("id=\"s1c-capture\""));
+        assert!(html.contains("id=\"s1c-verdict\""));
+        assert!(html.contains("id=\"s1c-streak\""));
+        assert!(html.contains("id=\"s1c4-state\""));
+        assert!(html.contains("id=\"s1c-blocker\""));
         assert!(html.contains("id=\"decision-scanned\""));
         assert!(html.contains("id=\"decision-projected\""));
         assert!(html.contains("id=\"transition-censors\""));

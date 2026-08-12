@@ -1563,6 +1563,7 @@ async fn control_dashboard_snapshot(
     let persisted_miner = read_json(&state.config.response_online_miner_report_path);
     let response_registry = read_json(&state.config.response_registry_path);
     let grounded_decision_census = read_json(&state.config.grounded_decision_census_path);
+    let s1c3_operational_status = read_json(&state.config.s1c3_operational_status_path);
     let structural_frontier_census =
         read_json(std::path::Path::new(STRUCTURAL_FRONTIER_CENSUS_PATH));
     let natural_vocabulary_census = if structural_frontier_census
@@ -1688,6 +1689,7 @@ async fn control_dashboard_snapshot(
             },
             "k1": k1_gate,
             "k2_decision_evidence": grounded_decision_snapshot(&grounded_decision_census),
+            "s1c3_operational": s1c3_operational_snapshot(&s1c3_operational_status),
             "safety": {
                 "cpu_allowed": admission.cpu_allowed,
                 "services_active": bridge.services_active,
@@ -1865,6 +1867,66 @@ fn grounded_decision_snapshot(report: &Value) -> Value {
         "model_training_allowed": census.model_training_allowed,
         "authority_ready": census.authority_ready,
         "phase_mutation_allowed": census.phase_mutation_allowed,
+    })
+}
+
+fn s1c3_operational_snapshot(report: &Value) -> Value {
+    let valid = report.get("schema").and_then(Value::as_str)
+        == Some("nando.s1c3-operational-status.v1")
+        && report.get("transaction_id").and_then(Value::as_str)
+            == Some("20260812T051022Z-75223baaa495-s1c3v7")
+        && report.get("verdict").and_then(Value::as_str)
+            == Some("INVALID_ENVIRONMENT_QUIESCENCE_TIMEOUT")
+        && report.get("blocker").and_then(Value::as_str) == Some("quiescence_window_not_observed")
+        && report.get("quiescence_root_sha256").and_then(Value::as_str)
+            == Some("726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b")
+        && report.get("capture_installed").and_then(Value::as_bool) == Some(false)
+        && report.get("s1c4_started").and_then(Value::as_bool) == Some(false)
+        && report.get("authority_ready").and_then(Value::as_bool) == Some(false)
+        && report
+            .get("model_training_allowed")
+            .and_then(Value::as_bool)
+            == Some(false)
+        && report
+            .get("phase_mutation_allowed")
+            .and_then(Value::as_bool)
+            == Some(false)
+        && report.get("attempted_intervals").and_then(Value::as_u64) == Some(1_750)
+        && report
+            .pointer("/longest_eligible_streaks/4")
+            .and_then(Value::as_u64)
+            == Some(14)
+        && report
+            .pointer("/longest_eligible_streaks/6")
+            .and_then(Value::as_u64)
+            == Some(16)
+        && report.get("required_intervals").and_then(Value::as_u64) == Some(30);
+    if !valid {
+        return json!({
+            "available": false,
+            "capture_installed": false,
+            "s1c4_started": false,
+            "authority_ready": false,
+            "model_training_allowed": false,
+            "phase_mutation_allowed": false,
+            "verdict": "STATUS_UNAVAILABLE",
+            "blocker": "s1c3_operational_status_missing_or_invalid",
+        });
+    }
+    json!({
+        "available": true,
+        "transaction_id": report.get("transaction_id"),
+        "verdict": report.get("verdict"),
+        "blocker": report.get("blocker"),
+        "capture_installed": false,
+        "s1c4_started": false,
+        "authority_ready": false,
+        "model_training_allowed": false,
+        "phase_mutation_allowed": false,
+        "attempted_intervals": 1_750,
+        "required_intervals": 30,
+        "longest_eligible_streaks": {"4": 14, "6": 16},
+        "quiescence_root_sha256": "726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b",
     })
 }
 
@@ -2478,6 +2540,64 @@ mod tests {
         let snapshot = grounded_decision_snapshot(&report);
         assert_eq!(snapshot["available"], false);
         assert_eq!(snapshot["verdict"], "REPORT_UNAVAILABLE");
+    }
+
+    #[test]
+    fn dashboard_s1c3_status_is_exact_and_fail_closed() {
+        let report = json!({
+            "schema": "nando.s1c3-operational-status.v1",
+            "transaction_id": "20260812T051022Z-75223baaa495-s1c3v7",
+            "verdict": "INVALID_ENVIRONMENT_QUIESCENCE_TIMEOUT",
+            "blocker": "quiescence_window_not_observed",
+            "quiescence_root_sha256": "726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b",
+            "capture_installed": false,
+            "s1c4_started": false,
+            "authority_ready": false,
+            "model_training_allowed": false,
+            "phase_mutation_allowed": false,
+            "attempted_intervals": 1_750,
+            "required_intervals": 30,
+            "longest_eligible_streaks": {"4": 14, "6": 16},
+        });
+        let snapshot = s1c3_operational_snapshot(&report);
+        assert_eq!(snapshot["available"], true);
+        assert_eq!(snapshot["capture_installed"], false);
+        assert_eq!(snapshot["s1c4_started"], false);
+        assert_eq!(snapshot["authority_ready"], false);
+
+        let mut forged = report;
+        forged["capture_installed"] = json!(true);
+        let rejected = s1c3_operational_snapshot(&forged);
+        assert_eq!(rejected["available"], false);
+        assert_eq!(rejected["capture_installed"], false);
+        assert_eq!(rejected["authority_ready"], false);
+
+        let mut forged = json!({
+            "schema": "nando.s1c3-operational-status.v1",
+            "transaction_id": "20260812T051022Z-75223baaa495-s1c3v7",
+            "verdict": "INVALID_ENVIRONMENT_QUIESCENCE_TIMEOUT",
+            "blocker": "latency_budget_exceeded",
+            "quiescence_root_sha256": "726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b",
+            "capture_installed": false,
+            "s1c4_started": false,
+            "authority_ready": false,
+            "model_training_allowed": false,
+            "phase_mutation_allowed": false,
+            "attempted_intervals": 1_750,
+            "required_intervals": 30,
+            "longest_eligible_streaks": {"4": 14, "6": 16},
+        });
+        let rejected = s1c3_operational_snapshot(&forged);
+        assert_eq!(rejected["available"], false);
+        assert_eq!(
+            rejected["blocker"],
+            "s1c3_operational_status_missing_or_invalid"
+        );
+
+        forged["blocker"] = json!("quiescence_window_not_observed");
+        let accepted = s1c3_operational_snapshot(&forged);
+        assert_eq!(accepted["available"], true);
+        assert_eq!(accepted["blocker"], "quiescence_window_not_observed");
     }
 
     #[test]

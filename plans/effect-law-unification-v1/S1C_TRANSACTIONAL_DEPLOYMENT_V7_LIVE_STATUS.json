@@ -1,0 +1,18 @@
+{
+  "attempted_intervals": 1750,
+  "authority_ready": false,
+  "blocker": "quiescence_window_not_observed",
+  "capture_installed": false,
+  "longest_eligible_streaks": {
+    "4": 14,
+    "6": 16
+  },
+  "model_training_allowed": false,
+  "phase_mutation_allowed": false,
+  "quiescence_root_sha256": "726724ff42450f52951ff6b066028aa0e226ce150e4f015f935f81d211a3e32b",
+  "required_intervals": 30,
+  "s1c4_started": false,
+  "schema": "nando.s1c3-operational-status.v1",
+  "transaction_id": "20260812T051022Z-75223baaa495-s1c3v7",
+  "verdict": "INVALID_ENVIRONMENT_QUIESCENCE_TIMEOUT"
+}
