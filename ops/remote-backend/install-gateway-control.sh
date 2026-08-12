@@ -2,8 +2,10 @@
 set -euo pipefail
 
 BINARY_SOURCE=""
+SIDECAR_SOURCE=""
 SERVICE="${NANDO_GATEWAY_CONTROL_SERVICE:-nando-gateway-control.service}"
 INSTALL_BINARY="${NANDO_GATEWAY_CONTROL_BINARY:-/opt/nando-wave/bin/nando-gateway-control}"
+INSTALL_SIDECAR="${NANDO_S1C3_OPERATIONAL_STATUS_JSON:-/var/lib/nando-wave/transition/grounded-meaning-v1/s1c3-operational-status-v1.json}"
 CONTROL_HEALTH="${NANDO_GATEWAY_CONTROL_HEALTH:-http://127.0.0.1:18788/health}"
 HOT_HEALTH="${NANDO_GATEWAY_CONTROL_HOT_HEALTH:-http://127.0.0.1:18789/health}"
 EDGE_HEALTH="${NANDO_GATEWAY_CONTROL_EDGE_HEALTH:-http://192.168.3.94:8787/health}"
@@ -16,7 +18,8 @@ Transactionally replace the remote Nando gateway-control binary.
 
 Usage:
   ops/remote-backend/install-gateway-control.sh \
-    --binary /path/to/nando-gateway-control
+    --binary /path/to/nando-gateway-control \
+    [--sidecar /path/to/s1c3-operational-status-v1.json]
 
 The data-plane Nginx and hot serving services are never restarted.
 EOF
@@ -26,6 +29,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --binary)
       BINARY_SOURCE="${2:-}"
+      shift 2
+      ;;
+    --sidecar)
+      SIDECAR_SOURCE="${2:-}"
       shift 2
       ;;
     --help)
@@ -48,6 +55,10 @@ if [[ ! -f "${INSTALL_BINARY}" ]]; then
   printf 'installed gateway-control binary is missing: %s\n' "${INSTALL_BINARY}" >&2
   exit 2
 fi
+if [[ -n "${SIDECAR_SOURCE}" && ! -f "${SIDECAR_SOURCE}" ]]; then
+  printf 'S1C operational sidecar is missing: %s\n' "${SIDECAR_SOURCE}" >&2
+  exit 2
+fi
 if ! sudo -n true; then
   printf 'passwordless sudo is required\n' >&2
   exit 2
@@ -56,6 +67,9 @@ fi
 work="$(mktemp -d)"
 candidate_binary="${work}/nando-gateway-control"
 backup_binary="${work}/previous-binary"
+candidate_sidecar="${work}/s1c3-operational-status-v1.json"
+backup_sidecar="${work}/previous-sidecar"
+sidecar_was_present=0
 control_was_active=0
 rollback_armed=0
 
@@ -70,6 +84,11 @@ rollback() {
   if [[ "${rollback_armed}" == "1" ]]; then
     sudo -n systemctl stop "${SERVICE}"
     sudo -n install -m 0755 "${backup_binary}" "${INSTALL_BINARY}"
+    if [[ "${sidecar_was_present}" == "1" ]]; then
+      sudo -n install -m 0644 "${backup_sidecar}" "${INSTALL_SIDECAR}"
+    elif [[ -n "${SIDECAR_SOURCE}" ]]; then
+      sudo -n rm -f "${INSTALL_SIDECAR}"
+    fi
     if [[ "${control_was_active}" == "1" ]]; then
       sudo -n systemctl start "${SERVICE}"
     fi
@@ -89,12 +108,23 @@ curl -fsS --max-time 2 "${EDGE_HEALTH}" |
   jq -e '.ok == true and .service == "nando-nginx-gateway"' >/dev/null
 install -m 0755 "${BINARY_SOURCE}" "${candidate_binary}"
 cp -a "${INSTALL_BINARY}" "${backup_binary}"
+if [[ -n "${SIDECAR_SOURCE}" ]]; then
+  install -m 0644 "${SIDECAR_SOURCE}" "${candidate_sidecar}"
+  if [[ -f "${INSTALL_SIDECAR}" ]]; then
+    cp -a "${INSTALL_SIDECAR}" "${backup_sidecar}"
+    sidecar_was_present=1
+  fi
+fi
 if systemctl is-active --quiet "${SERVICE}"; then
   control_was_active=1
   sudo -n systemctl stop "${SERVICE}"
 fi
 
 rollback_armed=1
+if [[ -n "${SIDECAR_SOURCE}" ]]; then
+  sudo -n install -m 0644 "${candidate_sidecar}" "${INSTALL_SIDECAR}.candidate.$$"
+  sudo -n mv -f "${INSTALL_SIDECAR}.candidate.$$" "${INSTALL_SIDECAR}"
+fi
 sudo -n install -m 0755 "${candidate_binary}" "${INSTALL_BINARY}.candidate.$$"
 sudo -n mv -f "${INSTALL_BINARY}.candidate.$$" "${INSTALL_BINARY}"
 sudo -n systemctl start "${SERVICE}"

@@ -1,0 +1,69 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "s1c3h-terminal-state",
+      "kind": "file",
+      "mode": "0400",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3H_LIVE_PROJECTION_V1/../S1C3H_CAPTURE_INSTALLATION_ATTEMPT_V1/20260812T222900Z-6f83abf21c24-s1c3h-v1/remote-mirror/s1c3h-state.json",
+      "sha256": "9bf69487a7ec765dd985da531572c5bd75d5b4bb26739b4552ad51c2dafda176",
+      "size_bytes": 500
+    },
+    {
+      "exists": true,
+      "id": "gateway-parser-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3H_LIVE_PROJECTION_V1/../../../../crates/nando-gateway-control/src/main.rs",
+      "sha256": "a487b8652a129f2582e77c86ee40908a9d9ff5b7c4a43f71879fcbd6887a481d",
+      "size_bytes": 144133
+    },
+    {
+      "exists": true,
+      "id": "dashboard-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3H_LIVE_PROJECTION_V1/../../../../crates/nando-gateway-control/src/live_dashboard.rs",
+      "sha256": "db0ca8414fef548e388ce04b563a75bfff1194f648ac9a1a460bd224f4a0850d",
+      "size_bytes": 48520
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 3,
+    "forbidden_side_effect_kinds": [
+      "connector_restart",
+      "decision_journal_write",
+      "generated_traffic",
+      "k2_authority",
+      "model_training",
+      "nginx_restart",
+      "phase_mutation",
+      "synthetic_fixture",
+      "transition_restart"
+    ],
+    "identity_contracts": 1,
+    "invariants": 2,
+    "planned_side_effect_kinds": [
+      "atomic_filesystem_replace",
+      "control_plane_restart",
+      "rollback_capable_binary_replace"
+    ],
+    "preserved_artifacts": 1,
+    "runtime_comparisons": 1,
+    "source_checks": 0,
+    "tests": 6
+  },
+  "manifest_sha256": "d296130e0099fb055b1e7d439df03d95902768da56ba2c2cb8d66ba7bbaa28c2",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [],
+  "task_id": "s1c3h-live-projection-v1",
+  "verdict": "READY_TO_IMPLEMENT"
+}

@@ -1,0 +1,144 @@
+{
+  "authority_bearing": true,
+  "baseline_checks": [
+    {
+      "expect": {
+        "mode": "0400",
+        "sha256": "9bf69487a7ec765dd985da531572c5bd75d5b4bb26739b4552ad51c2dafda176",
+        "size_bytes": 500
+      },
+      "id": "s1c3h-terminal-state",
+      "kind": "file",
+      "path": "../S1C3H_CAPTURE_INSTALLATION_ATTEMPT_V1/20260812T222900Z-6f83abf21c24-s1c3h-v1/remote-mirror/s1c3h-state.json"
+    },
+    {
+      "expect": {
+        "mode": "0664",
+        "sha256": "a487b8652a129f2582e77c86ee40908a9d9ff5b7c4a43f71879fcbd6887a481d",
+        "size_bytes": 144133
+      },
+      "id": "gateway-parser-source",
+      "kind": "file",
+      "path": "../../../../crates/nando-gateway-control/src/main.rs"
+    },
+    {
+      "expect": {
+        "mode": "0664",
+        "sha256": "db0ca8414fef548e388ce04b563a75bfff1194f648ac9a1a460bd224f4a0850d",
+        "size_bytes": 48520
+      },
+      "id": "dashboard-source",
+      "kind": "file",
+      "path": "../../../../crates/nando-gateway-control/src/live_dashboard.rs"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "comparison": "exact rooted state fields and canonical SHA-256",
+      "consumer": "gateway control S1C projection",
+      "id": "terminal-state-parser-parity",
+      "producer": "independently verified S1C-3H terminal state",
+      "test_id": "forged-state-rejected"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "no-scientific-promotion",
+      "statement": "capture installation opens only S1C-4 COLLECTING and keeps K2 scientific authority false",
+      "test_id": "claim-boundary"
+    },
+    {
+      "id": "data-plane-preserved",
+      "statement": "control-plane deployment preserves transition Nginx connector and journal",
+      "test_id": "runtime-survival"
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "baseline_check_id": "s1c3h-terminal-state",
+      "cursor_policy": "immutable_terminal_state",
+      "id": "terminal-state",
+      "path": "plans/effect-law-unification-v1/evidence/S1C3H_CAPTURE_INSTALLATION_ATTEMPT_V1/20260812T222900Z-6f83abf21c24-s1c3h-v1/remote-mirror/s1c3h-state.json",
+      "policy": "immutable",
+      "rollback_policy": "preserve_exact_bytes"
+    }
+  ],
+  "reuses_existing_implementation": false,
+  "runtime_comparisons": [
+    {
+      "comparison": "exact_stable_projection",
+      "id": "control-plane-runtime",
+      "observed_not_compared_fields": ["observation_timestamp"],
+      "reason": "only gateway-control and the status sidecar belong to this deployment",
+      "source": "remote service, connector, journal, and safety snapshots",
+      "stable_fields": ["transition_main_pid", "transition_nrestarts", "nginx_pid", "connector_pid", "connector_nrestarts", "journal_manifest_root", "false_accepts", "runtime_parity_failures"],
+      "expected_to_change_fields": ["gateway_control_main_pid", "gateway_control_binary_sha256", "s1c3_operational_status_sha256"],
+      "test_id": "runtime-survival"
+    }
+  ],
+  "schema": "nanda.implementation-preflight.v1",
+  "scientific_future_sensitive": true,
+  "side_effects": {
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "decision_journal_write",
+      "transition_restart",
+      "nginx_restart",
+      "connector_restart",
+      "model_training",
+      "phase_mutation",
+      "k2_authority"
+    ],
+    "planned": [
+      {"id": "install-sidecar", "kind": "atomic_filesystem_replace"},
+      {"id": "install-control", "kind": "rollback_capable_binary_replace"},
+      {"id": "restart-control", "kind": "control_plane_restart"}
+    ]
+  },
+  "state_machine": {
+    "initial_state": "BASELINE",
+    "steps": [
+      {
+        "cleanup": "remove_staged_files",
+        "failure_state": "PREPARE_FAILED",
+        "from": "BASELINE",
+        "id": "prepare",
+        "mutates": false,
+        "preserves": ["terminal-state"],
+        "test_id": "prepare-fault",
+        "to": "PREPARED"
+      },
+      {
+        "cleanup": "restore_previous_sidecar_and_control_binary",
+        "failure_state": "ROLLED_BACK",
+        "from": "PREPARED",
+        "id": "install",
+        "mutates": true,
+        "preserves": ["terminal-state"],
+        "test_id": "install-fault",
+        "to": "INSTALLED"
+      },
+      {
+        "cleanup": "restore_previous_sidecar_and_control_binary",
+        "failure_state": "ROLLED_BACK",
+        "from": "INSTALLED",
+        "id": "verify",
+        "mutates": true,
+        "preserves": ["terminal-state"],
+        "test_id": "verify-fault",
+        "to": "PASS"
+      }
+    ],
+    "terminal_states": ["PASS", "PREPARE_FAILED", "ROLLED_BACK"]
+  },
+  "task_id": "s1c3h-live-projection-v1",
+  "tests": [
+    {"expected": "no runtime mutation", "id": "prepare-fault", "kind": "fault_injection"},
+    {"expected": "previous sidecar and binary restored", "id": "install-fault", "kind": "fault_injection"},
+    {"expected": "failed API projection restores previous sidecar and binary", "id": "verify-fault", "kind": "fault_injection"},
+    {"expected": "any changed rooted field returns STATUS_UNAVAILABLE", "id": "forged-state-rejected", "kind": "parity"},
+    {"expected": "S1C-4 COLLECTING and K2 CLOSED are separate", "id": "claim-boundary", "kind": "parity"},
+    {"expected": "data-plane PIDs and safety counters survive", "id": "runtime-survival", "kind": "parity"}
+  ]
+}

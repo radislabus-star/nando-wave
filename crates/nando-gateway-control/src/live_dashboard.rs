@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.12-control-v17";
+const DASHBOARD_BUILD: &str = "2026.08.13-control-v18";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -451,7 +451,7 @@ const TEMPLATE: &str = r#"
 
     <section class="law" aria-labelledby="k2-title">
       <div class="law-head">
-        <div class="law-title"><h2 id="k2-title">K2 · decision evidence</h2><span>S1A transition projection → S1B decision census</span></div>
+        <div class="law-title"><h2 id="k2-title">K2 · grounded decision meaning</h2><span>S1A transitions → S1B census → S1C natural decisions</span></div>
         <strong id="decision-status" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
       <div class="law-body operational-boundary" aria-label="S1C operational boundary">
@@ -462,6 +462,7 @@ const TEMPLATE: &str = r#"
           <span>production <b id="s1c-production">—</b></span>
           <span>authority envelope <b id="s1c-authority-envelope">—</b></span>
           <span>S1C-4 <b id="s1c4-state">—</b></span>
+          <span>natural records <b id="s1c-natural-records">—</b></span>
         </p>
         <p class="law-blocker"><span>Terminal boundary:</span> <b id="s1c-blocker">—</b>.</p>
       </div>
@@ -542,7 +543,12 @@ const TEMPLATE: &str = r#"
     READY_FOR_BASELINES:"READY FOR BASELINES",
     REPORT_UNAVAILABLE:"REPORT UNAVAILABLE",
     S1C3G_ROLLBACK_PASS:"ROLLBACK PASS",
+    S1C3H_DEPLOYMENT_PASS:"DEPLOYMENT PASS",
     ROLLBACK_SEALED:"ROLLBACK SEALED",
+    INSTALLATION_VERIFIED:"INSTALLATION VERIFIED",
+    RECORDER_ACTIVE:"RECORDER ACTIVE",
+    COLLECTING:"COLLECTING",
+    awaiting_natural_decision_evidence:"ждём естественные решения после установки",
     post_install_stable_route_projection_mismatch_before_survival:"stable route projection mismatch до survival",
     response_authority_runtime_build_mismatch:"runtime build mismatch при старте",
     PROXIMATE_ONLY_NOT_PROVED_CAUSE:"сопутствующая диагностика, причина не доказана",
@@ -629,8 +635,10 @@ const TEMPLATE: &str = r#"
 
     const decisionAvailable = decision.available === true;
     const decisionReady = decision.verdict === "READY_FOR_BASELINES";
-    text("decision-status", !decisionAvailable ? "REPORT UNAVAILABLE" : decisionReady ? "READY FOR BASELINES" : "DYNAMICS ONLY");
-    className("decision-status", `law-verdict ${!decisionAvailable ? "bad" : decisionReady ? "good" : ""}`);
+    const s1cAvailable = s1c.available === true;
+    const s1cCollecting = s1cAvailable && s1c.capture_installed && s1c.s1c4_state === "COLLECTING";
+    text("decision-status", s1cCollecting ? "K2 CLOSED" : !decisionAvailable ? "REPORT UNAVAILABLE" : decisionReady ? "READY FOR BASELINES" : "DYNAMICS ONLY");
+    className("decision-status", `law-verdict ${!s1cCollecting && !decisionAvailable ? "bad" : !s1cCollecting && decisionReady ? "good" : ""}`);
     text("decision-scanned", decisionAvailable ? number.format(decision.transition_rows_scanned || 0) : "—");
     text("decision-projected", decisionAvailable ? number.format(decision.transition_rows_projected || 0) : "—");
     text("transition-lineages", decisionAvailable ? number.format(decision.distinct_transition_lineages || 0) : "—");
@@ -646,14 +654,15 @@ const TEMPLATE: &str = r#"
     text("decision-horizons", decisionAvailable ? number.format(decision.horizon_bound || 0) : "—");
     text("decision-satisfaction", decisionAvailable ? number.format(decision.satisfaction_verifiable || 0) : "—");
     text("decision-episodes", decisionAvailable ? number.format(decision.decision_episodes || 0) : "—");
-    text("decision-stage", !decisionAvailable ? "UNKNOWN" : `S1A PASS · S1B ${readable(decision.verdict)}`);
-    text("decision-blocker", readable(decision.blocker));
-    const s1cAvailable = s1c.available === true;
+    text("decision-stage", s1cCollecting ? "S1C-4 COLLECTING · K2 CLOSED" : !decisionAvailable ? "UNKNOWN" : `S1A PASS · S1B ${readable(decision.verdict)}`);
+    text("decision-blocker", s1cCollecting ? readable(s1c.blocker) : readable(decision.blocker));
     text("s1c-stage", s1cAvailable ? readable(s1c.stage) : "S1C");
     text("s1c-capture", s1cAvailable && s1c.capture_installed ? "INSTALLED" : "NOT INSTALLED");
     text("s1c-verdict", s1cAvailable ? readable(s1c.verdict) : "STATUS UNAVAILABLE");
     text("s1c-production", !s1cAvailable
       ? "UNKNOWN"
+      : s1c.production_state
+        ? readable(s1c.production_state)
       : s1c.baseline_restored
         ? "BASELINE RESTORED"
         : s1c.production_mutation
@@ -661,8 +670,11 @@ const TEMPLATE: &str = r#"
           : "UNCHANGED");
     text("s1c-authority-envelope", s1cAvailable ? readable(s1c.authority_envelope) : "UNKNOWN");
     text("s1c4-state", s1cAvailable ? readable(s1c.s1c4_state || (s1c.s1c4_started ? "STARTED" : "CLOSED")) : "UNKNOWN");
+    text("s1c-natural-records", s1cAvailable ? number.format(s1c.natural_record_count || 0) : "—");
     text("s1c-blocker", s1cAvailable
-      ? `${readable(s1c.blocker)}${s1c.startup_diagnostic ? ` · ${readable(s1c.startup_diagnostic)} (${readable(s1c.diagnostic_causality)})` : ""} · capture not installed · attempt consumed`
+      ? s1c.capture_installed
+        ? `${readable(s1c.blocker)} · natural records ${number.format(s1c.natural_record_count || 0)} · K2 CLOSED`
+        : `${readable(s1c.blocker)}${s1c.startup_diagnostic ? ` · ${readable(s1c.startup_diagnostic)} (${readable(s1c.diagnostic_causality)})` : ""} · capture not installed · attempt consumed`
       : "status sidecar отсутствует или невалиден");
 
     const current = {
@@ -776,16 +788,19 @@ mod tests {
         assert!(html.contains("id=\"current-blocker\""));
         assert!(html.contains("id=\"latest-verdict\""));
         assert!(html.contains("verified ordinary CPU"));
-        assert!(html.contains("K2 · decision evidence"));
-        assert!(html.contains("S1A transition projection → S1B decision census"));
+        assert!(html.contains("K2 · grounded decision meaning"));
+        assert!(html.contains("S1A transitions → S1B census → S1C natural decisions"));
         assert!(html.contains("id=\"s1c-stage\""));
         assert!(html.contains("id=\"s1c-capture\""));
         assert!(html.contains("id=\"s1c-verdict\""));
         assert!(html.contains("id=\"s1c-production\""));
         assert!(html.contains("id=\"s1c-authority-envelope\""));
         assert!(html.contains("id=\"s1c4-state\""));
+        assert!(html.contains("id=\"s1c-natural-records\""));
         assert!(html.contains("id=\"s1c-blocker\""));
         assert!(html.contains("S1C3G_ROLLBACK_PASS"));
+        assert!(html.contains("S1C3H_DEPLOYMENT_PASS"));
+        assert!(html.contains("K2 CLOSED"));
         assert!(html.contains("BASELINE RESTORED"));
         assert!(html.contains("attempt consumed"));
         assert!(html.contains("id=\"decision-scanned\""));

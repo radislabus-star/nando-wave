@@ -1970,7 +1970,22 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
             .get("terminal_status_root_sha256")
             .and_then(Value::as_str)
             == Some("180ccb0e04748c9246a2d2316c85aa8b6aa6426ae8350576526dc8fc5c385745");
-    if !legacy_valid && !s1c3g_valid {
+    let s1c3h_valid = rooted_json_matches_with_newline(report, "state_root_sha256")
+        && report.get("schema").and_then(Value::as_str) == Some("nando.s1c3h-state.v1")
+        && report.get("state").and_then(Value::as_str) == Some("COMPLETE")
+        && report.get("transaction_id").and_then(Value::as_str)
+            == Some("20260812T222900Z-6f83abf21c24-s1c3h-v1")
+        && report.get("verdict").and_then(Value::as_str) == Some("S1C3H_DEPLOYMENT_PASS")
+        && report.get("capture_installed").and_then(Value::as_bool) == Some(true)
+        && report.get("natural_record_count").and_then(Value::as_u64) == Some(0)
+        && report.get("scientific_authority").and_then(Value::as_bool) == Some(false)
+        && report.get("receipt_root_sha256").and_then(Value::as_str)
+            == Some("0647e5a6b96ffff8addb44f2bd6f57fa389aeca5a00cb7cc9a615837858dff3a")
+        && report
+            .get("final_verification_root_sha256")
+            .and_then(Value::as_str)
+            == Some("a124be09017176cb32e786ec64d0782f3c864cf4fcc9179d609f88a246340297");
+    if !legacy_valid && !s1c3g_valid && !s1c3h_valid {
         return json!({
             "available": false,
             "capture_installed": false,
@@ -1980,6 +1995,33 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
             "phase_mutation_allowed": false,
             "verdict": "STATUS_UNAVAILABLE",
             "blocker": "s1c3_operational_status_missing_or_invalid",
+        });
+    }
+    if s1c3h_valid {
+        return json!({
+            "available": true,
+            "stage": "S1C-3H",
+            "transaction_id": report.get("transaction_id"),
+            "verdict": report.get("verdict"),
+            "blocker": "awaiting_natural_decision_evidence",
+            "capture_installed": true,
+            "natural_record_count": report.get("natural_record_count"),
+            "production_mutation": true,
+            "baseline_restored": false,
+            "production_state": "RECORDER_ACTIVE",
+            "attempt_consumed": true,
+            "authority_envelope": "INSTALLATION_VERIFIED",
+            "s1c4_started": true,
+            "s1c4_state": "COLLECTING",
+            "s2_started": false,
+            "authority_ready": false,
+            "scientific_authority": false,
+            "model_training_allowed": false,
+            "phase_mutation_allowed": false,
+            "rerun_allowed": false,
+            "state_root_sha256": report.get("state_root_sha256"),
+            "receipt_root_sha256": report.get("receipt_root_sha256"),
+            "final_verification_root_sha256": report.get("final_verification_root_sha256"),
         });
     }
     if s1c3g_valid {
@@ -2052,6 +2094,22 @@ fn rooted_json_matches(value: &Value, root_field: &str) -> bool {
     let Ok(bytes) = serde_json::to_vec(&rooted) else {
         return false;
     };
+    format!("{:x}", Sha256::digest(bytes)) == expected
+}
+
+fn rooted_json_matches_with_newline(value: &Value, root_field: &str) -> bool {
+    let Some(expected) = value.get(root_field).and_then(Value::as_str) else {
+        return false;
+    };
+    let mut rooted = value.clone();
+    let Some(object) = rooted.as_object_mut() else {
+        return false;
+    };
+    object.remove(root_field);
+    let Ok(mut bytes) = serde_json::to_vec(&rooted) else {
+        return false;
+    };
+    bytes.push(b'\n');
     format!("{:x}", Sha256::digest(bytes)) == expected
 }
 
@@ -2801,6 +2859,42 @@ mod tests {
         let rejected = s1c3_operational_snapshot(&forged);
         assert_eq!(rejected["available"], false);
         assert_eq!(rejected["authority_ready"], false);
+    }
+
+    #[test]
+    fn dashboard_s1c3h_installation_opens_collection_without_k2_authority() {
+        let report = json!({
+            "capture_installed": true,
+            "final_verification_root_sha256": "a124be09017176cb32e786ec64d0782f3c864cf4fcc9179d609f88a246340297",
+            "natural_record_count": 0,
+            "receipt_root_sha256": "0647e5a6b96ffff8addb44f2bd6f57fa389aeca5a00cb7cc9a615837858dff3a",
+            "schema": "nando.s1c3h-state.v1",
+            "scientific_authority": false,
+            "state": "COMPLETE",
+            "state_root_sha256": "b708ae7be933eb2ab83ea945998b8db57d9fd27d75d0393727cff505dfd7ee17",
+            "transaction_id": "20260812T222900Z-6f83abf21c24-s1c3h-v1",
+            "verdict": "S1C3H_DEPLOYMENT_PASS",
+        });
+        let snapshot = s1c3_operational_snapshot(&report);
+        assert_eq!(snapshot["available"], true);
+        assert_eq!(snapshot["stage"], "S1C-3H");
+        assert_eq!(snapshot["capture_installed"], true);
+        assert_eq!(snapshot["natural_record_count"], 0);
+        assert_eq!(snapshot["s1c4_state"], "COLLECTING");
+        assert_eq!(snapshot["authority_ready"], false);
+        assert_eq!(snapshot["scientific_authority"], false);
+
+        let mut forged = report;
+        forged["natural_record_count"] = json!(1);
+        let rejected = s1c3_operational_snapshot(&forged);
+        assert_eq!(rejected["available"], false);
+        assert_eq!(rejected["capture_installed"], false);
+        assert_eq!(rejected["authority_ready"], false);
+
+        forged["natural_record_count"] = json!(0);
+        forged["state_root_sha256"] = json!("0".repeat(64));
+        let rejected = s1c3_operational_snapshot(&forged);
+        assert_eq!(rejected["available"], false);
     }
 
     #[test]
