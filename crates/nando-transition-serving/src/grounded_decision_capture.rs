@@ -776,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "isolated remote release S1C-2 three-ledger sync resource gate"]
+    #[ignore = "isolated remote release S1C-3 stage-correct sync resource gate"]
     fn three_ledger_sync_path_stays_within_eligible_budget() {
         const RECORDS: usize = 256;
         let root_dir = temp_directory("three-ledger-sync-gate");
@@ -786,25 +786,56 @@ mod tests {
             GROUNDED_DECISION_PRECOMMIT_QUOTA_BYTES_V1,
         )
         .expect("journal");
-        let mut samples = Vec::with_capacity(RECORDS);
+        let mut precommit_samples = Vec::with_capacity(RECORDS);
+        let mut settlement_samples = Vec::with_capacity(RECORDS);
+        let mut episode_samples = Vec::with_capacity(RECORDS);
         for index in 0..RECORDS {
             let sequence = 10_000_u64.saturating_add((index as u64).saturating_mul(10));
             let (precommit, selected, satisfaction) = joined_records(sequence);
-            let started = Instant::now();
+            let episode_started = Instant::now();
+            let precommit_started = Instant::now();
             journal.append_precommit(&precommit).expect("precommit");
+            precommit_samples.push(precommit_started.elapsed().as_nanos());
+            let settlement_started = Instant::now();
             journal.append_selected_action(&selected).expect("selected");
             journal
                 .append_goal_satisfaction(&satisfaction)
                 .expect("satisfaction");
-            samples.push(started.elapsed().as_nanos());
+            settlement_samples.push(settlement_started.elapsed().as_nanos());
+            episode_samples.push(episode_started.elapsed().as_nanos());
         }
-        let p99 = percentile_ns(&samples, 99);
-        let hard_max = samples.iter().copied().max().unwrap_or(u128::MAX);
-        println!("S1C2_SYNC_LATENCY p99_ns={p99} hard_max_ns={hard_max} records={RECORDS}");
-        assert!(p99 <= 5_000_000, "three-ledger sync p99 exceeded 5 ms");
+        let precommit_p99 = percentile_ns(&precommit_samples, 99);
+        let precommit_hard_max = precommit_samples.iter().copied().max().unwrap_or(u128::MAX);
+        let settlement_p99 = percentile_ns(&settlement_samples, 99);
+        let settlement_hard_max = settlement_samples
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(u128::MAX);
+        let episode_p99 = percentile_ns(&episode_samples, 99);
+        let episode_hard_max = episode_samples.iter().copied().max().unwrap_or(u128::MAX);
+        println!(
+            "S1C3_STAGE_SYNC_LATENCY precommit_p99_ns={precommit_p99} precommit_hard_max_ns={precommit_hard_max} settlement_p99_ns={settlement_p99} settlement_hard_max_ns={settlement_hard_max} episode_p99_ns={episode_p99} episode_hard_max_ns={episode_hard_max} records={RECORDS}"
+        );
         assert!(
-            hard_max <= 20_000_000,
-            "three-ledger sync hard ceiling exceeded 20 ms"
+            precommit_p99 <= 5_000_000,
+            "precommit sync p99 exceeded 5 ms"
+        );
+        assert!(
+            precommit_hard_max <= 20_000_000,
+            "precommit sync hard ceiling exceeded 20 ms"
+        );
+        assert!(
+            settlement_p99 <= 5_000_000,
+            "settlement sync p99 exceeded 5 ms"
+        );
+        assert!(
+            settlement_hard_max <= 20_000_000,
+            "settlement sync hard ceiling exceeded 20 ms"
+        );
+        assert!(
+            episode_hard_max <= 20_000_000,
+            "aggregate episode hard ceiling exceeded 20 ms"
         );
         fs::remove_dir_all(root_dir).expect("cleanup");
     }
