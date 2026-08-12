@@ -7,6 +7,8 @@ SERVICE="${NANDO_GATEWAY_CONTROL_SERVICE:-nando-gateway-control.service}"
 INSTALL_BINARY="${NANDO_GATEWAY_CONTROL_BINARY:-/opt/nando-wave/bin/nando-gateway-control}"
 INSTALL_SIDECAR="${NANDO_S1C3_OPERATIONAL_STATUS_JSON:-/var/lib/nando-wave/transition/grounded-meaning-v1/s1c3-operational-status-v1.json}"
 CONTROL_HEALTH="${NANDO_GATEWAY_CONTROL_HEALTH:-http://127.0.0.1:18788/health}"
+CONTROL_BASE="${NANDO_GATEWAY_CONTROL_BASE:-http://127.0.0.1:18788/control}"
+CONTROL_DASHBOARD_KEY="${NANDO_GATEWAY_CONTROL_DASHBOARD_KEY:-}"
 HOT_HEALTH="${NANDO_GATEWAY_CONTROL_HOT_HEALTH:-http://127.0.0.1:18789/health}"
 EDGE_HEALTH="${NANDO_GATEWAY_CONTROL_EDGE_HEALTH:-http://192.168.3.94:8787/health}"
 READINESS_ATTEMPTS="${NANDO_GATEWAY_CONTROL_READINESS_ATTEMPTS:-20}"
@@ -77,6 +79,48 @@ cleanup() {
   rm -rf "${work}"
 }
 
+load_dashboard_key() {
+  if [[ -n "${CONTROL_DASHBOARD_KEY}" ]]; then
+    return
+  fi
+
+  local control_pid
+  control_pid="$(systemctl show --property MainPID --value "${SERVICE}")"
+  if [[ ! "${control_pid}" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'cannot identify the running gateway-control process\n' >&2
+    exit 2
+  fi
+  CONTROL_DASHBOARD_KEY="$(
+    sudo -n cat "/proc/${control_pid}/environ" |
+      tr '\0' '\n' |
+      sed -n 's/^NANDO_STATUS_DASHBOARD_KEY=//p' |
+      head -n 1
+  )"
+  if [[ -z "${CONTROL_DASHBOARD_KEY}" ]]; then
+    printf 'gateway-control dashboard key is unavailable\n' >&2
+    exit 2
+  fi
+}
+
+projection_is_exact() {
+  printf 'url = "%s/%s/api/v1/dashboard"\n' \
+    "${CONTROL_BASE}" "${CONTROL_DASHBOARD_KEY}" |
+    curl --config - --fail --silent --show-error --max-time 2 |
+    jq -e '
+      .available == true and
+      .dashboard_build == "2026.08.13-control-v18" and
+      .s1c3_operational.stage == "S1C-3H" and
+      .s1c3_operational.verdict == "S1C3H_DEPLOYMENT_PASS" and
+      .s1c3_operational.capture_installed == true and
+      .s1c3_operational.natural_record_count == 0 and
+      .s1c3_operational.s1c4_state == "COLLECTING" and
+      .s1c3_operational.authority_ready == false and
+      .s1c3_operational.scientific_authority == false and
+      .s1c3_operational.model_training_allowed == false and
+      .s1c3_operational.phase_mutation_allowed == false
+    ' >/dev/null 2>&1
+}
+
 rollback() {
   local rc="${1:-1}"
   trap - ERR INT TERM EXIT
@@ -106,6 +150,9 @@ trap cleanup EXIT
 curl -fsS --max-time 2 "${HOT_HEALTH}" | jq -e '.ok == true' >/dev/null
 curl -fsS --max-time 2 "${EDGE_HEALTH}" |
   jq -e '.ok == true and .service == "nando-nginx-gateway"' >/dev/null
+if [[ -n "${SIDECAR_SOURCE}" ]]; then
+  load_dashboard_key
+fi
 install -m 0755 "${BINARY_SOURCE}" "${candidate_binary}"
 cp -a "${INSTALL_BINARY}" "${backup_binary}"
 if [[ -n "${SIDECAR_SOURCE}" ]]; then
@@ -135,6 +182,10 @@ for _attempt in $(seq 1 "${READINESS_ATTEMPTS}"); do
     curl -fsS --max-time 2 "${HOT_HEALTH}" | jq -e '.ok == true' >/dev/null
     curl -fsS --max-time 2 "${EDGE_HEALTH}" |
       jq -e '.ok == true and .service == "nando-nginx-gateway"' >/dev/null
+    if [[ -n "${SIDECAR_SOURCE}" ]] && ! projection_is_exact; then
+      printf 'gateway-control S1C-3H API projection mismatch\n' >&2
+      rollback 1
+    fi
     rollback_armed=0
     printf 'gateway-control ready; data-plane services stayed online\n'
     exit 0

@@ -48,7 +48,13 @@ EOF
 cat >"${BIN}/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-url="${*: -1}"
+if [[ " $* " == *" --config - "* ]]; then
+  IFS= read -r config_line
+  url="${config_line#url = \"}"
+  url="${url%\"}"
+else
+  url="${*: -1}"
+fi
 case "${url}" in
   *":18788/health")
     if [[ "${NANDO_TEST_FAIL_CONTROL:-0}" == "1" ]]; then
@@ -56,6 +62,14 @@ case "${url}" in
     else
       printf '%s\n' '{"ok":true,"service":"nando-gateway-control"}'
     fi
+    ;;
+  *"/api/v1/dashboard")
+    if [[ "${NANDO_TEST_FAIL_PROJECTION:-0}" == "1" ]]; then
+      natural_record_count=1
+    else
+      natural_record_count=0
+    fi
+    printf '%s\n' "{\"available\":true,\"dashboard_build\":\"2026.08.13-control-v18\",\"s1c3_operational\":{\"stage\":\"S1C-3H\",\"verdict\":\"S1C3H_DEPLOYMENT_PASS\",\"capture_installed\":true,\"natural_record_count\":${natural_record_count},\"s1c4_state\":\"COLLECTING\",\"authority_ready\":false,\"scientific_authority\":false,\"model_training_allowed\":false,\"phase_mutation_allowed\":false}}"
     ;;
   *":18789/health")
     printf '%s\n' '{"ok":true}'
@@ -84,6 +98,7 @@ export PATH="${BIN}:/usr/bin:/bin"
 export NANDO_TEST_SYSTEMCTL_STATE="${SYSTEMCTL_STATE}"
 export NANDO_GATEWAY_CONTROL_BINARY="${INSTALL_BINARY}"
 export NANDO_S1C3_OPERATIONAL_STATUS_JSON="${INSTALL_SIDECAR}"
+export NANDO_GATEWAY_CONTROL_DASHBOARD_KEY="test-dashboard-key"
 export NANDO_GATEWAY_CONTROL_READINESS_ATTEMPTS=1
 export NANDO_GATEWAY_CONTROL_READINESS_SLEEP_SECONDS=0
 
@@ -94,6 +109,16 @@ cmp -s "${SIDECAR_ONE}" "${INSTALL_SIDECAR}"
 
 cp -a "${INSTALL_BINARY}" "${WORK}/expected-binary"
 cp -a "${INSTALL_SIDECAR}" "${WORK}/expected-sidecar"
+if NANDO_TEST_FAIL_PROJECTION=1 "${INSTALLER}" \
+  --binary "${CANDIDATE_TWO}" --sidecar "${SIDECAR_TWO}" >/dev/null 2>&1; then
+  printf '%s\n' "installer accepted an invalid S1C-3H API projection" >&2
+  exit 1
+fi
+
+cmp -s "${WORK}/expected-binary" "${INSTALL_BINARY}"
+cmp -s "${WORK}/expected-sidecar" "${INSTALL_SIDECAR}"
+[[ -e "${SYSTEMCTL_STATE}/active" ]]
+
 if NANDO_TEST_FAIL_CONTROL=1 "${INSTALLER}" \
   --binary "${CANDIDATE_TWO}" --sidecar "${SIDECAR_TWO}" >/dev/null 2>&1; then
   printf '%s\n' "installer accepted a failed control health check" >&2
