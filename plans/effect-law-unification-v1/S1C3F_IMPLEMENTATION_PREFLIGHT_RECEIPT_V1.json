@@ -1,0 +1,75 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "decision-precommit-segment",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    },
+    {
+      "exists": true,
+      "id": "goal-satisfaction-segment",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    },
+    {
+      "exists": true,
+      "id": "selected-action-segment",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 3,
+    "forbidden_side_effect_kinds": [
+      "connector_restart",
+      "generated_traffic",
+      "journal_mutation",
+      "nginx_restart",
+      "scientific_authority_grant",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 3,
+    "invariants": 3,
+    "planned_side_effect_kinds": [
+      "atomic_binary_config_install",
+      "filesystem_read",
+      "http_get_health",
+      "transition_service_restart"
+    ],
+    "preserved_artifacts": 3,
+    "source_checks": 1,
+    "tests": 8
+  },
+  "manifest_sha256": "fc816451fb578e8f152093dc24e0c879397cb338539a477af5333d73238e3c3d",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "s1c3f-executor",
+      "path": "/tmp/nanda-s1c3f-preflight/s1c3f_remote_transaction_v1.py",
+      "sha256": "baecf65e5ee356a1ab4696387769cfd9184c9ba6640d174ab70ae95002970de0",
+      "size_bytes": 18936
+    }
+  ],
+  "task_id": "s1c3f-record-aware-capture-installation",
+  "verdict": "READY_TO_IMPLEMENT"
+}

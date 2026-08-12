@@ -1,0 +1,113 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "s1c3f-record-aware-capture-installation",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "decision-precommit-segment",
+      "kind": "file",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "expect": {"size_bytes": 4, "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072", "prefix_hex": "4e544631", "mode": "0600"}
+    },
+    {
+      "id": "goal-satisfaction-segment",
+      "kind": "file",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "expect": {"size_bytes": 4, "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072", "prefix_hex": "4e544631", "mode": "0600"}
+    },
+    {
+      "id": "selected-action-segment",
+      "kind": "file",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "expect": {"size_bytes": 4, "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072", "prefix_hex": "4e544631", "mode": "0600"}
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {"id": "read-baseline", "kind": "filesystem_read"},
+      {"id": "install-candidate", "kind": "atomic_binary_config_install"},
+      {"id": "restart-transition", "kind": "transition_service_restart"},
+      {"id": "read-health", "kind": "http_get_health"}
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "journal_mutation",
+      "nginx_restart",
+      "connector_restart",
+      "scientific_authority_grant"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "s1c3f-executor",
+      "path": "/tmp/nanda-s1c3f-preflight/s1c3f_remote_transaction_v1.py",
+      "sha256": "baecf65e5ee356a1ab4696387769cfd9184c9ba6640d174ab70ae95002970de0",
+      "forbidden_effect_patterns": [
+        {"effect": "generated_traffic", "regex": "(/v1/responses|method=[\\\"']POST|route_probe\\s*=\\s*base\\.route_probe)"},
+        {"effect": "synthetic_fixture", "regex": "(write_fixture|synthetic_traffic|generated_fixture)"},
+        {"effect": "journal_mutation", "regex": "(JOURNAL\\.(unlink|rmdir|rename)|open\\([^\\n]*JOURNAL[^\\n]*(wb|ab)|truncate\\([^\\n]*JOURNAL)"},
+        {"effect": "nginx_restart", "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*nginx"},
+        {"effect": "connector_restart", "regex": "systemctl\\([^\\n]*(restart|stop)[^\\n]*connector"},
+        {"effect": "scientific_authority_grant", "regex": "[\\\"']scientific_authority[\\\"']\\s*:\\s*True"}
+      ]
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "id": "decision-precommit-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "decision-precommit-segment"
+    },
+    {
+      "id": "goal-satisfaction-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "goal-satisfaction-segment"
+    },
+    {
+      "id": "selected-action-ledger",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "policy": "append_only_suffix",
+      "rollback_policy": "preserve_existing_and_natural_suffix",
+      "cursor_policy": "freeze_existing_records_only",
+      "baseline_check_id": "selected-action-segment"
+    }
+  ],
+  "state_machine": {
+    "initial_state": "NEW",
+    "terminal_states": ["PASS", "PREFLIGHT_FAILURE", "ROLLBACK_PASS", "VETO"],
+    "steps": [
+      {"id": "prepare", "from": "NEW", "to": "PREPARED", "mutates": true, "failure_state": "PREFLIGHT_FAILURE", "cleanup": "seal failure receipt and leave production untouched", "preserves": ["decision-precommit-ledger", "goal-satisfaction-ledger", "selected-action-ledger"], "test_id": "prepare-copy-fault"},
+      {"id": "execute", "from": "PREPARED", "to": "FINALIZE_PENDING", "mutates": true, "failure_state": "ROLLBACK_PASS", "cleanup": "restore baseline binary/config and preserve natural suffix", "preserves": ["decision-precommit-ledger", "goal-satisfaction-ledger", "selected-action-ledger"], "test_id": "execute-rollback-fault"},
+      {"id": "finalize", "from": "FINALIZE_PENDING", "to": "PASS", "mutates": true, "failure_state": "VETO", "cleanup": "connector veto invokes rollback before receipt", "preserves": ["decision-precommit-ledger", "goal-satisfaction-ledger", "selected-action-ledger"], "test_id": "finalize-veto-fault"}
+    ]
+  },
+  "invariants": [
+    {"id": "magic-is-format-not-record", "statement": "exact NTF1 header is four format bytes and zero records", "test_id": "parser-parity"},
+    {"id": "natural-suffix-preserved", "statement": "rollback preserves frozen prefix and all valid naturally arriving suffix frames", "test_id": "ledger-prefix-parity"},
+    {"id": "read-only-route-receipt", "statement": "route evidence uses GET health snapshots and creates no ordinary request", "test_id": "route-read-only"}
+  ],
+  "identity_contracts": [
+    {"id": "parser-identity", "producer": "executor framed segment parser", "consumer": "independent verifier framed segment parser", "comparison": "typed field equality over identical bytes", "test_id": "parser-parity"},
+    {"id": "verifier-byte-identity", "producer": "local verifier output", "consumer": "remote verifier output", "comparison": "byte identity before execute and seal", "test_id": "verifier-parity"},
+    {"id": "schema-identity", "producer": "S1C3F executor receipts", "consumer": "S1C3F independent verifier", "comparison": "exact S1C3F schemas, verdicts, roots, and state filename", "test_id": "schema-parity"}
+  ],
+  "tests": [
+    {"id": "prepare-copy-fault", "kind": "fault_injection", "expected": "terminal PREFLIGHT_FAILURE and no production mutation"},
+    {"id": "execute-rollback-fault", "kind": "fault_injection", "expected": "ROLLBACK_PASS with exact baseline pair and ledger prefix/suffix preservation"},
+    {"id": "finalize-veto-fault", "kind": "fault_injection", "expected": "connector veto rolls back and seals VETO"},
+    {"id": "parser-parity", "kind": "parity", "expected": "executor and independent parser agree on magic-only and framed bytes"},
+    {"id": "ledger-prefix-parity", "kind": "parity", "expected": "existing prefix and natural suffix survive rollback byte-identically"},
+    {"id": "route-read-only", "kind": "unit", "expected": "no POST or responses endpoint exists in route receipt owner"},
+    {"id": "verifier-parity", "kind": "parity", "expected": "local and remote verifier JSON bytes are identical"},
+    {"id": "schema-parity", "kind": "parity", "expected": "all terminal files expose only S1C3F namespace"}
+  ]
+}
