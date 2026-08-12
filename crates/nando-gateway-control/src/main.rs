@@ -166,6 +166,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Nando · Результат</title>
+<link rel="icon" href="data:,">
 <style>html,body {{ margin:0; min-height:100%; background:#0d1012; }}</style>
 </head>
 <body>{dashboard}</body>
