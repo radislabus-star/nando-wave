@@ -272,6 +272,19 @@ def require_expected_trigger_baseline(value: dict[str, dict[str, Any]]) -> None:
             raise GateFailure(f"s1c3h_oneshot_baseline:{unit}")
 
 
+def stable_trigger_baseline(timeout: float = 30.0) -> dict[str, dict[str, Any]]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, dict[str, Any]] = {}
+    while time.monotonic() < deadline:
+        last = trigger_snapshot()
+        try:
+            require_expected_trigger_baseline(last)
+            return last
+        except GateFailure:
+            time.sleep(0.2)
+    raise GateFailure(f"s1c3h_trigger_baseline_timeout:{last}")
+
+
 def nginx_pid() -> int:
     completed = subprocess.run(
         ["pgrep", "-o", "-x", "nginx"], check=False, capture_output=True, timeout=5
@@ -753,8 +766,7 @@ def prepare(args: argparse.Namespace) -> int:
         if sha256_file(root / "candidate-transition-serving.env") != build_receipt.get("config_sha256"):
             raise GateFailure("s1c3h_candidate_config_binding")
         services = service_snapshot()
-        triggers = trigger_snapshot()
-        require_expected_trigger_baseline(triggers)
+        triggers = stable_trigger_baseline()
         projected_health = stable_health()
         health_contract(projected_health, BASELINE_RUNTIME_CONTRACT)
         economics = economics_snapshot()

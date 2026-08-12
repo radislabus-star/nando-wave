@@ -45,6 +45,22 @@ def compatibility_fixture(root: Path) -> str:
 
 
 class StagingTests(unittest.TestCase):
+    def test_trigger_baseline_waits_for_natural_oneshot_completion(self) -> None:
+        busy = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{unit: {"active_state": "activating"} for unit in executor.ONESHOT_UNITS},
+        }
+        quiet = {
+            **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
+            **{unit: {"active_state": "inactive"} for unit in executor.ONESHOT_UNITS},
+        }
+        with (
+            mock.patch.object(executor, "trigger_snapshot", side_effect=[busy, quiet]),
+            mock.patch.object(executor.time, "sleep"),
+            mock.patch.object(executor.time, "monotonic", side_effect=[0.0, 0.0, 0.1]),
+        ):
+            self.assertEqual(executor.stable_trigger_baseline(timeout=1.0), quiet)
+
     def test_execution_staging_is_not_below_root_only_e_can_traverse(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
