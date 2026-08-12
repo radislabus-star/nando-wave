@@ -1,0 +1,1143 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c3b-implementation-boundary-v1",
+  "domain": "code",
+  "complexity_score": 66,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c6",
+    "c7",
+    "c12"
+  ],
+  "weak_triads": [
+    "c10",
+    "c11",
+    "c13",
+    "c14",
+    "c3",
+    "c4",
+    "c5",
+    "c8",
+    "c9"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12",
+      "c13",
+      "c14"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.0811,
+      "c10": 0.0811,
+      "c11": 0.0811,
+      "c12": 0.0811,
+      "c13": 0.0811,
+      "c14": 0.0811,
+      "c2": 0.0811,
+      "c3": 0.0811,
+      "c4": 0.0811,
+      "c5": 0.0811,
+      "c6": 0.0811,
+      "c7": 0.0811,
+      "c8": 0.0811,
+      "c9": 0.0811
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 28,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12",
+      "c13",
+      "c14"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3151,
+      "c10": 0.2448,
+      "c11": 0.2686,
+      "c12": 0.3265,
+      "c13": 0.2583,
+      "c14": 0.2417,
+      "c2": 0.2893,
+      "c3": 0.2355,
+      "c4": 0.2386,
+      "c5": 0.2562,
+      "c6": 0.3151,
+      "c7": 0.3037,
+      "c8": 0.2211,
+      "c9": 0.2665
+    },
+    "source_self_score": 0.2701,
+    "stable": [
+      "c1",
+      "c2",
+      "c6",
+      "c7",
+      "c12"
+    ],
+    "weak": [
+      "c3",
+      "c4",
+      "c5",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c13",
+      "c14"
+    ],
+    "weak_details": {
+      "c10": {
+        "nearest_source": "t10",
+        "nearest_source_score": 1.0,
+        "score": 0.2448,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c11": {
+        "nearest_source": "t11",
+        "nearest_source_score": 1.0,
+        "score": 0.2686,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c13": {
+        "nearest_source": "t13",
+        "nearest_source_score": 1.0,
+        "score": 0.2583,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c14": {
+        "nearest_source": "t14",
+        "nearest_source_score": 1.0,
+        "score": 0.2417,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c3": {
+        "nearest_source": "t3",
+        "nearest_source_score": 1.0,
+        "score": 0.2355,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c4": {
+        "nearest_source": "t4",
+        "nearest_source_score": 1.0,
+        "score": 0.2386,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c5": {
+        "nearest_source": "t5",
+        "nearest_source_score": 1.0,
+        "score": 0.2562,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c8": {
+        "nearest_source": "t8",
+        "nearest_source_score": 1.0,
+        "score": 0.2211,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c9": {
+        "nearest_source": "t9",
+        "nearest_source_score": 1.0,
+        "score": 0.2665,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "deployment-executor": "deployment-executor",
+      "deployment-verifier": "deployment-verifier",
+      "frozen-paper": "frozen-paper",
+      "implementation-tests": "implementation-tests",
+      "measurement-executor": "measurement-executor",
+      "measurement-verifier": "measurement-verifier",
+      "science-claim-boundary": "science-claim-boundary",
+      "structural-boundary": "structural-boundary",
+      "transaction-runner": "transaction-runner"
+    },
+    "scores": {
+      "deployment-executor": 1.0,
+      "deployment-verifier": 1.0,
+      "frozen-paper": 1.0,
+      "implementation-tests": 1.0,
+      "measurement-executor": 1.0,
+      "measurement-verifier": 1.0,
+      "science-claim-boundary": 1.0,
+      "structural-boundary": 1.0,
+      "transaction-runner": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "deployment-executor": 1,
+      "deployment-verifier": 1,
+      "frozen-paper": 1,
+      "implementation-tests": 1,
+      "measurement-executor": 2,
+      "measurement-verifier": 1,
+      "science-claim-boundary": 1,
+      "structural-boundary": 1,
+      "transaction-runner": 5
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.2701,
+      "norm": 120.9959,
+      "triads": 14
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "deployment-executor": "deployment-executor",
+      "deployment-verifier": "deployment-verifier",
+      "frozen-paper": "frozen-paper",
+      "implementation-tests": "implementation-tests",
+      "measurement-executor": "measurement-executor",
+      "measurement-verifier": "measurement-verifier",
+      "science-claim-boundary": "science-claim-boundary",
+      "structural-boundary": "structural-boundary",
+      "transaction-runner": "transaction-runner"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "deployment-executor": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deployment-verifier": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "frozen-paper": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "implementation-tests": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "measurement-executor": {
+          "norm": 45.6946,
+          "self_coherence": 0.714,
+          "triads": 2
+        },
+        "measurement-verifier": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "science-claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "structural-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "transaction-runner": {
+          "norm": 71.8331,
+          "self_coherence": 0.449,
+          "triads": 5
+        }
+      },
+      "source": {
+        "deployment-executor": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deployment-verifier": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "frozen-paper": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "implementation-tests": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "measurement-executor": {
+          "norm": 45.6946,
+          "self_coherence": 0.714,
+          "triads": 2
+        },
+        "measurement-verifier": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "science-claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "structural-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "transaction-runner": {
+          "norm": 71.8331,
+          "self_coherence": 0.449,
+          "triads": 5
+        }
+      }
+    },
+    "group_links": {
+      "deployment-executor": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "deployment-executor",
+        "exact_source_groups": [
+          "deployment-executor"
+        ]
+      },
+      "deployment-verifier": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "deployment-verifier",
+        "exact_source_groups": [
+          "deployment-verifier"
+        ]
+      },
+      "frozen-paper": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "frozen-paper",
+        "exact_source_groups": [
+          "frozen-paper"
+        ]
+      },
+      "implementation-tests": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "implementation-tests",
+        "exact_source_groups": [
+          "implementation-tests"
+        ]
+      },
+      "measurement-executor": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "measurement-executor",
+        "exact_source_groups": [
+          "measurement-executor"
+        ]
+      },
+      "measurement-verifier": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "measurement-verifier",
+        "exact_source_groups": [
+          "measurement-verifier"
+        ]
+      },
+      "science-claim-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "science-claim-boundary",
+        "exact_source_groups": [
+          "science-claim-boundary"
+        ]
+      },
+      "structural-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "structural-boundary",
+        "exact_source_groups": [
+          "structural-boundary"
+        ]
+      },
+      "transaction-runner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "transaction-runner",
+        "exact_source_groups": [
+          "transaction-runner"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "deployment-executor": {
+        "deployment-executor": 1.0,
+        "deployment-verifier": -0.0332,
+        "frozen-paper": -0.0215,
+        "implementation-tests": 0.0293,
+        "measurement-executor": 0.0027,
+        "measurement-verifier": 0.0273,
+        "science-claim-boundary": 0.0156,
+        "structural-boundary": 0.0293,
+        "transaction-runner": -0.0191
+      },
+      "deployment-verifier": {
+        "deployment-executor": -0.0332,
+        "deployment-verifier": 1.0,
+        "frozen-paper": 0.0039,
+        "implementation-tests": 0.0273,
+        "measurement-executor": 0.0164,
+        "measurement-verifier": 0.0332,
+        "science-claim-boundary": -0.0449,
+        "structural-boundary": -0.043,
+        "transaction-runner": -0.0183
+      },
+      "frozen-paper": {
+        "deployment-executor": -0.0215,
+        "deployment-verifier": 0.0039,
+        "frozen-paper": 1.0,
+        "implementation-tests": 0.043,
+        "measurement-executor": 0.0191,
+        "measurement-verifier": 0.0254,
+        "science-claim-boundary": 0.0254,
+        "structural-boundary": 0.0156,
+        "transaction-runner": 0.0322
+      },
+      "implementation-tests": {
+        "deployment-executor": 0.0293,
+        "deployment-verifier": 0.0273,
+        "frozen-paper": 0.043,
+        "implementation-tests": 1.0,
+        "measurement-executor": 0.0274,
+        "measurement-verifier": -0.0176,
+        "science-claim-boundary": 0.002,
+        "structural-boundary": 0.0234,
+        "transaction-runner": 0.0392
+      },
+      "measurement-executor": {
+        "deployment-executor": 0.0027,
+        "deployment-verifier": 0.0164,
+        "frozen-paper": 0.0191,
+        "implementation-tests": 0.0274,
+        "measurement-executor": 1.0,
+        "measurement-verifier": -0.0629,
+        "science-claim-boundary": -0.0547,
+        "structural-boundary": -0.0055,
+        "transaction-runner": 0.0085
+      },
+      "measurement-verifier": {
+        "deployment-executor": 0.0273,
+        "deployment-verifier": 0.0332,
+        "frozen-paper": 0.0254,
+        "implementation-tests": -0.0176,
+        "measurement-executor": -0.0629,
+        "measurement-verifier": 1.0,
+        "science-claim-boundary": 0.0078,
+        "structural-boundary": -0.0762,
+        "transaction-runner": -0.0035
+      },
+      "science-claim-boundary": {
+        "deployment-executor": 0.0156,
+        "deployment-verifier": -0.0449,
+        "frozen-paper": 0.0254,
+        "implementation-tests": 0.002,
+        "measurement-executor": -0.0547,
+        "measurement-verifier": 0.0078,
+        "science-claim-boundary": 1.0,
+        "structural-boundary": -0.002,
+        "transaction-runner": 0.0226
+      },
+      "structural-boundary": {
+        "deployment-executor": 0.0293,
+        "deployment-verifier": -0.043,
+        "frozen-paper": 0.0156,
+        "implementation-tests": 0.0234,
+        "measurement-executor": -0.0055,
+        "measurement-verifier": -0.0762,
+        "science-claim-boundary": -0.002,
+        "structural-boundary": 1.0,
+        "transaction-runner": -0.0113
+      },
+      "transaction-runner": {
+        "deployment-executor": -0.0191,
+        "deployment-verifier": -0.0183,
+        "frozen-paper": 0.0322,
+        "implementation-tests": 0.0392,
+        "measurement-executor": 0.0085,
+        "measurement-verifier": -0.0035,
+        "science-claim-boundary": 0.0226,
+        "structural-boundary": -0.0113,
+        "transaction-runner": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "deployment-executor": {
+          "gravity": 1.0,
+          "owner": "deployment executor",
+          "owners": {
+            "deployment executor": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "deployment-verifier": {
+          "gravity": 1.0,
+          "owner": "independent verifier",
+          "owners": {
+            "independent verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "frozen-paper": {
+          "gravity": 1.0,
+          "owner": "paper owner",
+          "owners": {
+            "paper owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "implementation-tests": {
+          "gravity": 1.0,
+          "owner": "test owner",
+          "owners": {
+            "test owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "measurement-executor": {
+          "gravity": 1.0,
+          "owner": "measurement executor",
+          "owners": {
+            "measurement executor": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "measurement-verifier": {
+          "gravity": 1.0,
+          "owner": "independent verifier",
+          "owners": {
+            "independent verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "science-claim-boundary": {
+          "gravity": 1.0,
+          "owner": "science claim owner",
+          "owners": {
+            "science claim owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "structural-boundary": {
+          "gravity": 1.0,
+          "owner": "structural verifier",
+          "owners": {
+            "structural verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "transaction-runner": {
+          "gravity": 1.0,
+          "owner": "transaction runner",
+          "owners": {
+            "transaction runner": 10
+          },
+          "support": 10,
+          "total": 10
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.5,
+          "owner": "science claim owner",
+          "owners": {
+            "science claim owner": 2,
+            "structural verifier": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "chronology": {
+          "gravity": 1.0,
+          "owner": "transaction runner",
+          "owners": {
+            "transaction runner": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "deployment": {
+          "gravity": 1.0,
+          "owner": "deployment executor",
+          "owners": {
+            "deployment executor": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "measurement": {
+          "gravity": 0.6667,
+          "owner": "measurement executor",
+          "owners": {
+            "measurement executor": 4,
+            "paper owner": 2
+          },
+          "support": 4,
+          "total": 6
+        },
+        "rollback": {
+          "gravity": 1.0,
+          "owner": "transaction runner",
+          "owners": {
+            "transaction runner": 6
+          },
+          "support": 6,
+          "total": 6
+        },
+        "tests": {
+          "gravity": 1.0,
+          "owner": "test owner",
+          "owners": {
+            "test owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "verification": {
+          "gravity": 1.0,
+          "owner": "independent verifier",
+          "owners": {
+            "independent verifier": 4
+          },
+          "support": 4,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "deployment receipt",
+            "implementation worksheet"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c13",
+            "candidate_answer:c14",
+            "plans/effect-law-unification-v1/s1c3b_production_load_absolute_gate_preregistration_v1.md:255",
+            "plans/effect-law-unification-v1/s1c3b_production_load_absolute_gate_preregistration_v1.md:331"
+          ],
+          "layers": [
+            "proof",
+            "science"
+          ],
+          "outputs": [
+            "capture availability only",
+            "no deployment authority"
+          ],
+          "owners": [
+            "science claim owner",
+            "structural verifier"
+          ],
+          "scopes": [
+            "proof only",
+            "science"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "chronology": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "git and remote deployment state",
+            "two verifier executions"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c11",
+            "candidate_answer:c5",
+            "ops/remote-backend/run_s1c3b_transaction_v1.sh:202",
+            "ops/remote-backend/run_s1c3b_transaction_v1.sh:71"
+          ],
+          "layers": [
+            "operations"
+          ],
+          "outputs": [
+            "exact comparison",
+            "one attempt only"
+          ],
+          "owners": [
+            "transaction runner"
+          ],
+          "scopes": [
+            "deployment only"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "deployment": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "verified preparation"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c9",
+            "ops/remote-backend/s1c3b_remote_transaction_v1.py:1097"
+          ],
+          "layers": [
+            "operations"
+          ],
+          "outputs": [
+            "rollback-covered mutation"
+          ],
+          "owners": [
+            "deployment executor"
+          ],
+          "scopes": [
+            "production"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "measurement": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [
+            "evaluate_measurement",
+            "immutable paper root",
+            "measured rows"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "candidate_answer:c2",
+            "candidate_answer:c3",
+            "ops/remote-backend/s1c3b_remote_transaction_v1.py:688",
+            "ops/remote-backend/s1c3b_remote_transaction_v1.py:734",
+            "plans/effect-law-unification-v1/s1c3b_production_load_absolute_gate_preregistration_v1.md:186"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "bounded protocol",
+            "complete raw evidence",
+            "resource receipt"
+          ],
+          "owners": [
+            "measurement executor",
+            "paper owner"
+          ],
+          "scopes": [
+            "product safety",
+            "proof only"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        },
+        "rollback": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [
+            "local and remote verification",
+            "state read",
+            "verified preparation"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c6",
+            "candidate_answer:c7",
+            "candidate_answer:c8",
+            "ops/remote-backend/run_s1c3b_transaction_v1.sh:229",
+            "ops/remote-backend/run_s1c3b_transaction_v1.sh:280",
+            "ops/remote-backend/run_s1c3b_transaction_v1.sh:313"
+          ],
+          "layers": [
+            "operations"
+          ],
+          "outputs": [
+            "armed trap",
+            "complete state",
+            "emergency rollback remains armed"
+          ],
+          "owners": [
+            "transaction runner"
+          ],
+          "scopes": [
+            "production safety"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        },
+        "tests": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "synthetic and static faults"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c12",
+            "ops/remote-backend/test_verify_s1c3b_transaction_v1.py:781"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "fail-closed checks"
+          ],
+          "owners": [
+            "test owner"
+          ],
+          "scopes": [
+            "implementation only"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "verification": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "deployment receipt",
+            "immutable transaction directory"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c10",
+            "candidate_answer:c4",
+            "ops/remote-backend/verify_s1c3b_transaction_v1.py:243",
+            "ops/remote-backend/verify_s1c3b_transaction_v1.py:832"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "preparation verdict",
+            "terminal verdict"
+          ],
+          "owners": [
+            "independent verifier"
+          ],
+          "scopes": [
+            "deployment only"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 45.2106,
+          "self_coherence": 0.7064,
+          "triads": 2
+        },
+        "chronology": {
+          "norm": 46.2601,
+          "self_coherence": 0.7228,
+          "triads": 2
+        },
+        "deployment": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "measurement": {
+          "norm": 56.285,
+          "self_coherence": 0.5863,
+          "triads": 3
+        },
+        "rollback": {
+          "norm": 55.7853,
+          "self_coherence": 0.5811,
+          "triads": 3
+        },
+        "tests": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "verification": {
+          "norm": 46.0,
+          "self_coherence": 0.7188,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "chronology": -0.021,
+          "deployment": 0.0318,
+          "measurement": -0.0181,
+          "rollback": 0.0278,
+          "tests": 0.018,
+          "verification": -0.0769
+        },
+        "chronology": {
+          "authority": -0.021,
+          "chronology": 1.0,
+          "deployment": 0.0176,
+          "measurement": 0.03,
+          "rollback": -0.0178,
+          "tests": -0.0041,
+          "verification": -0.0545
+        },
+        "deployment": {
+          "authority": 0.0318,
+          "chronology": 0.0176,
+          "deployment": 1.0,
+          "measurement": -0.01,
+          "rollback": -0.0392,
+          "tests": 0.0293,
+          "verification": -0.0041
+        },
+        "measurement": {
+          "authority": -0.0181,
+          "chronology": 0.03,
+          "deployment": -0.01,
+          "measurement": 1.0,
+          "rollback": 0.0076,
+          "tests": 0.0466,
+          "verification": -0.0147
+        },
+        "rollback": {
+          "authority": 0.0278,
+          "chronology": -0.0178,
+          "deployment": -0.0392,
+          "measurement": 0.0076,
+          "rollback": 1.0,
+          "tests": 0.0538,
+          "verification": 0.0257
+        },
+        "tests": {
+          "authority": 0.018,
+          "chronology": -0.0041,
+          "deployment": 0.0293,
+          "measurement": 0.0466,
+          "rollback": 0.0538,
+          "tests": 1.0,
+          "verification": 0.0068
+        },
+        "verification": {
+          "authority": -0.0769,
+          "chronology": -0.0545,
+          "deployment": -0.0041,
+          "measurement": -0.0147,
+          "rollback": 0.0257,
+          "tests": 0.0068,
+          "verification": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 45.2106,
+          "self_coherence": 0.7064,
+          "triads": 2
+        },
+        "chronology": {
+          "norm": 46.2601,
+          "self_coherence": 0.7228,
+          "triads": 2
+        },
+        "deployment": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "measurement": {
+          "norm": 56.285,
+          "self_coherence": 0.5863,
+          "triads": 3
+        },
+        "rollback": {
+          "norm": 55.7853,
+          "self_coherence": 0.5811,
+          "triads": 3
+        },
+        "tests": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "verification": {
+          "norm": 46.0,
+          "self_coherence": 0.7188,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "deployment-executor": 1,
+      "deployment-verifier": 1,
+      "frozen-paper": 1,
+      "implementation-tests": 1,
+      "measurement-executor": 2,
+      "measurement-verifier": 1,
+      "science-claim-boundary": 1,
+      "structural-boundary": 1,
+      "transaction-runner": 5
+    },
+    "stable_groups": [
+      "deployment-executor",
+      "deployment-verifier",
+      "frozen-paper",
+      "implementation-tests",
+      "measurement-executor",
+      "measurement-verifier",
+      "science-claim-boundary",
+      "structural-boundary",
+      "transaction-runner"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate triad has weak composite-mode support."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nRecheck or remove weak candidate triads:\n- c10: score=0.2448, nearest_source=t10, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c11: score=0.2686, nearest_source=t11, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c13: score=0.2583, nearest_source=t13, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c14: score=0.2417, nearest_source=t14, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c3: score=0.2355, nearest_source=t3, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c4: score=0.2386, nearest_source=t4, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c5: score=0.2562, nearest_source=t5, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c8: score=0.2211, nearest_source=t8, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c9: score=0.2665, nearest_source=t9, why=candidate triad does not resonate with the composite source memory above the stability threshold",
+  "trace_path": "/tmp/nanda-structural-gate/s1c3b-implementation-boundary-v1.trace.json"
+}

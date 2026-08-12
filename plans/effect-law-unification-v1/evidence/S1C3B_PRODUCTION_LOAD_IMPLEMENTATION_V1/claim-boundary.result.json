@@ -1,0 +1,310 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c3b-claim-boundary-v1",
+  "domain": "code",
+  "complexity_score": 17,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.2727,
+      "c2": 0.2727,
+      "c3": 0.2727,
+      "c4": 0.2727
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 8,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "c1",
+      "c2",
+      "c3",
+      "c4"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.5009,
+      "c2": 0.5402,
+      "c3": 0.5252,
+      "c4": 0.5234
+    },
+    "source_self_score": 0.5224,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "claim-boundary": "claim-boundary"
+    },
+    "scores": {
+      "claim-boundary": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "claim-boundary": 4
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.5224,
+      "norm": 66.873,
+      "triads": 4
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "claim-boundary": "claim-boundary"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "claim-boundary": {
+          "norm": 66.873,
+          "self_coherence": 0.5224,
+          "triads": 4
+        }
+      },
+      "source": {
+        "claim-boundary": {
+          "norm": 66.873,
+          "self_coherence": 0.5224,
+          "triads": 4
+        }
+      }
+    },
+    "group_links": {
+      "claim-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "claim-boundary",
+        "exact_source_groups": [
+          "claim-boundary"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "claim-boundary": {
+        "claim-boundary": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "claim-boundary": {
+          "gravity": 1.0,
+          "owner": "science claim owner",
+          "owners": {
+            "science claim owner": 8
+          },
+          "support": 8,
+          "total": 8
+        }
+      },
+      "route_centers": {
+        "science": {
+          "gravity": 1.0,
+          "owner": "science claim owner",
+          "owners": {
+            "science claim owner": 8
+          },
+          "support": 8,
+          "total": 8
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "science": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [
+            "deployment receipt",
+            "implementation worksheets",
+            "installed capture"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "candidate_answer:c2",
+            "candidate_answer:c3",
+            "candidate_answer:c4",
+            "plans/effect-law-unification-v1/s1c3b_production_load_absolute_gate_preregistration_v1.md:255",
+            "plans/effect-law-unification-v1/s1c3b_production_load_absolute_gate_preregistration_v1.md:331",
+            "plans/effect-law-unification-v1/s1c3b_production_load_absolute_gate_preregistration_v1.md:337",
+            "plans/effect-law-unification-v1/s1c3b_production_load_absolute_gate_preregistration_v1.md:347"
+          ],
+          "layers": [
+            "proof",
+            "science"
+          ],
+          "outputs": [
+            "authority false",
+            "capture available",
+            "collecting only",
+            "no scientific promotion"
+          ],
+          "owners": [
+            "science claim owner"
+          ],
+          "scopes": [
+            "proof only",
+            "science"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "science": {
+          "norm": 66.873,
+          "self_coherence": 0.5224,
+          "triads": 4
+        }
+      },
+      "interference_matrix": {
+        "science": {
+          "science": 1.0
+        }
+      },
+      "source": {
+        "science": {
+          "norm": 66.873,
+          "self_coherence": 0.5224,
+          "triads": 4
+        }
+      }
+    },
+    "source_group_sizes": {
+      "claim-boundary": 4
+    },
+    "stable_groups": [
+      "claim-boundary"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c3b-claim-boundary-v1.trace.json"
+}
