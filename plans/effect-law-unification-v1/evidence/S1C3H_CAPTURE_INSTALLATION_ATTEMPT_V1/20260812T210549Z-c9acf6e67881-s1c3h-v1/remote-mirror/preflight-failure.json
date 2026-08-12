@@ -1,0 +1,1 @@
+{"error":"s1c3h_staged_admission_invalid","observed_at_unix":1786568918,"preflight_failure_root_sha256":"c8d2f16a92841a13f39e84a0764f09ad67b0801b473cc2850da8dffabc7a8941","production_mutation":false,"schema":"nando.s1c3h-preflight-failure.v1","transaction_id":"20260812T210549Z-c9acf6e67881-s1c3h-v1"}

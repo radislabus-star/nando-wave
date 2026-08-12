@@ -46,6 +46,41 @@ def compatibility_fixture(root: Path) -> str:
 
 
 class StagingTests(unittest.TestCase):
+    def test_staged_profile_copies_bound_structural_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            staging = root / "staging"
+            staging.mkdir()
+            profile = root / "profile.json"
+            profile_value = {
+                "response_runtime": {"registry": "old"},
+                "runtime": {"admission_status": "old"},
+                "deployment": {"response_runtime_build": "old"},
+            }
+            write(profile, json.dumps(profile_value).encode())
+            structural = root / "STRUCTURAL_GATE_V2.json"
+            structural_value = {
+                "verdict": "PASS",
+                "pass_count": 4,
+                "route_count": 4,
+                "blocked_routes": [],
+            }
+            write(structural, json.dumps(structural_value, sort_keys=True).encode())
+            structural_sha = hashlib.sha256(structural.read_bytes()).hexdigest()
+            user = SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid())
+            with (
+                mock.patch.object(executor, "GATE_PROFILE", profile),
+                mock.patch.object(executor, "STRUCTURAL_RECEIPT", structural),
+                mock.patch.object(executor, "STRUCTURAL_RECEIPT_SHA256", structural_sha),
+                mock.patch.object(executor.pwd, "getpwnam", return_value=user),
+            ):
+                destination = executor.staged_profile(staging, staging / "authority")
+            self.assertTrue(destination.is_file())
+            self.assertEqual(
+                (staging / "receipts" / "STRUCTURAL_GATE_V2.json").read_bytes(),
+                structural.read_bytes(),
+            )
+
     def test_clean_interpreter_import_exposes_every_bound_dependency(self) -> None:
         directory = Path(executor.__file__).resolve().parent
         script = """

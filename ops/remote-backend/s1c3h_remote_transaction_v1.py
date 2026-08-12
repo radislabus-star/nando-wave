@@ -39,6 +39,8 @@ GATE_PROFILE = Path(
     "/opt/nando-wave/ops/phase-center-test-server/gates/"
     "nando-live-transition-gate.profile.json"
 )
+STRUCTURAL_RECEIPT = GATE_PROFILE.parent / "receipts/STRUCTURAL_GATE_V2.json"
+STRUCTURAL_RECEIPT_SHA256 = "e2da35480472aa246398b7d09d3a30a9feaefb15ff43be9fdc9d1ae68ae26ce8"
 TRANSITION_UNIT = "nando-transition-serving.service"
 TRIGGER_UNITS = (
     "nando-response-admission.path",
@@ -551,6 +553,24 @@ def staged_profile(staging: Path, candidate_authority: Path) -> Path:
     write_json(destination, profile, 0o600)
     user = pwd.getpwnam("e")
     os.chown(destination, user.pw_uid, user.pw_gid)
+    receipt = read_json(STRUCTURAL_RECEIPT)
+    if (
+        sha256_file(STRUCTURAL_RECEIPT) != STRUCTURAL_RECEIPT_SHA256
+        or receipt.get("verdict") != "PASS"
+        or receipt.get("pass_count") != 4
+        or receipt.get("route_count") != 4
+        or receipt.get("blocked_routes") != []
+    ):
+        raise GateFailure("s1c3h_structural_receipt_invalid")
+    receipt_directory = staging / "receipts"
+    receipt_directory.mkdir(mode=0o700)
+    os.chown(receipt_directory, user.pw_uid, user.pw_gid)
+    receipt_destination = receipt_directory / "STRUCTURAL_GATE_V2.json"
+    shutil.copyfile(STRUCTURAL_RECEIPT, receipt_destination)
+    os.chown(receipt_destination, user.pw_uid, user.pw_gid)
+    os.chmod(receipt_destination, 0o400)
+    fsync_file(receipt_destination)
+    fsync_directory(receipt_directory)
     return destination
 
 
@@ -641,6 +661,7 @@ def stage_candidate_authority(root: Path, phase: str) -> dict[str, Any]:
             "generation_root_sha256": generation_root,
             "generation_manifest": generation_manifest,
             "staging_manifest": tree_manifest(staging),
+            "structural_receipt_sha256": STRUCTURAL_RECEIPT_SHA256,
             "controller_report": report,
             "admission_expires_at_unix": admission.get("expires_at_unix"),
         },
