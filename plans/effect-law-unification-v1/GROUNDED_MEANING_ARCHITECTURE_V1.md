@@ -1,6 +1,6 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3C TERMINAL / S1C-3D ENGINEERING REPAIR OPEN`
+Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-3G TERMINAL ROLLBACK PASS / S1C-4 CLOSED`
 
 Plan date: `2026-08-11`
 
@@ -30,7 +30,10 @@ adversarial review, and its verification receipt are:
 - `S1C_SHADOW_PRODUCER_VERIFICATION_2026-08-11.md`;
 - `S1C3B_PRODUCTION_LOAD_TERMINAL_REPORT_2026-08-12.md`;
 - `S1C3C_CAPTURE_INSTALLATION_PREREGISTRATION_V1.md`;
-- `S1C3C_CAPTURE_INSTALLATION_CRITIQUE_V1.md`.
+- `S1C3C_CAPTURE_INSTALLATION_CRITIQUE_V1.md`;
+- `S1C3G_STABLE_HEALTH_PROJECTION_PREREGISTRATION_V1.md`;
+- `S1C3G_STABLE_HEALTH_PROJECTION_CRITIQUE_V1.md`;
+- `S1C3G_CAPTURE_INSTALLATION_TERMINAL_REPORT_2026-08-12.md`.
 
 Owners:
 
@@ -393,7 +396,7 @@ Exit evidence:
 
 ### S1C. Pre-Action Decision-Contract Owner
 
-Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 PASS / S1C-3B TERMINAL PREFLIGHT_FAILURE / S1C-3C TERMINAL RESOURCE_VETO / CAPTURE NOT INSTALLED`
+Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 PASS / S1C-3G TERMINAL ROLLBACK PASS / CAPTURE NOT INSTALLED`
 
 Purpose: create the missing evidence before action without changing action
 authority.
@@ -445,7 +448,8 @@ S1C-2 shadow producer with authority=false
 S1C-3 transactional deployment and restart parity
   S1C-3B consumed terminal attempt; never rerun
   S1C-3C consumed terminal RESOURCE_VETO attempt; never rerun
-  S1C-3D separately rooted engineering repair; old evidence remains immutable
+  S1C-3D through S1C-3F separately rooted terminal repairs; never rerun
+  S1C-3G consumed terminal ROLLBACK PASS attempt; never rerun
 S1C-4 natural append-cursor census
 ```
 
@@ -509,13 +513,13 @@ An authority-free postmortem may verify and report that exact frozen attempt,
 but it cannot grant preregistered authority, repair the consumed attempt, or
 authorize another transaction.
 
-S1C-3D is not another S1C-3C observation. It is a separately preregistered
-engineering route that repairs parity snapshot access and separates the 5 ms
-optimization target from the existing 20 ms hard safety ceiling. Every
-candidate identity receives at most one production mutation attempt; later
-repairs require a new immutable identity and preserve all earlier receipts.
-Installation PASS opens S1C-4 only at a new post-install append cursor and
-grants no scientific authority by itself.
+S1C-3D was not another S1C-3C observation. It began the separately rooted
+engineering sequence that continued through S1C-3G. Every identity consumed at
+most one production mutation attempt and preserved all earlier receipts. The
+final S1C-3G attempt ended `S1C3G_ROLLBACK_PASS`: baseline was restored, capture
+was not installed, and S1C-4 stayed closed. Installation PASS remains the only
+route that can open S1C-4 at a new post-install append cursor, and it grants no
+scientific authority by itself.
 
 No S2 work starts unless S1C is PASS and at least two independent decision
 lineages exist. A composition/equivalence claim additionally requires at least
@@ -796,11 +800,13 @@ S1C-1 pure contracts and parity     PASS / SOURCE ONLY
 S1C-2 shadow producer               PASS / NOT INSTALLED
 S1C-3B production attempt           TERMINAL PREFLIGHT_FAILURE
 S1C-3B attempt consumed             true
-S1C production capture              NOT INSTALLED
 S1C-3C successor                    TERMINAL RESOURCE_VETO
 S1C-3C remote attempts              1 / 1 CONSUMED
 S1C-3C authority envelope           UNSEALED / AUTHORITY FALSE
-S1C-3D engineering repair           PAPER OPEN / NOT DEPLOYED
+S1C-3D through S1C-3F               TERMINAL / IMMUTABLE
+S1C-3G stable health projection     TERMINAL ROLLBACK PASS
+S1C-3G attempt consumed             true
+S1C production capture              NOT INSTALLED
 S1C-4 natural census                CLOSED
 S2 frozen baselines                 BLOCKED
 S3 hidden representation            BLOCKED
@@ -810,12 +816,12 @@ S6 K2 product                       BLOCKED
 K2 execution authority              false
 ```
 
-Neither S1C-3B nor S1C-3C may be launched again. Their one-attempt budgets are
-consumed and their evidence remains immutable. S1C-3D may proceed only as the
-separately rooted engineering repair defined by its preregistration and
-critique. Until that route installs capture, S1C-4 stays closed. Targeted or
-synthetic natural traffic, model training, phase mutation, automatic S2
-activation, and K2 claims remain forbidden.
+S1C-3B through S1C-3G may not be launched again. Their one-attempt budgets are
+consumed and their evidence remains immutable. Any successor requires a new
+preregistration and implementation preflight. Until a separately rooted route
+installs capture, S1C-4 stays closed. Targeted or synthetic natural traffic,
+model training, phase mutation, automatic S2 activation, and K2 claims remain
+forbidden.
 
 Structural review packets:
 

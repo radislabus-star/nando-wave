@@ -23,6 +23,7 @@ use nando_operator_admission::{K1VocabularyGateV1, OperatorCertificationLedgerV1
 use nando_operator_learning::GroundedDecisionCensusV1;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::sync::Arc;
@@ -1872,7 +1873,7 @@ fn grounded_decision_snapshot(report: &Value) -> Value {
 }
 
 fn s1c3_operational_snapshot(report: &Value) -> Value {
-    let valid = report.get("schema").and_then(Value::as_str)
+    let legacy_valid = report.get("schema").and_then(Value::as_str)
         == Some("nando.s1c3c-terminal-status.v1")
         && report.get("transaction_id").and_then(Value::as_str)
             == Some("20260812T113705Z-2a1505055ce9-s1c3c-v1")
@@ -1908,7 +1909,68 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
             .get("terminal_status_root_sha256")
             .and_then(Value::as_str)
             == Some("28a0ed19d511072b4e4155fa2f7649a327e42fdf7c328cc0ccf7da78840a4384");
-    if !valid {
+    let s1c3g_valid = rooted_json_matches(report, "terminal_status_root_sha256")
+        && report.get("schema").and_then(Value::as_str) == Some("nando.s1c3g-terminal-status.v1")
+        && report.get("transaction_id").and_then(Value::as_str)
+            == Some("20260812T180143Z-1369da0a49ef-s1c3g-v1")
+        && report.get("source_commit").and_then(Value::as_str)
+            == Some("1369da0a49efcd48d3443da1eedaf51eefb73023")
+        && report.get("verdict").and_then(Value::as_str) == Some("S1C3G_ROLLBACK_PASS")
+        && report.get("blocker").and_then(Value::as_str)
+            == Some("post_install_stable_route_projection_mismatch_before_survival")
+        && report.get("startup_diagnostic").and_then(Value::as_str)
+            == Some("response_authority_runtime_build_mismatch")
+        && report.get("diagnostic_causality").and_then(Value::as_str)
+            == Some("PROXIMATE_ONLY_NOT_PROVED_CAUSE")
+        && report.get("capture_installed").and_then(Value::as_bool) == Some(false)
+        && report.get("production_mutation").and_then(Value::as_bool) == Some(true)
+        && report.get("baseline_restored").and_then(Value::as_bool) == Some(true)
+        && report.get("attempt_consumed").and_then(Value::as_bool) == Some(true)
+        && report.get("authority_envelope").and_then(Value::as_str) == Some("ROLLBACK_SEALED")
+        && report.get("s1c4_started").and_then(Value::as_bool) == Some(false)
+        && report.get("s1c4_state").and_then(Value::as_str) == Some("CLOSED")
+        && report.get("s2_started").and_then(Value::as_bool) == Some(false)
+        && report.get("authority_ready").and_then(Value::as_bool) == Some(false)
+        && report.get("scientific_authority").and_then(Value::as_bool) == Some(false)
+        && report
+            .get("model_training_allowed")
+            .and_then(Value::as_bool)
+            == Some(false)
+        && report
+            .get("phase_mutation_allowed")
+            .and_then(Value::as_bool)
+            == Some(false)
+        && report.get("rerun_allowed").and_then(Value::as_bool) == Some(false)
+        && report.get("false_accepts").and_then(Value::as_u64) == Some(0)
+        && report
+            .get("runtime_parity_failures")
+            .and_then(Value::as_u64)
+            == Some(0)
+        && report.get("baseline_binary_sha256").and_then(Value::as_str)
+            == Some("6ad63428f0cbbe96b539db2d63844403c697dec5041a91652b37857bb653ea58")
+        && report.get("baseline_config_sha256").and_then(Value::as_str)
+            == Some("cb2e33bdd2c9959b2c975e9585eb60927f9827327f6a74af6ade92b9b19486f5")
+        && report.get("state_root_sha256").and_then(Value::as_str)
+            == Some("e88e30b422e279824699b3d8d65afedb8de954cf73cf28ecfb7e872fb89ef44f")
+        && report.get("receipt_root_sha256").and_then(Value::as_str)
+            == Some("a453ef1b565d304c3e35f7b8a09d6b503098318fa9c3c9b0aa1e531b703d7965")
+        && report
+            .get("final_verification_root_sha256")
+            .and_then(Value::as_str)
+            == Some("c45f668f285bebf81ca466451eba55689e16112cd0a217a0e5a6392af9f31414")
+        && report
+            .get("journal_manifest_root_sha256")
+            .and_then(Value::as_str)
+            == Some("6ab9cd4823f1d737ec731e9c96049c0492d1966d91b3408dd524ea23b1c8666c")
+        && report
+            .get("compact_manifest_root_sha256")
+            .and_then(Value::as_str)
+            == Some("e77599a984d9ce86f412acbe60a16133ba6a1f2bf4c03d4879c07248a029ff14")
+        && report
+            .get("terminal_status_root_sha256")
+            .and_then(Value::as_str)
+            == Some("180ccb0e04748c9246a2d2316c85aa8b6aa6426ae8350576526dc8fc5c385745");
+    if !legacy_valid && !s1c3g_valid {
         return json!({
             "available": false,
             "capture_installed": false,
@@ -1920,8 +1982,41 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
             "blocker": "s1c3_operational_status_missing_or_invalid",
         });
     }
+    if s1c3g_valid {
+        return json!({
+            "available": true,
+            "stage": "S1C-3G",
+            "transaction_id": report.get("transaction_id"),
+            "verdict": report.get("verdict"),
+            "blocker": report.get("blocker"),
+            "startup_diagnostic": report.get("startup_diagnostic"),
+            "diagnostic_causality": report.get("diagnostic_causality"),
+            "capture_installed": false,
+            "production_mutation": true,
+            "baseline_restored": true,
+            "attempt_consumed": true,
+            "authority_envelope": "ROLLBACK_SEALED",
+            "s1c4_started": false,
+            "s1c4_state": "CLOSED",
+            "s2_started": false,
+            "authority_ready": false,
+            "scientific_authority": false,
+            "model_training_allowed": false,
+            "phase_mutation_allowed": false,
+            "rerun_allowed": false,
+            "false_accepts": 0,
+            "runtime_parity_failures": 0,
+            "state_root_sha256": report.get("state_root_sha256"),
+            "receipt_root_sha256": report.get("receipt_root_sha256"),
+            "final_verification_root_sha256": report.get("final_verification_root_sha256"),
+            "journal_manifest_root_sha256": report.get("journal_manifest_root_sha256"),
+            "compact_manifest_root_sha256": report.get("compact_manifest_root_sha256"),
+            "terminal_status_root_sha256": report.get("terminal_status_root_sha256"),
+        });
+    }
     json!({
         "available": true,
+        "stage": "S1C-3C",
         "transaction_id": report.get("transaction_id"),
         "verdict": report.get("verdict"),
         "blocker": report.get("blocker"),
@@ -1943,6 +2038,21 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
         "postmortem_root_sha256": "5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd",
         "terminal_status_root_sha256": "28a0ed19d511072b4e4155fa2f7649a327e42fdf7c328cc0ccf7da78840a4384",
     })
+}
+
+fn rooted_json_matches(value: &Value, root_field: &str) -> bool {
+    let Some(expected) = value.get(root_field).and_then(Value::as_str) else {
+        return false;
+    };
+    let mut rooted = value.clone();
+    let Some(object) = rooted.as_object_mut() else {
+        return false;
+    };
+    object.remove(root_field);
+    let Ok(bytes) = serde_json::to_vec(&rooted) else {
+        return false;
+    };
+    format!("{:x}", Sha256::digest(bytes)) == expected
 }
 
 fn k1_gate_snapshot(ms4: &Value) -> Value {
@@ -2642,6 +2752,55 @@ mod tests {
         assert_eq!(accepted["available"], true);
         assert_eq!(accepted["verdict"], "RESOURCE_VETO");
         assert_eq!(accepted["authority_envelope"], "UNSEALED");
+    }
+
+    #[test]
+    fn dashboard_s1c3g_rollback_is_exact_and_fail_closed() {
+        let report = json!({
+            "attempt_consumed": true,
+            "authority_envelope": "ROLLBACK_SEALED",
+            "authority_ready": false,
+            "baseline_binary_sha256": "6ad63428f0cbbe96b539db2d63844403c697dec5041a91652b37857bb653ea58",
+            "baseline_config_sha256": "cb2e33bdd2c9959b2c975e9585eb60927f9827327f6a74af6ade92b9b19486f5",
+            "baseline_restored": true,
+            "blocker": "post_install_stable_route_projection_mismatch_before_survival",
+            "capture_installed": false,
+            "compact_manifest_root_sha256": "e77599a984d9ce86f412acbe60a16133ba6a1f2bf4c03d4879c07248a029ff14",
+            "diagnostic_causality": "PROXIMATE_ONLY_NOT_PROVED_CAUSE",
+            "false_accepts": 0,
+            "final_verification_root_sha256": "c45f668f285bebf81ca466451eba55689e16112cd0a217a0e5a6392af9f31414",
+            "journal_manifest_root_sha256": "6ab9cd4823f1d737ec731e9c96049c0492d1966d91b3408dd524ea23b1c8666c",
+            "model_training_allowed": false,
+            "phase_mutation_allowed": false,
+            "production_mutation": true,
+            "receipt_root_sha256": "a453ef1b565d304c3e35f7b8a09d6b503098318fa9c3c9b0aa1e531b703d7965",
+            "rerun_allowed": false,
+            "runtime_parity_failures": 0,
+            "s1c4_started": false,
+            "s1c4_state": "CLOSED",
+            "s2_started": false,
+            "schema": "nando.s1c3g-terminal-status.v1",
+            "scientific_authority": false,
+            "source_commit": "1369da0a49efcd48d3443da1eedaf51eefb73023",
+            "startup_diagnostic": "response_authority_runtime_build_mismatch",
+            "state_root_sha256": "e88e30b422e279824699b3d8d65afedb8de954cf73cf28ecfb7e872fb89ef44f",
+            "transaction_id": "20260812T180143Z-1369da0a49ef-s1c3g-v1",
+            "verdict": "S1C3G_ROLLBACK_PASS",
+            "terminal_status_root_sha256": "180ccb0e04748c9246a2d2316c85aa8b6aa6426ae8350576526dc8fc5c385745",
+        });
+        let snapshot = s1c3_operational_snapshot(&report);
+        assert_eq!(snapshot["available"], true);
+        assert_eq!(snapshot["stage"], "S1C-3G");
+        assert_eq!(snapshot["verdict"], "S1C3G_ROLLBACK_PASS");
+        assert_eq!(snapshot["baseline_restored"], true);
+        assert_eq!(snapshot["capture_installed"], false);
+        assert_eq!(snapshot["s1c4_state"], "CLOSED");
+
+        let mut forged = report;
+        forged["capture_installed"] = json!(true);
+        let rejected = s1c3_operational_snapshot(&forged);
+        assert_eq!(rejected["available"], false);
+        assert_eq!(rejected["authority_ready"], false);
     }
 
     #[test]

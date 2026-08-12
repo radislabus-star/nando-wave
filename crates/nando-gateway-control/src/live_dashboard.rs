@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.12-control-v16";
+const DASHBOARD_BUILD: &str = "2026.08.12-control-v17";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -455,7 +455,7 @@ const TEMPLATE: &str = r#"
         <strong id="decision-status" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
       <div class="law-body operational-boundary" aria-label="S1C operational boundary">
-        <p class="discovery-label">S1C-3C · production capture</p>
+        <p class="discovery-label"><b id="s1c-stage">S1C</b> · production capture</p>
         <p class="law-counts vocabulary-slots">
           <span>capture <b id="s1c-capture">—</b></span>
           <span>attempt <b id="s1c-verdict">—</b></span>
@@ -541,6 +541,11 @@ const TEMPLATE: &str = r#"
     DECISION_SURFACE_LINEAGE_BLOCKED:"DECISION LINEAGE BLOCKED",
     READY_FOR_BASELINES:"READY FOR BASELINES",
     REPORT_UNAVAILABLE:"REPORT UNAVAILABLE",
+    S1C3G_ROLLBACK_PASS:"ROLLBACK PASS",
+    ROLLBACK_SEALED:"ROLLBACK SEALED",
+    post_install_stable_route_projection_mismatch_before_survival:"stable route projection mismatch до survival",
+    response_authority_runtime_build_mismatch:"runtime build mismatch при старте",
+    PROXIMATE_ONLY_NOT_PROVED_CAUSE:"сопутствующая диагностика, причина не доказана",
     unavailable:"UNKNOWN",
   }[value] || String(value || "—").replaceAll("_", " "));
 
@@ -644,13 +649,20 @@ const TEMPLATE: &str = r#"
     text("decision-stage", !decisionAvailable ? "UNKNOWN" : `S1A PASS · S1B ${readable(decision.verdict)}`);
     text("decision-blocker", readable(decision.blocker));
     const s1cAvailable = s1c.available === true;
+    text("s1c-stage", s1cAvailable ? readable(s1c.stage) : "S1C");
     text("s1c-capture", s1cAvailable && s1c.capture_installed ? "INSTALLED" : "NOT INSTALLED");
-    text("s1c-verdict", s1cAvailable ? "TERMINAL · RESOURCE VETO" : "STATUS UNAVAILABLE");
-    text("s1c-production", s1cAvailable && !s1c.production_mutation ? "UNCHANGED" : "UNKNOWN");
+    text("s1c-verdict", s1cAvailable ? readable(s1c.verdict) : "STATUS UNAVAILABLE");
+    text("s1c-production", !s1cAvailable
+      ? "UNKNOWN"
+      : s1c.baseline_restored
+        ? "BASELINE RESTORED"
+        : s1c.production_mutation
+          ? "MUTATED"
+          : "UNCHANGED");
     text("s1c-authority-envelope", s1cAvailable ? readable(s1c.authority_envelope) : "UNKNOWN");
-    text("s1c4-state", s1cAvailable && s1c.s1c4_started ? "STARTED" : "CLOSED");
+    text("s1c4-state", s1cAvailable ? readable(s1c.s1c4_state || (s1c.s1c4_started ? "STARTED" : "CLOSED")) : "UNKNOWN");
     text("s1c-blocker", s1cAvailable
-      ? "resource gate failed · frozen terminal verifier could not seal parity-mismatch VETO · capture not installed · retry forbidden"
+      ? `${readable(s1c.blocker)}${s1c.startup_diagnostic ? ` · ${readable(s1c.startup_diagnostic)} (${readable(s1c.diagnostic_causality)})` : ""} · capture not installed · attempt consumed`
       : "status sidecar отсутствует или невалиден");
 
     const current = {
@@ -766,15 +778,16 @@ mod tests {
         assert!(html.contains("verified ordinary CPU"));
         assert!(html.contains("K2 · decision evidence"));
         assert!(html.contains("S1A transition projection → S1B decision census"));
-        assert!(html.contains("S1C-3C · production capture"));
+        assert!(html.contains("id=\"s1c-stage\""));
         assert!(html.contains("id=\"s1c-capture\""));
         assert!(html.contains("id=\"s1c-verdict\""));
         assert!(html.contains("id=\"s1c-production\""));
         assert!(html.contains("id=\"s1c-authority-envelope\""));
         assert!(html.contains("id=\"s1c4-state\""));
         assert!(html.contains("id=\"s1c-blocker\""));
-        assert!(html.contains("TERMINAL · RESOURCE VETO"));
-        assert!(html.contains("retry forbidden"));
+        assert!(html.contains("S1C3G_ROLLBACK_PASS"));
+        assert!(html.contains("BASELINE RESTORED"));
+        assert!(html.contains("attempt consumed"));
         assert!(html.contains("id=\"decision-scanned\""));
         assert!(html.contains("id=\"decision-projected\""));
         assert!(html.contains("id=\"transition-censors\""));
