@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -199,8 +200,10 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("seal_resource_veto", emergency)
 
     def test_launcher_shell_syntax(self) -> None:
+        launcher = Path(wrapper.__file__).resolve().parent / "run_s1c3d_transaction_v1.sh"
+        self.assertTrue(os.access(launcher, os.X_OK))
         completed = subprocess.run(
-            ["bash", "-n", str(Path(wrapper.__file__).resolve().parent / "run_s1c3d_transaction_v1.sh")],
+            ["bash", "-n", str(launcher)],
             check=False,
         )
         self.assertEqual(completed.returncode, 0)
