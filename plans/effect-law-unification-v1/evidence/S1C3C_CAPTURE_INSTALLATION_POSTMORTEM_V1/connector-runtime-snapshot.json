@@ -1,0 +1,12 @@
+{
+  "active": true,
+  "main_pid": 2919,
+  "nrestarts": 0,
+  "observed_at": "2026-08-12T12:14:51Z",
+  "relay_failures": 258,
+  "route_identity_missing": 104,
+  "route_receipt_failures": 0,
+  "route_receipts": 69508,
+  "schema": "nando.s1c3c-postmortem-connector-runtime.v1",
+  "uptime_seconds": 914624
+}

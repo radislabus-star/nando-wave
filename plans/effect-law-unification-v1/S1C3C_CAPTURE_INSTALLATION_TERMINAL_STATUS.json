@@ -1,0 +1,23 @@
+{
+  "attempt_consumed": true,
+  "authority_envelope": "UNSEALED",
+  "authority_ready": false,
+  "blocker": "parity_output_mismatch_in_frozen_terminal_verifier",
+  "capture_installed": false,
+  "deployment_verdict": null,
+  "model_training_allowed": false,
+  "parity_root_sha256": "6390d4ac7b5acebbbf7b9d56b692662a64c7ddfa7fc39a8482a1797f9f62af6e",
+  "phase_mutation_allowed": false,
+  "postmortem_root_sha256": "5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd",
+  "production_mutation": false,
+  "rerun_allowed": false,
+  "resource_root_sha256": "174bc9ac3f7e7a6d53561bca3059c721bb59e2e6886baf6af29bb201016d23d0",
+  "resource_verdict": "S1C3B_RESOURCE_VETO",
+  "s1c4_started": false,
+  "s2_started": false,
+  "schema": "nando.s1c3c-terminal-status.v1",
+  "scientific_authority": false,
+  "terminal_status_root_sha256": "28a0ed19d511072b4e4155fa2f7649a327e42fdf7c328cc0ccf7da78840a4384",
+  "transaction_id": "20260812T113705Z-2a1505055ce9-s1c3c-v1",
+  "verdict": "RESOURCE_VETO"
+}

@@ -1,6 +1,6 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3B TERMINAL / S1C-3C IMPLEMENTED NOT RUN`
+Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3B TERMINAL / S1C-3C TERMINAL RESOURCE_VETO`
 
 Plan date: `2026-08-11`
 
@@ -393,7 +393,7 @@ Exit evidence:
 
 ### S1C. Pre-Action Decision-Contract Owner
 
-Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 PASS / S1C-3B TERMINAL PREFLIGHT_FAILURE / CAPTURE NOT INSTALLED`
+Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 PASS / S1C-3B TERMINAL PREFLIGHT_FAILURE / S1C-3C TERMINAL RESOURCE_VETO / CAPTURE NOT INSTALLED`
 
 Purpose: create the missing evidence before action without changing action
 authority.
@@ -444,7 +444,7 @@ S1C-1 pure binder, predicate, journal, and temporal-order tests
 S1C-2 shadow producer with authority=false
 S1C-3 transactional deployment and restart parity
   S1C-3B consumed terminal attempt; never rerun
-  S1C-3C separately preregistered successor; at most one new attempt
+  S1C-3C consumed terminal RESOURCE_VETO attempt; never rerun
 S1C-4 natural append-cursor census
 ```
 
@@ -486,6 +486,26 @@ lock acquisition. It retains the same frozen resource thresholds, candidate,
 ordinary-load denominator, rollback boundary, and scientific non-authority.
 Exactly one S1C-3C remote transaction is allowed after every implementation
 byte is committed and pushed. There is no automatic S1C-3D.
+
+That transaction is now consumed. The resource mechanism recorded two
+settlement-p99 failures (`5.097076 ms` and `6.104611 ms`, limit `5 ms`) and
+non-identical baseline/candidate parity outputs after both oracle executions
+failed to read the registry with `PermissionDenied`. Production mutation is
+false and capture is not installed. The frozen terminal verifier could not seal
+the VETO because its PASS-oriented parity check unconditionally requires equal
+output hashes. This preserves two distinct facts:
+
+```text
+operational outcome       RESOURCE_VETO
+authority envelope        UNSEALED / authority=false
+production mutation       false
+S1C-4                     CLOSED
+S2                        BLOCKED
+```
+
+An authority-free postmortem may verify and report that exact frozen attempt,
+but it cannot grant preregistered authority, repair the consumed attempt, or
+authorize another transaction.
 
 No S2 work starts unless S1C is PASS and at least two independent decision
 lineages exist. A composition/equivalence claim additionally requires at least
@@ -767,8 +787,9 @@ S1C-2 shadow producer               PASS / NOT INSTALLED
 S1C-3B production attempt           TERMINAL PREFLIGHT_FAILURE
 S1C-3B attempt consumed             true
 S1C production capture              NOT INSTALLED
-S1C-3C successor                    IMPLEMENTATION PASS / NOT RUN
-S1C-3C remote attempts              0
+S1C-3C successor                    TERMINAL RESOURCE_VETO
+S1C-3C remote attempts              1 / 1 CONSUMED
+S1C-3C authority envelope           UNSEALED / AUTHORITY FALSE
 S1C-4 natural census                CLOSED
 S2 frozen baselines                 BLOCKED
 S3 hidden representation            BLOCKED
@@ -778,11 +799,10 @@ S6 K2 product                       BLOCKED
 K2 execution authority              false
 ```
 
-The next permissible action is only the committed and pushed S1C-3C launcher:
-perform at most one production transaction under its frozen schema, resource,
-rollback, and authority contracts. The old `run_s1c3b_transaction_v1.sh` is
-permanently forbidden. A successful S1C-3C deployment may open S1C-4 only as a
-bounded natural census in `COLLECTING`. Targeted or synthetic traffic, model
+Neither S1C-3B nor S1C-3C may be launched again. Their one-attempt budgets are
+consumed, production capture remains uninstalled, and S1C-4 stays closed. The
+only permissible follow-up for this route is authority-free preservation and
+reporting of the terminal evidence. Targeted or synthetic traffic, model
 training, phase mutation, automatic S2 activation, and K2 claims remain
 forbidden.
 

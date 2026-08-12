@@ -217,8 +217,9 @@ S1C-1 contracts and durable journal              PASS / SOURCE ONLY
 S1C-2 shadow producer                            PASS / NOT INSTALLED
 S1C-3B sole production attempt                   TERMINAL PREFLIGHT_FAILURE
 S1C-3B production mutation                       false
-S1C-3C successor implementation                  PASS / NOT RUN
-S1C-3C remote attempts                           0
+S1C-3C successor attempt                         TERMINAL RESOURCE_VETO
+S1C-3C remote attempts                           1 / 1 CONSUMED
+S1C-3C authority envelope                        UNSEALED / AUTHORITY FALSE
 S1C production capture                           NOT INSTALLED
 S1C-4 natural decision census                    CLOSED
 S2 grounded meaning                              BLOCKED
@@ -315,15 +316,19 @@ S1C production capture installation
 -> grounded K2 certificate
 ```
 
-The sole S1C-3B transaction is consumed. It terminated before resource or
-deployment verdicts because the emitted idle metric field and parser field
-tuple disagreed. Production remained unchanged. That historical attempt may
-not be rerun. The separately preregistered S1C-3C successor is implemented and
-verified but has not run. Its local schema dry-run completes before any remote
-attempt is created, and its freeze derives commit, tree, and frozen file hashes
-from the uploaded source bundle. A deployment PASS would prove capture
-installation only; S1C-4 would still begin at `COLLECTING`, and S2 would remain
-blocked until natural evidence passes the frozen census.
+The sole S1C-3B transaction remains a consumed terminal preflight failure. The
+separately preregistered S1C-3C successor also consumed its only allowed remote
+attempt. Its frozen resource mechanism reached `RESOURCE_VETO` before any
+production mutation: settlement p99 exceeded 5 ms in rounds 2 and 3, and the
+baseline/candidate parity outputs were not byte-identical after both oracle
+processes failed to read the registry with `PermissionDenied`.
+
+The frozen S1C-3C terminal verifier then rejected the observed VETO at
+`parity_output_mismatch` because it unconditionally requires equal output hashes.
+Therefore the operational outcome is `RESOURCE_VETO`, but the authority envelope
+is `UNSEALED`, `authority=false`, capture remains uninstalled, S1C-4 remains
+closed, and no rerun is authorized. The authority-free postmortem root is
+`5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd`.
 
 ## 7. Completed Ownership Repair
 

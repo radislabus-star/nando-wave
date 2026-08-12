@@ -1872,18 +1872,22 @@ fn grounded_decision_snapshot(report: &Value) -> Value {
 
 fn s1c3_operational_snapshot(report: &Value) -> Value {
     let valid = report.get("schema").and_then(Value::as_str)
-        == Some("nando.s1c3b-terminal-status.v1")
+        == Some("nando.s1c3c-terminal-status.v1")
         && report.get("transaction_id").and_then(Value::as_str)
-            == Some("20260812T093629Z-36ffc0cbf56b-s1c3b-v1")
-        && report.get("verdict").and_then(Value::as_str) == Some("PREFLIGHT_FAILURE")
-        && report.get("blocker").and_then(Value::as_str) == Some("idle_metric_schema_mismatch")
+            == Some("20260812T113705Z-2a1505055ce9-s1c3c-v1")
+        && report.get("verdict").and_then(Value::as_str) == Some("RESOURCE_VETO")
+        && report.get("resource_verdict").and_then(Value::as_str) == Some("S1C3B_RESOURCE_VETO")
+        && report.get("deployment_verdict").is_some_and(Value::is_null)
+        && report.get("blocker").and_then(Value::as_str)
+            == Some("parity_output_mismatch_in_frozen_terminal_verifier")
         && report.get("capture_installed").and_then(Value::as_bool) == Some(false)
         && report.get("production_mutation").and_then(Value::as_bool) == Some(false)
         && report.get("attempt_consumed").and_then(Value::as_bool) == Some(true)
-        && report.get("resource_verdict").is_some_and(Value::is_null)
-        && report.get("deployment_verdict").is_some_and(Value::is_null)
+        && report.get("authority_envelope").and_then(Value::as_str) == Some("UNSEALED")
         && report.get("s1c4_started").and_then(Value::as_bool) == Some(false)
+        && report.get("s2_started").and_then(Value::as_bool) == Some(false)
         && report.get("authority_ready").and_then(Value::as_bool) == Some(false)
+        && report.get("scientific_authority").and_then(Value::as_bool) == Some(false)
         && report
             .get("model_training_allowed")
             .and_then(Value::as_bool)
@@ -1892,14 +1896,17 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
             .get("phase_mutation_allowed")
             .and_then(Value::as_bool)
             == Some(false)
+        && report.get("rerun_allowed").and_then(Value::as_bool) == Some(false)
+        && report.get("resource_root_sha256").and_then(Value::as_str)
+            == Some("174bc9ac3f7e7a6d53561bca3059c721bb59e2e6886baf6af29bb201016d23d0")
+        && report.get("parity_root_sha256").and_then(Value::as_str)
+            == Some("6390d4ac7b5acebbbf7b9d56b692662a64c7ddfa7fc39a8482a1797f9f62af6e")
+        && report.get("postmortem_root_sha256").and_then(Value::as_str)
+            == Some("5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd")
         && report
-            .get("local_evidence_manifest_sha256")
+            .get("terminal_status_root_sha256")
             .and_then(Value::as_str)
-            == Some("45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26")
-        && report
-            .get("remote_evidence_manifest_sha256")
-            .and_then(Value::as_str)
-            == Some("908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42");
+            == Some("28a0ed19d511072b4e4155fa2f7649a327e42fdf7c328cc0ccf7da78840a4384");
     if !valid {
         return json!({
             "available": false,
@@ -1920,14 +1927,20 @@ fn s1c3_operational_snapshot(report: &Value) -> Value {
         "capture_installed": false,
         "production_mutation": false,
         "attempt_consumed": true,
-        "resource_verdict": Value::Null,
+        "resource_verdict": "S1C3B_RESOURCE_VETO",
         "deployment_verdict": Value::Null,
+        "authority_envelope": "UNSEALED",
         "s1c4_started": false,
+        "s2_started": false,
         "authority_ready": false,
+        "scientific_authority": false,
         "model_training_allowed": false,
         "phase_mutation_allowed": false,
-        "local_evidence_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
-        "remote_evidence_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
+        "rerun_allowed": false,
+        "resource_root_sha256": "174bc9ac3f7e7a6d53561bca3059c721bb59e2e6886baf6af29bb201016d23d0",
+        "parity_root_sha256": "6390d4ac7b5acebbbf7b9d56b692662a64c7ddfa7fc39a8482a1797f9f62af6e",
+        "postmortem_root_sha256": "5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd",
+        "terminal_status_root_sha256": "28a0ed19d511072b4e4155fa2f7649a327e42fdf7c328cc0ccf7da78840a4384",
     })
 }
 
@@ -2546,21 +2559,27 @@ mod tests {
     #[test]
     fn dashboard_s1c3_status_is_exact_and_fail_closed() {
         let report = json!({
-            "schema": "nando.s1c3b-terminal-status.v1",
-            "transaction_id": "20260812T093629Z-36ffc0cbf56b-s1c3b-v1",
-            "verdict": "PREFLIGHT_FAILURE",
-            "blocker": "idle_metric_schema_mismatch",
+            "schema": "nando.s1c3c-terminal-status.v1",
+            "transaction_id": "20260812T113705Z-2a1505055ce9-s1c3c-v1",
+            "verdict": "RESOURCE_VETO",
+            "resource_verdict": "S1C3B_RESOURCE_VETO",
+            "deployment_verdict": null,
+            "blocker": "parity_output_mismatch_in_frozen_terminal_verifier",
             "capture_installed": false,
             "production_mutation": false,
             "attempt_consumed": true,
-            "resource_verdict": null,
-            "deployment_verdict": null,
+            "authority_envelope": "UNSEALED",
             "s1c4_started": false,
+            "s2_started": false,
             "authority_ready": false,
+            "scientific_authority": false,
             "model_training_allowed": false,
             "phase_mutation_allowed": false,
-            "local_evidence_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
-            "remote_evidence_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
+            "rerun_allowed": false,
+            "resource_root_sha256": "174bc9ac3f7e7a6d53561bca3059c721bb59e2e6886baf6af29bb201016d23d0",
+            "parity_root_sha256": "6390d4ac7b5acebbbf7b9d56b692662a64c7ddfa7fc39a8482a1797f9f62af6e",
+            "postmortem_root_sha256": "5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd",
+            "terminal_status_root_sha256": "28a0ed19d511072b4e4155fa2f7649a327e42fdf7c328cc0ccf7da78840a4384",
         });
         let snapshot = s1c3_operational_snapshot(&report);
         assert_eq!(snapshot["available"], true);
@@ -2582,27 +2601,33 @@ mod tests {
         assert_eq!(rejected["capture_installed"], false);
 
         forged["production_mutation"] = json!(false);
-        forged["resource_verdict"] = json!("S1C3B_RESOURCE_VETO");
+        forged["authority_envelope"] = json!("SEALED");
         let rejected = s1c3_operational_snapshot(&forged);
         assert_eq!(rejected["available"], false);
         assert_eq!(rejected["authority_ready"], false);
 
         let mut forged = json!({
-            "schema": "nando.s1c3b-terminal-status.v1",
-            "transaction_id": "20260812T093629Z-36ffc0cbf56b-s1c3b-v1",
-            "verdict": "PREFLIGHT_FAILURE",
+            "schema": "nando.s1c3c-terminal-status.v1",
+            "transaction_id": "20260812T113705Z-2a1505055ce9-s1c3c-v1",
+            "verdict": "RESOURCE_VETO",
+            "resource_verdict": "S1C3B_RESOURCE_VETO",
+            "deployment_verdict": null,
             "blocker": "latency_budget_exceeded",
             "capture_installed": false,
             "production_mutation": false,
             "attempt_consumed": true,
-            "resource_verdict": null,
-            "deployment_verdict": null,
+            "authority_envelope": "UNSEALED",
             "s1c4_started": false,
+            "s2_started": false,
             "authority_ready": false,
+            "scientific_authority": false,
             "model_training_allowed": false,
             "phase_mutation_allowed": false,
-            "local_evidence_manifest_sha256": "45150667dcd94fd2db8b2f6d9c3d77db3c07c8e9b5cb3fe40ec1fbbfe38b4c26",
-            "remote_evidence_manifest_sha256": "908a454f843a38e19de8076a7b011aaa7e8d0176fe074cdc47ef05f6f165bc42",
+            "rerun_allowed": false,
+            "resource_root_sha256": "174bc9ac3f7e7a6d53561bca3059c721bb59e2e6886baf6af29bb201016d23d0",
+            "parity_root_sha256": "6390d4ac7b5acebbbf7b9d56b692662a64c7ddfa7fc39a8482a1797f9f62af6e",
+            "postmortem_root_sha256": "5daeb142e7b5782d330a6aeca1166afcfae0f96ba00cd163a283bcc1990e60fd",
+            "terminal_status_root_sha256": "28a0ed19d511072b4e4155fa2f7649a327e42fdf7c328cc0ccf7da78840a4384",
         });
         let rejected = s1c3_operational_snapshot(&forged);
         assert_eq!(rejected["available"], false);
@@ -2611,10 +2636,11 @@ mod tests {
             "s1c3_operational_status_missing_or_invalid"
         );
 
-        forged["blocker"] = json!("idle_metric_schema_mismatch");
+        forged["blocker"] = json!("parity_output_mismatch_in_frozen_terminal_verifier");
         let accepted = s1c3_operational_snapshot(&forged);
         assert_eq!(accepted["available"], true);
-        assert_eq!(accepted["blocker"], "idle_metric_schema_mismatch");
+        assert_eq!(accepted["verdict"], "RESOURCE_VETO");
+        assert_eq!(accepted["authority_envelope"], "UNSEALED");
     }
 
     #[test]
