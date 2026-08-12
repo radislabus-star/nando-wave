@@ -123,8 +123,6 @@ def tree_manifest(root: Path) -> list[dict[str, Any]]:
                     "size_bytes": path.stat().st_size,
                     "sha256": file_digest(path),
                     "mode_octal": f"{path.stat().st_mode & 0o7777:04o}",
-                    "uid": path.stat().st_uid,
-                    "gid": path.stat().st_gid,
                 }
             )
     return rows
@@ -139,18 +137,50 @@ def compatibility_manifest(root: Path) -> dict[str, dict[str, Any]]:
             "size_bytes": path.stat().st_size,
             "sha256": file_digest(path),
             "mode_octal": f"{path.stat().st_mode & 0o7777:04o}",
-            "uid": path.stat().st_uid,
-            "gid": path.stat().st_gid,
         }
     return rows
+
+
+def transport_projection(rows: Any) -> Any:
+    if isinstance(rows, list):
+        return [transport_projection(row) for row in rows]
+    if isinstance(rows, dict):
+        return {
+            key: transport_projection(value)
+            for key, value in rows.items()
+            if key not in {"uid", "gid"}
+        }
+    return rows
+
+
+def verify_recorded_owners(rows: Any) -> None:
+    if isinstance(rows, list):
+        for row in rows:
+            verify_recorded_owners(row)
+    elif isinstance(rows, dict):
+        if "uid" in rows or "gid" in rows:
+            require(type(rows.get("uid")) is int and rows["uid"] >= 0, "recorded_uid")
+            require(type(rows.get("gid")) is int and rows["gid"] >= 0, "recorded_gid")
+        for value in rows.values():
+            verify_recorded_owners(value)
 
 
 def verify_compatibility_snapshot(root: Path) -> dict[str, Any]:
     value = load_json(root / "snapshot.json")
     verify_root(value, "snapshot_root_sha256", "compatibility_snapshot")
     exact(value.get("schema"), "nando.s1c3h-compatibility-snapshot.v1", "snapshot_schema")
-    exact(value.get("compatibility_files"), compatibility_manifest(root), "snapshot_files")
-    exact(value.get("generation_manifest"), tree_manifest(root / "generation"), "snapshot_generation")
+    verify_recorded_owners(value.get("compatibility_files"))
+    verify_recorded_owners(value.get("generation_manifest"))
+    exact(
+        transport_projection(value.get("compatibility_files")),
+        compatibility_manifest(root),
+        "snapshot_files",
+    )
+    exact(
+        transport_projection(value.get("generation_manifest")),
+        tree_manifest(root / "generation"),
+        "snapshot_generation",
+    )
     pointer = load_json(root / "response-authority-sidecar-current-v2.json")
     exact(pointer.get("generation_root_sha256"), value.get("generation_root_sha256"), "snapshot_pointer")
     return value
@@ -296,6 +326,31 @@ def verify_final(directory: Path, preparation: dict[str, Any], build: dict[str, 
     if deployed:
         exact(pair, build["pair"], "deployed_pair")
         exact(receipt.get("installed_config_sha256"), build["config_sha256"], "deployed_config")
+        installed_unit = directory / "evidence" / "installed-unit"
+        exact(
+            file_digest(installed_unit / "nando-transition-serving"),
+            build["pair"]["transition_sha256"],
+            "installed_transition_bytes",
+        )
+        exact(
+            file_digest(installed_unit / "nando-response-admission"),
+            build["pair"]["authority_sha256"],
+            "installed_authority_bytes",
+        )
+        exact(
+            file_digest(installed_unit / "transition-serving.env"),
+            build["config_sha256"],
+            "installed_config_bytes",
+        )
+        recorded_unit = receipt.get("installed_unit")
+        require(isinstance(recorded_unit, dict), "installed_unit_manifest")
+        for name, path in (
+            ("nando-transition-serving", installed_unit / "nando-transition-serving"),
+            ("nando-response-admission", installed_unit / "nando-response-admission"),
+            ("transition-serving.env", installed_unit / "transition-serving.env"),
+        ):
+            exact(recorded_unit[name].get("sha256"), file_digest(path), f"installed_unit:{name}")
+            exact(recorded_unit[name].get("size_bytes"), path.stat().st_size, f"installed_unit_size:{name}")
         exact(receipt.get("capture_installed"), True, "capture_installed")
         exact(receipt.get("capture_environment"), {
             "NANDO_GROUNDED_DECISION_JOURNAL": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1",

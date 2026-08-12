@@ -435,6 +435,25 @@ def snapshot_compatibility(destination: Path) -> None:
     fsync_directory(destination.parent)
 
 
+def snapshot_installed_unit(root: Path) -> dict[str, dict[str, Any]]:
+    destination = root / "evidence" / "installed-unit"
+    remove_directory(destination)
+    destination.mkdir(mode=0o700)
+    sources = {
+        "nando-transition-serving": TRANSITION_BINARY,
+        "nando-response-admission": AUTHORITY_BINARY,
+        "transition-serving.env": TRANSITION_CONFIG,
+    }
+    for name, source in sources.items():
+        target = destination / name
+        shutil.copy2(source, target)
+        os.chown(target, 0, 0)
+        os.chmod(target, 0o500 if not name.endswith(".env") else 0o400)
+        fsync_file(target)
+    fsync_directory(destination)
+    return file_manifest({name: destination / name for name in sources})
+
+
 def verify_compatibility_snapshot(source: Path) -> dict[str, Any]:
     value = read_json(source / "snapshot.json")
     if value.get("snapshot_root_sha256") != sha256_bytes(
@@ -1086,6 +1105,7 @@ def execute(args: argparse.Namespace) -> int:
         installed_snapshot_path = root / "evidence" / "installed-compatibility"
         snapshot_compatibility(installed_snapshot_path)
         installed_snapshot = verify_compatibility_snapshot(installed_snapshot_path)
+        installed_unit = snapshot_installed_unit(root)
         restore_authority_triggers(preparation["triggers_before"])
         wait_for_oneshots()
         require_trigger_state_restored(preparation["triggers_before"])
@@ -1105,6 +1125,7 @@ def execute(args: argparse.Namespace) -> int:
                 "installed_compatibility_snapshot_root_sha256": installed_snapshot[
                     "snapshot_root_sha256"
                 ],
+                "installed_unit": installed_unit,
                 "installed_pair": installed_pair,
                 "installed_config_sha256": sha256_file(TRANSITION_CONFIG),
                 "services_after": services_after,
@@ -1214,6 +1235,7 @@ def finalize(args: argparse.Namespace) -> int:
                 "installed_compatibility_snapshot_root_sha256"
             ),
             "installed_pair": pending["installed_pair"],
+            "installed_unit": pending.get("installed_unit"),
             "installed_config_sha256": pending["installed_config_sha256"],
             "capture_installed": pending["capture_installed"],
             "capture_environment": pending.get("capture_environment"),

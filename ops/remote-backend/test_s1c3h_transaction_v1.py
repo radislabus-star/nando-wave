@@ -376,6 +376,21 @@ class TransactionStateTests(unittest.TestCase):
 
 
 class VerifierTests(unittest.TestCase):
+    def test_snapshot_verifier_ignores_transport_owner_rewrite_but_binds_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            state = base / "state"
+            compatibility_fixture(state)
+            snapshot = base / "snapshot"
+            with mock.patch.object(executor, "STATE_DIR", state):
+                executor.snapshot_compatibility(snapshot)
+            value = verifier.verify_compatibility_snapshot(snapshot)
+            self.assertIn("uid", value["compatibility_files"]["admission.json"])
+            self.assertNotIn(
+                "uid",
+                verifier.transport_projection(value["compatibility_files"])["admission.json"],
+            )
+
     def test_executor_accepts_verifier_freeze_schema(self) -> None:
         directory = Path(verifier.__file__).resolve().parent
         value = verifier.create_freeze("a" * 40, "b" * 40, directory)

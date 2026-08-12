@@ -76,7 +76,7 @@ rollback_armed=false
 
 cleanup() {
   rm -rf "$work"
-  ssh "$remote" "rm -rf '$remote_upload' '$remote_build'" >/dev/null 2>&1 || true
+  ssh "$remote" "git -C '$remote_repo' worktree remove --force '$remote_build/source' >/dev/null 2>&1 || true; git -C '$remote_repo' worktree prune; rm -rf '$remote_upload' '$remote_build'" >/dev/null 2>&1 || true
 }
 
 connector_snapshot() {
@@ -179,7 +179,7 @@ PYTHONPATH=ops/remote-backend python3 ops/remote-backend/verify_s1c3h_transactio
   "$local_dir/remote-mirror" --implementation-freeze "$local_dir/remote-mirror/implementation-freeze.json" \
   --predeployment > "$local_dir/s1c3h-predeployment.local.json"
 scp -q "$local_dir/s1c3h-predeployment.local.json" "$remote:$remote_upload/predeployment-verification.json"
-ssh "$remote" "env PYTHONPATH='$remote_upload' python3 '$remote_upload/verify_s1c3h_transaction_v1.py' verify \
+ssh "$remote" "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/verify_s1c3h_transaction_v1.py' verify \
   '$remote_transaction' --implementation-freeze '$remote_transaction/implementation-freeze.json' --predeployment" \
   > "$local_dir/s1c3h-predeployment.remote.json"
 cmp "$local_dir/s1c3h-predeployment.local.json" "$local_dir/s1c3h-predeployment.remote.json"
@@ -218,7 +218,7 @@ PYTHONPATH=ops/remote-backend python3 ops/remote-backend/verify_s1c3h_transactio
   "$local_dir/remote-mirror" --implementation-freeze "$local_dir/remote-mirror/implementation-freeze.json" \
   > "$local_dir/s1c3h-final.local.json"
 scp -q "$local_dir/s1c3h-final.local.json" "$remote:$remote_upload/final-verification.json"
-ssh "$remote" "env PYTHONPATH='$remote_upload' python3 '$remote_upload/verify_s1c3h_transaction_v1.py' verify \
+ssh "$remote" "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/verify_s1c3h_transaction_v1.py' verify \
   '$remote_transaction' --implementation-freeze '$remote_transaction/implementation-freeze.json'" \
   > "$local_dir/s1c3h-final.remote.json"
 cmp "$local_dir/s1c3h-final.local.json" "$local_dir/s1c3h-final.remote.json"
