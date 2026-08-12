@@ -1,6 +1,6 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3B TERMINAL / S1C-3C PREREGISTERED`
+Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3B TERMINAL / S1C-3C IMPLEMENTED NOT RUN`
 
 Plan date: `2026-08-11`
 
@@ -767,7 +767,8 @@ S1C-2 shadow producer               PASS / NOT INSTALLED
 S1C-3B production attempt           TERMINAL PREFLIGHT_FAILURE
 S1C-3B attempt consumed             true
 S1C production capture              NOT INSTALLED
-S1C-3C successor                    PREREGISTERED / NOT IMPLEMENTED
+S1C-3C successor                    IMPLEMENTATION PASS / NOT RUN
+S1C-3C remote attempts              0
 S1C-4 natural census                CLOSED
 S2 frozen baselines                 BLOCKED
 S3 hidden representation            BLOCKED
@@ -777,13 +778,13 @@ S6 K2 product                       BLOCKED
 K2 execution authority              false
 ```
 
-The next permissible engineering action is only `S1C-3C`: complete its
-adversarial paper review, freeze a local schema-contract preflight and the
-successor transaction bytes, then perform at most one production transaction.
-The old `run_s1c3b_transaction_v1.sh` is permanently forbidden. A successful
-S1C-3C deployment may open S1C-4 only as a bounded natural census in
-`COLLECTING`. Targeted or synthetic traffic, model training, phase mutation,
-automatic S2 activation, and K2 claims remain forbidden.
+The next permissible action is only the committed and pushed S1C-3C launcher:
+perform at most one production transaction under its frozen schema, resource,
+rollback, and authority contracts. The old `run_s1c3b_transaction_v1.sh` is
+permanently forbidden. A successful S1C-3C deployment may open S1C-4 only as a
+bounded natural census in `COLLECTING`. Targeted or synthetic traffic, model
+training, phase mutation, automatic S2 activation, and K2 claims remain
+forbidden.
 
 Structural review packets:
 

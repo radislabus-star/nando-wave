@@ -217,6 +217,8 @@ S1C-1 contracts and durable journal              PASS / SOURCE ONLY
 S1C-2 shadow producer                            PASS / NOT INSTALLED
 S1C-3B sole production attempt                   TERMINAL PREFLIGHT_FAILURE
 S1C-3B production mutation                       false
+S1C-3C successor implementation                  PASS / NOT RUN
+S1C-3C remote attempts                           0
 S1C production capture                           NOT INSTALLED
 S1C-4 natural decision census                    CLOSED
 S2 grounded meaning                              BLOCKED
@@ -316,11 +318,12 @@ S1C production capture installation
 The sole S1C-3B transaction is consumed. It terminated before resource or
 deployment verdicts because the emitted idle metric field and parser field
 tuple disagreed. Production remained unchanged. That historical attempt may
-not be rerun. The only prospective path is a separately preregistered S1C-3C
-transaction whose local schema dry-run completes before any remote attempt is
-created. A deployment PASS would prove capture installation only; S1C-4 would
-still begin at `COLLECTING`, and S2 would remain blocked until natural evidence
-passes the frozen census.
+not be rerun. The separately preregistered S1C-3C successor is implemented and
+verified but has not run. Its local schema dry-run completes before any remote
+attempt is created, and its freeze derives commit, tree, and frozen file hashes
+from the uploaded source bundle. A deployment PASS would prove capture
+installation only; S1C-4 would still begin at `COLLECTING`, and S2 would remain
+blocked until natural evidence passes the frozen census.
 
 ## 7. Completed Ownership Repair
 
