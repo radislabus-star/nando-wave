@@ -8,6 +8,7 @@ import hashlib
 import os
 import re
 import stat
+import subprocess
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -45,6 +46,27 @@ def compatibility_fixture(root: Path) -> str:
 
 
 class StagingTests(unittest.TestCase):
+    def test_clean_interpreter_import_exposes_every_bound_dependency(self) -> None:
+        directory = Path(executor.__file__).resolve().parent
+        script = """
+import s1c3h_remote_transaction_v1 as module
+required = (
+    'canonical_bytes', 'economics_snapshot', 'fsync_directory',
+    'health_snapshot', 'journal_snapshot', 'process_environment',
+    'service_snapshot', 'sha256_file', 'systemctl', 'write_json',
+)
+missing = [name for name in required if not callable(getattr(module, name, None))]
+assert not missing, missing
+assert callable(module.http_json)
+"""
+        subprocess.run(
+            [__import__("sys").executable, "-c", script],
+            check=True,
+            cwd=directory,
+            capture_output=True,
+            timeout=10,
+        )
+
     def test_trigger_baseline_waits_for_natural_oneshot_completion(self) -> None:
         busy = {
             **{unit: {"active_state": "active"} for unit in executor.TRIGGER_UNITS},
@@ -195,6 +217,65 @@ class CompatibilitySnapshotTests(unittest.TestCase):
 
 
 class TransactionStateTests(unittest.TestCase):
+    def test_preflight_failure_seals_with_verified_unchanged_production(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            failure = executor.rooted(
+                {
+                    "schema": "nando.s1c3h-preflight-failure.v1",
+                    "transaction_id": "test",
+                    "error": "clean-import-blocker",
+                    "production_mutation": False,
+                    "observed_at_unix": 1,
+                },
+                "preflight_failure_root_sha256",
+            )
+            executor.write_json(root / "preflight-failure.json", failure, 0o400)
+            executor.write_json(root / "transaction-state.json", {"state": "PREFLIGHT_FAILURE"}, 0o600)
+            production = {"pair": {"pair_contract_equal": True}, "journal": {"record_count": 0}}
+            with (
+                mock.patch.object(executor, "verify_current_production", return_value=production),
+                mock.patch.object(executor, "execution_staging", return_value=root / "missing"),
+            ):
+                executor.abort_predeployment(
+                    SimpleNamespace(transaction_directory=str(root), reason="ignored")
+                )
+            terminal = json.loads((root / "s1c3h-state.json").read_text())
+            self.assertEqual(terminal["state"], "COMPLETE")
+            self.assertEqual(terminal["verdict"], "S1C3H_PREFLIGHT_FAILURE")
+            self.assertEqual(
+                terminal["preflight_failure_root_sha256"],
+                failure["preflight_failure_root_sha256"],
+            )
+            self.assertFalse(terminal["production_mutation"])
+
+    def test_legacy_preflight_failure_preserves_original_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = b'{"error":"old-import-error","schema":"nando.s1c3h-preflight-failure.v1"}\n'
+            write(root / "preflight-failure.json", original, 0o400)
+            executor.write_json(
+                root / "transaction-state.json",
+                {"state": "PREFLIGHT_FAILURE", "transaction_id": "legacy-test"},
+                0o600,
+            )
+            production = {"pair": {"pair_contract_equal": True}, "journal": {"record_count": 0}}
+            with (
+                mock.patch.object(executor, "verify_current_production", return_value=production),
+                mock.patch.object(executor, "execution_staging", return_value=root / "missing"),
+            ):
+                executor.abort_predeployment(
+                    SimpleNamespace(transaction_directory=str(root), reason="ignored")
+                )
+            self.assertEqual(
+                (root / "preflight-failure.unrooted.json").read_bytes(), original
+            )
+            rooted_failure = json.loads((root / "preflight-failure.json").read_text())
+            self.assertEqual(rooted_failure["transaction_id"], "legacy-test")
+            self.assertEqual(
+                rooted_failure["legacy_unrooted_sha256"], hashlib.sha256(original).hexdigest()
+            )
+
     def test_diagnostic_precedes_rollback_on_execute_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

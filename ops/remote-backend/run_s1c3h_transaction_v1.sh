@@ -165,13 +165,27 @@ ssh "$remote" "env PYTHONPATH='$remote_upload' python3 '$remote_upload/verify_s1
   --config '$remote_build/transition-serving.env.candidate'" > "$work/candidate-build-receipt.json"
 scp -q "$work/candidate-build-receipt.json" "$remote:$remote_upload/candidate-build-receipt.json"
 
+set +e
 ssh "$remote" "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/s1c3h_remote_transaction_v1.py' prepare \
   --transaction-id '$transaction_id' --transaction-directory '$remote_transaction' \
   --candidate-transition '$remote_build/nando-transition-serving' \
   --candidate-authority '$remote_build/nando-response-admission' \
   --candidate-config '$remote_build/transition-serving.env.candidate' \
   --build-receipt '$remote_upload/candidate-build-receipt.json' \
-  --implementation-freeze '$remote_upload/implementation-freeze.json'" > "$local_dir/prepare-result.json"
+  --implementation-freeze '$remote_upload/implementation-freeze.json'" \
+  > "$local_dir/prepare-result.json" 2> "$local_dir/prepare-error.json"
+prepare_code=$?
+set -e
+if [[ $prepare_code -ne 0 ]]; then
+  state=$(ssh "$remote" "sudo -n jq -r .state '$remote_transaction/transaction-state.json'")
+  [[ $state == PREFLIGHT_FAILURE ]]
+  ssh "$remote" "sudo -n env PYTHONPATH='$remote_upload' python3 '$remote_upload/s1c3h_remote_transaction_v1.py' abort-predeployment \
+    --transaction-directory '$remote_transaction' --reason prepare_failed" > "$local_dir/preflight-seal.json"
+  mirror_remote
+  printf 'transaction_directory=%s\nlocal_evidence=%s\nverdict=S1C3H_PREFLIGHT_FAILURE production_mutation=no\n' \
+    "$remote_transaction" "$local_dir"
+  exit 3
+fi
 rollback_armed=true
 trap emergency EXIT INT TERM HUP
 mirror_remote

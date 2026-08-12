@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import time
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +97,14 @@ def fsync_file(path: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def http_json(url: str) -> dict[str, Any]:
+    with urllib.request.urlopen(url, timeout=4) as response:
+        value = json.load(response)
+    if not isinstance(value, dict):
+        raise GateFailure(f"s1c3h_http_object:{url}")
+    return value
 
 
 def atomic_install(
@@ -340,8 +349,8 @@ def stable_health() -> dict[str, Any]:
 
 
 def health_contract(snapshot: dict[str, Any], expected_runtime_contract: str) -> None:
-    hot = previous.base.http_json("http://127.0.0.1:18789/health")
-    cpu = previous.base.http_json("http://192.168.3.94:8787/cpu-health")
+    hot = http_json("http://127.0.0.1:18789/health")
+    cpu = http_json("http://192.168.3.94:8787/cpu-health")
     expected = {
         "ok": True,
         "service": "nando-transition-serving",
@@ -833,8 +842,19 @@ def prepare(args: argparse.Namespace) -> int:
         print(json.dumps({"state": "PREPARED", "preparation_root_sha256": preparation["preparation_root_sha256"]}, sort_keys=True))
         return 0
     except Exception as error:
-        write_json(root / "preflight-failure.json", {"schema": "nando.s1c3h-preflight-failure.v1", "error": str(error)}, 0o400)
+        failure = rooted(
+            {
+                "schema": "nando.s1c3h-preflight-failure.v1",
+                "transaction_id": args.transaction_id,
+                "error": str(error),
+                "production_mutation": False,
+                "observed_at_unix": int(time.time()),
+            },
+            "preflight_failure_root_sha256",
+        )
+        write_json(root / "preflight-failure.json", failure, 0o400)
         write_json(root / "transaction-state.json", {"schema": STATE_SCHEMA, "state": "PREFLIGHT_FAILURE", "transaction_id": args.transaction_id}, 0o600)
+        fsync_directory(root)
         remove_directory(execution_staging(root))
         raise
 
@@ -865,7 +885,7 @@ def persist_candidate_diagnostic(root: Path, stage: str, error: str) -> dict[str
     try:
         health = {
             "projection": stable_health(),
-            "hot": previous.base.http_json("http://127.0.0.1:18789/health"),
+            "hot": http_json("http://127.0.0.1:18789/health"),
         }
     except Exception as health_error:
         health = {"error": str(health_error)}
@@ -1170,17 +1190,57 @@ def execute(args: argparse.Namespace) -> int:
 def abort_predeployment(args: argparse.Namespace) -> int:
     root = Path(args.transaction_directory)
     state = read_json(root / "transaction-state.json").get("state")
-    if state != "PREPARED":
+    if state not in {"PREPARED", "PREFLIGHT_FAILURE"}:
         raise GateFailure(f"s1c3h_abort_state:{state}")
-    verify_current_production()
+    production = verify_current_production()
+    if state == "PREFLIGHT_FAILURE":
+        failure_path = root / "preflight-failure.json"
+        failure = read_json(failure_path)
+        if "preflight_failure_root_sha256" not in failure:
+            if set(failure) != {"schema", "error"} or failure.get("schema") != "nando.s1c3h-preflight-failure.v1":
+                raise GateFailure("s1c3h_legacy_preflight_failure_shape")
+            original = root / "preflight-failure.unrooted.json"
+            if not original.exists():
+                shutil.copy2(failure_path, original)
+                os.chmod(original, 0o400)
+                fsync_file(original)
+            failure = rooted(
+                {
+                    "schema": "nando.s1c3h-preflight-failure.v1",
+                    "transaction_id": read_json(root / "transaction-state.json")[
+                        "transaction_id"
+                    ],
+                    "error": failure["error"],
+                    "production_mutation": False,
+                    "legacy_unrooted_sha256": sha256_file(original),
+                    "observed_at_unix": int(time.time()),
+                },
+                "preflight_failure_root_sha256",
+            )
+            write_json(failure_path, failure, 0o400)
+            fsync_directory(root)
+        if failure.get("preflight_failure_root_sha256") != sha256_bytes(
+            canonical_bytes(failure, "preflight_failure_root_sha256")
+        ):
+            raise GateFailure("s1c3h_preflight_failure_root")
+        transaction_id = failure["transaction_id"]
+        reason = failure["error"]
+        failure_root = failure["preflight_failure_root_sha256"]
+    else:
+        transaction_id = read_json(root / "preparation.json")["transaction_id"]
+        reason = args.reason
+        failure_root = None
     terminal = rooted(
         {
             "schema": STATE_SCHEMA,
-            "state": "PREFLIGHT_FAILURE",
-            "transaction_id": read_json(root / "preparation.json")["transaction_id"],
+            "state": "COMPLETE",
+            "transaction_id": transaction_id,
             "verdict": "S1C3H_PREFLIGHT_FAILURE",
-            "reason": args.reason,
+            "reason": reason,
+            "preflight_failure_root_sha256": failure_root,
             "production_mutation": False,
+            "production_pair": production["pair"],
+            "journal": production["journal"],
             "capture_installed": False,
             "scientific_authority": False,
         },
@@ -1188,6 +1248,7 @@ def abort_predeployment(args: argparse.Namespace) -> int:
     )
     write_json(root / "s1c3h-state.json", terminal, 0o400)
     write_json(root / "transaction-state.json", {"schema": STATE_SCHEMA, "state": "COMPLETE", "transaction_id": terminal["transaction_id"]}, 0o600)
+    fsync_directory(root)
     remove_directory(execution_staging(root))
     return 0
 
