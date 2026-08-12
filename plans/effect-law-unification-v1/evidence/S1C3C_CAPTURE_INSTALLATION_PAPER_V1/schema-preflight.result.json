@@ -1,0 +1,300 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c3c-schema-preflight-v1-final",
+  "domain": "code",
+  "complexity_score": 14,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.3333,
+      "c2": 0.3333,
+      "c3": 0.3333
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 6,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.5812,
+      "c2": 0.5999,
+      "c3": 0.5933
+    },
+    "source_self_score": 0.5915,
+    "stable": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "schema-preflight": "schema-preflight"
+    },
+    "scores": {
+      "schema-preflight": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "schema-preflight": 3
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.5915,
+      "norm": 56.7803,
+      "triads": 3
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "schema-preflight": "schema-preflight"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "schema-preflight": {
+          "norm": 56.7803,
+          "self_coherence": 0.5915,
+          "triads": 3
+        }
+      },
+      "source": {
+        "schema-preflight": {
+          "norm": 56.7803,
+          "self_coherence": 0.5915,
+          "triads": 3
+        }
+      }
+    },
+    "group_links": {
+      "schema-preflight": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "schema-preflight",
+        "exact_source_groups": [
+          "schema-preflight"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "schema-preflight": {
+        "schema-preflight": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "schema-preflight": {
+          "gravity": 1.0,
+          "owner": "local preflight owner",
+          "owners": {
+            "local preflight owner": 6
+          },
+          "support": 6,
+          "total": 6
+        }
+      },
+      "route_centers": {
+        "preflight": {
+          "gravity": 1.0,
+          "owner": "local preflight owner",
+          "owners": {
+            "local preflight owner": 6
+          },
+          "support": 6,
+          "total": 6
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "preflight": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [
+            "committed fixtures",
+            "exact idle line"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "candidate_answer:c2",
+            "candidate_answer:c3",
+            "plans/effect-law-unification-v1/s1c3c_capture_installation_preregistration_v1.md:124",
+            "plans/effect-law-unification-v1/s1c3c_capture_installation_preregistration_v1.md:50",
+            "plans/effect-law-unification-v1/s1c3c_capture_installation_preregistration_v1.md:92"
+          ],
+          "layers": [
+            "conclusion",
+            "proof",
+            "test"
+          ],
+          "outputs": [
+            "no remote work on failure",
+            "no resource authority",
+            "rooted local verdict"
+          ],
+          "owners": [
+            "local preflight owner"
+          ],
+          "scopes": [
+            "local only",
+            "successor only"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "preflight": {
+          "norm": 56.7803,
+          "self_coherence": 0.5915,
+          "triads": 3
+        }
+      },
+      "interference_matrix": {
+        "preflight": {
+          "preflight": 1.0
+        }
+      },
+      "source": {
+        "preflight": {
+          "norm": 56.7803,
+          "self_coherence": 0.5915,
+          "triads": 3
+        }
+      }
+    },
+    "source_group_sizes": {
+      "schema-preflight": 3
+    },
+    "stable_groups": [
+      "schema-preflight"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c3c-schema-preflight-v1-final.trace.json"
+}

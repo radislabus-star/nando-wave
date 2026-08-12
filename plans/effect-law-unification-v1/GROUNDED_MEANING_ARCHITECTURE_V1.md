@@ -1,6 +1,6 @@
 # Grounded Meaning Architecture And Preregistered Execution Plan V1
 
-Status: `CANONICAL PAPER PLAN / S0-S1B PASS / S1C-0 PASS / S1C-1 PASS / S1C-2 PREREGISTERED`
+Status: `CANONICAL PAPER PLAN / S0-S1A PASS / S1B EMPTY / S1C-2 DONE / S1C-3B TERMINAL / S1C-3C PREREGISTERED`
 
 Plan date: `2026-08-11`
 
@@ -27,7 +27,10 @@ adversarial review, and its verification receipt are:
 - `S1C_PRE_ACTION_DECISION_OWNER_VERIFICATION_2026-08-11.md`;
 - `S1C_SHADOW_PRODUCER_PREREGISTRATION_V1.md`;
 - `S1C_SHADOW_PRODUCER_CRITIQUE_V1.md`;
-- `S1C_SHADOW_PRODUCER_VERIFICATION_2026-08-11.md`.
+- `S1C_SHADOW_PRODUCER_VERIFICATION_2026-08-11.md`;
+- `S1C3B_PRODUCTION_LOAD_TERMINAL_REPORT_2026-08-12.md`;
+- `S1C3C_CAPTURE_INSTALLATION_PREREGISTRATION_V1.md`;
+- `S1C3C_CAPTURE_INSTALLATION_CRITIQUE_V1.md`.
 
 Owners:
 
@@ -390,7 +393,7 @@ Exit evidence:
 
 ### S1C. Pre-Action Decision-Contract Owner
 
-Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 SOURCE NEXT / RUNTIME NOT ACTIVATED`
+Status: `S1C-0 PASS / S1C-1 PASS / S1C-2 PASS / S1C-3B TERMINAL PREFLIGHT_FAILURE / CAPTURE NOT INSTALLED`
 
 Purpose: create the missing evidence before action without changing action
 authority.
@@ -440,6 +443,8 @@ S1C-0 route and ownership freeze
 S1C-1 pure binder, predicate, journal, and temporal-order tests
 S1C-2 shadow producer with authority=false
 S1C-3 transactional deployment and restart parity
+  S1C-3B consumed terminal attempt; never rerun
+  S1C-3C separately preregistered successor; at most one new attempt
 S1C-4 natural append-cursor census
 ```
 
@@ -472,6 +477,15 @@ EMPTY_ALTERNATIVE_SURFACE   no meaningful action alternative exists
 INSUFFICIENT_LINEAGES       fewer than two independent decision lineages
 PASS                        alternative-bearing episodes in two lineages
 ```
+
+S1C-3C is not a repair that changes the S1C-3B outcome. S1C-3B remains
+terminal. S1C-3C creates prospective authority only after a local contract
+dry-run proves the parser group count, typed field tuple, and evaluator fixture
+agree before timestamp creation, evidence-directory creation, SSH, or remote
+lock acquisition. It retains the same frozen resource thresholds, candidate,
+ordinary-load denominator, rollback boundary, and scientific non-authority.
+Exactly one S1C-3C remote transaction is allowed after every implementation
+byte is committed and pushed. There is no automatic S1C-3D.
 
 No S2 work starts unless S1C is PASS and at least two independent decision
 lineages exist. A composition/equivalence claim additionally requires at least
@@ -749,7 +763,12 @@ S1A transition projection           PASS
 S1B decision census                 PASS / EMPTY_DECISION_SURFACE
 S1C-0 pre-action owner freeze       PASS
 S1C-1 pure contracts and parity     PASS / SOURCE ONLY
-S1C-2 shadow producer               PREREGISTERED / SOURCE NEXT
+S1C-2 shadow producer               PASS / NOT INSTALLED
+S1C-3B production attempt           TERMINAL PREFLIGHT_FAILURE
+S1C-3B attempt consumed             true
+S1C production capture              NOT INSTALLED
+S1C-3C successor                    PREREGISTERED / NOT IMPLEMENTED
+S1C-4 natural census                CLOSED
 S2 frozen baselines                 BLOCKED
 S3 hidden representation            BLOCKED
 S4 evaluation                       BLOCKED
@@ -758,11 +777,13 @@ S6 K2 product                       BLOCKED
 K2 execution authority              false
 ```
 
-The next permissible engineering action is only the preregistered `S1C-2`
-source slice: implement the false-by-default shadow producer around the existing
-prepared evaluation and durable journal, then run its frozen source gates.
-Deployment, capture activation, model training, phase mutation, and K2 claims
-remain forbidden.
+The next permissible engineering action is only `S1C-3C`: complete its
+adversarial paper review, freeze a local schema-contract preflight and the
+successor transaction bytes, then perform at most one production transaction.
+The old `run_s1c3b_transaction_v1.sh` is permanently forbidden. A successful
+S1C-3C deployment may open S1C-4 only as a bounded natural census in
+`COLLECTING`. Targeted or synthetic traffic, model training, phase mutation,
+automatic S2 activation, and K2 claims remain forbidden.
 
 Structural review packets:
 

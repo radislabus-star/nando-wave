@@ -1,0 +1,387 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c3c-terminal-boundary-v1",
+  "domain": "code",
+  "complexity_score": 16,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.3333,
+      "c2": 0.3333,
+      "c3": 0.3333
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 6,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.6084,
+      "c2": 0.5697,
+      "c3": 0.5874
+    },
+    "source_self_score": 0.5885,
+    "stable": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "terminal-boundary": "terminal-boundary"
+    },
+    "scores": {
+      "terminal-boundary": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "terminal-boundary": 3
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.5885,
+      "norm": 56.4978,
+      "triads": 3
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "terminal-boundary": "terminal-boundary"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "terminal-boundary": {
+          "norm": 56.4978,
+          "self_coherence": 0.5885,
+          "triads": 3
+        }
+      },
+      "source": {
+        "terminal-boundary": {
+          "norm": 56.4978,
+          "self_coherence": 0.5885,
+          "triads": 3
+        }
+      }
+    },
+    "group_links": {
+      "terminal-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-boundary",
+        "exact_source_groups": [
+          "terminal-boundary"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "terminal-boundary": {
+        "terminal-boundary": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [
+        {
+          "center": "s1c-3b paper owner",
+          "group": "terminal-boundary",
+          "kind": "owner_conflict",
+          "owners": [
+            "s1c-3b paper owner",
+            "s1c-3c launcher owner",
+            "s1c-3c paper owner"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        }
+      ],
+      "group_centers": {
+        "terminal-boundary": {
+          "gravity": 0.3333,
+          "owner": "s1c-3b paper owner",
+          "owners": {
+            "s1c-3b paper owner": 2,
+            "s1c-3c launcher owner": 2,
+            "s1c-3c paper owner": 2
+          },
+          "support": 2,
+          "total": 6
+        }
+      },
+      "route_centers": {
+        "successor": {
+          "gravity": 0.5,
+          "owner": "s1c-3c launcher owner",
+          "owners": {
+            "s1c-3c launcher owner": 2,
+            "s1c-3c paper owner": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "terminal": {
+          "gravity": 1.0,
+          "owner": "s1c-3b paper owner",
+          "owners": {
+            "s1c-3b paper owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "terminal-boundary"
+      }
+    ],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "successor": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "local schema pass",
+            "successor command"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c2",
+            "candidate_answer:c3",
+            "plans/effect-law-unification-v1/s1c3c_capture_installation_preregistration_v1.md:216",
+            "plans/effect-law-unification-v1/s1c3c_capture_installation_preregistration_v1.md:39"
+          ],
+          "layers": [
+            "conclusion",
+            "operation",
+            "paper"
+          ],
+          "outputs": [
+            "no disguised retry",
+            "one new namespace"
+          ],
+          "owners": [
+            "s1c-3c launcher owner",
+            "s1c-3c paper owner"
+          ],
+          "scopes": [
+            "both protocols",
+            "s1c-3c only"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "terminal": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "terminal receipt"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "plans/effect-law-unification-v1/s1c3b_production_load_terminal_report_2026-08-12.md:1"
+          ],
+          "layers": [
+            "conclusion",
+            "proof"
+          ],
+          "outputs": [
+            "closed old attempt"
+          ],
+          "owners": [
+            "s1c-3b paper owner"
+          ],
+          "scopes": [
+            "s1c-3b only"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "successor": {
+          "norm": 44.8999,
+          "self_coherence": 0.7016,
+          "triads": 2
+        },
+        "terminal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "successor": {
+          "successor": 1.0,
+          "terminal": 0.0529
+        },
+        "terminal": {
+          "successor": 0.0529,
+          "terminal": 1.0
+        }
+      },
+      "source": {
+        "successor": {
+          "norm": 44.8999,
+          "self_coherence": 0.7016,
+          "triads": 2
+        },
+        "terminal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "terminal-boundary": 3
+    },
+    "stable_groups": [
+      "terminal-boundary"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 1,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 1,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "terminal-boundary"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 1,
+    "repair_queue": [
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "terminal-boundary"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "No decisive structural signal was found."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c3c-terminal-boundary-v1.trace.json"
+}

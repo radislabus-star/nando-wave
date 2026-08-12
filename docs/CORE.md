@@ -2,7 +2,7 @@
 
 Status: canonical current-core map.
 
-Current source snapshot: 2026-07-27 Europe/Tallinn.
+Current source snapshot: 2026-08-12 Europe/Tallinn.
 
 This document answers three questions in one place:
 
@@ -209,13 +209,18 @@ response ACTIVE packages                         2
 real local CPU execution                         PASS
 false accepts                                    0
 runtime parity failures                          0
-M3                                               WATCH / qualifying streak 1 of 3
 production authority                             true, narrow immutable lease
-multi-source MS3 generation 1                    CONTRADICTION
-multi-source blocker                             physical_transition_mismatch
-multi-source generation registry                 IMPLEMENTED / authority false
-NorthStar cellular support bridge                SHADOW TEST PASS
-NorthStar five-seed proof                        NOT EVALUATED
+K1 certified operational laws                    1 / 3 minimum seed
+S1A transition projection                        PASS
+S1B decision census                              EMPTY_DECISION_SURFACE
+S1C-1 contracts and durable journal              PASS / SOURCE ONLY
+S1C-2 shadow producer                            PASS / NOT INSTALLED
+S1C-3B sole production attempt                   TERMINAL PREFLIGHT_FAILURE
+S1C-3B production mutation                       false
+S1C production capture                           NOT INSTALLED
+S1C-4 natural decision census                    CLOSED
+S2 grounded meaning                              BLOCKED
+K2 execution authority                           false
 ```
 
 Package counts are a dated source checkpoint, not a timeless live claim, and
@@ -253,7 +258,7 @@ crystallized-scalar-db6407c627296d8b   natural value projection
 crystallized-scalar-e35441ca7863327d   continuation: wait
 ```
 
-Real `/v2/responses` requests have returned `local_accept=true` without an
+Real `/v1/responses` requests have returned `local_accept=true` without an
 upstream LLM call. The external gate reports
 `eligible_for_local_accept=true`; false accepts and runtime parity mismatches
 remain zero.
@@ -264,23 +269,25 @@ value with HTTP 200 and the serving process attributed `1 accept / 104 input
 tokens` to package `crystallized-scalar-db6407c627296d8b`. Package-owned
 counters are bounded diagnostics and grant no authority.
 
-The blocker is now breadth and mature-window economics, not signal
-connectivity:
+The product blocker is breadth: only one law is certified for the K1
+epistemic basis. The grounded-meaning blocker is earlier and independent:
+production still lacks durable pre-action goal and alternative receipts.
 
 ```text
-adaptive ACTIVE response packages        3
+K1 certified operational laws            1 / 3 minimum seed
 natural package -> gateway -> CPU         PASS
-additional status/count/filter/compose   NOT YET ACTIVE
-current-epoch verified token share       about 79.6%
-historical multi-source opportunity      571.2M tokens, recovery unaudited
-fresh multi-source structural epoch      NEXT
-qualifying M3 streak                     1 / 3
-M3                                       WATCH
+additional natural laws                  NOT YET CERTIFIED
+S1A transition projection                PASS
+S1B decision census                      EMPTY_DECISION_SURFACE
+S1C production capture                   NOT INSTALLED
+ordinary pre-action decision episodes    0 proven
+S2 grounded meaning                      BLOCKED
 ```
 
 Increasing coverage must come from additional independently proven operators,
-not from widening this package, weakening admission, or restoring fixed
-`32 + 32` readiness.
+not from widening an existing package or weakening admission. Grounded meaning
+must come from natural pre-action decision evidence, not from interpreting
+transition dynamics after the action.
 
 The completed narrow route and the next breadth route are:
 
@@ -297,13 +304,23 @@ adaptive support
 
 then:
 
-STOP-MS0 complete
--> MS1 pre-action topology capture
--> MS2 factorization
--> MS3/MS4 first natural multi-source ACTIVE package
--> MS5-MS8 rich portfolio
--> three mature >=50% M3 windows
+S1C production capture installation
+-> bounded natural S1C-4 census
+-> explicit frozen baselines
+-> hidden relation representation
+-> natural composition-law identification
+-> independent future and cleanup
+-> grounded K2 certificate
 ```
+
+The sole S1C-3B transaction is consumed. It terminated before resource or
+deployment verdicts because the emitted idle metric field and parser field
+tuple disagreed. Production remained unchanged. That historical attempt may
+not be rerun. The only prospective path is a separately preregistered S1C-3C
+transaction whose local schema dry-run completes before any remote attempt is
+created. A deployment PASS would prove capture installation only; S1C-4 would
+still begin at `COLLECTING`, and S2 would remain blocked until natural evidence
+passes the frozen census.
 
 ## 7. Completed Ownership Repair
 
