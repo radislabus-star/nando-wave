@@ -1,6 +1,6 @@
 # S1C Transactional Deployment Preregistration V6
 
-Status: `DESIGN FROZEN / OFFLINE DIAGNOSTIC PASS / NO DEPLOYMENT`
+Status: `DESIGN FROZEN / PAPER VERIFICATION PASS / ONE V6 ATTEMPT AUTHORIZED`
 
 Date: `2026-08-12 Europe/Tallinn`
 

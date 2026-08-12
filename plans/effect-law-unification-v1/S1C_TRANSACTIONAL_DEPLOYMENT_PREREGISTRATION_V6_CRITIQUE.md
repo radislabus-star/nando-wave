@@ -1,6 +1,6 @@
 # S1C Transactional Deployment Preregistration V6 Critique
 
-Status: `ADVERSARIAL REVIEW / ACCEPTED WITH REPAIRS / NO DEPLOYMENT`
+Status: `ADVERSARIAL REVIEW / ACCEPTED WITH REPAIRS / PAPER VERIFIED`
 
 Date: `2026-08-12 Europe/Tallinn`
 
