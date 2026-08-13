@@ -1,0 +1,887 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "s1c4-natural-census-paper-v1",
+  "domain": "code",
+  "complexity_score": 46,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8",
+    "c9",
+    "c10"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1,
+      "c10": 0.1,
+      "c2": 0.1,
+      "c3": 0.1,
+      "c4": 0.1,
+      "c5": 0.1,
+      "c6": 0.1,
+      "c7": 0.1,
+      "c8": 0.1,
+      "c9": 0.1
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 20,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3089,
+      "c10": 0.337,
+      "c2": 0.3101,
+      "c3": 0.3199,
+      "c4": 0.2845,
+      "c5": 0.3224,
+      "c6": 0.3101,
+      "c7": 0.3504,
+      "c8": 0.3529,
+      "c9": 0.3028
+    },
+    "source_self_score": 0.3199,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "claim-boundary": "claim-boundary",
+      "exact-join": "exact-join",
+      "frozen-window": "frozen-window",
+      "ingress-binding": "ingress-binding",
+      "ledger-persistence": "ledger-persistence",
+      "queue-transport": "queue-transport",
+      "receipt-proof": "receipt-proof",
+      "rollback": "rollback",
+      "terminal-cardinality": "terminal-cardinality",
+      "verdict": "verdict"
+    },
+    "scores": {
+      "claim-boundary": 1.0,
+      "exact-join": 1.0,
+      "frozen-window": 1.0,
+      "ingress-binding": 1.0,
+      "ledger-persistence": 1.0,
+      "queue-transport": 1.0,
+      "receipt-proof": 1.0,
+      "rollback": 1.0,
+      "terminal-cardinality": 1.0,
+      "verdict": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "claim-boundary": 1,
+      "exact-join": 1,
+      "frozen-window": 1,
+      "ingress-binding": 1,
+      "ledger-persistence": 1,
+      "queue-transport": 1,
+      "receipt-proof": 1,
+      "rollback": 1,
+      "terminal-cardinality": 1,
+      "verdict": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3199,
+      "norm": 102.3719,
+      "triads": 10
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "claim-boundary": "claim-boundary",
+      "exact-join": "exact-join",
+      "frozen-window": "frozen-window",
+      "ingress-binding": "ingress-binding",
+      "ledger-persistence": "ledger-persistence",
+      "queue-transport": "queue-transport",
+      "receipt-proof": "receipt-proof",
+      "rollback": "rollback",
+      "terminal-cardinality": "terminal-cardinality",
+      "verdict": "verdict"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "exact-join": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "frozen-window": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ingress-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ledger-persistence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "queue-transport": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "receipt-proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-cardinality": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "verdict": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "exact-join": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "frozen-window": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ingress-binding": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ledger-persistence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "queue-transport": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "receipt-proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rollback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-cardinality": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "verdict": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "claim-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "claim-boundary",
+        "exact_source_groups": [
+          "claim-boundary"
+        ]
+      },
+      "exact-join": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "exact-join",
+        "exact_source_groups": [
+          "exact-join"
+        ]
+      },
+      "frozen-window": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "frozen-window",
+        "exact_source_groups": [
+          "frozen-window"
+        ]
+      },
+      "ingress-binding": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "ingress-binding",
+        "exact_source_groups": [
+          "ingress-binding"
+        ]
+      },
+      "ledger-persistence": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "ledger-persistence",
+        "exact_source_groups": [
+          "ledger-persistence"
+        ]
+      },
+      "queue-transport": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "queue-transport",
+        "exact_source_groups": [
+          "queue-transport"
+        ]
+      },
+      "receipt-proof": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "receipt-proof",
+        "exact_source_groups": [
+          "receipt-proof"
+        ]
+      },
+      "rollback": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "rollback",
+        "exact_source_groups": [
+          "rollback"
+        ]
+      },
+      "terminal-cardinality": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-cardinality",
+        "exact_source_groups": [
+          "terminal-cardinality"
+        ]
+      },
+      "verdict": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "verdict",
+        "exact_source_groups": [
+          "verdict"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "claim-boundary": {
+        "claim-boundary": 1.0,
+        "exact-join": 0.0156,
+        "frozen-window": 0.0137,
+        "ingress-binding": -0.0332,
+        "ledger-persistence": 0.0059,
+        "queue-transport": -0.0078,
+        "receipt-proof": -0.0293,
+        "rollback": -0.0449,
+        "terminal-cardinality": 0.0273,
+        "verdict": 0.0215
+      },
+      "exact-join": {
+        "claim-boundary": 0.0156,
+        "exact-join": 1.0,
+        "frozen-window": 0.041,
+        "ingress-binding": -0.002,
+        "ledger-persistence": -0.0293,
+        "queue-transport": 0.0078,
+        "receipt-proof": 0.0059,
+        "rollback": 0.0137,
+        "terminal-cardinality": -0.0234,
+        "verdict": -0.0371
+      },
+      "frozen-window": {
+        "claim-boundary": 0.0137,
+        "exact-join": 0.041,
+        "frozen-window": 1.0,
+        "ingress-binding": 0.0313,
+        "ledger-persistence": -0.0898,
+        "queue-transport": -0.0176,
+        "receipt-proof": -0.0273,
+        "rollback": 0.0156,
+        "terminal-cardinality": 0.0332,
+        "verdict": 0.0313
+      },
+      "ingress-binding": {
+        "claim-boundary": -0.0332,
+        "exact-join": -0.002,
+        "frozen-window": 0.0313,
+        "ingress-binding": 1.0,
+        "ledger-persistence": -0.0117,
+        "queue-transport": 0.0059,
+        "receipt-proof": 0.0469,
+        "rollback": -0.0078,
+        "terminal-cardinality": -0.0371,
+        "verdict": -0.0039
+      },
+      "ledger-persistence": {
+        "claim-boundary": 0.0059,
+        "exact-join": -0.0293,
+        "frozen-window": -0.0898,
+        "ingress-binding": -0.0117,
+        "ledger-persistence": 1.0,
+        "queue-transport": -0.002,
+        "receipt-proof": 0.0078,
+        "rollback": -0.0156,
+        "terminal-cardinality": -0.0254,
+        "verdict": 0.0703
+      },
+      "queue-transport": {
+        "claim-boundary": -0.0078,
+        "exact-join": 0.0078,
+        "frozen-window": -0.0176,
+        "ingress-binding": 0.0059,
+        "ledger-persistence": -0.002,
+        "queue-transport": 1.0,
+        "receipt-proof": 0.0371,
+        "rollback": 0.0176,
+        "terminal-cardinality": -0.0352,
+        "verdict": 0.0176
+      },
+      "receipt-proof": {
+        "claim-boundary": -0.0293,
+        "exact-join": 0.0059,
+        "frozen-window": -0.0273,
+        "ingress-binding": 0.0469,
+        "ledger-persistence": 0.0078,
+        "queue-transport": 0.0371,
+        "receipt-proof": 1.0,
+        "rollback": 0.0313,
+        "terminal-cardinality": 0.0176,
+        "verdict": 0.0313
+      },
+      "rollback": {
+        "claim-boundary": -0.0449,
+        "exact-join": 0.0137,
+        "frozen-window": 0.0156,
+        "ingress-binding": -0.0078,
+        "ledger-persistence": -0.0156,
+        "queue-transport": 0.0176,
+        "receipt-proof": 0.0313,
+        "rollback": 1.0,
+        "terminal-cardinality": 0.0527,
+        "verdict": 0.0156
+      },
+      "terminal-cardinality": {
+        "claim-boundary": 0.0273,
+        "exact-join": -0.0234,
+        "frozen-window": 0.0332,
+        "ingress-binding": -0.0371,
+        "ledger-persistence": -0.0254,
+        "queue-transport": -0.0352,
+        "receipt-proof": 0.0176,
+        "rollback": 0.0527,
+        "terminal-cardinality": 1.0,
+        "verdict": -0.0176
+      },
+      "verdict": {
+        "claim-boundary": 0.0215,
+        "exact-join": -0.0371,
+        "frozen-window": 0.0313,
+        "ingress-binding": -0.0039,
+        "ledger-persistence": 0.0703,
+        "queue-transport": 0.0176,
+        "receipt-proof": 0.0313,
+        "rollback": 0.0156,
+        "terminal-cardinality": -0.0176,
+        "verdict": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "claim-boundary": {
+          "gravity": 1.0,
+          "owner": "s1c owner",
+          "owners": {
+            "s1c owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "exact-join": {
+          "gravity": 1.0,
+          "owner": "s1c census",
+          "owners": {
+            "s1c census": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "frozen-window": {
+          "gravity": 1.0,
+          "owner": "s1c census",
+          "owners": {
+            "s1c census": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "ingress-binding": {
+          "gravity": 1.0,
+          "owner": "opportunity bridge",
+          "owners": {
+            "opportunity bridge": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "ledger-persistence": {
+          "gravity": 1.0,
+          "owner": "s1c ledger",
+          "owners": {
+            "s1c ledger": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "queue-transport": {
+          "gravity": 1.0,
+          "owner": "s1c classifier",
+          "owners": {
+            "s1c classifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "receipt-proof": {
+          "gravity": 1.0,
+          "owner": "s1c verifier",
+          "owners": {
+            "s1c verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "rollback": {
+          "gravity": 1.0,
+          "owner": "deployment transaction",
+          "owners": {
+            "deployment transaction": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "terminal-cardinality": {
+          "gravity": 1.0,
+          "owner": "s1c runtime",
+          "owners": {
+            "s1c runtime": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "verdict": {
+          "gravity": 1.0,
+          "owner": "s1c census",
+          "owners": {
+            "s1c census": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.6,
+          "owner": "s1c census",
+          "owners": {
+            "deployment transaction": 2,
+            "s1c census": 6,
+            "s1c owner": 2
+          },
+          "support": 6,
+          "total": 10
+        },
+        "execution": {
+          "gravity": 0.25,
+          "owner": "opportunity bridge",
+          "owners": {
+            "opportunity bridge": 2,
+            "s1c classifier": 2,
+            "s1c ledger": 2,
+            "s1c runtime": 2
+          },
+          "support": 2,
+          "total": 8
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "s1c verifier",
+          "owners": {
+            "s1c verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 5,
+          "entrypoints": [
+            "closed cursor",
+            "exact denominator",
+            "installed instrument",
+            "rollback armed",
+            "terminal report"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c10",
+            "candidate_answer:c5",
+            "candidate_answer:c6",
+            "candidate_answer:c8",
+            "candidate_answer:c9",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:113",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:145",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:162",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:38",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:96"
+          ],
+          "layers": [
+            "operations",
+            "proof",
+            "science"
+          ],
+          "outputs": [
+            "1024 requests or 24 hours",
+            "exact denominator",
+            "restored runtime and preserved suffixes",
+            "stop after s1c-4",
+            "terminal s1c-4 report"
+          ],
+          "owners": [
+            "deployment transaction",
+            "s1c census",
+            "s1c owner"
+          ],
+          "scopes": [
+            "production",
+            "science"
+          ],
+          "source_triads": 5,
+          "triads": 10
+        },
+        "execution": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [
+            "nonblocking enqueue",
+            "request path",
+            "submit request",
+            "writer loop"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "candidate_answer:c2",
+            "candidate_answer:c3",
+            "candidate_answer:c4",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:22",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:64",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:85",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:90"
+          ],
+          "layers": [
+            "persistence",
+            "runtime"
+          ],
+          "outputs": [
+            "durable classification suffix",
+            "durable request binding",
+            "one queued row",
+            "one writer command"
+          ],
+          "owners": [
+            "opportunity bridge",
+            "s1c classifier",
+            "s1c ledger",
+            "s1c runtime"
+          ],
+          "scopes": [
+            "evidence",
+            "production"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "decision_recorded row"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c7",
+            "plans/effect-law-unification-v1/s1c4_natural_census_preregistration_v1.md:100"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "accepted episode or veto"
+          ],
+          "owners": [
+            "s1c verifier"
+          ],
+          "scopes": [
+            "science"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 72.7736,
+          "self_coherence": 0.4548,
+          "triads": 5
+        },
+        "execution": {
+          "norm": 62.2896,
+          "self_coherence": 0.4866,
+          "triads": 4
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "execution": 0.0035,
+          "proof": 0.0052
+        },
+        "execution": {
+          "authority": 0.0035,
+          "execution": 1.0,
+          "proof": 0.0562
+        },
+        "proof": {
+          "authority": 0.0052,
+          "execution": 0.0562,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 72.7736,
+          "self_coherence": 0.4548,
+          "triads": 5
+        },
+        "execution": {
+          "norm": 62.2896,
+          "self_coherence": 0.4866,
+          "triads": 4
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "claim-boundary": 1,
+      "exact-join": 1,
+      "frozen-window": 1,
+      "ingress-binding": 1,
+      "ledger-persistence": 1,
+      "queue-transport": 1,
+      "receipt-proof": 1,
+      "rollback": 1,
+      "terminal-cardinality": 1,
+      "verdict": 1
+    },
+    "stable_groups": [
+      "claim-boundary",
+      "exact-join",
+      "frozen-window",
+      "ingress-binding",
+      "ledger-persistence",
+      "queue-transport",
+      "receipt-proof",
+      "rollback",
+      "terminal-cardinality",
+      "verdict"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/s1c4-natural-census-paper-v1.trace.json"
+}

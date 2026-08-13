@@ -1,0 +1,37 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id":"ordinary_request","role":"interface"},
+    {"id":"opportunity_producer","role":"producer"},
+    {"id":"classification_ticket","role":"orchestrator"},
+    {"id":"classification_queue","role":"producer"},
+    {"id":"classification_writer","role":"mutation_owner"},
+    {"id":"classification_ledger","role":"evidence_owner"},
+    {"id":"census_joiner","role":"candidate_rank_owner"},
+    {"id":"census_display","role":"display_rank_owner"},
+    {"id":"decision_verifier","role":"proof_owner"},
+    {"id":"dashboard_renderer","role":"render_owner"},
+    {"id":"deployment_observer","role":"observer"}
+  ],
+  "edges": [
+    {"id":"exec-request-opportunity","from":"ordinary_request","relation":"calls","to":"opportunity_producer","events":["ordinary_request"]},
+    {"id":"exec-opportunity-ticket","from":"opportunity_producer","relation":"delegates","to":"classification_ticket","events":["ordinary_request"]},
+    {"id":"exec-ticket-queue","from":"classification_ticket","relation":"calls","to":"classification_queue","events":["terminal_classification"]},
+    {"id":"exec-queue-writer","from":"classification_queue","relation":"delegates","to":"classification_writer","events":["terminal_classification"]},
+    {"id":"authority-queue-ledger","from":"classification_queue","relation":"produces_for","to":"classification_ledger","events":["terminal_classification"]},
+    {"id":"authority-ledger-joiner","from":"classification_ledger","relation":"passes_to","to":"census_joiner","events":["terminal_census"]},
+    {"id":"authority-joiner-display","from":"census_joiner","relation":"passes_to","to":"census_display","events":["terminal_census"]},
+    {"id":"authority-display-renderer","from":"census_display","relation":"passes_to","to":"dashboard_renderer","events":["terminal_census"]},
+    {"id":"proof-ledger-verifier","from":"classification_ledger","relation":"proves","to":"decision_verifier","events":["terminal_proof"]},
+    {"id":"observe-ledger","from":"classification_ledger","relation":"observes","to":"deployment_observer","events":["deployment_check"]}
+  ],
+  "routes": [
+    {"id":"request-binding-execution","event":"ordinary_request","kind":"execution","entry":"ordinary_request","terminal":"classification_ticket","required_roles":["interface","producer","orchestrator"],"path_cardinality":[{"from":"ordinary_request","to":"classification_ticket","min":1,"max":1}]},
+    {"id":"terminal-classification-execution","event":"terminal_classification","kind":"execution","entry":"classification_ticket","terminal":"classification_writer","required_roles":["orchestrator","producer","mutation_owner"],"path_cardinality":[{"from":"classification_ticket","to":"classification_writer","min":1,"max":1}]},
+    {"id":"terminal-classification-authority","event":"terminal_classification","kind":"authority","entry":"classification_queue","terminal":"classification_ledger","required_roles":["producer","evidence_owner"],"path_cardinality":[{"from":"classification_queue","to":"classification_ledger","min":1,"max":1}]},
+    {"id":"terminal-census-authority","event":"terminal_census","kind":"authority","entry":"classification_ledger","terminal":"dashboard_renderer","required_roles":["evidence_owner","candidate_rank_owner","display_rank_owner","render_owner"],"path_cardinality":[{"from":"classification_ledger","to":"dashboard_renderer","min":1,"max":1}]},
+    {"id":"terminal-census-proof","event":"terminal_proof","kind":"proof","entry":"classification_ledger","terminal":"decision_verifier","required_roles":["evidence_owner","proof_owner"],"path_cardinality":[{"from":"classification_ledger","to":"decision_verifier","min":1,"max":1}]},
+    {"id":"deployment-observation","event":"deployment_check","kind":"observation","entry":"classification_ledger","terminal":"deployment_observer","required_roles":["evidence_owner","observer"]}
+  ]
+}

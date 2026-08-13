@@ -11,6 +11,8 @@ mod economics_worker;
 pub mod generation_shadow;
 pub mod grounded_decision_capture;
 pub mod grounded_decision_census;
+pub mod grounded_decision_natural_census;
+pub mod grounded_decision_natural_census_runtime;
 mod k1_natural_scheduler;
 mod k1_natural_scheduler_runtime;
 mod k1_pre_action_prediction;
@@ -75,8 +77,8 @@ use nando_operator_learning::{
     DurableSelectedActionBindingV1, EvidencePolicyV1, ExactPreActionGoalInputV1,
     GoalSatisfactionReceiptV1, GroundedDecisionShadowCensorV1, LearningRequestStructureInputV1,
     LearningRequestStructureV1, OnlineCollectionConfig, OnlineCollectionStatus,
-    OpportunityBridgeEventV1, ReducibilityClass, TypedGoalContractV1, TypedGoalPredicateArtifactV1,
-    bind_exact_pre_action_goal_v1, is_source_neutral_relation_frame,
+    OpportunityBridgeEventV1, ReducibilityClass, S1c4TerminalClassificationV1, TypedGoalContractV1,
+    TypedGoalPredicateArtifactV1, bind_exact_pre_action_goal_v1, is_source_neutral_relation_frame,
     verify_exact_goal_predicate_v1,
 };
 use nando_operator_proof::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
@@ -124,13 +126,14 @@ use economics_worker::{EconomicsWorkerHandle, spawn_economics_worker};
 use generation_shadow::{
     GenerationShadowConfigV3, GenerationShadowIngressV3, GenerationShadowRuntimeV3,
 };
+use grounded_decision_natural_census::{S1c4ClassificationIngressV1, S1c4ClassificationRuntimeV1};
 use learning_evidence_bridge::LearningEvidenceBridgeRuntimeV1;
 use learning_structure_bridge::LearningStructureBridgeRuntimeV2;
 use miner_worker::{
     CollectionMinerHealthSnapshot, CollectionMinerPublishedSnapshot, MinerWorkerHandle,
     spawn_miner_worker,
 };
-use opportunity_bridge::OpportunityBridgeRuntime;
+use opportunity_bridge::{OpportunityBridgeRuntime, OpportunityBridgeSubmissionReceiptV1};
 use provider_capture::{
     ProviderCaptureConfigV3, ProviderCaptureIngressV3, ProviderCaptureRuntimeV3,
 };
@@ -774,6 +777,7 @@ fn trace_id_digest(trace_id: &str) -> [u8; 32] {
 
 struct GroundedDecisionShadowRuntimeV1 {
     journal: Mutex<grounded_decision_capture::GroundedDecisionPrecommitJournalV1>,
+    classification: S1c4ClassificationRuntimeV1,
     process_epoch_root_sha256: String,
     monotonic_origin: Instant,
     censors: Mutex<BTreeMap<GroundedDecisionShadowCensorV1, u64>>,
@@ -789,10 +793,15 @@ impl GroundedDecisionShadowRuntimeV1 {
                 .unwrap_or_default()
                 .as_nanos()
         );
+        let classification_path = path
+            .parent()
+            .ok_or_else(|| "grounded_decision_journal_parent_missing".to_owned())?
+            .join("s1c4-classifications-v1");
         Ok(Self {
             journal: Mutex::new(
                 grounded_decision_capture::GroundedDecisionPrecommitJournalV1::open(path)?,
             ),
+            classification: S1c4ClassificationRuntimeV1::open(&classification_path)?,
             process_epoch_root_sha256: sha256_bytes(epoch_material.as_bytes()),
             monotonic_origin: Instant::now(),
             censors: Mutex::new(BTreeMap::new()),
@@ -809,6 +818,62 @@ impl GroundedDecisionShadowRuntimeV1 {
         if let Ok(mut censors) = self.censors.lock() {
             let count = censors.entry(censor).or_default();
             *count = count.saturating_add(1);
+        }
+    }
+
+    fn record_censor_with_ticket(
+        &self,
+        ticket: &mut Option<S1c4ClassificationTicketV1>,
+        censor: GroundedDecisionShadowCensorV1,
+    ) {
+        self.record_censor(censor);
+        if let Some(ticket) = ticket.as_mut() {
+            ticket.classify(S1c4TerminalClassificationV1::Censored { reason: censor });
+        }
+    }
+}
+
+struct S1c4ClassificationTicketV1 {
+    runtime: S1c4ClassificationRuntimeV1,
+    opportunity_receipt: OpportunityBridgeSubmissionReceiptV1,
+    request_input_tokens: u64,
+    request_observed_at_unix: u64,
+    request_event_identity_root_sha256: String,
+    session_lineage_root_sha256: String,
+    terminal: bool,
+}
+
+impl S1c4ClassificationTicketV1 {
+    fn classify(&mut self, classification: S1c4TerminalClassificationV1) {
+        if self.terminal {
+            return;
+        }
+        self.terminal = true;
+        let Some(opportunity_request_ordinal) = self.opportunity_receipt.request_ordinal else {
+            return;
+        };
+        let _ = self
+            .runtime
+            .try_submit_terminal(S1c4ClassificationIngressV1 {
+                opportunity_sequence: self.opportunity_receipt.sequence,
+                opportunity_request_ordinal,
+                opportunity_event_root_sha256: self.opportunity_receipt.event_root_sha256.clone(),
+                request_input_tokens: self.request_input_tokens,
+                request_observed_at_unix: self.request_observed_at_unix,
+                request_event_identity_root_sha256: self.request_event_identity_root_sha256.clone(),
+                session_lineage_root_sha256: self.session_lineage_root_sha256.clone(),
+                observed_at_unix_ms: unix_now_ms(),
+                classification,
+            });
+    }
+}
+
+impl Drop for S1c4ClassificationTicketV1 {
+    fn drop(&mut self) {
+        if !self.terminal {
+            self.classify(S1c4TerminalClassificationV1::Censored {
+                reason: GroundedDecisionShadowCensorV1::ActionProjectionIncomplete,
+            });
         }
     }
 }
@@ -1185,6 +1250,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     refresh_executor(&state);
     refresh_response_authority(&state);
     spawn_response_authority_runtime(state.clone())?;
+    grounded_decision_natural_census_runtime::spawn_s1c4_natural_census_runtime(state.clone())?;
     refresh_expression_shadow(&state);
     let max_body_bytes = state.config.max_body_bytes;
     let app = Router::new()
@@ -5147,13 +5213,37 @@ fn handle_openai(
             }
         }
     }
-    observe_live_economics_request(
+    let opportunity_request = observe_live_economics_request(
         &state,
         &request_event_id,
         body.clone(),
         input_tokens,
         traffic_source_dedupe_eligible(traffic_source),
     );
+    let mut s1c4_classification_ticket =
+        opportunity_request.and_then(|(opportunity_receipt, request_observed_at_unix)| {
+            let opportunity_request_ordinal = opportunity_receipt.request_ordinal?;
+            state
+                .grounded_decision_shadow
+                .as_ref()
+                .filter(|runtime| {
+                    runtime.classification.eligible_ticket(
+                        opportunity_request_ordinal,
+                        opportunity_receipt.s1c4_deadline_eligible,
+                    )
+                })
+                .map(|runtime| S1c4ClassificationTicketV1 {
+                    runtime: runtime.classification.clone(),
+                    opportunity_receipt,
+                    request_input_tokens: input_tokens,
+                    request_observed_at_unix,
+                    request_event_identity_root_sha256: request_identity
+                        .request_event_sha256()
+                        .to_owned(),
+                    session_lineage_root_sha256: request_identity.session_lineage_root().to_hex(),
+                    terminal: false,
+                })
+        });
     let request_shape =
         provider_request_shape(&payload, projection, &request_text, &capability_atom_ids);
     write_event(
@@ -5194,11 +5284,14 @@ fn handle_openai(
         ) {
             Ok(Some(goal)) => Some(goal),
             Ok(None) => {
-                runtime.record_censor(GroundedDecisionShadowCensorV1::MissingExactGoal);
+                runtime.record_censor_with_ticket(
+                    &mut s1c4_classification_ticket,
+                    GroundedDecisionShadowCensorV1::MissingExactGoal,
+                );
                 None
             }
             Err(censor) => {
-                runtime.record_censor(censor);
+                runtime.record_censor_with_ticket(&mut s1c4_classification_ticket, censor);
                 None
             }
         }
@@ -5215,6 +5308,7 @@ fn handle_openai(
             input_tokens,
             Some(traffic_source),
             grounded_decision_goal,
+            &mut s1c4_classification_ticket,
         )
     {
         return response;
@@ -5419,27 +5513,35 @@ fn finalize_grounded_decision_capture_v1(
     runtime: &GroundedDecisionShadowRuntimeV1,
     pending: PendingGroundedDecisionCaptureV1,
     execution: &RoutedResponseExecution,
+    classification_ticket: &mut Option<S1c4ClassificationTicketV1>,
 ) {
     if pending.precommit_durability_receipt.validate().is_err()
         || pending.precommit_durability_receipt.precommit_root_sha256
             != pending.precommit.precommit_root_sha256
     {
-        runtime.record_censor(GroundedDecisionShadowCensorV1::PrecommitSyncFailed);
+        runtime.record_censor_with_ticket(
+            classification_ticket,
+            GroundedDecisionShadowCensorV1::PrecommitSyncFailed,
+        );
         return;
     }
     let Some(capture) = execution.k1_capture() else {
-        runtime.record_censor(if execution.reason.contains("independent_verifier") {
+        let censor = if execution.reason.contains("independent_verifier") {
             GroundedDecisionShadowCensorV1::IndependentVerifierUnavailable
         } else {
             GroundedDecisionShadowCensorV1::TerminalConsequenceUnavailable
-        });
+        };
+        runtime.record_censor_with_ticket(classification_ticket, censor);
         return;
     };
     let Some((action_projection, execution_binding)) = pending.snapshot.k1_index.capture_material(
         &capture.selected_action_contract_root_sha256,
         &capture.opaque_execution_binding_root_sha256,
     ) else {
-        runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionNotK1);
+        runtime.record_censor_with_ticket(
+            classification_ticket,
+            GroundedDecisionShadowCensorV1::SelectedActionNotK1,
+        );
         return;
     };
     let selected_receipt = match nando_operator_learning::SelectedActionBindingReceiptV1::seal(
@@ -5453,7 +5555,10 @@ fn finalize_grounded_decision_capture_v1(
     ) {
         Ok(receipt) => receipt,
         Err(_) => {
-            runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionBindingFailed);
+            runtime.record_censor_with_ticket(
+                classification_ticket,
+                GroundedDecisionShadowCensorV1::SelectedActionBindingFailed,
+            );
             return;
         }
     };
@@ -5468,19 +5573,28 @@ fn finalize_grounded_decision_capture_v1(
     ) {
         Ok(selected) => selected,
         Err(_) => {
-            runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionBindingFailed);
+            runtime.record_censor_with_ticket(
+                classification_ticket,
+                GroundedDecisionShadowCensorV1::SelectedActionBindingFailed,
+            );
             return;
         }
     };
     let mut journal = match runtime.journal.lock() {
         Ok(journal) => journal,
         Err(_) => {
-            runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionSyncFailed);
+            runtime.record_censor_with_ticket(
+                classification_ticket,
+                GroundedDecisionShadowCensorV1::SelectedActionSyncFailed,
+            );
             return;
         }
     };
     if journal.append_selected_action(&selected).is_err() {
-        runtime.record_censor(GroundedDecisionShadowCensorV1::SelectedActionSyncFailed);
+        runtime.record_censor_with_ticket(
+            classification_ticket,
+            GroundedDecisionShadowCensorV1::SelectedActionSyncFailed,
+        );
         return;
     }
     let satisfied = match verify_exact_goal_predicate_v1(
@@ -5491,7 +5605,10 @@ fn finalize_grounded_decision_capture_v1(
     ) {
         Ok(satisfied) => satisfied,
         Err(_) => {
-            runtime.record_censor(GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed);
+            runtime.record_censor_with_ticket(
+                classification_ticket,
+                GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed,
+            );
             return;
         }
     };
@@ -5503,7 +5620,10 @@ fn finalize_grounded_decision_capture_v1(
     ) {
         Ok(receipt) => receipt,
         Err(_) => {
-            runtime.record_censor(GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed);
+            runtime.record_censor_with_ticket(
+                classification_ticket,
+                GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed,
+            );
             return;
         }
     };
@@ -5516,12 +5636,22 @@ fn finalize_grounded_decision_capture_v1(
     ) {
         Ok(satisfaction) => satisfaction,
         Err(_) => {
-            runtime.record_censor(GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed);
+            runtime.record_censor_with_ticket(
+                classification_ticket,
+                GroundedDecisionShadowCensorV1::GoalPredicateVerificationFailed,
+            );
             return;
         }
     };
     if journal.append_goal_satisfaction(&satisfaction).is_err() {
-        runtime.record_censor(GroundedDecisionShadowCensorV1::SatisfactionSyncFailed);
+        runtime.record_censor_with_ticket(
+            classification_ticket,
+            GroundedDecisionShadowCensorV1::SatisfactionSyncFailed,
+        );
+    } else if let Some(ticket) = classification_ticket.as_mut() {
+        ticket.classify(S1c4TerminalClassificationV1::DecisionRecorded {
+            decision_precommit_root_sha256: pending.precommit.precommit_root_sha256,
+        });
     }
 }
 
@@ -5537,6 +5667,7 @@ fn try_response_actor(
     input_tokens: u64,
     traffic_source_header: Option<&str>,
     grounded_decision_goal: Option<GroundedDecisionGoalIngressV1>,
+    classification_ticket: &mut Option<S1c4ClassificationTicketV1>,
 ) -> Option<Response> {
     if !projection.avoids_upstream_llm_call() {
         return None;
@@ -5622,14 +5753,20 @@ fn try_response_actor(
         grounded_decision_goal,
     ) {
         if decision_snapshot.is_none() {
-            runtime.record_censor(GroundedDecisionShadowCensorV1::AuthoritySnapshotUnavailable);
+            runtime.record_censor_with_ticket(
+                classification_ticket,
+                GroundedDecisionShadowCensorV1::AuthoritySnapshotUnavailable,
+            );
         }
         if let Some(snapshot) = decision_snapshot.as_ref() {
             if !Arc::ptr_eq(&executor, &snapshot.executor)
                 || snapshot.authority_snapshot_root_sha256
                     != snapshot.k1_index.authority_snapshot().snapshot_root_sha256
             {
-                runtime.record_censor(GroundedDecisionShadowCensorV1::AuthoritySnapshotMismatch);
+                runtime.record_censor_with_ticket(
+                    classification_ticket,
+                    GroundedDecisionShadowCensorV1::AuthoritySnapshotMismatch,
+                );
             } else {
                 let prepared =
                     executor.evaluate_pre_action(request_text, payload, snapshot.k1_index.as_ref());
@@ -5671,6 +5808,10 @@ fn try_response_actor(
                                 available_action_contracts_root_sha256: available_actions
                                     .contracts_root_sha256
                                     .clone(),
+                                available_action_count: u32::try_from(
+                                    available_actions.action_contract_roots_sha256.len(),
+                                )
+                                .unwrap_or(u32::MAX),
                                 opaque_execution_binding_set_root_sha256,
                                 journal_sequence: bound_goal
                                     .goal_contract
@@ -5701,22 +5842,34 @@ fn try_response_actor(
                                                 opaque_execution_binding_roots_sha256,
                                             });
                                     }
-                                    Err(_) => runtime.record_censor(
+                                    Err(_) => runtime.record_censor_with_ticket(
+                                        classification_ticket,
                                         GroundedDecisionShadowCensorV1::PrecommitSyncFailed,
                                     ),
                                 }
                             }
-                            Err(_) => runtime
-                                .record_censor(GroundedDecisionShadowCensorV1::PrecommitSealFailed),
+                            Err(_) => runtime.record_censor_with_ticket(
+                                classification_ticket,
+                                GroundedDecisionShadowCensorV1::PrecommitSealFailed,
+                            ),
                         }
                     }
                     (PreparedK1EvidenceV1::Ready { .. }, Ok(_)) => runtime
-                        .record_censor(GroundedDecisionShadowCensorV1::AuthoritySnapshotMismatch),
+                        .record_censor_with_ticket(
+                            classification_ticket,
+                            GroundedDecisionShadowCensorV1::AuthoritySnapshotMismatch,
+                        ),
                     (PreparedK1EvidenceV1::Censored(censor), _) => {
-                        runtime.record_censor(prepared_k1_censor_v1(censor));
+                        runtime.record_censor_with_ticket(
+                            classification_ticket,
+                            prepared_k1_censor_v1(censor),
+                        );
                     }
                     (_, Err(_)) => {
-                        runtime.record_censor(GroundedDecisionShadowCensorV1::GoalInputInvalid);
+                        runtime.record_censor_with_ticket(
+                            classification_ticket,
+                            GroundedDecisionShadowCensorV1::GoalInputInvalid,
+                        );
                     }
                 }
                 prepared_execution = Some(prepared);
@@ -5756,7 +5909,7 @@ fn try_response_actor(
         state.grounded_decision_shadow.as_ref(),
         pending_grounded_decision,
     ) {
-        finalize_grounded_decision_capture_v1(runtime, pending, &execution);
+        finalize_grounded_decision_capture_v1(runtime, pending, &execution, classification_ticket);
     }
     if execution.status != ResponseExecutionStatus::Executed {
         let decidability = classify_cpu_decidability(request_text, payload);
@@ -8409,7 +8562,7 @@ fn observe_live_economics_request(
     request_body: Bytes,
     input_tokens: u64,
     eligible: bool,
-) {
+) -> Option<(OpportunityBridgeSubmissionReceiptV1, u64)> {
     let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
     let result =
         state
@@ -8419,12 +8572,18 @@ fn observe_live_economics_request(
         state.counters.errors.fetch_add(1, Ordering::Relaxed);
         eprintln!("nando-live-economics request: {error}");
     }
-    if eligible {
-        submit_opportunity_event(
-            state,
-            OpportunityBridgeEventV1::request(intent_sha256, input_tokens, unix_now()),
-            "request",
-        );
+    if !eligible {
+        return None;
+    }
+    let observed_at_unix = unix_now();
+    let event = OpportunityBridgeEventV1::request(intent_sha256, input_tokens, observed_at_unix);
+    match state.opportunity_bridge.submit(event) {
+        Ok(receipt) => Some((receipt, observed_at_unix)),
+        Err(error) => {
+            state.counters.errors.fetch_add(1, Ordering::Relaxed);
+            eprintln!("nando-response-miner opportunity request: {error}");
+            None
+        }
     }
 }
 
@@ -8474,7 +8633,7 @@ fn submit_opportunity_event(state: &AppState, event: OpportunityBridgeEventV1, e
     let result = if let Some(worker) = current_miner_worker(state) {
         worker.submit_opportunity_event(event)
     } else if state.opportunity_bridge.producer_enabled() {
-        state.opportunity_bridge.submit(event)
+        state.opportunity_bridge.submit(event).map(|_| ())
     } else {
         return;
     };

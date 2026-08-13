@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.13-control-v18";
+const DASHBOARD_BUILD: &str = "2026.08.13-control-v19";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -454,17 +454,17 @@ const TEMPLATE: &str = r#"
         <div class="law-title"><h2 id="k2-title">K2 · grounded decision meaning</h2><span>S1A transitions → S1B census → S1C natural decisions</span></div>
         <strong id="decision-status" class="law-verdict">ЗАГРУЗКА</strong>
       </div>
-      <div class="law-body operational-boundary" aria-label="S1C operational boundary">
-        <p class="discovery-label"><b id="s1c-stage">S1C</b> · production capture</p>
+        <div class="law-body operational-boundary" aria-label="S1C-4 natural census">
+        <p class="discovery-label"><b>S1C-4</b> · конечный natural census · K2 CLOSED</p>
         <p class="law-counts vocabulary-slots">
-          <span>capture <b id="s1c-capture">—</b></span>
-          <span>attempt <b id="s1c-verdict">—</b></span>
-          <span>production <b id="s1c-production">—</b></span>
-          <span>authority envelope <b id="s1c-authority-envelope">—</b></span>
-          <span>S1C-4 <b id="s1c4-state">—</b></span>
-          <span>natural records <b id="s1c-natural-records">—</b></span>
+          <span>окно <b id="s1c4-state">—</b></span>
+          <span>классифицировано <b id="s1c4-classified">—</b></span>
+          <span>цель до action <b id="s1c4-goals">—</b></span>
+          <span>K1-варианты <b id="s1c4-alternatives">—</b></span>
+          <span>verified satisfaction <b id="s1c4-satisfied">—</b></span>
+          <span>lineages <b id="s1c4-lineages">—</b></span>
         </p>
-        <p class="law-blocker"><span>Terminal boundary:</span> <b id="s1c-blocker">—</b>.</p>
+        <p class="law-blocker"><span>Verdict:</span> <b id="s1c4-verdict">—</b>. <span>Blocker:</span> <b id="s1c-blocker">—</b>.</p>
       </div>
       <div class="law-body">
         <p class="law-counts vocabulary-slots">
@@ -538,6 +538,21 @@ const TEMPLATE: &str = r#"
     capacity_exhausted:"capacity exhausted",
     missing_pre_action_goal:"нет pre-action goal receipt",
     grounded_decision_census_missing_or_invalid:"decision census отсутствует или невалиден",
+    s1c4_natural_census_missing_or_invalid:"новое natural-окно ещё не открыто или report невалиден",
+    finite_natural_window_open:"идёт конечное окно обычного трафика",
+    awaiting_durable_classification_quiescence:"окно закрыто, ждём durable writer не более 60 секунд",
+    no_pre_action_exact_goal_in_frozen_window:"в замороженном окне нет точной цели до action",
+    no_applicable_certified_k1_alternative_in_frozen_window:"цели есть, но нет доступного certified K1-варианта",
+    fewer_than_two_independent_decision_lineages:"меньше двух независимых decision lineage",
+    natural_grounded_decision_surface_observed:"полная natural decision surface подтверждена",
+    evidence_integrity_veto:"потеря, mismatch или safety failure делают измерение неинтерпретируемым",
+    heterogeneous_unresolved_surface:"смешанная неполная поверхность не допускает вывода",
+    NOT_OPEN:"NOT OPEN",
+    QUIESCING:"QUIESCING",
+    TERMINAL:"TERMINAL",
+    EMPTY_GOAL_SURFACE:"EMPTY GOAL SURFACE",
+    EMPTY_ALTERNATIVE_SURFACE:"EMPTY ALTERNATIVE SURFACE",
+    INSUFFICIENT_LINEAGES:"INSUFFICIENT LINEAGES",
     EMPTY_DECISION_SURFACE:"EMPTY DECISION SURFACE",
     DECISION_SURFACE_LINEAGE_BLOCKED:"DECISION LINEAGE BLOCKED",
     READY_FOR_BASELINES:"READY FOR BASELINES",
@@ -569,6 +584,7 @@ const TEMPLATE: &str = r#"
     const safety = snapshot.safety || {};
     const k1 = snapshot.k1 || {};
     const decision = snapshot.k2_decision_evidence || {};
+    const s1c4 = snapshot.s1c4_natural_census || {};
     const s1c = snapshot.s1c3_operational || {};
     sourceGeneratedAt = snapshot.generated_at_unix || 0;
 
@@ -635,10 +651,9 @@ const TEMPLATE: &str = r#"
 
     const decisionAvailable = decision.available === true;
     const decisionReady = decision.verdict === "READY_FOR_BASELINES";
-    const s1cAvailable = s1c.available === true;
-    const s1cCollecting = s1cAvailable && s1c.capture_installed && s1c.s1c4_state === "COLLECTING";
-    text("decision-status", s1cCollecting ? "K2 CLOSED" : !decisionAvailable ? "REPORT UNAVAILABLE" : decisionReady ? "READY FOR BASELINES" : "DYNAMICS ONLY");
-    className("decision-status", `law-verdict ${!s1cCollecting && !decisionAvailable ? "bad" : !s1cCollecting && decisionReady ? "good" : ""}`);
+    const s1c4Available = s1c4.available === true;
+    text("decision-status", "K2 CLOSED");
+    className("decision-status", "law-verdict");
     text("decision-scanned", decisionAvailable ? number.format(decision.transition_rows_scanned || 0) : "—");
     text("decision-projected", decisionAvailable ? number.format(decision.transition_rows_projected || 0) : "—");
     text("transition-lineages", decisionAvailable ? number.format(decision.distinct_transition_lineages || 0) : "—");
@@ -654,28 +669,16 @@ const TEMPLATE: &str = r#"
     text("decision-horizons", decisionAvailable ? number.format(decision.horizon_bound || 0) : "—");
     text("decision-satisfaction", decisionAvailable ? number.format(decision.satisfaction_verifiable || 0) : "—");
     text("decision-episodes", decisionAvailable ? number.format(decision.decision_episodes || 0) : "—");
-    text("decision-stage", s1cCollecting ? "S1C-4 COLLECTING · K2 CLOSED" : !decisionAvailable ? "UNKNOWN" : `S1A PASS · S1B ${readable(decision.verdict)}`);
-    text("decision-blocker", s1cCollecting ? readable(s1c.blocker) : readable(decision.blocker));
-    text("s1c-stage", s1cAvailable ? readable(s1c.stage) : "S1C");
-    text("s1c-capture", s1cAvailable && s1c.capture_installed ? "INSTALLED" : "NOT INSTALLED");
-    text("s1c-verdict", s1cAvailable ? readable(s1c.verdict) : "STATUS UNAVAILABLE");
-    text("s1c-production", !s1cAvailable
-      ? "UNKNOWN"
-      : s1c.production_state
-        ? readable(s1c.production_state)
-      : s1c.baseline_restored
-        ? "BASELINE RESTORED"
-        : s1c.production_mutation
-          ? "MUTATED"
-          : "UNCHANGED");
-    text("s1c-authority-envelope", s1cAvailable ? readable(s1c.authority_envelope) : "UNKNOWN");
-    text("s1c4-state", s1cAvailable ? readable(s1c.s1c4_state || (s1c.s1c4_started ? "STARTED" : "CLOSED")) : "UNKNOWN");
-    text("s1c-natural-records", s1cAvailable ? number.format(s1c.natural_record_count || 0) : "—");
-    text("s1c-blocker", s1cAvailable
-      ? s1c.capture_installed
-        ? `${readable(s1c.blocker)} · natural records ${number.format(s1c.natural_record_count || 0)} · K2 CLOSED`
-        : `${readable(s1c.blocker)}${s1c.startup_diagnostic ? ` · ${readable(s1c.startup_diagnostic)} (${readable(s1c.diagnostic_causality)})` : ""} · capture not installed · attempt consumed`
-      : "status sidecar отсутствует или невалиден");
+    text("decision-stage", !decisionAvailable ? "S1A/S1B REPORT UNAVAILABLE" : `S1A PASS · S1B ${readable(decision.verdict)} · S1C-4 ${readable(s1c4.state)}`);
+    text("decision-blocker", s1c4Available ? readable(s1c4.blocker) : readable(decision.blocker));
+    text("s1c4-state", readable(s1c4.state));
+    text("s1c4-classified", s1c4Available ? `${number.format(s1c4.classified_requests || 0)} / ${number.format(s1c4.denominator_requests || 0)}` : "—");
+    text("s1c4-goals", s1c4Available ? number.format(s1c4.goal_bound || 0) : "—");
+    text("s1c4-alternatives", s1c4Available ? number.format(s1c4.alternative_bearing || 0) : "—");
+    text("s1c4-satisfied", s1c4Available ? number.format(s1c4.satisfied_episodes || 0) : "—");
+    text("s1c4-lineages", s1c4Available ? number.format(s1c4.distinct_decision_lineages || 0) : "—");
+    text("s1c4-verdict", s1c4Available ? readable(s1c4.verdict) : "REPORT UNAVAILABLE");
+    text("s1c-blocker", readable(s1c4.blocker));
 
     const current = {
       ingressTokens: ingress.input_tokens || 0,
@@ -790,19 +793,16 @@ mod tests {
         assert!(html.contains("verified ordinary CPU"));
         assert!(html.contains("K2 · grounded decision meaning"));
         assert!(html.contains("S1A transitions → S1B census → S1C natural decisions"));
-        assert!(html.contains("id=\"s1c-stage\""));
-        assert!(html.contains("id=\"s1c-capture\""));
-        assert!(html.contains("id=\"s1c-verdict\""));
-        assert!(html.contains("id=\"s1c-production\""));
-        assert!(html.contains("id=\"s1c-authority-envelope\""));
+        assert!(html.contains("конечный natural census"));
         assert!(html.contains("id=\"s1c4-state\""));
-        assert!(html.contains("id=\"s1c-natural-records\""));
+        assert!(html.contains("id=\"s1c4-classified\""));
+        assert!(html.contains("id=\"s1c4-goals\""));
+        assert!(html.contains("id=\"s1c4-alternatives\""));
+        assert!(html.contains("id=\"s1c4-satisfied\""));
+        assert!(html.contains("id=\"s1c4-lineages\""));
+        assert!(html.contains("id=\"s1c4-verdict\""));
         assert!(html.contains("id=\"s1c-blocker\""));
-        assert!(html.contains("S1C3G_ROLLBACK_PASS"));
-        assert!(html.contains("S1C3H_DEPLOYMENT_PASS"));
         assert!(html.contains("K2 CLOSED"));
-        assert!(html.contains("BASELINE RESTORED"));
-        assert!(html.contains("attempt consumed"));
         assert!(html.contains("id=\"decision-scanned\""));
         assert!(html.contains("id=\"decision-projected\""));
         assert!(html.contains("id=\"transition-censors\""));
@@ -811,7 +811,7 @@ mod tests {
         assert!(html.contains("id=\"decision-horizons\""));
         assert!(html.contains("id=\"decision-satisfaction\""));
         assert!(html.contains("id=\"decision-episodes\""));
-        assert!(html.contains("DYNAMICS ONLY"));
+        assert!(html.contains("S1A PASS"));
         assert!(html.contains("нет pre-action goal receipt"));
         assert!(!html.contains("повторяемых <b"));
         assert!(!html.contains("все доступные epistemic modes уже доказаны"));

@@ -57,6 +57,7 @@ fn precommit(sequence: u64) -> DecisionContractPrecommitV1 {
         authority_snapshot: authority(),
         applicability_evaluator_schema: "nando.response-pre-action-evaluator.v1".to_owned(),
         available_action_contracts_root_sha256: actions.contracts_root_sha256,
+        available_action_count: 1,
         opaque_execution_binding_set_root_sha256: root('f'),
         journal_sequence: sequence + 1,
         action_selection_not_before_sequence: sequence + 2,
@@ -251,6 +252,7 @@ fn durable_decision_fixture(
         authority_snapshot: authority,
         applicability_evaluator_schema: "nando.response-pre-action-evaluator.v1".to_owned(),
         available_action_contracts_root_sha256: available_actions.contracts_root_sha256.clone(),
+        available_action_count: 1,
         opaque_execution_binding_set_root_sha256: opaque_action_execution_binding_set_root_v1(
             binding_roots.clone(),
         )
@@ -286,6 +288,27 @@ fn durable_decision_fixture(
         goal_contract: bound_goal.goal_contract,
         predicate,
     }
+}
+
+#[test]
+fn legacy_v1_precommit_without_action_count_decodes_and_keeps_its_original_root() {
+    let mut legacy = precommit(90);
+    legacy.reseal_as_legacy_v1_for_test().expect("legacy root");
+    let expected_root = legacy.precommit_root_sha256.clone();
+    let mut encoded = serde_cbor::value::to_value(&legacy).expect("CBOR value");
+    let serde_cbor::Value::Map(ref mut fields) = encoded else {
+        panic!("precommit must encode as a CBOR map");
+    };
+    fields.remove(&serde_cbor::Value::Text(
+        "available_action_count".to_owned(),
+    ));
+    let bytes = serde_cbor::to_vec(&encoded).expect("legacy bytes");
+    let decoded: DecisionContractPrecommitV1 =
+        serde_cbor::from_slice(&bytes).expect("legacy decode");
+    decoded.validate().expect("legacy validation");
+    assert_eq!(decoded.schema, DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1);
+    assert_eq!(decoded.available_action_count, 0);
+    assert_eq!(decoded.precommit_root_sha256, expected_root);
 }
 
 #[test]

@@ -14,6 +14,7 @@ pub const OPAQUE_ACTION_EXECUTION_BINDING_SCHEMA_V1: &str =
     "nando.opaque-action-execution-binding.v1";
 pub const DECISION_AUTHORITY_SNAPSHOT_SCHEMA_V1: &str = "nando.decision-authority-snapshot.v1";
 pub const DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1: &str = "nando.decision-contract-precommit.v1";
+pub const DECISION_CONTRACT_PRECOMMIT_SCHEMA_V2: &str = "nando.decision-contract-precommit.v2";
 pub const DECISION_CONTRACT_DURABILITY_RECEIPT_SCHEMA_V1: &str =
     "nando.decision-contract-durability-receipt.v1";
 pub const SELECTED_ACTION_BINDING_RECEIPT_SCHEMA_V1: &str =
@@ -462,6 +463,7 @@ pub struct DecisionContractPrecommitInputV1 {
     pub authority_snapshot: DecisionAuthoritySnapshotV1,
     pub applicability_evaluator_schema: String,
     pub available_action_contracts_root_sha256: String,
+    pub available_action_count: u32,
     pub opaque_execution_binding_set_root_sha256: String,
     pub journal_sequence: u64,
     pub action_selection_not_before_sequence: u64,
@@ -494,6 +496,8 @@ pub struct DecisionContractPrecommitV1 {
     pub applicability_evaluator_schema: String,
     pub runtime_contract_root_sha256: String,
     pub available_action_contracts_root_sha256: String,
+    #[serde(default)]
+    pub available_action_count: u32,
     pub opaque_execution_binding_set_root_sha256: String,
     pub journal_sequence: u64,
     pub action_selection_not_before_sequence: u64,
@@ -534,6 +538,39 @@ struct DecisionContractPrecommitDigestV1<'a> {
     phase_mutation_allowed: bool,
 }
 
+#[derive(Serialize)]
+struct DecisionContractPrecommitDigestV2<'a> {
+    schema: &'static str,
+    request_event_identity_root_sha256: &'a str,
+    process_epoch_root_sha256: &'a str,
+    pre_action_observation_root_sha256: &'a str,
+    pre_action_topology_root_sha256: &'a str,
+    typed_goal_contract_root_sha256: &'a str,
+    goal_binding_receipt_root_sha256: &'a str,
+    constraint_contract_root_sha256: &'a str,
+    outcome_horizon_contract_root_sha256: &'a str,
+    observation_mask_root_sha256: &'a str,
+    feature_exclusion_root_sha256: &'a str,
+    decision_authority_snapshot_root_sha256: &'a str,
+    response_registry_schema: &'a str,
+    response_registry_revision: u64,
+    response_registry_root_sha256: &'a str,
+    external_admission_authority_root_sha256: &'a str,
+    certification_ledger_revision: u64,
+    certification_ledger_root_sha256: &'a str,
+    k1_vocabulary_gate_root_sha256: &'a str,
+    applicability_evaluator_schema: &'a str,
+    runtime_contract_root_sha256: &'a str,
+    available_action_contracts_root_sha256: &'a str,
+    available_action_count: u32,
+    opaque_execution_binding_set_root_sha256: &'a str,
+    journal_sequence: u64,
+    action_selection_not_before_sequence: u64,
+    precommit_monotonic_nanos: u64,
+    authority_ready: bool,
+    phase_mutation_allowed: bool,
+}
+
 impl DecisionContractPrecommitV1 {
     pub fn seal(input: DecisionContractPrecommitInputV1) -> Result<Self, &'static str> {
         input.goal_contract.validate()?;
@@ -554,7 +591,7 @@ impl DecisionContractPrecommitV1 {
         }
         let authority = input.authority_snapshot;
         let mut precommit = Self {
-            schema: DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1.to_owned(),
+            schema: DECISION_CONTRACT_PRECOMMIT_SCHEMA_V2.to_owned(),
             precommit_root_sha256: String::new(),
             request_event_identity_root_sha256: input.request_event_identity_root_sha256,
             process_epoch_root_sha256: input.process_epoch_root_sha256,
@@ -580,6 +617,7 @@ impl DecisionContractPrecommitV1 {
             applicability_evaluator_schema: input.applicability_evaluator_schema,
             runtime_contract_root_sha256: authority.runtime_contract_root_sha256,
             available_action_contracts_root_sha256: input.available_action_contracts_root_sha256,
+            available_action_count: input.available_action_count,
             opaque_execution_binding_set_root_sha256: input
                 .opaque_execution_binding_set_root_sha256,
             journal_sequence: input.journal_sequence,
@@ -594,14 +632,20 @@ impl DecisionContractPrecommitV1 {
     }
 
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.schema != DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1
-            || self.response_registry_schema.is_empty()
+        if !matches!(
+            self.schema.as_str(),
+            DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1 | DECISION_CONTRACT_PRECOMMIT_SCHEMA_V2
+        ) || self.response_registry_schema.is_empty()
             || self.applicability_evaluator_schema.is_empty()
             || self.response_registry_revision == 0
             || self.certification_ledger_revision == 0
             || self.journal_sequence == 0
             || self.action_selection_not_before_sequence <= self.journal_sequence
             || self.precommit_monotonic_nanos == 0
+            || (self.schema == DECISION_CONTRACT_PRECOMMIT_SCHEMA_V2
+                && self.available_action_count == 0)
+            || (self.schema == DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1
+                && self.available_action_count != 0)
             || self.authority_ready
             || self.phase_mutation_allowed
             || !roots_valid([
@@ -634,8 +678,44 @@ impl DecisionContractPrecommitV1 {
     }
 
     fn expected_root(&self) -> Result<String, &'static str> {
-        canonical_json_sha256(&DecisionContractPrecommitDigestV1 {
-            schema: DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1,
+        if self.schema == DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1 {
+            return canonical_json_sha256(&DecisionContractPrecommitDigestV1 {
+                schema: DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1,
+                request_event_identity_root_sha256: &self.request_event_identity_root_sha256,
+                process_epoch_root_sha256: &self.process_epoch_root_sha256,
+                pre_action_observation_root_sha256: &self.pre_action_observation_root_sha256,
+                pre_action_topology_root_sha256: &self.pre_action_topology_root_sha256,
+                typed_goal_contract_root_sha256: &self.typed_goal_contract_root_sha256,
+                goal_binding_receipt_root_sha256: &self.goal_binding_receipt_root_sha256,
+                constraint_contract_root_sha256: &self.constraint_contract_root_sha256,
+                outcome_horizon_contract_root_sha256: &self.outcome_horizon_contract_root_sha256,
+                observation_mask_root_sha256: &self.observation_mask_root_sha256,
+                feature_exclusion_root_sha256: &self.feature_exclusion_root_sha256,
+                decision_authority_snapshot_root_sha256: &self
+                    .decision_authority_snapshot_root_sha256,
+                response_registry_schema: &self.response_registry_schema,
+                response_registry_revision: self.response_registry_revision,
+                response_registry_root_sha256: &self.response_registry_root_sha256,
+                external_admission_authority_root_sha256: &self
+                    .external_admission_authority_root_sha256,
+                certification_ledger_revision: self.certification_ledger_revision,
+                certification_ledger_root_sha256: &self.certification_ledger_root_sha256,
+                k1_vocabulary_gate_root_sha256: &self.k1_vocabulary_gate_root_sha256,
+                applicability_evaluator_schema: &self.applicability_evaluator_schema,
+                runtime_contract_root_sha256: &self.runtime_contract_root_sha256,
+                available_action_contracts_root_sha256: &self
+                    .available_action_contracts_root_sha256,
+                opaque_execution_binding_set_root_sha256: &self
+                    .opaque_execution_binding_set_root_sha256,
+                journal_sequence: self.journal_sequence,
+                action_selection_not_before_sequence: self.action_selection_not_before_sequence,
+                precommit_monotonic_nanos: self.precommit_monotonic_nanos,
+                authority_ready: false,
+                phase_mutation_allowed: false,
+            });
+        }
+        canonical_json_sha256(&DecisionContractPrecommitDigestV2 {
+            schema: DECISION_CONTRACT_PRECOMMIT_SCHEMA_V2,
             request_event_identity_root_sha256: &self.request_event_identity_root_sha256,
             process_epoch_root_sha256: &self.process_epoch_root_sha256,
             pre_action_observation_root_sha256: &self.pre_action_observation_root_sha256,
@@ -658,6 +738,7 @@ impl DecisionContractPrecommitV1 {
             applicability_evaluator_schema: &self.applicability_evaluator_schema,
             runtime_contract_root_sha256: &self.runtime_contract_root_sha256,
             available_action_contracts_root_sha256: &self.available_action_contracts_root_sha256,
+            available_action_count: self.available_action_count,
             opaque_execution_binding_set_root_sha256: &self
                 .opaque_execution_binding_set_root_sha256,
             journal_sequence: self.journal_sequence,
@@ -666,6 +747,14 @@ impl DecisionContractPrecommitV1 {
             authority_ready: false,
             phase_mutation_allowed: false,
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reseal_as_legacy_v1_for_test(&mut self) -> Result<(), &'static str> {
+        self.schema = DECISION_CONTRACT_PRECOMMIT_SCHEMA_V1.to_owned();
+        self.available_action_count = 0;
+        self.precommit_root_sha256 = self.expected_root()?;
+        self.validate()
     }
 }
 

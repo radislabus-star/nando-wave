@@ -1,0 +1,160 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "transition-binary",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/tmp/nanda-s1c4-preflight/opt/nando-wave/bin/nando-transition-serving",
+      "sha256": "c05d9b21958f2160db9b54fb38226bef5bd44c735305f8c06382722f8c6f9042",
+      "size_bytes": 62751656
+    },
+    {
+      "exists": true,
+      "id": "control-binary",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/tmp/nanda-s1c4-preflight/opt/nando-wave/bin/nando-gateway-control",
+      "sha256": "804f77d53d2fca7fb34f75a964d067ef1ffa84681833de41c5d297947495a108",
+      "size_bytes": 5283488
+    },
+    {
+      "exists": true,
+      "id": "transition-config",
+      "kind": "file",
+      "mode": "0644",
+      "path": "/tmp/nanda-s1c4-preflight/etc/nando-wave/roles/transition-serving.env",
+      "sha256": "1e6e6726d3d8df34dfcac6cb6644664cf3b066d0c31fe40652fa17cd524708d6",
+      "size_bytes": 1597
+    },
+    {
+      "exists": true,
+      "id": "opportunity-checkpoint",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/opportunity-bridge-v1/counter-checkpoint-v1.json",
+      "sha256": "f3203836f412081c3da08eb17eadf71adca6ebb914fe28ad40d57551d8e5c661",
+      "size_bytes": 191
+    },
+    {
+      "exists": true,
+      "id": "decision-precommit",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    },
+    {
+      "exists": true,
+      "id": "selected-action",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    },
+    {
+      "exists": true,
+      "id": "goal-satisfaction",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor",
+      "sha256": "4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072",
+      "size_bytes": 4
+    },
+    {
+      "exists": true,
+      "id": "s1c3-status",
+      "kind": "file",
+      "mode": "0644",
+      "path": "/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/s1c3-operational-status-v1.json",
+      "sha256": "9bf69487a7ec765dd985da531572c5bd75d5b4bb26739b4552ad51c2dafda176",
+      "size_bytes": 500
+    },
+    {
+      "exists": true,
+      "id": "s1ab-census",
+      "kind": "file",
+      "mode": "0644",
+      "path": "/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/grounded-decision-census-v1.json",
+      "sha256": "68f249b9c128eee814c7d5555ce672c97065500b967efc2a86608f5bb54fa15d",
+      "size_bytes": 1278
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 9,
+    "forbidden_side_effect_kinds": [
+      "automatic_s2_entry",
+      "classification_ledger_truncation",
+      "connector_restart",
+      "decision_journal_truncation",
+      "generated_traffic",
+      "k2_authority",
+      "model_training",
+      "nginx_restart",
+      "opportunity_checkpoint_rewrite_for_claim",
+      "package_activation",
+      "phase_mutation",
+      "post_hoc_goal",
+      "raw_request_persistence",
+      "raw_response_persistence",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 4,
+    "invariants": 7,
+    "planned_side_effect_kinds": [
+      "atomic_fail_closed_report_replace",
+      "atomic_immutable_cursor_create",
+      "background_append_only_framed_ledger",
+      "bounded_nonblocking_memory_queue",
+      "bounded_structural_record_implementation",
+      "bounded_transition_and_control_restart",
+      "read_only_health_and_pid_check",
+      "rollback_capable_binary_and_config_replace",
+      "rollback_capable_binary_replace"
+    ],
+    "preserved_artifacts": 6,
+    "runtime_comparisons": 1,
+    "source_checks": 3,
+    "tests": 17
+  },
+  "manifest_sha256": "5bd9ae5e61cb05e91e901b9f3d7f3d9021912e13ad701e310b64f492610f80d0",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "opportunity-owner",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/opportunity_bridge/mod.rs",
+      "sha256": "10c3e2b3c073bcca4be4e64e96bbf8df04be0377b35cfe062daf7f52aac8730b",
+      "size_bytes": 20589
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "decision-journal-owner",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/grounded_decision_capture.rs",
+      "sha256": "43f6de5d3df4c4a9f51f35694e8b50948c992e66b2fa1ecd846b393408cd42d4",
+      "size_bytes": 34008
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "s1ab-census-owner",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/grounded_decision_census.rs",
+      "sha256": "6534dd85f9d727d864cd4b5f7849095e37e602322b18e06d538a29cbd2799193",
+      "size_bytes": 20043
+    }
+  ],
+  "task_id": "s1c4-natural-census-v1",
+  "verdict": "READY_TO_IMPLEMENT"
+}

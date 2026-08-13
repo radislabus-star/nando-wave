@@ -1,0 +1,132 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "s1c4-natural-census-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"transition-binary","kind":"file","path":"/tmp/nanda-s1c4-preflight/opt/nando-wave/bin/nando-transition-serving","expect":{"size_bytes":62751656,"sha256":"c05d9b21958f2160db9b54fb38226bef5bd44c735305f8c06382722f8c6f9042","mode":"0755"}},
+    {"id":"control-binary","kind":"file","path":"/tmp/nanda-s1c4-preflight/opt/nando-wave/bin/nando-gateway-control","expect":{"size_bytes":5283488,"sha256":"804f77d53d2fca7fb34f75a964d067ef1ffa84681833de41c5d297947495a108","mode":"0755"}},
+    {"id":"transition-config","kind":"file","path":"/tmp/nanda-s1c4-preflight/etc/nando-wave/roles/transition-serving.env","expect":{"size_bytes":1597,"sha256":"1e6e6726d3d8df34dfcac6cb6644664cf3b066d0c31fe40652fa17cd524708d6","mode":"0644"}},
+    {"id":"opportunity-checkpoint","kind":"file","path":"/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/opportunity-bridge-v1/counter-checkpoint-v1.json","expect":{"size_bytes":191,"sha256":"f3203836f412081c3da08eb17eadf71adca6ebb914fe28ad40d57551d8e5c661","mode":"0600"}},
+    {"id":"decision-precommit","kind":"file","path":"/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor","expect":{"size_bytes":4,"sha256":"4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072","prefix_hex":"4e544631","mode":"0600"}},
+    {"id":"selected-action","kind":"file","path":"/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor","expect":{"size_bytes":4,"sha256":"4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072","prefix_hex":"4e544631","mode":"0600"}},
+    {"id":"goal-satisfaction","kind":"file","path":"/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor","expect":{"size_bytes":4,"sha256":"4fc61a14f994e28249509ec2504e89df30497a2aa76b1d9c5f6c38e2acee6072","prefix_hex":"4e544631","mode":"0600"}},
+    {"id":"s1c3-status","kind":"file","path":"/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/s1c3-operational-status-v1.json","expect":{"size_bytes":500,"sha256":"9bf69487a7ec765dd985da531572c5bd75d5b4bb26739b4552ad51c2dafda176","mode":"0644"}},
+    {"id":"s1ab-census","kind":"file","path":"/tmp/nanda-s1c4-preflight/var/lib/nando-wave/transition/grounded-meaning-v1/grounded-decision-census-v1.json","expect":{"size_bytes":1278,"sha256":"68f249b9c128eee814c7d5555ce672c97065500b967efc2a86608f5bb54fa15d","mode":"0644"}}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"compile-types","kind":"bounded_structural_record_implementation"},
+      {"id":"enqueue-classification","kind":"bounded_nonblocking_memory_queue"},
+      {"id":"append-classification","kind":"background_append_only_framed_ledger"},
+      {"id":"publish-cursor","kind":"atomic_immutable_cursor_create"},
+      {"id":"publish-report","kind":"atomic_fail_closed_report_replace"},
+      {"id":"install-transition","kind":"rollback_capable_binary_and_config_replace"},
+      {"id":"install-control","kind":"rollback_capable_binary_replace"},
+      {"id":"restart-scoped-services","kind":"bounded_transition_and_control_restart"},
+      {"id":"observe-runtime","kind":"read_only_health_and_pid_check","comparison_id":"live-runtime"}
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "post_hoc_goal",
+      "raw_request_persistence",
+      "raw_response_persistence",
+      "decision_journal_truncation",
+      "opportunity_checkpoint_rewrite_for_claim",
+      "classification_ledger_truncation",
+      "nginx_restart",
+      "connector_restart",
+      "model_training",
+      "phase_mutation",
+      "package_activation",
+      "k2_authority",
+      "automatic_s2_entry"
+    ]
+  },
+  "source_checks": [
+    {"id":"opportunity-owner","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/opportunity_bridge/mod.rs","sha256":"10c3e2b3c073bcca4be4e64e96bbf8df04be0377b35cfe062daf7f52aac8730b","forbidden_effect_patterns":[
+      {"effect":"generated_traffic","regex":"(/v1/responses|method=[\\\"']POST)"},
+      {"effect":"synthetic_fixture","regex":"(synthetic_traffic|generated_fixture)"},
+      {"effect":"phase_mutation","regex":"mutate_phase"},
+      {"effect":"opportunity_checkpoint_rewrite_for_claim","regex":"(rewrite.*opportunity_checkpoint|opportunity_checkpoint.*truncate)"}
+    ]},
+    {"id":"decision-journal-owner","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/grounded_decision_capture.rs","sha256":"43f6de5d3df4c4a9f51f35694e8b50948c992e66b2fa1ecd846b393408cd42d4","forbidden_effect_patterns":[
+      {"effect":"generated_traffic","regex":"(/v1/responses|method=[\\\"']POST)"},
+      {"effect":"post_hoc_goal","regex":"(post_hoc_goal|infer_goal_from_(selected|outcome))"},
+      {"effect":"raw_request_persistence","regex":"raw_request.*(write|append|persist)"},
+      {"effect":"raw_response_persistence","regex":"raw_response.*(write|append|persist)"},
+      {"effect":"classification_ledger_truncation","regex":"classification.*truncate"},
+      {"effect":"decision_journal_truncation","regex":"(decision.*truncate|truncate.*decision)"}
+    ]},
+    {"id":"s1ab-census-owner","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/grounded_decision_census.rs","sha256":"6534dd85f9d727d864cd4b5f7849095e37e602322b18e06d538a29cbd2799193","forbidden_effect_patterns":[
+      {"effect":"generated_traffic","regex":"(/v1/responses|method=[\\\"']POST)"},
+      {"effect":"model_training","regex":"(train_model|model_training_allowed\\s*:\\s*true)"},
+      {"effect":"phase_mutation","regex":"phase_mutation_allowed\\s*:\\s*true"},
+      {"effect":"k2_authority","regex":"k2_authority\\s*[:=]\\s*true"},
+      {"effect":"package_activation","regex":"(activate_package|package_activation\\s*[:=]\\s*true)"},
+      {"effect":"automatic_s2_entry","regex":"(automatic_s2_entry|start_s2)"},
+      {"effect":"nginx_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},
+      {"effect":"connector_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*connector"}
+    ]}
+  ],
+  "runtime_comparisons": [
+    {"id":"live-runtime","source":"gateway CPU health plus systemd and connector snapshots","comparison":"exact_stable_projection","stable_fields":["gateway_active","transition_active","admission_verdict","response_executor_cache_ready","response_active_profiles","false_accepts","runtime_parity_failures","nginx_pid","connector_pid","connector_nrestarts"],"expected_to_change_fields":["transition_pid","gateway_control_pid","transition_binary_sha256","gateway_control_binary_sha256","s1c4_state","classification_rows"],"observed_not_compared_fields":["ordinary counters","timestamps","authority lease expiry","background oneshot pid"],"reason":"instrument and dashboard may change while serving safety and unscoped data-plane owners remain stable","test_id":"live-runtime-parity"}
+  ],
+  "preserved_artifacts": [
+    {"id":"opportunity-ledger","path":"/var/lib/nando-wave/transition/opportunity-bridge-v1/counter-checkpoint-v1.json","policy":"append_only_natural_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_prefix_and_accept_natural_suffix","baseline_check_id":"opportunity-checkpoint"},
+    {"id":"decision-precommit-ledger","path":"/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/decision-precommit-00000000000000000000.cbor","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"decision-precommit"},
+    {"id":"selected-action-ledger","path":"/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/selected-action-binding-00000000000000000000.cbor","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"selected-action"},
+    {"id":"goal-satisfaction-ledger","path":"/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/goal-satisfaction-00000000000000000000.cbor","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"goal-satisfaction"},
+    {"id":"s1c3-terminal-state","path":"/var/lib/nando-wave/transition/grounded-meaning-v1/s1c3-operational-status-v1.json","policy":"immutable","rollback_policy":"preserve_exact_bytes","cursor_policy":"immutable_terminal_state","baseline_check_id":"s1c3-status"},
+    {"id":"s1ab-census","path":"/var/lib/nando-wave/transition/grounded-meaning-v1/grounded-decision-census-v1.json","policy":"separate_scientific_stage","rollback_policy":"preserve_exact_bytes","cursor_policy":"never_use_as_s1c4_denominator","baseline_check_id":"s1ab-census"}
+  ],
+  "state_machine": {
+    "initial_state":"PAPER_PASS",
+    "terminal_states":["IMPLEMENTED","PREFLIGHT_FAILURE","DEPLOYMENT_ROLLBACK_PASS","VETO"],
+    "steps":[
+      {"id":"implement-records","from":"PAPER_PASS","to":"RECORDS_IMPLEMENTED","mutates":true,"failure_state":"PREFLIGHT_FAILURE","cleanup":"leave production untouched and retain compile diagnostics","preserves":["opportunity-ledger","decision-precommit-ledger","selected-action-ledger","goal-satisfaction-ledger","s1c3-terminal-state","s1ab-census"],"test_id":"record-codec-fault"},
+      {"id":"implement-writer","from":"RECORDS_IMPLEMENTED","to":"WRITER_IMPLEMENTED","mutates":true,"failure_state":"PREFLIGHT_FAILURE","cleanup":"leave production untouched and retain writer diagnostics","preserves":["opportunity-ledger","decision-precommit-ledger","selected-action-ledger","goal-satisfaction-ledger"],"test_id":"writer-fault-matrix"},
+      {"id":"implement-census","from":"WRITER_IMPLEMENTED","to":"CENSUS_IMPLEMENTED","mutates":true,"failure_state":"PREFLIGHT_FAILURE","cleanup":"leave production untouched and retain census diagnostics","preserves":["opportunity-ledger","decision-precommit-ledger","selected-action-ledger","goal-satisfaction-ledger","s1ab-census"],"test_id":"verdict-matrix"},
+      {"id":"stage-deployment","from":"CENSUS_IMPLEMENTED","to":"ROLLBACK_ARMED","mutates":true,"failure_state":"PREFLIGHT_FAILURE","cleanup":"remove unreferenced staging only and leave production untouched","preserves":["opportunity-ledger","decision-precommit-ledger","selected-action-ledger","goal-satisfaction-ledger","s1c3-terminal-state","s1ab-census"],"test_id":"deployment-stage-fault"},
+      {"id":"install-runtime","from":"ROLLBACK_ARMED","to":"RUNTIME_INSTALLED","mutates":true,"failure_state":"DEPLOYMENT_ROLLBACK_PASS","cleanup":"restore previous binaries and config while preserving all natural suffixes","preserves":["opportunity-ledger","decision-precommit-ledger","selected-action-ledger","goal-satisfaction-ledger","s1c3-terminal-state","s1ab-census"],"test_id":"runtime-install-fault"},
+      {"id":"open-cursor","from":"RUNTIME_INSTALLED","to":"CURSOR_OPEN","mutates":true,"failure_state":"DEPLOYMENT_ROLLBACK_PASS","cleanup":"seal candidate window VETO then restore previous code without truncating classifications","preserves":["opportunity-ledger","decision-precommit-ledger","selected-action-ledger","goal-satisfaction-ledger","s1c3-terminal-state","s1ab-census"],"test_id":"cursor-open-fault"},
+      {"id":"verify-live","from":"CURSOR_OPEN","to":"IMPLEMENTED","mutates":true,"failure_state":"DEPLOYMENT_ROLLBACK_PASS","cleanup":"persist diagnostics and failed-window VETO then restore previous code","preserves":["opportunity-ledger","decision-precommit-ledger","selected-action-ledger","goal-satisfaction-ledger","s1c3-terminal-state","s1ab-census"],"test_id":"live-runtime-fault"}
+    ]
+  },
+  "invariants": [
+    {"id":"one-terminal-row","statement":"every durable post-cursor ordinary Request has exactly one terminal S1C classification with the same sequence and identity","test_id":"request-classification-parity"},
+    {"id":"append-only-chain","statement":"classification rows are bounded canonical hash-chained and restart equivalent","test_id":"classification-restart-parity"},
+    {"id":"loss-is-veto","statement":"queue overflow writer failure gap duplicate orphan or malformed row cannot be excluded and yields VETO","test_id":"writer-fault-matrix"},
+    {"id":"exact-decision-join","statement":"DECISION_RECORDED is admitted only after exact precommit selected action satisfaction and verifier joins","test_id":"decision-join-negative"},
+    {"id":"finite-window","statement":"the first of 1024 requests or 24 hours closes the immutable denominator and quiescence cannot extend it","test_id":"cursor-boundary"},
+    {"id":"natural-suffix-preserved","statement":"deployment and rollback preserve all opportunity decision and classification natural suffixes","test_id":"rollback-suffix-parity"},
+    {"id":"no-promotion","statement":"every S1C-4 report keeps K2 training phase mutation package activation and S2 authority false","test_id":"claim-boundary"}
+  ],
+  "identity_contracts": [
+    {"id":"opportunity-classification-identity","producer":"opportunity Request submission receipt","consumer":"S1C classification ticket and census","comparison":"exact opportunity sequence plus request event identity root","test_id":"request-classification-parity"},
+    {"id":"classification-ledger-identity","producer":"single background classification writer","consumer":"restart scanner and terminal census","comparison":"canonical row bytes previous root row root sequence and identity","test_id":"classification-restart-parity"},
+    {"id":"decision-receipt-identity","producer":"existing S1C decision journals","consumer":"S1C-4 decision verifier","comparison":"exact precommit root request identity authority available action selected binding satisfaction and independent verifier","test_id":"decision-join-parity"},
+    {"id":"report-parser-identity","producer":"S1C-4 terminal census","consumer":"gateway control and dashboard","comparison":"canonical report root all denominator fields verdict and false authority flags","test_id":"dashboard-report-parity"}
+  ],
+  "tests": [
+    {"id":"record-codec-fault","kind":"fault_injection","expected":"malformed oversized noncanonical or unrooted rows are rejected before append"},
+    {"id":"writer-fault-matrix","kind":"fault_injection","expected":"queue append sync checkpoint and duplicate failures remain visible and force VETO"},
+    {"id":"verdict-matrix","kind":"fault_injection","expected":"all five frozen terminal outcomes and heterogeneous unresolved surface are exact under malformed and complete inputs"},
+    {"id":"deployment-stage-fault","kind":"fault_injection","expected":"no production mutation and all existing evidence preserved"},
+    {"id":"runtime-install-fault","kind":"fault_injection","expected":"old binaries and config restored with natural suffixes preserved"},
+    {"id":"cursor-open-fault","kind":"fault_injection","expected":"no mutable or silently reopened census window"},
+    {"id":"live-runtime-fault","kind":"fault_injection","expected":"failed live verification seals diagnostics and restores scoped runtime without evidence loss"},
+    {"id":"live-runtime-parity","kind":"parity","expected":"CPU admission profiles false accepts parity Nginx and connector remain safe"},
+    {"id":"request-classification-parity","kind":"parity","expected":"one exact terminal row per durable denominator request"},
+    {"id":"classification-restart-parity","kind":"parity","expected":"row count roots identities and prior-root chain survive restart byte exactly"},
+    {"id":"decision-join-negative","kind":"fault_injection","expected":"missing duplicate orphan mismatched or unverified decision material yields VETO"},
+    {"id":"decision-join-parity","kind":"parity","expected":"producer and verifier agree on every joined decision root and identity"},
+    {"id":"cursor-boundary","kind":"unit","expected":"1024 request and 24 hour boundaries are immutable and earliest wins"},
+    {"id":"rollback-suffix-parity","kind":"parity","expected":"frozen prefixes and all naturally arriving valid suffixes remain byte identical"},
+    {"id":"claim-boundary","kind":"parity","expected":"K2 training phase package and automatic S2 flags remain false for all verdicts"},
+    {"id":"dashboard-forgery-negative","kind":"fault_injection","expected":"changed report root denominator verdict or authority field renders unavailable"},
+    {"id":"dashboard-report-parity","kind":"parity","expected":"gateway parser and census producer agree on canonical report bytes and root"}
+  ]
+}

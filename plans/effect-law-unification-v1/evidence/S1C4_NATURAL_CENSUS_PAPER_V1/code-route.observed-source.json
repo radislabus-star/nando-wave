@@ -1,0 +1,293 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": ".",
+  "nodes": [
+    {
+      "id": "ordinary_request",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 5216,
+        "contains": "let opportunity_request = observe_live_economics_request("
+      }
+    },
+    {
+      "id": "opportunity_producer",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 8580,
+        "contains": "match state.opportunity_bridge.submit(event) {"
+      }
+    },
+    {
+      "id": "classification_ticket",
+      "role": "orchestrator",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 5235,
+        "contains": ".map(|runtime| S1c4ClassificationTicketV1 {"
+      }
+    },
+    {
+      "id": "classification_queue",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census.rs",
+        "line": 218,
+        "contains": "pub fn try_submit_terminal(&self, ingress: S1c4ClassificationIngressV1)"
+      }
+    },
+    {
+      "id": "classification_writer",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census.rs",
+        "line": 115,
+        "contains": ".name(\"nando-s1c4-classification-writer\".to_owned())"
+      }
+    },
+    {
+      "id": "classification_ledger",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census.rs",
+        "line": 171,
+        "contains": "if let Err(error) = ledger.append(&row) {"
+      }
+    },
+    {
+      "id": "census_joiner",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
+        "line": 634,
+        "contains": "fn project_census("
+      }
+    },
+    {
+      "id": "census_display",
+      "role": "display_rank_owner",
+      "evidence": {
+        "path": "crates/nando-gateway-control/src/main.rs",
+        "line": 1877,
+        "contains": "fn s1c4_natural_census_snapshot(report: &Value) -> Value {"
+      }
+    },
+    {
+      "id": "decision_verifier",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
+        "line": 705,
+        "contains": "validate_decision_journals(&precommits, &selected, &satisfactions)?;"
+      }
+    },
+    {
+      "id": "dashboard_renderer",
+      "role": "render_owner",
+      "evidence": {
+        "path": "crates/nando-gateway-control/src/live_dashboard.rs",
+        "line": 174,
+        "contains": "pub(crate) fn render(initial: InitialMetrics) -> String {"
+      }
+    },
+    {
+      "id": "deployment_observer",
+      "role": "observer",
+      "evidence": {
+        "path": "ops/remote-backend/install-gateway-control.sh",
+        "line": 105,
+        "contains": "projection_is_exact() {"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "exec-request-opportunity",
+      "from": "ordinary_request",
+      "relation": "calls",
+      "to": "opportunity_producer",
+      "events": ["ordinary_request"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 5216,
+        "contains": "let opportunity_request = observe_live_economics_request("
+      }
+    },
+    {
+      "id": "exec-opportunity-ticket",
+      "from": "opportunity_producer",
+      "relation": "delegates",
+      "to": "classification_ticket",
+      "events": ["ordinary_request"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 5224,
+        "contains": "opportunity_request.and_then(|(opportunity_receipt, request_observed_at_unix)| {"
+      }
+    },
+    {
+      "id": "exec-ticket-queue",
+      "from": "classification_ticket",
+      "relation": "calls",
+      "to": "classification_queue",
+      "events": ["terminal_classification"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 857,
+        "contains": ".try_submit_terminal(S1c4ClassificationIngressV1 {"
+      }
+    },
+    {
+      "id": "exec-queue-writer",
+      "from": "classification_queue",
+      "relation": "delegates",
+      "to": "classification_writer",
+      "events": ["terminal_classification"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census.rs",
+        "line": 219,
+        "contains": "match self.sender.try_send(ingress) {"
+      }
+    },
+    {
+      "id": "authority-queue-ledger",
+      "from": "classification_queue",
+      "relation": "produces_for",
+      "to": "classification_ledger",
+      "events": ["terminal_classification"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census.rs",
+        "line": 171,
+        "contains": "if let Err(error) = ledger.append(&row) {"
+      }
+    },
+    {
+      "id": "authority-ledger-joiner",
+      "from": "classification_ledger",
+      "relation": "passes_to",
+      "to": "census_joiner",
+      "events": ["terminal_census"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
+        "line": 349,
+        "contains": "let projection = project_census(paths, &cursor, &rows, end_ordinal)?;"
+      }
+    },
+    {
+      "id": "authority-joiner-display",
+      "from": "census_joiner",
+      "relation": "passes_to",
+      "to": "census_display",
+      "events": ["terminal_census"],
+      "evidence": {
+        "path": "crates/nando-gateway-control/src/main.rs",
+        "line": 1695,
+        "contains": "\"s1c4_natural_census\": s1c4_natural_census_snapshot(&s1c4_natural_census),"
+      }
+    },
+    {
+      "id": "authority-display-renderer",
+      "from": "census_display",
+      "relation": "passes_to",
+      "to": "dashboard_renderer",
+      "events": ["terminal_census"],
+      "evidence": {
+        "path": "crates/nando-gateway-control/src/live_dashboard.rs",
+        "line": 674,
+        "contains": "text(\"s1c4-state\", readable(s1c4.state));"
+      }
+    },
+    {
+      "id": "proof-ledger-verifier",
+      "from": "classification_ledger",
+      "relation": "proves",
+      "to": "decision_verifier",
+      "events": ["terminal_proof"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
+        "line": 705,
+        "contains": "validate_decision_journals(&precommits, &selected, &satisfactions)?;"
+      }
+    },
+    {
+      "id": "observe-ledger",
+      "from": "classification_ledger",
+      "relation": "observes",
+      "to": "deployment_observer",
+      "events": ["deployment_check"],
+      "evidence": {
+        "path": "ops/remote-backend/install-gateway-control.sh",
+        "line": 108,
+        "contains": "curl --config - --fail --silent --show-error --max-time 2 |"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "request-binding-execution",
+      "event": "ordinary_request",
+      "kind": "execution",
+      "entry": "ordinary_request",
+      "terminal": "classification_ticket",
+      "required_roles": ["interface", "producer", "orchestrator"],
+      "path_cardinality": [
+        {"from": "ordinary_request", "to": "classification_ticket", "min": 1, "max": 1}
+      ]
+    },
+    {
+      "id": "terminal-classification-execution",
+      "event": "terminal_classification",
+      "kind": "execution",
+      "entry": "classification_ticket",
+      "terminal": "classification_writer",
+      "required_roles": ["orchestrator", "producer", "mutation_owner"],
+      "path_cardinality": [
+        {"from": "classification_ticket", "to": "classification_writer", "min": 1, "max": 1}
+      ]
+    },
+    {
+      "id": "terminal-classification-authority",
+      "event": "terminal_classification",
+      "kind": "authority",
+      "entry": "classification_queue",
+      "terminal": "classification_ledger",
+      "required_roles": ["producer", "evidence_owner"],
+      "path_cardinality": [
+        {"from": "classification_queue", "to": "classification_ledger", "min": 1, "max": 1}
+      ]
+    },
+    {
+      "id": "terminal-census-authority",
+      "event": "terminal_census",
+      "kind": "authority",
+      "entry": "classification_ledger",
+      "terminal": "dashboard_renderer",
+      "required_roles": ["evidence_owner", "candidate_rank_owner", "display_rank_owner", "render_owner"],
+      "path_cardinality": [
+        {"from": "classification_ledger", "to": "dashboard_renderer", "min": 1, "max": 1}
+      ]
+    },
+    {
+      "id": "terminal-census-proof",
+      "event": "terminal_proof",
+      "kind": "proof",
+      "entry": "classification_ledger",
+      "terminal": "decision_verifier",
+      "required_roles": ["evidence_owner", "proof_owner"],
+      "path_cardinality": [
+        {"from": "classification_ledger", "to": "decision_verifier", "min": 1, "max": 1}
+      ]
+    },
+    {
+      "id": "deployment-observation",
+      "event": "deployment_check",
+      "kind": "observation",
+      "entry": "classification_ledger",
+      "terminal": "deployment_observer",
+      "required_roles": ["evidence_owner", "observer"]
+    }
+  ]
+}

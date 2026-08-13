@@ -12,7 +12,9 @@ use nando_operator_learning::{OPPORTUNITY_BRIDGE_MAX_EVENT_BYTES_V1, Opportunity
 #[cfg(test)]
 use super::MAX_CONSUMER_INFLIGHT_EVENTS;
 use super::checkpoint::persist_counter_checkpoint;
-use super::{BridgeInner, record_event, record_timing, set_last_error};
+use super::{
+    BridgeInner, OpportunityBridgeSubmissionReceiptV1, record_event, record_timing, set_last_error,
+};
 
 const EVENT_SUFFIX: &str = ".cbor";
 pub(super) const MAX_SPOOL_FILES: u64 = 131_072;
@@ -27,13 +29,14 @@ pub(super) struct PendingBridgeEvent {
 pub(super) fn persist_event(
     inner: &BridgeInner,
     event: &OpportunityBridgeEventV1,
-) -> Result<(), String> {
+) -> Result<OpportunityBridgeSubmissionReceiptV1, String> {
     let bytes = event.canonical_cbor()?;
     let digest = event.canonical_sha256()?;
     let _guard = inner
         .persist_lock
         .lock()
         .map_err(|_| "opportunity_bridge_persist_lock_poisoned".to_owned())?;
+    let s1c4_deadline_eligible = super::deadline::classify_request_before_persist(inner, event)?;
     let event_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     let mut spool_files = inner.spool_files.load(Ordering::Acquire);
     let mut spool_bytes = inner.spool_bytes.load(Ordering::Acquire);
@@ -50,12 +53,19 @@ pub(super) fn persist_event(
         ));
     }
     let sequence = inner.next_sequence.fetch_add(1, Ordering::AcqRel);
+    let request_ordinal = event.request_economics().map(|_| {
+        inner
+            .producer
+            .request_events
+            .load(Ordering::Acquire)
+            .saturating_add(1)
+    });
     let file_name = event_file_name(sequence, &digest);
     let final_path = inner.pending_dir.join(&file_name);
     let temporary_path = inner.staging_dir.join(format!("{file_name}.tmp"));
     if final_path.exists() {
         inner.producer.duplicates.fetch_add(1, Ordering::Relaxed);
-        return Ok(());
+        return Err("opportunity_bridge_duplicate_sequence".to_owned());
     }
     let mut file = OpenOptions::new()
         .create_new(true)
@@ -70,17 +80,29 @@ pub(super) fn persist_event(
             fs::rename(&temporary_path, &final_path)
                 .map_err(|error| format!("opportunity_bridge_publish:{error}"))
         });
-    if persisted.is_err() {
+    if let Err(error) = persisted {
         let _ = fs::remove_file(&temporary_path);
-        return persisted;
+        return Err(error);
     }
     inner.spool_files.fetch_add(1, Ordering::AcqRel);
     inner.spool_bytes.fetch_add(event_bytes, Ordering::AcqRel);
     inner.pending_events.fetch_add(1, Ordering::AcqRel);
     inner.pending_bytes.fetch_add(event_bytes, Ordering::AcqRel);
     record_event(&inner.producer, event, sequence);
+    if let Some((_, observed_at_unix)) = event.request_economics() {
+        super::deadline::freeze_request_limit_after_persist(
+            inner,
+            s1c4_deadline_eligible,
+            observed_at_unix,
+        )?;
+    }
     inner.producer_sync_requested.store(true, Ordering::Release);
-    Ok(())
+    Ok(OpportunityBridgeSubmissionReceiptV1 {
+        sequence,
+        event_root_sha256: digest,
+        request_ordinal,
+        s1c4_deadline_eligible,
+    })
 }
 
 pub(super) fn sync_pending_spool(

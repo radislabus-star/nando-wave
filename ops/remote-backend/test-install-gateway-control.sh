@@ -69,7 +69,7 @@ case "${url}" in
     else
       natural_record_count=0
     fi
-    printf '%s\n' "{\"available\":true,\"dashboard_build\":\"2026.08.13-control-v18\",\"s1c3_operational\":{\"stage\":\"S1C-3H\",\"verdict\":\"S1C3H_DEPLOYMENT_PASS\",\"capture_installed\":true,\"natural_record_count\":${natural_record_count},\"s1c4_state\":\"COLLECTING\",\"authority_ready\":false,\"scientific_authority\":false,\"model_training_allowed\":false,\"phase_mutation_allowed\":false}}"
+    printf '%s\n' "{\"available\":true,\"dashboard_build\":\"2026.08.13-control-v19\",\"s1c3_operational\":{\"stage\":\"S1C-3H\",\"verdict\":\"S1C3H_DEPLOYMENT_PASS\",\"capture_installed\":true,\"natural_record_count\":${natural_record_count},\"s1c4_state\":\"COLLECTING\",\"authority_ready\":false,\"scientific_authority\":false,\"model_training_allowed\":false,\"phase_mutation_allowed\":false}}"
     ;;
   *":18789/health")
     printf '%s\n' '{"ok":true}'

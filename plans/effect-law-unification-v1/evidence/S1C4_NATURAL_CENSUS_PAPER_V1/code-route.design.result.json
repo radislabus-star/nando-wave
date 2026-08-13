@@ -1,0 +1,315 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 11,
+  "edge_count": 10,
+  "routes": [
+    {
+      "id": "request-binding-execution",
+      "event": "ordinary_request",
+      "kind": "execution",
+      "entry": "ordinary_request",
+      "via": [],
+      "terminal": "classification_ticket",
+      "path_count": 1,
+      "paths": [
+        [
+          "ordinary_request",
+          "opportunity_producer",
+          "classification_ticket"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "classification_ticket"
+        ],
+        "producer": [
+          "opportunity_producer"
+        ],
+        "interface": [
+          "ordinary_request"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "ordinary_request",
+          "to": "classification_ticket",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "ordinary_request",
+              "opportunity_producer",
+              "classification_ticket"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terminal-classification-execution",
+      "event": "terminal_classification",
+      "kind": "execution",
+      "entry": "classification_ticket",
+      "via": [],
+      "terminal": "classification_writer",
+      "path_count": 1,
+      "paths": [
+        [
+          "classification_ticket",
+          "classification_queue",
+          "classification_writer"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "classification_queue"
+        ],
+        "orchestrator": [
+          "classification_ticket"
+        ],
+        "mutation_owner": [
+          "classification_writer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "classification_ticket",
+          "to": "classification_writer",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "classification_ticket",
+              "classification_queue",
+              "classification_writer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terminal-classification-authority",
+      "event": "terminal_classification",
+      "kind": "authority",
+      "entry": "classification_queue",
+      "via": [],
+      "terminal": "classification_ledger",
+      "path_count": 1,
+      "paths": [
+        [
+          "classification_queue",
+          "classification_ledger"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "classification_ledger"
+        ],
+        "producer": [
+          "classification_queue"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "classification_queue",
+          "to": "classification_ledger",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "classification_queue",
+              "classification_ledger"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terminal-census-authority",
+      "event": "terminal_census",
+      "kind": "authority",
+      "entry": "classification_ledger",
+      "via": [],
+      "terminal": "dashboard_renderer",
+      "path_count": 1,
+      "paths": [
+        [
+          "classification_ledger",
+          "census_joiner",
+          "census_display",
+          "dashboard_renderer"
+        ]
+      ],
+      "role_owners": {
+        "display_rank_owner": [
+          "census_display"
+        ],
+        "candidate_rank_owner": [
+          "census_joiner"
+        ],
+        "evidence_owner": [
+          "classification_ledger"
+        ],
+        "render_owner": [
+          "dashboard_renderer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "classification_ledger",
+          "to": "dashboard_renderer",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "classification_ledger",
+              "census_joiner",
+              "census_display",
+              "dashboard_renderer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terminal-census-proof",
+      "event": "terminal_proof",
+      "kind": "proof",
+      "entry": "classification_ledger",
+      "via": [],
+      "terminal": "decision_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "classification_ledger",
+          "decision_verifier"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "classification_ledger"
+        ],
+        "proof_owner": [
+          "decision_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "classification_ledger",
+          "to": "decision_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "classification_ledger",
+              "decision_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deployment-observation",
+      "event": "deployment_check",
+      "kind": "observation",
+      "entry": "classification_ledger",
+      "via": [],
+      "terminal": "deployment_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "classification_ledger",
+          "deployment_observer"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "classification_ledger"
+        ],
+        "observer": [
+          "deployment_observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "terminal_classification": {
+      "candidate_rank_owner": [],
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "classification_ledger"
+      ],
+      "render_owner": [],
+      "mutation_owner": [],
+      "authorization_owner": []
+    },
+    "terminal_census": {
+      "candidate_rank_owner": [
+        "census_joiner"
+      ],
+      "display_rank_owner": [
+        "census_display"
+      ],
+      "evidence_owner": [
+        "classification_ledger"
+      ],
+      "render_owner": [
+        "dashboard_renderer"
+      ],
+      "mutation_owner": [],
+      "authorization_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

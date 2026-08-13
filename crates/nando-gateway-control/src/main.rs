@@ -20,7 +20,7 @@ use nando_gateway_control::{
     service_statuses,
 };
 use nando_operator_admission::{K1VocabularyGateV1, OperatorCertificationLedgerV1};
-use nando_operator_learning::GroundedDecisionCensusV1;
+use nando_operator_learning::{GroundedDecisionCensusV1, S1c4NaturalCensusReportV1};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -1565,6 +1565,7 @@ async fn control_dashboard_snapshot(
     let persisted_miner = read_json(&state.config.response_online_miner_report_path);
     let response_registry = read_json(&state.config.response_registry_path);
     let grounded_decision_census = read_json(&state.config.grounded_decision_census_path);
+    let s1c4_natural_census = read_json(&state.config.s1c4_natural_census_path);
     let s1c3_operational_status = read_json(&state.config.s1c3_operational_status_path);
     let structural_frontier_census =
         read_json(std::path::Path::new(STRUCTURAL_FRONTIER_CENSUS_PATH));
@@ -1691,6 +1692,7 @@ async fn control_dashboard_snapshot(
             },
             "k1": k1_gate,
             "k2_decision_evidence": grounded_decision_snapshot(&grounded_decision_census),
+            "s1c4_natural_census": s1c4_natural_census_snapshot(&s1c4_natural_census),
             "s1c3_operational": s1c3_operational_snapshot(&s1c3_operational_status),
             "safety": {
                 "cpu_allowed": admission.cpu_allowed,
@@ -1866,6 +1868,58 @@ fn grounded_decision_snapshot(report: &Value) -> Value {
         "distinct_decision_lineages": census.distinct_decision_lineages,
         "verdict": census.verdict,
         "blocker": census.blocker,
+        "model_training_allowed": census.model_training_allowed,
+        "authority_ready": census.authority_ready,
+        "phase_mutation_allowed": census.phase_mutation_allowed,
+    })
+}
+
+fn s1c4_natural_census_snapshot(report: &Value) -> Value {
+    let Ok(census) = serde_json::from_value::<S1c4NaturalCensusReportV1>(report.clone()) else {
+        return json!({
+            "available": false,
+            "state": "NOT_OPEN",
+            "verdict": "REPORT_UNAVAILABLE",
+            "blocker": "s1c4_natural_census_missing_or_invalid",
+            "k2_open": false,
+        });
+    };
+    if census.validate().is_err() {
+        return json!({
+            "available": false,
+            "state": "INVALID",
+            "verdict": "REPORT_UNAVAILABLE",
+            "blocker": "s1c4_natural_census_missing_or_invalid",
+            "k2_open": false,
+        });
+    }
+    json!({
+        "available": true,
+        "report_root_sha256": census.report_root_sha256,
+        "cursor_root_sha256": census.cursor_root_sha256,
+        "state": census.state,
+        "verdict": census.verdict,
+        "blocker": census.blocker,
+        "generated_at_unix": census.generated_at_unix,
+        "closes_at_unix": census.closes_at_unix,
+        "denominator_requests": census.denominator_requests,
+        "denominator_input_tokens": census.denominator_input_tokens,
+        "classified_requests": census.classified_requests,
+        "goal_bound": census.goal_bound,
+        "alternative_bearing": census.alternative_bearing,
+        "decision_episodes": census.decision_episodes,
+        "satisfied_episodes": census.satisfied_episodes,
+        "distinct_decision_lineages": census.distinct_decision_lineages,
+        "censor_counts": census.censor_counts,
+        "source_complete": census.source_complete,
+        "exact_join_complete": census.exact_join_complete,
+        "queue_overflow": census.queue_overflow,
+        "writer_failures": census.writer_failures,
+        "duplicate_rows": census.duplicate_rows,
+        "false_accepts": census.false_accepts,
+        "parity_failures": census.parity_failures,
+        "k2_open": census.k2_open,
+        "s2_started": census.s2_started,
         "model_training_allowed": census.model_training_allowed,
         "authority_ready": census.authority_ready,
         "phase_mutation_allowed": census.phase_mutation_allowed,
@@ -2527,6 +2581,70 @@ fn should_auto_promote(mode: GatewayMode, cpu_allowed: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_root(byte: char) -> String {
+        byte.to_string().repeat(64)
+    }
+
+    fn valid_s1c4_report() -> S1c4NaturalCensusReportV1 {
+        S1c4NaturalCensusReportV1::seal(S1c4NaturalCensusReportV1 {
+            schema: String::new(),
+            report_root_sha256: String::new(),
+            cursor_root_sha256: test_root('1'),
+            state: nando_operator_learning::S1c4NaturalCensusStateV1::Collecting,
+            verdict: nando_operator_learning::S1c4NaturalCensusVerdictV1::Collecting,
+            blocker: "finite_natural_window_open".to_owned(),
+            generated_at_unix: 1,
+            closes_at_unix: 0,
+            quiescence_deadline_unix: 0,
+            opportunity_end_sequence: 12,
+            opportunity_end_request_ordinal: 8,
+            opportunity_end_input_tokens: 80,
+            denominator_requests: 8,
+            denominator_input_tokens: 80,
+            classified_requests: 8,
+            goal_bound: 0,
+            alternative_bearing: 0,
+            decision_episodes: 0,
+            satisfied_episodes: 0,
+            distinct_decision_lineages: 0,
+            censor_counts: BTreeMap::from([(
+                nando_operator_learning::GroundedDecisionShadowCensorV1::MissingExactGoal,
+                8,
+            )]),
+            classification_rows_total: 8,
+            classification_last_root_sha256: test_root('2'),
+            queue_overflow: 0,
+            writer_failures: 0,
+            duplicate_rows: 0,
+            false_accepts: 0,
+            parity_failures: 0,
+            source_complete: true,
+            exact_join_complete: true,
+            raw_payloads_persisted: false,
+            k2_open: false,
+            s2_started: false,
+            model_training_allowed: false,
+            package_activation_allowed: false,
+            authority_ready: false,
+            phase_mutation_allowed: false,
+        })
+        .expect("report")
+    }
+
+    #[test]
+    fn dashboard_s1c4_report_is_rooted_and_fail_closed() {
+        let report = valid_s1c4_report();
+        let snapshot =
+            s1c4_natural_census_snapshot(&serde_json::to_value(&report).expect("serialize report"));
+        assert_eq!(snapshot["available"], true);
+        assert_eq!(snapshot["denominator_requests"], 8);
+        assert_eq!(snapshot["k2_open"], false);
+
+        let mut forged = serde_json::to_value(report).expect("serialize forged report");
+        forged["denominator_requests"] = json!(7);
+        assert_eq!(s1c4_natural_census_snapshot(&forged)["available"], false);
+    }
 
     #[test]
     fn html_escape_blocks_markup() {

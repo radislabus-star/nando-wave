@@ -1,4 +1,5 @@
 mod checkpoint;
+mod deadline;
 mod spool;
 
 use std::collections::{BTreeSet, VecDeque};
@@ -14,6 +15,8 @@ use serde::Serialize;
 
 use crate::miner_worker::MinerWorkerHandle;
 use checkpoint::{OpportunityBridgeCounterCheckpointV1, load_counter_checkpoint};
+pub(crate) use deadline::OpportunityWindowClosureV1;
+pub(crate) use deadline::{OpportunityWindowBoundaryV1, S1C4_WINDOW_BOUNDARY_FILE_V1};
 use spool::{
     PendingBridgeEvent, acknowledge_pending_batch, create_private_directory,
     discard_acknowledged_prefix, first_pending_sequence, next_pending_sequence, pending_batch,
@@ -86,7 +89,24 @@ pub struct OpportunityBridgeRuntime {
     inner: Arc<BridgeInner>,
 }
 
-struct BridgeInner {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpportunityBridgeSubmissionReceiptV1 {
+    pub sequence: u64,
+    pub event_root_sha256: String,
+    pub request_ordinal: Option<u64>,
+    pub s1c4_deadline_eligible: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct OpportunityBridgeDurableCursorV1 {
+    pub counter_started_after_sequence: u64,
+    pub last_sequence: u64,
+    pub durable_sequence: u64,
+    pub request_events: u64,
+    pub request_input_tokens: u64,
+}
+
+pub(crate) struct BridgeInner {
     root: PathBuf,
     counter_checkpoint_path: PathBuf,
     counter_checkpoint: Mutex<OpportunityBridgeCounterCheckpointV1>,
@@ -108,6 +128,7 @@ struct BridgeInner {
     consumer_started: AtomicBool,
     consumer_inflight: AtomicU64,
     producer_sync_requested: AtomicBool,
+    deadline_capture: Mutex<Option<deadline::OpportunityWindowCaptureV1>>,
 }
 
 struct InflightOpportunityBatch {
@@ -182,6 +203,7 @@ impl OpportunityBridgeRuntime {
                 producer_sync_requested: AtomicBool::new(
                     next_sequence.saturating_sub(1) > counter_checkpoint.last_sequence,
                 ),
+                deadline_capture: Mutex::new(None),
             }),
         };
         let mut recovered_counter_checkpoint = counter_checkpoint;
@@ -251,7 +273,10 @@ impl OpportunityBridgeRuntime {
         self.inner.producer_enabled
     }
 
-    pub fn submit(&self, event: OpportunityBridgeEventV1) -> Result<(), String> {
+    pub fn submit(
+        &self,
+        event: OpportunityBridgeEventV1,
+    ) -> Result<OpportunityBridgeSubmissionReceiptV1, String> {
         if !self.inner.producer_enabled {
             return Err("opportunity_bridge_producer_disabled".to_owned());
         }
@@ -262,6 +287,97 @@ impl OpportunityBridgeRuntime {
             record_failure(&self.inner.producer, error);
         }
         result
+    }
+
+    pub(crate) fn with_durable_cursor<T>(
+        &self,
+        inspect: impl FnOnce(OpportunityBridgeDurableCursorV1, &BridgeInner) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let _guard = self
+            .inner
+            .persist_lock
+            .lock()
+            .map_err(|_| "opportunity_bridge_persist_lock_poisoned".to_owned())?;
+        let last_sequence = self.inner.producer.last_sequence.load(Ordering::Acquire);
+        let durable_sequence = self.inner.producer.durable_sequence.load(Ordering::Acquire);
+        if durable_sequence < last_sequence {
+            return Err("opportunity_bridge_durable_cursor_pending".to_owned());
+        }
+        inspect(
+            OpportunityBridgeDurableCursorV1 {
+                counter_started_after_sequence: self
+                    .inner
+                    .producer
+                    .counter_started_after_sequence
+                    .load(Ordering::Acquire),
+                last_sequence,
+                durable_sequence,
+                request_events: self.inner.producer.request_events.load(Ordering::Acquire),
+                request_input_tokens: self
+                    .inner
+                    .producer
+                    .request_input_tokens
+                    .load(Ordering::Acquire),
+            },
+            &self.inner,
+        )
+    }
+
+    pub(crate) fn configure_request_deadline_capture_locked(
+        inner: &BridgeInner,
+        cursor_root_sha256: String,
+        deadline_at_unix: u64,
+        maximum_request_ordinal: u64,
+        boundary_path: PathBuf,
+    ) -> Result<(), String> {
+        deadline::configure_window_capture(
+            inner,
+            cursor_root_sha256,
+            deadline_at_unix,
+            maximum_request_ordinal,
+            boundary_path,
+        )
+    }
+
+    pub(crate) fn disable_request_deadline_capture_locked(inner: &BridgeInner) {
+        deadline::disable_window_capture(inner);
+    }
+
+    pub(crate) fn configure_request_deadline_capture(
+        &self,
+        cursor_root_sha256: String,
+        deadline_at_unix: u64,
+        maximum_request_ordinal: u64,
+        boundary_path: PathBuf,
+    ) -> Result<(), String> {
+        let _guard = self
+            .inner
+            .persist_lock
+            .lock()
+            .map_err(|_| "opportunity_bridge_persist_lock_poisoned".to_owned())?;
+        Self::configure_request_deadline_capture_locked(
+            &self.inner,
+            cursor_root_sha256,
+            deadline_at_unix,
+            maximum_request_ordinal,
+            boundary_path,
+        )
+    }
+
+    pub(crate) fn disable_request_deadline_capture(&self) {
+        deadline::disable_window_capture(&self.inner);
+    }
+
+    pub(crate) fn freeze_request_deadline_boundary(
+        &self,
+        observed_at_unix: u64,
+    ) -> Result<Option<OpportunityWindowBoundaryV1>, String> {
+        let _guard = self
+            .inner
+            .persist_lock
+            .lock()
+            .map_err(|_| "opportunity_bridge_persist_lock_poisoned".to_owned())?;
+        deadline::freeze_time_limit_if_due(&self.inner, observed_at_unix)
     }
 
     pub fn start_consumer(&self, worker: MinerWorkerHandle) -> Result<(), String> {

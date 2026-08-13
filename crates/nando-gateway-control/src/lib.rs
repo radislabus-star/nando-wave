@@ -66,6 +66,7 @@ pub struct ControlConfig {
     pub response_miner_status_path: PathBuf,
     pub response_online_miner_report_path: PathBuf,
     pub grounded_decision_census_path: PathBuf,
+    pub s1c4_natural_census_path: PathBuf,
     pub s1c3_operational_status_path: PathBuf,
     pub build_manifest_path: PathBuf,
     pub admission_max_age_seconds: u64,
@@ -146,6 +147,12 @@ impl ControlConfig {
             grounded_decision_census_path: PathBuf::from(
                 env::var("NANDO_GROUNDED_DECISION_CENSUS_JSON").unwrap_or_else(|_| {
                     "/var/lib/nando-wave/transition/grounded-meaning-v1/grounded-decision-census-v1.json"
+                        .into()
+                }),
+            ),
+            s1c4_natural_census_path: PathBuf::from(
+                env::var("NANDO_S1C4_NATURAL_CENSUS_JSON").unwrap_or_else(|_| {
+                    "/var/lib/nando-wave/transition/grounded-meaning-v1/s1c4-natural-census-report-v1.json"
                         .into()
                 }),
             ),
@@ -535,6 +542,7 @@ mod tests {
             response_miner_status_path: root.join("response-miner-status.json"),
             response_online_miner_report_path: root.join("response-online-miner-report.json"),
             grounded_decision_census_path: root.join("grounded-decision-census-v1.json"),
+            s1c4_natural_census_path: root.join("s1c4-natural-census-report-v1.json"),
             s1c3_operational_status_path: root.join("s1c3-operational-status-v1.json"),
             build_manifest_path: root.join("build-manifest.json"),
             admission_max_age_seconds: 900,

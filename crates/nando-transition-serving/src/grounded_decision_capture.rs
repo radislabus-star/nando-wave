@@ -12,6 +12,9 @@ use nando_operator_learning::{
 pub const GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V1: &str = "decision-precommit";
 pub const GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V1: &str = "selected-action-binding";
 pub const GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V1: &str = "goal-satisfaction";
+pub const GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V2: &str = "decision-precommit-v2";
+pub const GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V2: &str = "selected-action-binding-v2";
+pub const GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V2: &str = "goal-satisfaction-v2";
 pub const GROUNDED_DECISION_PRECOMMIT_SEGMENT_BYTES_V1: u64 = 64 * 1024 * 1024;
 pub const GROUNDED_DECISION_PRECOMMIT_QUOTA_BYTES_V1: u64 = 2 * 1024 * 1024 * 1024;
 
@@ -47,26 +50,23 @@ impl GroundedDecisionPrecommitJournalV1 {
     ) -> Result<Self, String> {
         let precommit_ledger = FramedCborLedger::open_with_limits(
             directory,
-            GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V1,
+            GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V2,
             segment_bytes,
             1,
         )?;
         let selected_ledger = FramedCborLedger::open_with_limits(
             directory,
-            GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V1,
+            GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V2,
             segment_bytes,
             1,
         )?;
         let satisfaction_ledger = FramedCborLedger::open_with_limits(
             directory,
-            GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V1,
+            GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V2,
             segment_bytes,
             1,
         )?;
-        let recovered = read_framed_cbor::<DecisionContractPrecommitV1>(
-            directory,
-            GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V1,
-        )?;
+        let recovered = read_precommit_records(directory)?;
         let mut seen_request_roots = BTreeSet::new();
         let mut precommits_by_root = BTreeMap::new();
         for precommit in recovered {
@@ -80,10 +80,7 @@ impl GroundedDecisionPrecommitJournalV1 {
             }
         }
         let mut selected_by_precommit_root = BTreeMap::new();
-        for selected in read_framed_cbor::<DurableSelectedActionBindingV1>(
-            directory,
-            GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V1,
-        )? {
+        for selected in read_selected_records(directory)? {
             let precommit = precommits_by_root
                 .get(&selected.receipt.precommit_root_sha256)
                 .ok_or_else(|| "grounded_decision_selected_precommit_missing".to_owned())?;
@@ -96,10 +93,7 @@ impl GroundedDecisionPrecommitJournalV1 {
             }
         }
         let mut satisfaction_by_precommit_root = BTreeMap::new();
-        for satisfaction in read_framed_cbor::<DurableGoalSatisfactionV1>(
-            directory,
-            GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V1,
-        )? {
+        for satisfaction in read_satisfaction_records(directory)? {
             let precommit = precommits_by_root
                 .get(&satisfaction.precommit_root_sha256)
                 .ok_or_else(|| "grounded_decision_satisfaction_precommit_missing".to_owned())?;
@@ -258,10 +252,7 @@ impl GroundedDecisionPrecommitJournalV1 {
     }
 
     pub fn recover_precommits(&self) -> Result<Vec<DecisionContractPrecommitV1>, String> {
-        let records: Vec<DecisionContractPrecommitV1> = read_framed_cbor(
-            &self.directory,
-            GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V1,
-        )?;
+        let records = read_precommit_records(&self.directory)?;
         for record in &records {
             record.validate().map_err(str::to_owned)?;
         }
@@ -269,14 +260,11 @@ impl GroundedDecisionPrecommitJournalV1 {
     }
 
     pub fn recover_selected_actions(&self) -> Result<Vec<DurableSelectedActionBindingV1>, String> {
-        read_framed_cbor(&self.directory, GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V1)
+        read_selected_records(&self.directory)
     }
 
     pub fn recover_goal_satisfactions(&self) -> Result<Vec<DurableGoalSatisfactionV1>, String> {
-        read_framed_cbor(
-            &self.directory,
-            GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V1,
-        )
+        read_satisfaction_records(&self.directory)
     }
 
     #[must_use]
@@ -288,6 +276,46 @@ impl GroundedDecisionPrecommitJournalV1 {
     pub const fn poisoned(&self) -> bool {
         self.poisoned
     }
+}
+
+pub(crate) fn read_precommit_records(
+    directory: &Path,
+) -> Result<Vec<DecisionContractPrecommitV1>, String> {
+    read_versioned_records(
+        directory,
+        GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V1,
+        GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V2,
+    )
+}
+
+pub(crate) fn read_selected_records(
+    directory: &Path,
+) -> Result<Vec<DurableSelectedActionBindingV1>, String> {
+    read_versioned_records(
+        directory,
+        GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V1,
+        GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V2,
+    )
+}
+
+pub(crate) fn read_satisfaction_records(
+    directory: &Path,
+) -> Result<Vec<DurableGoalSatisfactionV1>, String> {
+    read_versioned_records(
+        directory,
+        GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V1,
+        GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V2,
+    )
+}
+
+fn read_versioned_records<T: serde::de::DeserializeOwned>(
+    directory: &Path,
+    legacy_prefix: &str,
+    current_prefix: &str,
+) -> Result<Vec<T>, String> {
+    let mut records = read_framed_cbor(directory, legacy_prefix)?;
+    records.extend(read_framed_cbor(directory, current_prefix)?);
+    Ok(records)
 }
 
 fn append_synced_record<T: serde::Serialize>(
@@ -405,6 +433,7 @@ mod tests {
             authority_snapshot: authority,
             applicability_evaluator_schema: "nando.response-pre-action-evaluator.v1".to_owned(),
             available_action_contracts_root_sha256: actions.contracts_root_sha256,
+            available_action_count: 1,
             opaque_execution_binding_set_root_sha256: root('e'),
             journal_sequence: sequence + 1,
             action_selection_not_before_sequence: sequence + 2,
@@ -492,6 +521,7 @@ mod tests {
             authority_snapshot: authority,
             applicability_evaluator_schema: "nando.response-pre-action-evaluator.v1".to_owned(),
             available_action_contracts_root_sha256: actions.contracts_root_sha256.clone(),
+            available_action_count: 1,
             opaque_execution_binding_set_root_sha256: opaque_action_execution_binding_set_root_v1(
                 binding_roots.clone(),
             )
@@ -643,6 +673,84 @@ mod tests {
                 .count(),
             3
         );
+        fs::remove_dir_all(root_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn current_writes_use_v2_prefixes_without_creating_legacy_segments() {
+        let root_dir = temp_directory("versioned-prefixes");
+        let (precommit, selected, satisfaction) = joined_records(65);
+        {
+            let mut journal = GroundedDecisionPrecommitJournalV1::open(&root_dir).expect("journal");
+            journal.append_precommit(&precommit).expect("precommit");
+            journal.append_selected_action(&selected).expect("selected");
+            journal
+                .append_goal_satisfaction(&satisfaction)
+                .expect("satisfaction");
+        }
+        for legacy_prefix in [
+            GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V1,
+            GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V1,
+            GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V1,
+        ] {
+            let path = root_dir.join(format!("{legacy_prefix}-00000000000000000000.cbor"));
+            assert!(!path.exists());
+        }
+        for current_prefix in [
+            GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V2,
+            GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V2,
+            GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V2,
+        ] {
+            let path = root_dir.join(format!("{current_prefix}-00000000000000000000.cbor"));
+            assert!(fs::metadata(path).expect("current segment").len() > 4);
+        }
+        let restored = GroundedDecisionPrecommitJournalV1::open(&root_dir).expect("restart");
+        assert_eq!(
+            restored.recover_precommits().expect("precommits"),
+            vec![precommit]
+        );
+        assert_eq!(
+            restored.recover_selected_actions().expect("selected"),
+            vec![selected]
+        );
+        assert_eq!(
+            restored.recover_goal_satisfactions().expect("satisfaction"),
+            vec![satisfaction]
+        );
+        fs::remove_dir_all(root_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn existing_legacy_prefix_bytes_remain_unchanged_after_current_writes() {
+        let root_dir = temp_directory("legacy-prefix-preservation");
+        fs::create_dir_all(&root_dir).expect("directory");
+        let legacy_paths = [
+            GROUNDED_DECISION_PRECOMMIT_LEDGER_PREFIX_V1,
+            GROUNDED_DECISION_SELECTED_LEDGER_PREFIX_V1,
+            GROUNDED_DECISION_SATISFACTION_LEDGER_PREFIX_V1,
+        ]
+        .map(|prefix| root_dir.join(format!("{prefix}-00000000000000000000.cbor")));
+        for path in &legacy_paths {
+            fs::write(path, b"NTF1").expect("legacy genesis");
+        }
+        let legacy_before = legacy_paths
+            .iter()
+            .map(|path| fs::read(path).expect("legacy before"))
+            .collect::<Vec<_>>();
+        let (precommit, selected, satisfaction) = joined_records(66);
+        {
+            let mut journal = GroundedDecisionPrecommitJournalV1::open(&root_dir).expect("journal");
+            journal.append_precommit(&precommit).expect("precommit");
+            journal.append_selected_action(&selected).expect("selected");
+            journal
+                .append_goal_satisfaction(&satisfaction)
+                .expect("satisfaction");
+        }
+        let legacy_after = legacy_paths
+            .iter()
+            .map(|path| fs::read(path).expect("legacy after"))
+            .collect::<Vec<_>>();
+        assert_eq!(legacy_after, legacy_before);
         fs::remove_dir_all(root_dir).expect("cleanup");
     }
 
