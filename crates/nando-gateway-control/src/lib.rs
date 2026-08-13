@@ -152,7 +152,7 @@ impl ControlConfig {
             ),
             s1c4_natural_census_path: PathBuf::from(
                 env::var("NANDO_S1C4_NATURAL_CENSUS_JSON").unwrap_or_else(|_| {
-                    "/var/lib/nando-wave/transition/grounded-meaning-v1/s1c4-natural-census-report-v1.json"
+                    "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/s1c4-natural-census-v1/s1c4-natural-census-report-v1.json"
                         .into()
                 }),
             ),

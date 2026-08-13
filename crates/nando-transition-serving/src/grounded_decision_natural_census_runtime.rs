@@ -28,6 +28,7 @@ use crate::{AppState, ServingConfig, sha256_file_streaming, unix_now};
 pub const S1C4_CURSOR_FILE_V1: &str = "s1c4-natural-census-cursor-v1.json";
 pub const S1C4_REPORT_FILE_V1: &str = "s1c4-natural-census-report-v1.json";
 pub const S1C4_OPEN_REQUEST_FILE_V1: &str = "s1c4-open-request-v1.json";
+pub const S1C4_OUTPUT_DIRECTORY_V1: &str = "s1c4-natural-census-v1";
 const CONTROLLER_POLL: Duration = Duration::from_millis(100);
 const MAX_SIDECAR_BYTES: u64 = 64 * 1024;
 
@@ -956,11 +957,7 @@ struct CensusPathsV1 {
 }
 
 fn census_paths(config: &ServingConfig) -> Result<CensusPathsV1, String> {
-    let output_directory = config
-        .grounded_decision_journal_path
-        .parent()
-        .ok_or_else(|| "s1c4_output_parent_missing".to_owned())?
-        .to_path_buf();
+    let output_directory = s1c4_output_directory(&config.grounded_decision_journal_path);
     Ok(CensusPathsV1 {
         cursor_path: output_directory.join(S1C4_CURSOR_FILE_V1),
         open_request_path: output_directory.join(S1C4_OPEN_REQUEST_FILE_V1),
@@ -971,6 +968,10 @@ fn census_paths(config: &ServingConfig) -> Result<CensusPathsV1, String> {
         economics_path: config.ms4_ordinary_economics_path.clone(),
         output_directory,
     })
+}
+
+pub(crate) fn s1c4_output_directory(journal_directory: &Path) -> PathBuf {
+    journal_directory.join(S1C4_OUTPUT_DIRECTORY_V1)
 }
 
 fn read_safety_counters(path: &Path) -> Result<SafetyCountersV1, String> {
@@ -1061,6 +1062,15 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn output_directory_stays_inside_the_service_owned_journal() {
+        let journal = Path::new("/state/grounded-meaning-v1/decision-contract-precommits-v1");
+        let output = s1c4_output_directory(journal);
+        assert_eq!(output, journal.join(S1C4_OUTPUT_DIRECTORY_V1));
+        assert!(output.starts_with(journal));
+        assert_ne!(output.parent(), journal.parent());
+    }
 
     fn root(byte: char) -> String {
         byte.to_string().repeat(64)

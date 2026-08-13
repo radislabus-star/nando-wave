@@ -9,12 +9,13 @@ after implementation. This receipt records the post-edit checks only.
 operator-learning                 419 PASS
 transition-serving                316 PASS, 9 ignored
 gateway control                    60 PASS
-S1C-4 census                        9 PASS
+S1C-4 census                       10 PASS
 exact boundary                      2 PASS
 journal compatibility               8 PASS, 2 ignored
 strict Clippy                     PASS
 format and diff checks            PASS
 gateway installer transaction     PASS
+production path ownership audit   PASS after P0 repair
 NANDA structural gate            PASS, coherence only
 NANDA observed-source route gate  PASS, source structure only
 ```

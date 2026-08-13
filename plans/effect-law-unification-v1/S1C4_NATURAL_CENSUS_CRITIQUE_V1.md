@@ -24,7 +24,7 @@ Status: `ADVERSARIAL REVIEW APPLIED BEFORE IMPLEMENTATION`
 ## Post-Implementation Conformance Review
 
 The frozen preregistration above was not rewritten after coding. Review of the
-implemented bytes found and closed four additional P0/P1 conformance hazards:
+implemented bytes found and closed five additional P0/P1 conformance hazards:
 
 | Priority | Finding | Implemented repair |
 |---|---|---|
@@ -32,6 +32,7 @@ implemented bytes found and closed four additional P0/P1 conformance hazards:
 | P0 | The 1024-request limit could also be observed only after later requests arrived. | The same boundary receipt is sealed under the opportunity persist lock immediately after the exact 1024th eligible request; subsequent requests are marked census-ineligible. |
 | P0 | Opening the cursor and enabling request classification in separate critical sections could lose the first post-freeze request. | Cursor projection and both recorder predicates are configured atomically under the opportunity persist lock before the immutable cursor file is published. Failed publication disables both predicates. |
 | P1 | Adding `available_action_count` to the V1 precommit struct changed old CBOR decode/root semantics. | New precommits use `nando.decision-contract-precommit.v2`; V1 decodes with a default zero count and validates against the original V1 digest without the new field. |
+| P0 | The first implementation placed new cursor/report files in the root-owned `grounded-meaning-v1` directory, while the serving process runs as `e`. | All S1C-4 mutable files now live under a dedicated child of the existing service-owned durable decision journal. The root-owned parent remains read-only to the service. |
 
 The rooted boundary validates its closure reason: `REQUEST_LIMIT` must equal the
 exact frozen maximum ordinal, while `TIME_LIMIT` must equal the immutable

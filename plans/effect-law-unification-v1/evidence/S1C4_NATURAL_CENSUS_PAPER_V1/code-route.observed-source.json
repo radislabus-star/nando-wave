@@ -8,7 +8,7 @@
       "role": "interface",
       "evidence": {
         "path": "crates/nando-transition-serving/src/lib.rs",
-        "line": 5216,
+        "line": 5215,
         "contains": "let opportunity_request = observe_live_economics_request("
       }
     },
@@ -17,7 +17,7 @@
       "role": "producer",
       "evidence": {
         "path": "crates/nando-transition-serving/src/lib.rs",
-        "line": 8580,
+        "line": 8579,
         "contains": "match state.opportunity_bridge.submit(event) {"
       }
     },
@@ -26,7 +26,7 @@
       "role": "orchestrator",
       "evidence": {
         "path": "crates/nando-transition-serving/src/lib.rs",
-        "line": 5235,
+        "line": 5234,
         "contains": ".map(|runtime| S1c4ClassificationTicketV1 {"
       }
     },
@@ -62,7 +62,7 @@
       "role": "candidate_rank_owner",
       "evidence": {
         "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
-        "line": 634,
+        "line": 635,
         "contains": "fn project_census("
       }
     },
@@ -80,7 +80,7 @@
       "role": "proof_owner",
       "evidence": {
         "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
-        "line": 705,
+        "line": 706,
         "contains": "validate_decision_journals(&precommits, &selected, &satisfactions)?;"
       }
     },
@@ -112,7 +112,7 @@
       "events": ["ordinary_request"],
       "evidence": {
         "path": "crates/nando-transition-serving/src/lib.rs",
-        "line": 5216,
+        "line": 5215,
         "contains": "let opportunity_request = observe_live_economics_request("
       }
     },
@@ -124,7 +124,7 @@
       "events": ["ordinary_request"],
       "evidence": {
         "path": "crates/nando-transition-serving/src/lib.rs",
-        "line": 5224,
+        "line": 5223,
         "contains": "opportunity_request.and_then(|(opportunity_receipt, request_observed_at_unix)| {"
       }
     },
@@ -136,7 +136,7 @@
       "events": ["terminal_classification"],
       "evidence": {
         "path": "crates/nando-transition-serving/src/lib.rs",
-        "line": 857,
+        "line": 856,
         "contains": ".try_submit_terminal(S1c4ClassificationIngressV1 {"
       }
     },
@@ -172,7 +172,7 @@
       "events": ["terminal_census"],
       "evidence": {
         "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
-        "line": 349,
+        "line": 350,
         "contains": "let projection = project_census(paths, &cursor, &rows, end_ordinal)?;"
       }
     },
@@ -208,7 +208,7 @@
       "events": ["terminal_proof"],
       "evidence": {
         "path": "crates/nando-transition-serving/src/grounded_decision_natural_census_runtime.rs",
-        "line": 705,
+        "line": 706,
         "contains": "validate_decision_journals(&precommits, &selected, &satisfactions)?;"
       }
     },

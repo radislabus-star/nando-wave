@@ -793,10 +793,9 @@ impl GroundedDecisionShadowRuntimeV1 {
                 .unwrap_or_default()
                 .as_nanos()
         );
-        let classification_path = path
-            .parent()
-            .ok_or_else(|| "grounded_decision_journal_parent_missing".to_owned())?
-            .join("s1c4-classifications-v1");
+        let classification_path =
+            grounded_decision_natural_census_runtime::s1c4_output_directory(path)
+                .join("s1c4-classifications-v1");
         Ok(Self {
             journal: Mutex::new(
                 grounded_decision_capture::GroundedDecisionPrecommitJournalV1::open(path)?,

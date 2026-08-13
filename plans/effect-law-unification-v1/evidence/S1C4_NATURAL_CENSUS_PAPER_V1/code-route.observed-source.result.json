@@ -269,30 +269,30 @@
   "cardinality_basis": "static_declared_paths_per_named_event_scenario",
   "event_authority_owners": {
     "terminal_classification": {
-      "authorization_owner": [],
-      "render_owner": [],
-      "mutation_owner": [],
-      "candidate_rank_owner": [],
-      "display_rank_owner": [],
       "evidence_owner": [
         "classification_ledger"
-      ]
+      ],
+      "display_rank_owner": [],
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": [],
+      "authorization_owner": []
     },
     "terminal_census": {
-      "authorization_owner": [],
-      "render_owner": [
-        "dashboard_renderer"
-      ],
-      "mutation_owner": [],
-      "candidate_rank_owner": [
-        "census_joiner"
+      "evidence_owner": [
+        "classification_ledger"
       ],
       "display_rank_owner": [
         "census_display"
       ],
-      "evidence_owner": [
-        "classification_ledger"
-      ]
+      "render_owner": [
+        "dashboard_renderer"
+      ],
+      "candidate_rank_owner": [
+        "census_joiner"
+      ],
+      "mutation_owner": [],
+      "authorization_owner": []
     }
   },
   "source_evidence": {
