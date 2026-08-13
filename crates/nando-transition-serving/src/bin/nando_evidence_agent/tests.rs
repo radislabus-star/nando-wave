@@ -196,8 +196,9 @@ mod tests {
         assert_eq!(outbox.frames.len(), 1);
         assert!(
             outbox
-                .frames
-                .values()
+                .materialized_frames()
+                .expect("materialize frames")
+                .iter()
                 .all(|bound| bound.runtime_parity_case.is_some())
         );
         drop(outbox);
@@ -205,8 +206,9 @@ mod tests {
         let mut restored = LocalEvidenceOutbox::open(&root).expect("restore");
         assert!(
             restored
-                .frames
-                .values()
+                .materialized_frames()
+                .expect("materialize restored frames")
+                .iter()
                 .all(|bound| bound.runtime_parity_case.is_some())
         );
         restored
@@ -277,7 +279,7 @@ mod tests {
         sink.append_verified_frame(bound).expect("append bound");
         let outbox = outbox.lock().expect("outbox lock");
         assert_eq!(outbox.frames.len(), 1);
-        assert!(outbox.frames.values().all(|bound| {
+        assert!(outbox.materialized_frames().expect("materialize frames").iter().all(|bound| {
             valid_root(&bound.route_receipt_root_sha256)
                 && bound.route_receipt.validate()
                 && bound.route_receipt.receipt_root_sha256 == bound.route_receipt_root_sha256

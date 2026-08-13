@@ -1002,6 +1002,7 @@ mod tests {
                     &evidence_session_id_sha256("session-a"),
                     u64::MAX,
                 )
+                .map_err(io::Error::other)?
                 .is_some()
         );
         remote

@@ -202,6 +202,18 @@ pub fn read_framed_cbor<T: DeserializeOwned>(
     prefix: &str,
 ) -> Result<Vec<T>, String> {
     let mut output = Vec::new();
+    visit_framed_cbor(directory, prefix, |_, value| {
+        output.push(value);
+        Ok(())
+    })?;
+    Ok(output)
+}
+
+pub fn visit_framed_cbor<T, F>(directory: &Path, prefix: &str, mut visitor: F) -> Result<(), String>
+where
+    T: DeserializeOwned,
+    F: FnMut(FramedRecordRef, T) -> Result<(), String>,
+{
     for segment_id in segment_ids(directory, prefix)? {
         let path = segment_path(directory, prefix, segment_id);
         let mut file = File::open(&path)
@@ -213,6 +225,9 @@ pub fn read_framed_cbor<T: DeserializeOwned>(
             return Err("framed_ledger_bad_magic".to_owned());
         }
         loop {
+            let offset = file
+                .stream_position()
+                .map_err(|error| format!("framed_ledger_read_position:{error}"))?;
             let mut length = [0_u8; 4];
             match file.read_exact(&mut length) {
                 Ok(()) => {}
@@ -234,13 +249,55 @@ pub fn read_framed_cbor<T: DeserializeOwned>(
             if digest64(&payload) != u64::from_le_bytes(expected_digest) {
                 return Err("framed_ledger_digest_mismatch".to_owned());
             }
-            output.push(
+            let record = FramedRecordRef {
+                segment_id,
+                offset,
+                payload_bytes: u32::try_from(payload_bytes)
+                    .map_err(|_| "framed_ledger_record_too_large".to_owned())?,
+                payload_digest64: u64::from_le_bytes(expected_digest),
+            };
+            visitor(
+                record,
                 serde_cbor::from_slice(&payload)
                     .map_err(|error| format!("framed_ledger_decode:{error}"))?,
-            );
+            )?;
         }
     }
-    Ok(output)
+    Ok(())
+}
+
+pub fn read_framed_cbor_record<T: DeserializeOwned>(
+    directory: &Path,
+    prefix: &str,
+    record: &FramedRecordRef,
+) -> Result<T, String> {
+    let path = segment_path(directory, prefix, record.segment_id);
+    let mut file = File::open(&path)
+        .map_err(|error| format!("framed_ledger_read_open:{}:{error}", path.display()))?;
+    file.seek(SeekFrom::Start(record.offset))
+        .map_err(|error| format!("framed_ledger_read_seek:{error}"))?;
+    let mut header = [0_u8; 12];
+    file.read_exact(&mut header)
+        .map_err(|error| format!("framed_ledger_read_header:{error}"))?;
+    let payload_bytes = u32::from_le_bytes(header[..4].try_into().unwrap_or([0; 4]));
+    let payload_digest64 = u64::from_le_bytes(header[4..].try_into().unwrap_or([0; 8]));
+    if payload_bytes != record.payload_bytes || payload_digest64 != record.payload_digest64 {
+        return Err("framed_ledger_record_ref_mismatch".to_owned());
+    }
+    if payload_bytes > MAX_FRAME_PAYLOAD_BYTES {
+        return Err("framed_ledger_record_too_large".to_owned());
+    }
+    let mut payload = vec![
+        0_u8;
+        usize::try_from(payload_bytes)
+            .map_err(|_| "framed_ledger_record_too_large".to_owned())?
+    ];
+    file.read_exact(&mut payload)
+        .map_err(|error| format!("framed_ledger_read_payload:{error}"))?;
+    if digest64(&payload) != payload_digest64 {
+        return Err("framed_ledger_digest_mismatch".to_owned());
+    }
+    serde_cbor::from_slice(&payload).map_err(|error| format!("framed_ledger_decode:{error}"))
 }
 
 pub fn write_atomic_cbor<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
@@ -387,4 +444,47 @@ fn sync_directory(path: &Path) -> Result<(), String> {
 #[cfg(not(unix))]
 fn sync_directory(_path: &Path) -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temporary_root(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "nando-framed-ledger-{label}-{}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn record_reference_reads_exact_persisted_value() {
+        let root = temporary_root("record-reference");
+        let _ = fs::remove_dir_all(&root);
+        let mut ledger = FramedCborLedger::open(&root, "records").expect("ledger");
+        let record = ledger.append(&vec!["alpha", "beta"]).expect("append");
+        ledger.sync().expect("sync");
+
+        let restored: Vec<String> =
+            read_framed_cbor_record(&root, "records", &record).expect("record");
+        assert_eq!(restored, vec!["alpha".to_owned(), "beta".to_owned()]);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn record_reference_rejects_rebound_coordinates() {
+        let root = temporary_root("record-reference-rebound");
+        let _ = fs::remove_dir_all(&root);
+        let mut ledger = FramedCborLedger::open(&root, "records").expect("ledger");
+        let mut record = ledger.append(&42_u64).expect("append");
+        ledger.sync().expect("sync");
+        record.payload_digest64 ^= 1;
+
+        assert_eq!(
+            read_framed_cbor_record::<u64>(&root, "records", &record)
+                .expect_err("rebound must fail"),
+            "framed_ledger_record_ref_mismatch"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
 }

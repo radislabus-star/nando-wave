@@ -1,0 +1,352 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "evidence-agent-resource-recovery-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "local-agent-state",
+      "kind": "file",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/state-v1.cbor",
+      "expect": {
+        "mode": "0600",
+        "size_bytes": 353,
+        "sha256": "b20916197dfc4345a4f3791d024b96f4ea5982fb6c3ea7933732bf78280c3733"
+      }
+    },
+    {
+      "id": "local-agent-pending",
+      "kind": "file",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/pending-v2.cbor",
+      "expect": {
+        "mode": "0600",
+        "size_bytes": 29017,
+        "sha256": "c5446dd3b4b04aeffd4eb96e8333e2f4fb2b6d1c0039c82553923c26ee9b19e6"
+      }
+    },
+    {
+      "id": "local-outbox-segment-5383",
+      "kind": "file",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/outbox-v2/route-bound-relation-frame-00000000000000005383.cbor",
+      "expect": {
+        "mode": "0600",
+        "size_bytes": 67089359,
+        "sha256": "fa8e82367ccd20580f96ef7abc9adaf337df1f80342f48c1abbe6fab12a0a7c7"
+      }
+    },
+    {
+      "id": "local-outbox-segment-5384",
+      "kind": "file",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/outbox-v2/route-bound-relation-frame-00000000000000005384.cbor",
+      "expect": {
+        "mode": "0600",
+        "size_bytes": 67106430,
+        "sha256": "0bc85771ee3de48cd529fd07b968e3f064e32fc492e94d1d87e928583e4ac430"
+      }
+    },
+    {
+      "id": "local-outbox-segment-5385",
+      "kind": "file",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/outbox-v2/route-bound-relation-frame-00000000000000005385.cbor",
+      "expect": {
+        "mode": "0600",
+        "size_bytes": 39201453,
+        "sha256": "5e55910213918902a627b72a0fea7b91f2e9481917f3b0c8aef87669e24eff3d"
+      }
+    }
+  ],
+  "source_checks": [
+    {
+      "id": "existing-outbox-source",
+      "path": "../../crates/nando-transition-serving/src/bin/nando_evidence_agent/outbox.rs",
+      "sha256": "00bb7822c07a358eb930865ff61cccd7cad960b6e914a28ab4a7d982f8bb311c",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "generated_traffic",
+          "regex": "generate_(synthetic|controlled)_traffic\\s*\\("
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "write_(synthetic|fixture)_session\\s*\\("
+        },
+        {
+          "effect": "codex_session_mutation",
+          "regex": "OpenOptions::new\\(\\).*write\\(true\\).*sessions_directory"
+        },
+        {
+          "effect": "legacy_evidence_deletion",
+          "regex": "remove_(file|dir_all)\\([^\\n]*orphaned-client-epoch"
+        }
+      ]
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "read-existing-ledgers",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "write-resource-bounded-agent",
+        "kind": "source_edit"
+      },
+      {
+        "id": "archive-old-client-epoch",
+        "kind": "immutable_evidence_backup"
+      },
+      {
+        "id": "install-new-client-key",
+        "kind": "credential_rotation"
+      },
+      {
+        "id": "install-local-agent",
+        "kind": "local_service_transaction"
+      },
+      {
+        "id": "verify-runtime-resources",
+        "kind": "service_snapshot",
+        "comparison_id": "local-runtime-projection"
+      }
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "codex_session_mutation",
+      "legacy_evidence_deletion"
+    ]
+  },
+  "preserved_artifacts": [
+    {
+      "id": "old-agent-state",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/state-v1.cbor",
+      "policy": "immutable_backup_before_epoch_rollover",
+      "rollback_policy": "restore_exact_original_bytes",
+      "baseline_check_id": "local-agent-state"
+    },
+    {
+      "id": "old-agent-pending",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/pending-v2.cbor",
+      "policy": "immutable_backup_before_epoch_rollover",
+      "rollback_policy": "restore_exact_original_bytes",
+      "baseline_check_id": "local-agent-pending"
+    },
+    {
+      "id": "old-outbox-5383",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/outbox-v2/route-bound-relation-frame-00000000000000005383.cbor",
+      "policy": "immutable_backup_and_replay_under_new_client_epoch",
+      "rollback_policy": "restore_exact_original_bytes",
+      "baseline_check_id": "local-outbox-segment-5383"
+    },
+    {
+      "id": "old-outbox-5384",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/outbox-v2/route-bound-relation-frame-00000000000000005384.cbor",
+      "policy": "immutable_backup_and_replay_under_new_client_epoch",
+      "rollback_policy": "restore_exact_original_bytes",
+      "baseline_check_id": "local-outbox-segment-5384"
+    },
+    {
+      "id": "old-outbox-5385",
+      "path": "/home/ubu/.local/state/nando-evidence-agent/outbox-v2/route-bound-relation-frame-00000000000000005385.cbor",
+      "policy": "immutable_backup_and_replay_under_new_client_epoch",
+      "rollback_policy": "restore_exact_original_bytes",
+      "baseline_check_id": "local-outbox-segment-5385"
+    }
+  ],
+  "state_machine": {
+    "initial_state": "AGENT_STOPPED",
+    "terminal_states": [
+      "RECOVERY_PASS",
+      "BUILD_FAILED",
+      "BACKUP_FAILED",
+      "KEY_ROTATION_FAILED",
+      "INSTALL_FAILED",
+      "RUNTIME_GATE_FAILED"
+    ],
+    "steps": [
+      {
+        "id": "build-and-test",
+        "from": "AGENT_STOPPED",
+        "to": "CANDIDATE_VERIFIED",
+        "mutates": false
+      },
+      {
+        "id": "archive-old-epoch",
+        "from": "CANDIDATE_VERIFIED",
+        "to": "OLD_EPOCH_ARCHIVED",
+        "mutates": true,
+        "failure_state": "BACKUP_FAILED",
+        "cleanup": "remove_incomplete_backup_only",
+        "preserves": [
+          "old-agent-state",
+          "old-agent-pending",
+          "old-outbox-5383",
+          "old-outbox-5384",
+          "old-outbox-5385"
+        ],
+        "test_id": "backup-fault"
+      },
+      {
+        "id": "rotate-client-identity",
+        "from": "OLD_EPOCH_ARCHIVED",
+        "to": "NEW_CLIENT_CONFIGURED",
+        "mutates": true,
+        "failure_state": "KEY_ROTATION_FAILED",
+        "cleanup": "remove_new_key_and_restore_old_local_key",
+        "preserves": [
+          "old-agent-state",
+          "old-agent-pending",
+          "old-outbox-5383",
+          "old-outbox-5384",
+          "old-outbox-5385"
+        ],
+        "test_id": "key-rotation-fault"
+      },
+      {
+        "id": "install-candidate",
+        "from": "NEW_CLIENT_CONFIGURED",
+        "to": "CANDIDATE_ACTIVE",
+        "mutates": true,
+        "failure_state": "INSTALL_FAILED",
+        "cleanup": "transactional_installer_restores_previous_binary_unit_and_service_state",
+        "preserves": [
+          "old-agent-state",
+          "old-agent-pending",
+          "old-outbox-5383",
+          "old-outbox-5384",
+          "old-outbox-5385"
+        ],
+        "test_id": "installer-rollback"
+      },
+      {
+        "id": "runtime-resource-gate",
+        "from": "CANDIDATE_ACTIVE",
+        "to": "RECOVERY_PASS",
+        "mutates": true,
+        "failure_state": "RUNTIME_GATE_FAILED",
+        "cleanup": "stop_candidate_and_restore_previous_binary_unit_key_and_state",
+        "preserves": [
+          "old-agent-state",
+          "old-agent-pending",
+          "old-outbox-5383",
+          "old-outbox-5384",
+          "old-outbox-5385"
+        ],
+        "test_id": "runtime-gate-fault"
+      }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "no-session-replay-storm",
+      "statement": "Unchanged Codex JSONL files are never reread after startup registration.",
+      "test_id": "unchanged-session-io"
+    },
+    {
+      "id": "bounded-outbox-memory",
+      "statement": "Outbox payloads remain on disk and only one bounded remote batch is materialized.",
+      "test_id": "outbox-memory-bound"
+    },
+    {
+      "id": "old-epoch-preserved",
+      "statement": "The sequence-5477 local branch and all queued natural evidence remain byte-verifiable after rollover.",
+      "test_id": "legacy-evidence-parity"
+    },
+    {
+      "id": "connector-unaffected",
+      "statement": "The local connector PID and health route survive evidence-agent deployment.",
+      "test_id": "connector-parity"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "client-key-identity",
+      "producer": "local SHA-256 of the rotated 32-byte evidence key",
+      "consumer": "mini-PC evidence-clients filename and key bytes",
+      "comparison": "exact key SHA-256 and byte parity",
+      "test_id": "client-key-parity"
+    },
+    {
+      "id": "outbox-frame-identity",
+      "producer": "disk-indexed RouteBoundOutboxFrameV1 record",
+      "consumer": "RemoteEvidenceBatchV1 frame",
+      "comparison": "exact canonical frame and transport-binding parity",
+      "test_id": "outbox-frame-parity"
+    }
+  ],
+  "runtime_comparisons": [
+    {
+      "id": "local-runtime-projection",
+      "source": "systemd user service plus procfs and local gateway health",
+      "comparison": "exact_stable_projection",
+      "reason": "resource repair must not interrupt the connector or restore swap growth",
+      "test_id": "connector-parity",
+      "stable_fields": [
+        "connector_pid",
+        "gateway_health_service",
+        "legacy_backup_hashes"
+      ],
+      "expected_to_change_fields": [
+        "evidence_agent_pid",
+        "evidence_client_id",
+        "accepted_batches"
+      ],
+      "observed_not_compared_fields": [
+        "codex_session_sizes",
+        "system_page_cache_bytes"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "id": "backup-fault",
+      "kind": "fault_injection",
+      "expected": "partial backup is removed and every original evidence byte remains in place"
+    },
+    {
+      "id": "key-rotation-fault",
+      "kind": "fault_injection",
+      "expected": "new client key is not activated unless local and remote copies are byte-identical"
+    },
+    {
+      "id": "installer-rollback",
+      "kind": "fault_injection",
+      "expected": "failed readiness restores previous binary, unit and stopped service state"
+    },
+    {
+      "id": "runtime-gate-fault",
+      "kind": "fault_injection",
+      "expected": "resource-limit or transport failure stops candidate and leaves immutable old epoch backup"
+    },
+    {
+      "id": "unchanged-session-io",
+      "kind": "integration",
+      "expected": "no reads from unchanged large JSONL files during an idle observation window"
+    },
+    {
+      "id": "outbox-memory-bound",
+      "kind": "integration",
+      "expected": "a multi-segment outbox opens and drains below MemoryMax without swap growth"
+    },
+    {
+      "id": "legacy-evidence-parity",
+      "kind": "parity",
+      "expected": "all five frozen artifact SHA-256 values match their immutable backup copies"
+    },
+    {
+      "id": "connector-parity",
+      "kind": "parity",
+      "expected": "connector PID and gateway health identity are unchanged"
+    },
+    {
+      "id": "client-key-parity",
+      "kind": "parity",
+      "expected": "local key SHA-256 equals remote configured client id and remote key SHA-256"
+    },
+    {
+      "id": "outbox-frame-parity",
+      "kind": "parity",
+      "expected": "disk-indexed frames produce the same canonical remote batch as in-memory frames"
+    }
+  ]
+}

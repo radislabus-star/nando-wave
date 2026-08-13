@@ -69,6 +69,8 @@ grep -Fq "nando-evidence-agent" "${unit}"
 grep -Fq "ReadOnlyPaths=%h/.codex/sessions" "${unit}"
 grep -Fq "ReadOnlyPaths=-%t/nando-connector" "${unit}"
 grep -Fq "ReadWritePaths=%h/.local/state/nando-evidence-agent" "${unit}"
+grep -Fq "MemorySwapMax=0" "${unit}"
+grep -Fq "IOSchedulingClass=idle" "${unit}"
 exec_path="$(sed -n 's/^ExecStart=\([^ ]*\).*/\1/p' "${unit}")"
 [[ -x "${exec_path}" ]]
 EOF

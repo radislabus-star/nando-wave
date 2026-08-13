@@ -18,9 +18,9 @@ use nando_client_evidence::{
 use nando_operator_kernel::{RelationFrame, canonical_json_sha256, sha256_bytes};
 use nando_operator_learning::{FramedCborLedger, RuntimeParityCase, read_framed_cbor};
 use nando_transition_serving::remote_evidence_spool::{
-    REMOTE_EVIDENCE_ENDPOINT_V1, REMOTE_EVIDENCE_MAX_FRAMES_V1, RemoteEvidenceAckV1,
-    RemoteEvidenceBatchV1, RemoteEvidenceFrameSealErrorV1, RemoteEvidenceFrameV1,
-    RemoteEvidenceFrameValidationBlockerV1, RouteBoundEvidenceFrameV1,
+    REMOTE_EVIDENCE_ENDPOINT_V1, REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1, REMOTE_EVIDENCE_MAX_FRAMES_V1,
+    RemoteEvidenceAckV1, RemoteEvidenceBatchV1, RemoteEvidenceFrameSealErrorV1,
+    RemoteEvidenceFrameV1, RemoteEvidenceFrameValidationBlockerV1, RouteBoundEvidenceFrameV1,
     parse_remote_evidence_key_v1, remote_evidence_genesis_root, sign_remote_evidence_request_v1,
 };
 use nando_transition_serving::{
@@ -382,13 +382,11 @@ impl EvidenceAgent {
             .outbox
             .lock()
             .map_err(|_| "evidence_agent_outbox_lock_poisoned".to_owned())?;
-        let selected = outbox
-            .frames
-            .iter()
-            .filter(|(root, _)| !self.state.seen_frame_roots.contains(*root))
-            .take(REMOTE_EVIDENCE_MAX_FRAMES_V1)
-            .map(|(root, frame)| (root.clone(), frame.clone()))
-            .collect::<Vec<_>>();
+        let selected = outbox.selected_unseen(
+            &self.state.seen_frame_roots,
+            REMOTE_EVIDENCE_MAX_FRAMES_V1,
+            REMOTE_EVIDENCE_MAX_BATCH_BYTES_V1.saturating_sub(64 * 1024),
+        )?;
         drop(outbox);
         if selected.is_empty() {
             return Ok(None);

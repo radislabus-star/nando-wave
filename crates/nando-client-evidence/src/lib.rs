@@ -5,7 +5,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -67,7 +67,17 @@ pub struct NandoRouteReceiptIndex {
     offset: u64,
     last_sequence: u64,
     previous_receipt_root_sha256: String,
-    receipts: BTreeMap<(String, String), Vec<NandoRouteReceiptV1>>,
+    receipts: BTreeMap<[u8; 64], Vec<RouteReceiptRefV1>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RouteReceiptRefV1 {
+    offset: u64,
+    line_bytes: u16,
+    sequence: u64,
+    request_observed_at_unix_nanos: u64,
+    route_confirmed_at_unix_nanos: u64,
+    receipt_root_sha256: [u8; 32],
 }
 
 impl ClientRouteIdentityV1 {
@@ -311,40 +321,53 @@ impl NandoRouteReceiptIndex {
             {
                 return Err("route_receipt_index_budget".to_owned());
             }
+            let identity =
+                route_identity_key(&receipt.turn_intent_id_sha256, &receipt.session_id_sha256)?;
+            let reference = RouteReceiptRefV1 {
+                offset: record_offset,
+                line_bytes: u16::try_from(read)
+                    .map_err(|_| "route_receipt_record_budget".to_owned())?,
+                sequence: receipt.sequence,
+                request_observed_at_unix_nanos: receipt.request_observed_at_unix_nanos,
+                route_confirmed_at_unix_nanos: receipt.route_confirmed_at_unix_nanos,
+                receipt_root_sha256: decode_sha256(&receipt.receipt_root_sha256)
+                    .ok_or_else(|| "route_receipt_chain_invalid".to_owned())?,
+            };
             self.last_sequence = receipt.sequence;
             self.previous_receipt_root_sha256 = receipt.receipt_root_sha256.clone();
-            self.receipts
-                .entry((
-                    receipt.turn_intent_id_sha256.clone(),
-                    receipt.session_id_sha256.clone(),
-                ))
-                .or_default()
-                .push(receipt);
+            self.receipts.entry(identity).or_default().push(reference);
             self.offset = next_offset;
             accepted = accepted.saturating_add(1);
         }
         Ok(accepted)
     }
 
-    #[must_use]
     pub fn receipt_for_frame(
         &self,
         turn_intent_id_sha256: &str,
         session_id_sha256: &str,
         frame_observed_at_unix_nanos: u64,
-    ) -> Option<&NandoRouteReceiptV1> {
-        self.receipts
-            .get(&(
-                turn_intent_id_sha256.to_owned(),
-                session_id_sha256.to_owned(),
-            ))
-            .and_then(|receipts| {
-                receipts.iter().rev().find(|receipt| {
-                    receipt.request_observed_at_unix_nanos <= frame_observed_at_unix_nanos
+    ) -> Result<Option<NandoRouteReceiptV1>, String> {
+        let identity = route_identity_key(turn_intent_id_sha256, session_id_sha256)?;
+        let Some(reference) = self.receipts.get(&identity).and_then(|receipts| {
+            receipts
+                .iter()
+                .filter(|receipt| {
+                    frame_observed_at_unix_nanos > 0
+                        && receipt.request_observed_at_unix_nanos <= frame_observed_at_unix_nanos
                         && receipt.route_confirmed_at_unix_nanos <= frame_observed_at_unix_nanos
-                        && frame_observed_at_unix_nanos > 0
                 })
-            })
+                .max_by_key(|receipt| {
+                    (
+                        receipt.route_confirmed_at_unix_nanos,
+                        receipt.request_observed_at_unix_nanos,
+                        receipt.sequence,
+                    )
+                })
+        }) else {
+            return Ok(None);
+        };
+        self.read_receipt(reference, &identity).map(Some)
     }
 
     #[must_use]
@@ -355,6 +378,40 @@ impl NandoRouteReceiptIndex {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.receipts.is_empty()
+    }
+
+    fn read_receipt(
+        &self,
+        reference: &RouteReceiptRefV1,
+        expected_identity: &[u8; 64],
+    ) -> Result<NandoRouteReceiptV1, String> {
+        let mut file =
+            File::open(&self.path).map_err(|error| format!("route_receipt_read_open:{error}"))?;
+        file.seek(SeekFrom::Start(reference.offset))
+            .map_err(|error| format!("route_receipt_seek:{error}"))?;
+        let mut line = vec![0_u8; usize::from(reference.line_bytes)];
+        file.read_exact(&mut line)
+            .map_err(|error| format!("route_receipt_exact_read:{error}"))?;
+        if line.pop() != Some(b'\n') || line.is_empty() || line.len() > MAX_ROUTE_RECEIPT_BYTES {
+            return Err("route_receipt_record_changed".to_owned());
+        }
+        let receipt: NandoRouteReceiptV1 = serde_json::from_slice(&line)
+            .map_err(|error| format!("route_receipt_decode:{error}"))?;
+        let canonical = serde_json::to_vec(&receipt)
+            .map_err(|error| format!("route_receipt_encode:{error}"))?;
+        let identity =
+            route_identity_key(&receipt.turn_intent_id_sha256, &receipt.session_id_sha256)?;
+        if !receipt.validate()
+            || canonical != line
+            || identity != *expected_identity
+            || receipt.sequence != reference.sequence
+            || receipt.request_observed_at_unix_nanos != reference.request_observed_at_unix_nanos
+            || receipt.route_confirmed_at_unix_nanos != reference.route_confirmed_at_unix_nanos
+            || decode_sha256(&receipt.receipt_root_sha256) != Some(reference.receipt_root_sha256)
+        {
+            return Err("route_receipt_record_changed".to_owned());
+        }
+        Ok(receipt)
     }
 }
 
@@ -400,6 +457,39 @@ fn valid_sha256(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         && !value.bytes().all(|byte| byte == b'0')
+}
+
+fn route_identity_key(
+    turn_intent_id_sha256: &str,
+    session_id_sha256: &str,
+) -> Result<[u8; 64], String> {
+    let turn = decode_sha256(turn_intent_id_sha256)
+        .ok_or_else(|| "route_receipt_identity_invalid".to_owned())?;
+    let session = decode_sha256(session_id_sha256)
+        .ok_or_else(|| "route_receipt_identity_invalid".to_owned())?;
+    let mut identity = [0_u8; 64];
+    identity[..32].copy_from_slice(&turn);
+    identity[32..].copy_from_slice(&session);
+    Ok(identity)
+}
+
+fn decode_sha256(value: &str) -> Option<[u8; 32]> {
+    if !valid_sha256(value) {
+        return None;
+    }
+    let mut decoded = [0_u8; 32];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        decoded[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
+    }
+    Some(decoded)
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        _ => None,
+    }
 }
 
 fn validate_ledger_path(path: &Path, max_bytes: u64) -> Result<(), String> {
@@ -515,12 +605,14 @@ mod tests {
         assert_eq!(
             index
                 .receipt_for_frame(&first.turn_intent_id_sha256, &first.session_id_sha256, 300)
+                .expect("lookup")
                 .map(|receipt| receipt.sequence),
             Some(second.sequence)
         );
         assert_eq!(
             index
                 .receipt_for_frame(&first.turn_intent_id_sha256, &first.session_id_sha256, 175)
+                .expect("lookup")
                 .map(|receipt| receipt.sequence),
             Some(first.sequence)
         );
@@ -554,8 +646,49 @@ mod tests {
                     &before_action.session_id_sha256,
                     200,
                 )
+                .expect("lookup")
                 .map(|receipt| receipt.sequence),
             Some(before_action.sequence)
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn lookup_rejects_a_receipt_changed_after_indexing() {
+        let root = temporary_root("changed-after-index");
+        let path = root.join("route-receipts-v1.jsonl");
+        let mut ledger =
+            NandoRouteReceiptLedger::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+                .expect("ledger");
+        let receipt = ledger
+            .append(&identity(), sha256_bytes(b"original"), 200, 100, 150)
+            .expect("receipt");
+        drop(ledger);
+
+        let index = NandoRouteReceiptIndex::open(&path, DEFAULT_ROUTE_RECEIPT_LEDGER_MAX_BYTES)
+            .expect("index");
+        let mut bytes = fs::read(&path).expect("read receipt ledger");
+        let body_root = receipt.request_body_sha256.as_bytes();
+        let root_offset = bytes
+            .windows(body_root.len())
+            .position(|window| window == body_root)
+            .expect("request body root");
+        bytes[root_offset] = if bytes[root_offset] == b'a' {
+            b'b'
+        } else {
+            b'a'
+        };
+        fs::write(&path, bytes).expect("change indexed receipt");
+
+        assert_eq!(
+            index
+                .receipt_for_frame(
+                    &receipt.turn_intent_id_sha256,
+                    &receipt.session_id_sha256,
+                    200,
+                )
+                .expect_err("changed receipt must fail closed"),
+            "route_receipt_record_changed"
         );
         fs::remove_dir_all(root).expect("cleanup");
     }

@@ -10,8 +10,9 @@ struct RouteBoundOutboxFrameV1 {
 }
 
 struct LocalEvidenceOutbox {
+    directory: PathBuf,
     ledger: FramedCborLedger,
-    frames: BTreeMap<String, RouteBoundOutboxFrameV1>,
+    frames: BTreeMap<String, nando_operator_learning::FramedRecordRef>,
     payload_bytes: u64,
 }
 
@@ -33,33 +34,41 @@ struct RouteBindingMetrics {
 impl LocalEvidenceOutbox {
     fn open(directory: &Path) -> Result<Self, String> {
         let ledger = FramedCborLedger::open(directory, OUTBOX_PREFIX)?;
-        let persisted = read_framed_cbor::<RouteBoundOutboxFrameV1>(directory, OUTBOX_PREFIX)?;
-        let mut frames = BTreeMap::<String, RouteBoundOutboxFrameV1>::new();
+        let mut frames = BTreeMap::<String, nando_operator_learning::FramedRecordRef>::new();
         let mut payload_bytes = 0_u64;
-        for bound in persisted {
-            let sealed = bound.seal()?;
-            let bytes = frame_bytes(&bound)?;
-            let new_root = !frames.contains_key(&sealed.frame_root_sha256);
-            if let Some(existing) = frames.get(&sealed.frame_root_sha256) {
-                if existing == &bound {
-                    continue;
+        nando_operator_learning::visit_framed_cbor::<RouteBoundOutboxFrameV1, _>(
+            directory,
+            OUTBOX_PREFIX,
+            |record, bound| {
+                let sealed = bound.seal()?;
+                let new_root = !frames.contains_key(&sealed.frame_root_sha256);
+                if let Some(existing_ref) = frames.get(&sealed.frame_root_sha256) {
+                    let existing = nando_operator_learning::read_framed_cbor_record::<
+                        RouteBoundOutboxFrameV1,
+                    >(directory, OUTBOX_PREFIX, existing_ref)?;
+                    if existing == bound {
+                        return Ok(());
+                    }
+                    if !existing.same_transport_binding(&bound)
+                        || existing.runtime_parity_case.is_some()
+                        || bound.runtime_parity_case.is_none()
+                    {
+                        return Err("evidence_agent_outbox_rebound".to_owned());
+                    }
                 }
-                if !existing.same_transport_binding(&bound)
-                    || existing.runtime_parity_case.is_some()
-                    || bound.runtime_parity_case.is_none()
+                if new_root && frames.len() >= MAX_OUTBOX_FRAMES
+                    || payload_bytes.saturating_add(u64::from(record.payload_bytes))
+                        > MAX_OUTBOX_BYTES
                 {
-                    return Err("evidence_agent_outbox_rebound".to_owned());
+                    return Err("evidence_agent_outbox_budget".to_owned());
                 }
-            }
-            if new_root && frames.len() >= MAX_OUTBOX_FRAMES
-                || payload_bytes.saturating_add(bytes) > MAX_OUTBOX_BYTES
-            {
-                return Err("evidence_agent_outbox_budget".to_owned());
-            }
-            payload_bytes = payload_bytes.saturating_add(bytes);
-            frames.insert(sealed.frame_root_sha256, bound);
-        }
+                payload_bytes = payload_bytes.saturating_add(u64::from(record.payload_bytes));
+                frames.insert(sealed.frame_root_sha256, record);
+                Ok(())
+            },
+        )?;
         Ok(Self {
+            directory: directory.to_owned(),
             ledger,
             frames,
             payload_bytes,
@@ -90,8 +99,9 @@ impl LocalEvidenceOutbox {
         sealed: RemoteEvidenceFrameV1,
     ) -> Result<(), String> {
         let new_root = !self.frames.contains_key(&sealed.frame_root_sha256);
-        if let Some(existing) = self.frames.get(&sealed.frame_root_sha256) {
-            if existing == &bound
+        if let Some(existing_ref) = self.frames.get(&sealed.frame_root_sha256) {
+            let existing = self.read_record(existing_ref)?;
+            if existing == bound
                 || existing.same_transport_binding(&bound)
                     && existing.runtime_parity_case.is_some()
                     && bound.runtime_parity_case.is_none()
@@ -111,11 +121,47 @@ impl LocalEvidenceOutbox {
         {
             return Err("evidence_agent_outbox_budget".to_owned());
         }
-        self.ledger.append(&bound)?;
+        let record = self.ledger.append(&bound)?;
         self.ledger.sync()?;
         self.payload_bytes = self.payload_bytes.saturating_add(bytes);
-        self.frames.insert(sealed.frame_root_sha256, bound);
+        self.frames.insert(sealed.frame_root_sha256, record);
         Ok(())
+    }
+
+    fn read_record(
+        &self,
+        record: &nando_operator_learning::FramedRecordRef,
+    ) -> Result<RouteBoundOutboxFrameV1, String> {
+        nando_operator_learning::read_framed_cbor_record(
+            &self.directory,
+            OUTBOX_PREFIX,
+            record,
+        )
+    }
+
+    fn selected_unseen(
+        &self,
+        seen: &BTreeSet<String>,
+        limit: usize,
+        max_payload_bytes: usize,
+    ) -> Result<Vec<(String, RouteBoundOutboxFrameV1)>, String> {
+        let mut selected = Vec::new();
+        let mut selected_bytes = 0_usize;
+        for (root, record) in self.frames.iter().filter(|(root, _)| !seen.contains(*root)) {
+            if selected.len() >= limit {
+                break;
+            }
+            let record_bytes = usize::try_from(record.payload_bytes)
+                .map_err(|_| "evidence_agent_outbox_frame_budget".to_owned())?;
+            if !selected.is_empty()
+                && selected_bytes.saturating_add(record_bytes) > max_payload_bytes
+            {
+                break;
+            }
+            selected_bytes = selected_bytes.saturating_add(record_bytes);
+            selected.push((root.clone(), self.read_record(record)?));
+        }
+        Ok(selected)
     }
 
     fn compact_all(&mut self) -> Result<(), String> {
@@ -123,6 +169,14 @@ impl LocalEvidenceOutbox {
         self.frames.clear();
         self.payload_bytes = 0;
         Ok(())
+    }
+
+    #[cfg(test)]
+    fn materialized_frames(&self) -> Result<Vec<RouteBoundOutboxFrameV1>, String> {
+        self.frames
+            .values()
+            .map(|record| self.read_record(record))
+            .collect()
     }
 }
 
@@ -183,13 +237,11 @@ impl VerifiedRelationFrameSink for OutboxSink {
                     .fetch_add(1, Ordering::Relaxed);
                 return Err(error);
             }
-            receipts
-                .receipt_for_frame(
-                    &frame.client_intent_id_sha256,
-                    &frame.session_id_sha256,
-                    frame.observed_at_unix_nanos,
-                )
-                .cloned()
+            receipts.receipt_for_frame(
+                &frame.client_intent_id_sha256,
+                &frame.session_id_sha256,
+                frame.observed_at_unix_nanos,
+            )?
         };
         let Some(route_receipt) = route_receipt else {
             self.route_metrics
