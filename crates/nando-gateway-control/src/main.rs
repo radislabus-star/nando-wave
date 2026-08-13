@@ -1616,6 +1616,8 @@ async fn control_dashboard_snapshot(
         metric_u64(&natural_vocabulary_census, "cohorts_total")
     };
     let queue_rows = metric_u64(&k1_scheduler, "queue_rows");
+    let completed_generations = metric_u64(&k1_scheduler, "completed_generations");
+    let bounded_wire_recovered = scheduler_summary_available && completed_generations >= 556;
     let k1_gate = k1_gate_snapshot(&ms4_closed_loop);
     let economics_false_accepts = metric_u64(economics, "false_accepts");
     let economics_parity = metric_u64(economics, "runtime_parity_mismatches");
@@ -1704,13 +1706,19 @@ async fn control_dashboard_snapshot(
                     .get("leading_candidate_root_sha256")
                     .and_then(Value::as_str)
                     .unwrap_or(""),
-                "completed_generations": metric_u64(&k1_scheduler, "completed_generations"),
+                "completed_generations": completed_generations,
                 "next_generation_sequence": metric_u64(&k1_scheduler, "next_generation_sequence"),
                 "active_candidate": k1_scheduler.get("active_candidate").and_then(Value::as_bool).unwrap_or(false),
                 "latest_verdict": k1_scheduler.get("latest_verdict").and_then(Value::as_str).unwrap_or(""),
                 "latest_verdict_blocker": k1_scheduler.get("latest_verdict_blocker").and_then(Value::as_str).unwrap_or(""),
                 "authority_ready": k1_scheduler.get("authority_ready").and_then(Value::as_bool).unwrap_or(false),
                 "phase_mutation_allowed": k1_scheduler.get("phase_mutation_allowed").and_then(Value::as_bool).unwrap_or(false),
+            },
+            "k1_transport": {
+                "bounded_authority_wire": if bounded_wire_recovered { "pass" } else { "pending" },
+                "recovery_generation": 556,
+                "recovery_generation_completed": bounded_wire_recovered,
+                "scientific_authority": false,
             },
             "packages": {
                 "active": active_response_package_count(&response_registry),

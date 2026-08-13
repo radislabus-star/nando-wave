@@ -129,7 +129,8 @@
     <section class="status-section" aria-labelledby="research-title">
       <div class="section-head"><h2 id="research-title">Исследовательский статус</h2><p>Коротко: что доказано и что блокирует следующий переход.</p></div>
       <div class="status-lines">
-        <div class="status-line"><strong>K1 discovery</strong><span id="k1-progress" class="status-state">—</span><div class="status-copy">Law #2: <b id="law2-state">—</b> · scheduler <b id="k1-state">—</b> · <span id="k1-blocker">—</span></div></div>
+        <div class="status-line"><strong>K1 transport</strong><span id="k1-transport-state" class="status-state">—</span><div class="status-copy" id="k1-transport-detail">Проверка bounded authority wire.</div></div>
+        <div class="status-line"><strong>K1 laws</strong><span id="k1-progress" class="status-state">—</span><div class="status-copy">Law #2 <b id="law2-state">—</b> · последний исход <b id="k1-state">—</b>: <span id="k1-blocker">—</span> · готово сейчас <b id="k1-ready">—</b> · следующая generation <b id="k1-next">—</b></div></div>
         <div class="status-line"><strong>S1C-4</strong><span id="s1c4-state" class="status-state">—</span><div class="status-copy"><b id="s1c4-window">—</b> classified · goals before action <b id="s1c4-goals">—</b> · verdict <b id="s1c4-verdict">—</b>. Ожидание не изменит это закрытое окно.</div></div>
         <div class="status-line"><strong>K2 meaning</strong><span id="k2-progress" class="status-state">CLOSED</span><div class="status-copy" id="k2-next">Следующий честный маршрут: отдельная preregistered среда с machine-readable goal до действия.</div></div>
       </div>
@@ -152,6 +153,8 @@
     no_readiness_pass_candidate:"нет readiness-PASS кандидата",
     acquisition_fail:"acquisition fail",
     selected_role_witness_missing:"capture не сохранил типизированную роль",
+    terminal_acquisition_fail:"ACQUISITION FAIL",
+    motif_program_candidates_empty:"identifier не нашёл допустимой программы в frozen motif",
     EMPTY_GOAL_SURFACE:"EMPTY GOAL SURFACE",
     EMPTY_ALTERNATIVE_SURFACE:"EMPTY ALTERNATIVE SURFACE",
     INSUFFICIENT_LINEAGES:"INSUFFICIENT LINEAGES",
@@ -175,6 +178,7 @@
     const epoch = snapshot.product?.current_epoch || {};
     const s1c = snapshot.s1c4_natural_census || {};
     const k1 = snapshot.k1 || {};
+    const k1Transport = snapshot.k1_transport || {};
     const discovery = snapshot.discovery || {};
     const safety = snapshot.safety || {};
     sourceGeneratedAt = snapshot.generated_at_unix || 0;
@@ -202,10 +206,18 @@
 
     const laws = Number.isFinite(k1.law_certificates) ? k1.law_certificates : null;
     const minimum = k1.min_law_certificates || 3;
+    const transportPass = k1Transport.bounded_authority_wire === "pass";
+    text("k1-transport-state", transportPass ? "PASS" : "PENDING");
+    node("k1-transport-state")?.classList.toggle("good", transportPass);
+    text("k1-transport-detail", transportPass
+      ? `generation ${number.format(k1Transport.recovery_generation || 556)} прошла freeze → authority → identifier. Это исправление транспорта, не Law #2.`
+      : "Bounded authority wire ещё не подтверждён завершённой generation.");
     text("k1-progress", laws === null ? "UNKNOWN" : `${number.format(laws)} / ${number.format(minimum)}`);
-    text("law2-state", laws !== null && laws >= 2 ? "PASS" : "ПОИСК");
+    text("law2-state", laws !== null && laws >= 2 ? "PASS" : "НЕ ДОКАЗАН");
     text("k1-state", readable(discovery.state));
     text("k1-blocker", readable(discovery.blocker));
+    text("k1-ready", number.format(discovery.ready_now || 0));
+    text("k1-next", number.format(discovery.next_generation_sequence || 0));
 
     text("cpu-gate", safety.cpu_allowed ? "OPEN" : "CLOSED");
     text("false-accepts", number.format(safety.false_accepts || 0));

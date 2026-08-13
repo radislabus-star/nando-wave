@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.13-control-v21";
+const DASHBOARD_BUILD: &str = "2026.08.13-control-v22";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -350,6 +350,8 @@ mod tests {
         assert!(html.contains("upstream-вызовов предотвращено"));
         assert!(html.contains("С открытия страницы"));
         assert!(html.contains("Исследовательский статус"));
+        assert!(html.contains("id=\"k1-transport-state\""));
+        assert!(html.contains("id=\"k1-transport-detail\""));
         assert!(html.contains("id=\"k1-progress\""));
         assert!(html.contains("id=\"law2-state\""));
         assert!(html.contains("id=\"k1-blocker\""));
@@ -360,7 +362,7 @@ mod tests {
         assert!(html.contains("id=\"k2-next\""));
         assert!(html.contains("Ожидание не изменит это закрытое окно"));
         assert!(html.contains("отдельная preregistered среда"));
-        assert_eq!(html.matches("class=\"status-line\"").count(), 3);
+        assert_eq!(html.matches("class=\"status-line\"").count(), 4);
         assert_eq!(html.matches("class=\"route-row").count(), 3);
         assert!(!html.contains("Распознавание майнера"));
         assert!(!html.contains("CPU economics · вся история"));
