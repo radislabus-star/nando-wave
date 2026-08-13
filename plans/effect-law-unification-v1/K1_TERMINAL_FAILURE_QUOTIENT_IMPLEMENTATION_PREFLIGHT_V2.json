@@ -1,0 +1,80 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k1-terminal-failure-quotient-v1-r2",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"duplicate-policy","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/duplicate_cohorts.rs","expect":{"size_bytes":7364,"sha256":"716cb9c3ddc2502b92c479952383133e9f0ef23307b5c81c4f395da4e496e993","mode":"0664"}},
+    {"id":"scheduler-authority","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","expect":{"size_bytes":20993,"sha256":"aa4b2a299df01d09fd4703f266dc8841a36e24b895b2dfd8f762785278a6f8c4","mode":"0664"}},
+    {"id":"scheduler-lifecycle","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/lifecycle.rs","expect":{"size_bytes":25071,"sha256":"00937c3816d97d3e16e0382989c2389484b0ea665566e2443f459774a1e84e7e","mode":"0664"}},
+    {"id":"production-ledger-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-ledger-v1.json","expect":{"size_bytes":2246130,"sha256":"00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362","mode":"0640"}},
+    {"id":"production-anchor-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-anchor-v1.json","expect":{"size_bytes":576,"sha256":"882fb350544622c7f2e616eb5157e442379d7549bc286cbdf58c09fd55e4c197","mode":"0664"}}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"derive-quotient","kind":"read_only_append_only_projection"},
+      {"id":"rank-queue","kind":"bounded_candidate_ranking"},
+      {"id":"append-natural-suffix","kind":"signed_append_only_event"},
+      {"id":"scoped-deploy","kind":"rollback_capable_cold_authority_control_restart"}
+    ],
+    "forbidden": ["generated_traffic","synthetic_fixture","teacher_output","program_hint","manual_family_mapping","law_promotion","phase_mutation","hot_restart","nginx_restart","connector_restart","ledger_rewrite"]
+  },
+  "source_checks": [
+    {"id":"duplicate-policy-source","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/duplicate_cohorts.rs","sha256":"716cb9c3ddc2502b92c479952383133e9f0ef23307b5c81c4f395da4e496e993","forbidden_effect_patterns":[
+      {"effect":"generated_traffic","regex":"generate_(synthetic|targeted)_traffic\\s*\\("},
+      {"effect":"synthetic_fixture","regex":"write_(synthetic|generated)_fixture\\s*\\("},
+      {"effect":"phase_mutation","regex":"phase_mutation_allowed\\s*:\\s*true"},
+      {"effect":"manual_family_mapping","regex":"renderer_family|manual_family"},
+      {"effect":"program_hint","regex":"ResponseProgram|ResponseOperation|FILTER|COUNT|BRANCH"},
+      {"effect":"teacher_output","regex":"teacher_(output|label)|completed_trace_teacher"},
+      {"effect":"ledger_rewrite","regex":"fs::(write|rename|remove_file)|write_bytes_atomic"}
+    ]},
+    {"id":"authority-source","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","sha256":"aa4b2a299df01d09fd4703f266dc8841a36e24b895b2dfd8f762785278a6f8c4","forbidden_effect_patterns":[
+      {"effect":"law_promotion","regex":"promote_law_2"},
+      {"effect":"hot_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*transition-serving"},
+      {"effect":"nginx_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},
+      {"effect":"connector_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*connector"}
+    ]}
+  ],
+  "state_machine": {
+    "initial_state":"PAPER_PASS",
+    "terminal_states":["IMPLEMENTED","LOCAL_FAILURE","PRODUCTION_COPY_VETO","DEPLOYMENT_ROLLBACK_PASS"],
+    "steps":[
+      {"id":"implement-pure-quotient","from":"PAPER_PASS","to":"QUOTIENT_IMPLEMENTED","mutates":true,"failure_state":"LOCAL_FAILURE","cleanup":"retain diagnostics and leave production untouched","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"implementation-abort"},
+      {"id":"verify-production-copy","from":"QUOTIENT_IMPLEMENTED","to":"LOCAL_VERIFIED","mutates":true,"failure_state":"PRODUCTION_COPY_VETO","cleanup":"remove only disposable copy after retaining compact receipt","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"production-copy-abort"},
+      {"id":"scoped-deployment","from":"LOCAL_VERIFIED","to":"IMPLEMENTED","mutates":true,"failure_state":"DEPLOYMENT_ROLLBACK_PASS","cleanup":"restore matching cold authority and control binaries while preserving naturally appended suffix","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"deployment-rollback"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id":"scheduler-ledger-prefix","path":"/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1/k1-epistemic-scheduler-ledger-v1.json","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"production-ledger-copy"},
+    {"id":"scheduler-anchor","path":"/var/lib/nando-wave/verification/20260810-motif-ordering/k1-epistemic-scheduler-anchor-v1.json","policy":"monotonic_external_anchor","rollback_policy":"never restore an older revision over a natural suffix","cursor_policy":"compare prefix then preserve current revision","baseline_check_id":"production-anchor-copy"}
+  ],
+  "identity_contracts": [
+    {"id":"learner-authority-quotient-parity","producer":"cold learner terminal quotient and queue V3","consumer":"certification authority recomputation","comparison":"exact quotient root queue root candidate and freeze root","test_id":"authority-selection-parity"},
+    {"id":"restart-quotient-parity","producer":"signed journal projection before restart","consumer":"fresh signed journal replay","comparison":"exact quotient root and demoted family roots","test_id":"restart-parity"}
+  ],
+  "runtime_comparisons": [
+    {"id":"live-cutover","source":"production services and scheduler summary","comparison":"exact_stable_projection","stable_fields":["hot_pid","nginx_pid","connector_pid","false_accepts_zero","parity_failures_zero","ledger_prefix"],"expected_to_change_fields":["cold_pid","authority_pid","control_pid","scheduler_revision","quotient_root","queue_root","leading_candidate"],"observed_not_compared_fields":["natural_traffic_suffix","timestamps","traffic_counters"],"reason":"natural traffic and signed terminal suffix may advance during the scoped deployment","test_id":"live-runtime-parity"}
+  ],
+  "invariants": [
+    {"id":"operator-blind","statement":"family key contains no program opcode renderer or manual family hint","test_id":"forbidden-field-test"},
+    {"id":"bounded-threshold","statement":"demotion requires four generations and four distinct structural roots with exact empty-candidate blocker","test_id":"quotient-threshold-tests"},
+    {"id":"search-complete","statement":"demoted ready family remains reachable when no fresh ready family exists","test_id":"fallback-queue-test"},
+    {"id":"authority-recomputes","statement":"client quotient cannot bypass authority queue reconstruction or freeze reseal","test_id":"authority-selection-parity"},
+    {"id":"claim-boundary","statement":"quotient authority and phase remain false and no Law 2 claim is emitted","test_id":"claim-boundary"}
+  ],
+  "tests": [
+    {"id":"implementation-abort","kind":"fault_injection","expected":"any local build or test failure leaves production ledger anchor and binaries untouched"},
+    {"id":"production-copy-abort","kind":"fault_injection","expected":"failed disposable replay retains compact diagnostics and cannot reach production sockets or state"},
+    {"id":"quotient-threshold-tests","kind":"unit","expected":"only four distinct exact empty-candidate terminals exhaust one operator-blind family"},
+    {"id":"forbidden-field-test","kind":"unit","expected":"family digest contains only preregistered pre-freeze fields and terminal class"},
+    {"id":"fallback-queue-test","kind":"unit","expected":"exhausted rows rank behind fresh peers but remain reachable as the only ready route"},
+    {"id":"authority-selection-parity","kind":"parity","expected":"learner and authority derive identical quotient queue candidate and freeze roots"},
+    {"id":"restart-parity","kind":"parity","expected":"signed journal replay reproduces exact quotient root"},
+    {"id":"production-copy-shadow","kind":"parity","expected":"dead scalar families stop leading and fresh collection boolean or record surfaces become reachable without production mutation"},
+    {"id":"claim-boundary","kind":"unit","expected":"authority_ready and phase_mutation_allowed remain false and Law 2 remains unproved"},
+    {"id":"live-runtime-parity","kind":"parity","expected":"protected PIDs and safety counters remain stable while scoped owners change"},
+    {"id":"deployment-rollback","kind":"fault_injection","expected":"previous scoped binaries return while hot Nginx connector and append-only suffix survive"}
+  ]
+}

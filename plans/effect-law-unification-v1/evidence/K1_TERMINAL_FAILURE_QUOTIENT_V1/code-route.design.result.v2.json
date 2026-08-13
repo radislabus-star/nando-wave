@@ -1,0 +1,191 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "VETO",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": false,
+  "contract": "plans/effect-law-unification-v1/evidence/K1_TERMINAL_FAILURE_QUOTIENT_V1/code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 9,
+  "edge_count": 6,
+  "routes": [
+    {
+      "id": "selection-authority",
+      "event": "candidate_selection",
+      "kind": "authority",
+      "entry": "journal_replay",
+      "via": [],
+      "terminal": "family_quotient",
+      "path_count": 1,
+      "paths": [
+        [
+          "journal_replay",
+          "terminal_projector",
+          "family_quotient"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "family_quotient"
+        ],
+        "producer": [
+          "journal_replay"
+        ],
+        "evidence_owner": [
+          "terminal_projector"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "freeze-authority",
+      "event": "candidate_freeze",
+      "kind": "authority",
+      "entry": "queue_builder",
+      "via": [],
+      "terminal": "signed_freeze_append",
+      "path_count": 1,
+      "paths": [
+        [
+          "queue_builder",
+          "authority_recompute",
+          "signed_freeze_append"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "authority_recompute"
+        ],
+        "producer": [
+          "queue_builder"
+        ],
+        "mutation_owner": [
+          "signed_freeze_append"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "queue_builder",
+          "to": "signed_freeze_append",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "queue_builder",
+              "authority_recompute",
+              "signed_freeze_append"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dashboard-observation",
+      "event": "dashboard_refresh",
+      "kind": "observation",
+      "entry": "scheduler_summary",
+      "via": [],
+      "terminal": "family_quotient",
+      "path_count": 1,
+      "paths": [
+        [
+          "scheduler_summary",
+          "family_quotient"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "family_quotient"
+        ],
+        "observer": [
+          "scheduler_summary"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "selection-parity",
+      "event": "parity",
+      "kind": "proof",
+      "entry": "parity_projection",
+      "via": [],
+      "terminal": "parity_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "parity_projection",
+          "parity_test"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "parity_projection"
+        ],
+        "proof_owner": [
+          "parity_test"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "candidate_selection": {
+      "authorization_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "mutation_owner": [],
+      "candidate_rank_owner": [
+        "family_quotient"
+      ],
+      "evidence_owner": [
+        "terminal_projector"
+      ]
+    },
+    "candidate_freeze": {
+      "authorization_owner": [
+        "authority_recompute"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "mutation_owner": [
+        "signed_freeze_append"
+      ],
+      "candidate_rank_owner": [],
+      "evidence_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [
+    {
+      "code": "observation_relation_role_mismatch",
+      "message": "observes must terminate at an observer",
+      "edge": "observe-quotient",
+      "target_role": "candidate_rank_owner"
+    }
+  ],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

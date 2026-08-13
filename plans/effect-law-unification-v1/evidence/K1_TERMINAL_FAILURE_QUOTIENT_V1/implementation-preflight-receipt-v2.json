@@ -1,0 +1,107 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "duplicate-policy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/duplicate_cohorts.rs",
+      "sha256": "716cb9c3ddc2502b92c479952383133e9f0ef23307b5c81c4f395da4e496e993",
+      "size_bytes": 7364
+    },
+    {
+      "exists": true,
+      "id": "scheduler-authority",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "aa4b2a299df01d09fd4703f266dc8841a36e24b895b2dfd8f762785278a6f8c4",
+      "size_bytes": 20993
+    },
+    {
+      "exists": true,
+      "id": "scheduler-lifecycle",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/lifecycle.rs",
+      "sha256": "00937c3816d97d3e16e0382989c2389484b0ea665566e2443f459774a1e84e7e",
+      "size_bytes": 25071
+    },
+    {
+      "exists": true,
+      "id": "production-ledger-copy",
+      "kind": "file",
+      "mode": "0640",
+      "path": "/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-ledger-v1.json",
+      "sha256": "00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362",
+      "size_bytes": 2246130
+    },
+    {
+      "exists": true,
+      "id": "production-anchor-copy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-anchor-v1.json",
+      "sha256": "882fb350544622c7f2e616eb5157e442379d7549bc286cbdf58c09fd55e4c197",
+      "size_bytes": 576
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 5,
+    "forbidden_side_effect_kinds": [
+      "connector_restart",
+      "generated_traffic",
+      "hot_restart",
+      "law_promotion",
+      "ledger_rewrite",
+      "manual_family_mapping",
+      "nginx_restart",
+      "phase_mutation",
+      "program_hint",
+      "synthetic_fixture",
+      "teacher_output"
+    ],
+    "identity_contracts": 2,
+    "invariants": 5,
+    "planned_side_effect_kinds": [
+      "bounded_candidate_ranking",
+      "read_only_append_only_projection",
+      "rollback_capable_cold_authority_control_restart",
+      "signed_append_only_event"
+    ],
+    "preserved_artifacts": 2,
+    "runtime_comparisons": 1,
+    "source_checks": 2,
+    "tests": 11
+  },
+  "manifest_sha256": "fc6ae3a962e0dd294d322a19c03ffeee30a1ee2e56f782e7fce6a08b8d546852",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "duplicate-policy-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/duplicate_cohorts.rs",
+      "sha256": "716cb9c3ddc2502b92c479952383133e9f0ef23307b5c81c4f395da4e496e993",
+      "size_bytes": 7364
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "authority-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "aa4b2a299df01d09fd4703f266dc8841a36e24b895b2dfd8f762785278a6f8c4",
+      "size_bytes": 20993
+    }
+  ],
+  "task_id": "k1-terminal-failure-quotient-v1-r2",
+  "verdict": "READY_TO_IMPLEMENT"
+}

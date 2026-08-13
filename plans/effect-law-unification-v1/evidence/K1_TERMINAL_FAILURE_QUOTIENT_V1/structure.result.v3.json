@@ -1,0 +1,864 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k1-terminal-failure-quotient-v1",
+  "domain": "code",
+  "complexity_score": 44,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8",
+    "c9"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1154,
+      "c2": 0.1154,
+      "c3": 0.1154,
+      "c4": 0.1154,
+      "c5": 0.1154,
+      "c6": 0.1154,
+      "c7": 0.1154,
+      "c8": 0.1154,
+      "c9": 0.1154
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 18,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3375,
+      "c2": 0.362,
+      "c3": 0.3924,
+      "c4": 0.317,
+      "c5": 0.2971,
+      "c6": 0.3064,
+      "c7": 0.2812,
+      "c8": 0.3117,
+      "c9": 0.3461
+    },
+    "source_self_score": 0.3279,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "claim boundary": "claim boundary",
+      "deployment": "deployment",
+      "diagnosis": "diagnosis",
+      "fallback": "fallback",
+      "history": "history",
+      "nonleakage": "nonleakage",
+      "parity": "parity",
+      "ranking": "ranking",
+      "reopening": "reopening"
+    },
+    "scores": {
+      "claim boundary": 1.0,
+      "deployment": 1.0,
+      "diagnosis": 1.0,
+      "fallback": 1.0,
+      "history": 1.0,
+      "nonleakage": 1.0,
+      "parity": 1.0,
+      "ranking": 1.0,
+      "reopening": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "claim boundary": 1,
+      "deployment": 1,
+      "diagnosis": 1,
+      "fallback": 1,
+      "history": 1,
+      "nonleakage": 1,
+      "parity": 1,
+      "ranking": 1,
+      "reopening": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3279,
+      "norm": 94.4458,
+      "triads": 9
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "claim boundary": "claim boundary",
+      "deployment": "deployment",
+      "diagnosis": "diagnosis",
+      "fallback": "fallback",
+      "history": "history",
+      "nonleakage": "nonleakage",
+      "parity": "parity",
+      "ranking": "ranking",
+      "reopening": "reopening"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "claim boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deployment": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "diagnosis": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fallback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "history": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "nonleakage": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ranking": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "reopening": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "claim boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deployment": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "diagnosis": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fallback": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "history": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "nonleakage": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ranking": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "reopening": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "claim boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "claim boundary",
+        "exact_source_groups": [
+          "claim boundary"
+        ]
+      },
+      "deployment": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "deployment",
+        "exact_source_groups": [
+          "deployment"
+        ]
+      },
+      "diagnosis": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "diagnosis",
+        "exact_source_groups": [
+          "diagnosis"
+        ]
+      },
+      "fallback": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "fallback",
+        "exact_source_groups": [
+          "fallback"
+        ]
+      },
+      "history": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "history",
+        "exact_source_groups": [
+          "history"
+        ]
+      },
+      "nonleakage": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "nonleakage",
+        "exact_source_groups": [
+          "nonleakage"
+        ]
+      },
+      "parity": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "parity",
+        "exact_source_groups": [
+          "parity"
+        ]
+      },
+      "ranking": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "ranking",
+        "exact_source_groups": [
+          "ranking"
+        ]
+      },
+      "reopening": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "reopening",
+        "exact_source_groups": [
+          "reopening"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "claim boundary": {
+        "claim boundary": 1.0,
+        "deployment": -0.0117,
+        "diagnosis": 0.0586,
+        "fallback": -0.0703,
+        "history": -0.0371,
+        "nonleakage": 0.0391,
+        "parity": 0.0039,
+        "ranking": -0.0469,
+        "reopening": -0.0156
+      },
+      "deployment": {
+        "claim boundary": -0.0117,
+        "deployment": 1.0,
+        "diagnosis": 0.0313,
+        "fallback": -0.0039,
+        "history": 0.0566,
+        "nonleakage": 0.0078,
+        "parity": -0.0352,
+        "ranking": 0.0156,
+        "reopening": -0.0391
+      },
+      "diagnosis": {
+        "claim boundary": 0.0586,
+        "deployment": 0.0313,
+        "diagnosis": 1.0,
+        "fallback": -0.0313,
+        "history": 0.0215,
+        "nonleakage": 0.0078,
+        "parity": 0.0273,
+        "ranking": -0.0039,
+        "reopening": -0.043
+      },
+      "fallback": {
+        "claim boundary": -0.0703,
+        "deployment": -0.0039,
+        "diagnosis": -0.0313,
+        "fallback": 1.0,
+        "history": 0.0098,
+        "nonleakage": 0.0469,
+        "parity": -0.0273,
+        "ranking": -0.0273,
+        "reopening": -0.0195
+      },
+      "history": {
+        "claim boundary": -0.0371,
+        "deployment": 0.0566,
+        "diagnosis": 0.0215,
+        "fallback": 0.0098,
+        "history": 1.0,
+        "nonleakage": 0.0137,
+        "parity": -0.0527,
+        "ranking": -0.002,
+        "reopening": -0.0137
+      },
+      "nonleakage": {
+        "claim boundary": 0.0391,
+        "deployment": 0.0078,
+        "diagnosis": 0.0078,
+        "fallback": 0.0469,
+        "history": 0.0137,
+        "nonleakage": 1.0,
+        "parity": 0.0469,
+        "ranking": 0.0156,
+        "reopening": -0.0195
+      },
+      "parity": {
+        "claim boundary": 0.0039,
+        "deployment": -0.0352,
+        "diagnosis": 0.0273,
+        "fallback": -0.0273,
+        "history": -0.0527,
+        "nonleakage": 0.0469,
+        "parity": 1.0,
+        "ranking": -0.0273,
+        "reopening": -0.0313
+      },
+      "ranking": {
+        "claim boundary": -0.0469,
+        "deployment": 0.0156,
+        "diagnosis": -0.0039,
+        "fallback": -0.0273,
+        "history": -0.002,
+        "nonleakage": 0.0156,
+        "parity": -0.0273,
+        "ranking": 1.0,
+        "reopening": 0.0117
+      },
+      "reopening": {
+        "claim boundary": -0.0156,
+        "deployment": -0.0391,
+        "diagnosis": -0.043,
+        "fallback": -0.0195,
+        "history": -0.0137,
+        "nonleakage": -0.0195,
+        "parity": -0.0313,
+        "ranking": 0.0117,
+        "reopening": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "claim boundary": {
+          "gravity": 1.0,
+          "owner": "independent gates",
+          "owners": {
+            "independent gates": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "deployment": {
+          "gravity": 1.0,
+          "owner": "transaction",
+          "owners": {
+            "transaction": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "diagnosis": {
+          "gravity": 1.0,
+          "owner": "quotient builder",
+          "owners": {
+            "quotient builder": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "fallback": {
+          "gravity": 1.0,
+          "owner": "queue builder",
+          "owners": {
+            "queue builder": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "history": {
+          "gravity": 1.0,
+          "owner": "authority journal",
+          "owners": {
+            "authority journal": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "nonleakage": {
+          "gravity": 1.0,
+          "owner": "quotient builder",
+          "owners": {
+            "quotient builder": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "parity": {
+          "gravity": 1.0,
+          "owner": "authority process",
+          "owners": {
+            "authority process": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "ranking": {
+          "gravity": 1.0,
+          "owner": "quotient builder",
+          "owners": {
+            "quotient builder": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "reopening": {
+          "gravity": 1.0,
+          "owner": "quotient builder",
+          "owners": {
+            "quotient builder": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.6,
+          "owner": "quotient builder",
+          "owners": {
+            "authority process": 2,
+            "quotient builder": 6,
+            "transaction": 2
+          },
+          "support": 6,
+          "total": 10
+        },
+        "execution": {
+          "gravity": 1.0,
+          "owner": "queue builder",
+          "owners": {
+            "queue builder": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "observation": {
+          "gravity": 1.0,
+          "owner": "authority journal",
+          "owners": {
+            "authority journal": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 0.5,
+          "owner": "independent gates",
+          "owners": {
+            "independent gates": 2,
+            "quotient builder": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 5,
+          "entrypoints": [
+            "binary install",
+            "family history",
+            "freeze request",
+            "new world",
+            "observation"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c3",
+            "candidate_answer:c4",
+            "candidate_answer:c6",
+            "candidate_answer:c7",
+            "candidate_answer:c9",
+            "k1_terminal_failure_quotient_preregistration_v1.md",
+            "plans/effect-law-unification-v1/k1_terminal_failure_quotient_preregistration_v1.md:96"
+          ],
+          "layers": [
+            "operations",
+            "runtime",
+            "scheduler"
+          ],
+          "outputs": [
+            "cutover or rollback",
+            "family root",
+            "fresh rank",
+            "novelty rank",
+            "signed event"
+          ],
+          "owners": [
+            "authority process",
+            "quotient builder",
+            "transaction"
+          ],
+          "scopes": [
+            "production",
+            "scheduler"
+          ],
+          "source_triads": 5,
+          "triads": 10
+        },
+        "execution": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "ranked rows"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c5",
+            "k1_terminal_failure_quotient_critique_v1.md"
+          ],
+          "layers": [
+            "scheduler"
+          ],
+          "outputs": [
+            "bounded queue"
+          ],
+          "owners": [
+            "queue builder"
+          ],
+          "scopes": [
+            "scheduler"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "replay"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "plans/effect-law-unification-v1/evidence/k1_terminal_failure_quotient_v1/production-ledger-diagnostic-v1.md:9"
+          ],
+          "layers": [
+            "persistence"
+          ],
+          "outputs": [
+            "validated ledger"
+          ],
+          "owners": [
+            "authority journal"
+          ],
+          "scopes": [
+            "production copy"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "queue repair",
+            "signed pair"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c2",
+            "candidate_answer:c8",
+            "crates/nando-operator-learning/src/multi_source/identification.rs:617",
+            "k1_terminal_failure_quotient_preregistration_v1.md"
+          ],
+          "layers": [
+            "science"
+          ],
+          "outputs": [
+            "no promotion",
+            "rooted observations"
+          ],
+          "owners": [
+            "independent gates",
+            "quotient builder"
+          ],
+          "scopes": [
+            "scheduler",
+            "science"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 70.7672,
+          "self_coherence": 0.4423,
+          "triads": 5
+        },
+        "execution": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 46.5618,
+          "self_coherence": 0.7275,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "execution": -0.0141,
+          "observation": 0.0009,
+          "proof": -0.0036
+        },
+        "execution": {
+          "authority": -0.0141,
+          "execution": 1.0,
+          "observation": 0.0098,
+          "proof": -0.0698
+        },
+        "observation": {
+          "authority": 0.0009,
+          "execution": 0.0098,
+          "observation": 1.0,
+          "proof": -0.0107
+        },
+        "proof": {
+          "authority": -0.0036,
+          "execution": -0.0698,
+          "observation": -0.0107,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 70.7672,
+          "self_coherence": 0.4423,
+          "triads": 5
+        },
+        "execution": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 46.5618,
+          "self_coherence": 0.7275,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "claim boundary": 1,
+      "deployment": 1,
+      "diagnosis": 1,
+      "fallback": 1,
+      "history": 1,
+      "nonleakage": 1,
+      "parity": 1,
+      "ranking": 1,
+      "reopening": 1
+    },
+    "stable_groups": [
+      "claim boundary",
+      "deployment",
+      "diagnosis",
+      "fallback",
+      "history",
+      "nonleakage",
+      "parity",
+      "ranking",
+      "reopening"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k1-terminal-failure-quotient-v1.trace.json"
+}

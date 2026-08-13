@@ -1,0 +1,29 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id":"journal_replay","role":"producer"},
+    {"id":"terminal_projector","role":"evidence_owner"},
+    {"id":"family_quotient","role":"candidate_rank_owner"},
+    {"id":"queue_builder","role":"producer"},
+    {"id":"authority_recompute","role":"authorization_owner"},
+    {"id":"signed_freeze_append","role":"mutation_owner"},
+    {"id":"scheduler_summary","role":"observer"},
+    {"id":"parity_projection","role":"producer"},
+    {"id":"parity_test","role":"proof_owner"}
+  ],
+  "edges": [
+    {"id":"read-terminal-prefix","from":"journal_replay","relation":"produces_for","to":"terminal_projector","events":["candidate_selection"]},
+    {"id":"quotient-observations","from":"terminal_projector","relation":"passes_to","to":"family_quotient","events":["candidate_selection"]},
+    {"id":"authorize-queue","from":"queue_builder","relation":"passes_to","to":"authority_recompute","events":["candidate_freeze"]},
+    {"id":"append-freeze","from":"authority_recompute","relation":"authorizes","to":"signed_freeze_append","events":["candidate_freeze"]},
+    {"id":"observe-quotient","from":"family_quotient","relation":"observes","to":"scheduler_summary","events":["dashboard_refresh"]},
+    {"id":"prove-parity","from":"parity_projection","relation":"proves","to":"parity_test","events":["parity"]}
+  ],
+  "routes": [
+    {"id":"selection-authority","event":"candidate_selection","kind":"authority","entry":"journal_replay","terminal":"family_quotient","required_roles":["producer","evidence_owner","candidate_rank_owner"]},
+    {"id":"freeze-authority","event":"candidate_freeze","kind":"authority","entry":"queue_builder","terminal":"signed_freeze_append","required_roles":["producer","authorization_owner","mutation_owner"],"path_cardinality":[{"from":"queue_builder","to":"signed_freeze_append","min":1,"max":1}]},
+    {"id":"dashboard-observation","event":"dashboard_refresh","kind":"observation","entry":"family_quotient","terminal":"scheduler_summary","required_roles":["candidate_rank_owner","observer"]},
+    {"id":"selection-parity","event":"parity","kind":"proof","entry":"parity_projection","terminal":"parity_test","required_roles":["producer","proof_owner"]}
+  ]
+}
