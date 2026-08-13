@@ -129,8 +129,9 @@
     <section class="status-section" aria-labelledby="research-title">
       <div class="section-head"><h2 id="research-title">Исследовательский статус</h2><p>Коротко: что доказано и что блокирует следующий переход.</p></div>
       <div class="status-lines">
-        <div class="status-line"><strong>K1</strong><span id="k1-progress" class="status-state">—</span><div class="status-copy">Law #2: <b id="law2-state">—</b> · <span id="k1-blocker">—</span></div></div>
-        <div class="status-line"><strong>K2</strong><span id="k2-progress" class="status-state">CLOSED</span><div class="status-copy">S1C: <b id="s1c-verdict">—</b> · exact pre-action goals <b id="s1c-goals">—</b></div></div>
+        <div class="status-line"><strong>K1 discovery</strong><span id="k1-progress" class="status-state">—</span><div class="status-copy">Law #2: <b id="law2-state">—</b> · scheduler <b id="k1-state">—</b> · <span id="k1-blocker">—</span></div></div>
+        <div class="status-line"><strong>S1C-4</strong><span id="s1c4-state" class="status-state">—</span><div class="status-copy"><b id="s1c4-window">—</b> classified · goals before action <b id="s1c4-goals">—</b> · verdict <b id="s1c4-verdict">—</b>. Ожидание не изменит это закрытое окно.</div></div>
+        <div class="status-line"><strong>K2 meaning</strong><span id="k2-progress" class="status-state">CLOSED</span><div class="status-copy" id="k2-next">Следующий честный маршрут: отдельная preregistered среда с machine-readable goal до действия.</div></div>
       </div>
     </section>
   </div>
@@ -194,14 +195,17 @@
     text("s1c-tokens", s1cAvailable ? number.format(s1c.denominator_input_tokens || 0) : "—");
     text("s1c-captured", s1cAvailable ? `${number.format(s1c.classified_requests || 0)} / ${number.format(s1c.denominator_requests || 0)}` : "—");
     text("s1c-result", s1cAvailable && s1c.source_complete && s1c.exact_join_complete ? "captured · exact join" : "capture incomplete");
-    text("s1c-verdict", s1cAvailable ? readable(s1c.verdict) : "REPORT UNAVAILABLE");
-    text("s1c-goals", s1cAvailable ? number.format(s1c.goal_bound || 0) : "—");
+    text("s1c4-state", s1cAvailable ? readable(s1c.state) : "UNAVAILABLE");
+    text("s1c4-verdict", s1cAvailable ? readable(s1c.verdict) : "REPORT UNAVAILABLE");
+    text("s1c4-window", s1cAvailable ? `${number.format(s1c.classified_requests || 0)} / ${number.format(s1c.denominator_requests || 0)}` : "—");
+    text("s1c4-goals", s1cAvailable ? number.format(s1c.goal_bound || 0) : "—");
 
     const laws = Number.isFinite(k1.law_certificates) ? k1.law_certificates : null;
     const minimum = k1.min_law_certificates || 3;
     text("k1-progress", laws === null ? "UNKNOWN" : `${number.format(laws)} / ${number.format(minimum)}`);
     text("law2-state", laws !== null && laws >= 2 ? "PASS" : "ПОИСК");
-    text("k1-blocker", `${readable(discovery.state)} · ${readable(discovery.blocker)}`);
+    text("k1-state", readable(discovery.state));
+    text("k1-blocker", readable(discovery.blocker));
 
     text("cpu-gate", safety.cpu_allowed ? "OPEN" : "CLOSED");
     text("false-accepts", number.format(safety.false_accepts || 0));

@@ -1579,6 +1579,29 @@ fn spawn_response_authority_runtime(state: AppState) -> Result<(), String> {
         .map_err(|error| format!("response_authority_thread:{error}"))
 }
 
+fn legacy_ms3_learning_blocker(
+    enabled: bool,
+    ready: bool,
+    evidence_source_available: bool,
+    remote_evidence_enabled: bool,
+    route_bound_remote_evidence_available: bool,
+    route_bound_terminal_link_available: bool,
+) -> Option<&'static str> {
+    if !enabled {
+        Some("LEGACY_MS3_RESEARCH_DISABLED")
+    } else if ready {
+        None
+    } else if !evidence_source_available {
+        Some("NO_LIVE_POST_ACTION_EVIDENCE_SOURCE")
+    } else if remote_evidence_enabled && !route_bound_remote_evidence_available {
+        Some("NO_ROUTE_BOUND_REMOTE_EVIDENCE")
+    } else if remote_evidence_enabled && !route_bound_terminal_link_available {
+        Some("NO_ROUTE_BOUND_TOPOLOGY_FRAME_TERMINAL_LINK")
+    } else {
+        Some("LIVE_POST_ACTION_EVIDENCE_NOT_YET_VERIFIED")
+    }
+}
+
 async fn health(State(state): State<AppState>) -> Response {
     let policy = policy_status(&state.config);
     let (cache_ready, revision, active_profiles, cache_error) = cache_status(&state);
@@ -1711,19 +1734,18 @@ async fn health(State(state): State<AppState>) -> Response {
         frozen_generation_evidence_status(&state);
     remote_evidence.learning_closed_loop_ready =
         remote_evidence.enabled && route_bound_frozen_generations > 0;
-    let learning_closed_loop_ready = remote_evidence.learning_closed_loop_ready
+    let evidence_learning_closed_loop_ready = remote_evidence.learning_closed_loop_ready
         || !remote_evidence.enabled && local_session_evidence_ready && frozen_generations > 0;
-    let learning_blocker = if learning_closed_loop_ready {
-        Value::Null
-    } else if session_source_files == 0 && remote_evidence.accepted_frames == 0 {
-        json!("NO_LIVE_POST_ACTION_EVIDENCE_SOURCE")
-    } else if remote_evidence.enabled && remote_evidence.route_bound_frames == 0 {
-        json!("NO_ROUTE_BOUND_REMOTE_EVIDENCE")
-    } else if remote_evidence.enabled && route_bound_frozen_generations == 0 {
-        json!("NO_ROUTE_BOUND_TOPOLOGY_FRAME_TERMINAL_LINK")
-    } else {
-        json!("LIVE_POST_ACTION_EVIDENCE_NOT_YET_VERIFIED")
-    };
+    let learning_closed_loop_ready =
+        state.config.multi_source_research_enabled && evidence_learning_closed_loop_ready;
+    let learning_blocker = legacy_ms3_learning_blocker(
+        state.config.multi_source_research_enabled,
+        learning_closed_loop_ready,
+        session_source_files > 0 || remote_evidence.accepted_frames > 0,
+        remote_evidence.enabled,
+        remote_evidence.route_bound_frames > 0,
+        route_bound_frozen_generations > 0,
+    );
     let mut collection_status = collection_snapshot.as_ref().map_or_else(
         || json!({}),
         |value| serde_json::to_value(&value.status).unwrap_or_else(|_| json!({})),
@@ -1808,6 +1830,30 @@ async fn health(State(state): State<AppState>) -> Response {
             Value::Bool(state.config.multi_source_research_enabled),
         );
         object.insert(
+            "multi_source_research_blocker".to_owned(),
+            learning_blocker.map_or(Value::Null, Value::from),
+        );
+        object.insert(
+            "legacy_ms3_research".to_owned(),
+            json!({
+                "route": "legacy_ms3",
+                "legacy": true,
+                "enabled": state.config.multi_source_research_enabled,
+                "status": if !state.config.multi_source_research_enabled {
+                    "DISABLED"
+                } else if learning_closed_loop_ready {
+                    "READY"
+                } else {
+                    "BLOCKED"
+                },
+                "learning_closed_loop_ready": learning_closed_loop_ready,
+                "blocker": learning_blocker,
+                "compatibility_fields_preserved": true,
+                "authority_ready": false,
+                "phase_mutation_allowed": false,
+            }),
+        );
+        object.insert(
             "k1_natural_scheduler_enabled".to_owned(),
             Value::Bool(state.config.k1_natural_scheduler_enabled),
         );
@@ -1842,6 +1888,9 @@ async fn health(State(state): State<AppState>) -> Response {
                 "route_bound_frozen_generations": route_bound_frozen_generations,
                 "learning_closed_loop_ready": learning_closed_loop_ready,
                 "blocker": learning_blocker,
+                "route_owner": "legacy_ms3",
+                "legacy_route": true,
+                "route_enabled": state.config.multi_source_research_enabled,
                 "authority_ready": false,
                 "phase_mutation_allowed": false,
                 "raw_session_payload_persisted": false,
@@ -8854,6 +8903,34 @@ mod tests {
         "status_projection_external_evidence.v1";
 
     #[test]
+    fn legacy_ms3_health_projection_preserves_enabled_blocker_matrix() {
+        assert_eq!(
+            legacy_ms3_learning_blocker(false, false, true, true, true, false),
+            Some("LEGACY_MS3_RESEARCH_DISABLED")
+        );
+        assert_eq!(
+            legacy_ms3_learning_blocker(true, true, true, true, true, true),
+            None
+        );
+        assert_eq!(
+            legacy_ms3_learning_blocker(true, false, false, true, false, false),
+            Some("NO_LIVE_POST_ACTION_EVIDENCE_SOURCE")
+        );
+        assert_eq!(
+            legacy_ms3_learning_blocker(true, false, true, true, false, false),
+            Some("NO_ROUTE_BOUND_REMOTE_EVIDENCE")
+        );
+        assert_eq!(
+            legacy_ms3_learning_blocker(true, false, true, true, true, false),
+            Some("NO_ROUTE_BOUND_TOPOLOGY_FRAME_TERMINAL_LINK")
+        );
+        assert_eq!(
+            legacy_ms3_learning_blocker(true, false, true, false, false, false),
+            Some("LIVE_POST_ACTION_EVIDENCE_NOT_YET_VERIFIED")
+        );
+    }
+
+    #[test]
     fn independent_future_terminalizes_the_applicability_gate() {
         assert!(applicability_failure_requires_rollover(false, true));
         assert!(!applicability_failure_requires_rollover(true, true));
@@ -9783,6 +9860,21 @@ mod tests {
         let health: Value = serde_json::from_slice(&bytes).expect("health json");
         assert_eq!(health["ok"], true);
         assert_eq!(health["multi_source_research_enabled"], false);
+        assert_eq!(
+            health["multi_source_research_blocker"],
+            "LEGACY_MS3_RESEARCH_DISABLED"
+        );
+        assert_eq!(health["legacy_ms3_research"]["route"], "legacy_ms3");
+        assert_eq!(health["legacy_ms3_research"]["legacy"], true);
+        assert_eq!(health["legacy_ms3_research"]["enabled"], false);
+        assert_eq!(health["legacy_ms3_research"]["status"], "DISABLED");
+        assert_eq!(
+            health["learning_health"]["blocker"],
+            "LEGACY_MS3_RESEARCH_DISABLED"
+        );
+        assert_eq!(health["learning_health"]["route_owner"], "legacy_ms3");
+        assert_eq!(health["learning_health"]["legacy_route"], true);
+        assert_eq!(health["learning_health"]["route_enabled"], false);
         assert_eq!(health["k1_natural_scheduler_enabled"], false);
         assert_eq!(health["online_collection_miner"]["ready"], false);
 

@@ -1,0 +1,45 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id":"cold_health_request","role":"interface"},
+    {"id":"legacy_config_reader","role":"producer"},
+    {"id":"legacy_route_state","role":"evidence_owner"},
+    {"id":"legacy_route_projector","role":"display_rank_owner"},
+    {"id":"cold_health_renderer","role":"render_owner"},
+    {"id":"remote_spool","role":"producer"},
+    {"id":"remote_transport_state","role":"evidence_owner"},
+    {"id":"remote_transport_projector","role":"display_rank_owner"},
+    {"id":"dashboard_api","role":"display_rank_owner"},
+    {"id":"s1c4_report","role":"evidence_owner"},
+    {"id":"k1_summary","role":"candidate_rank_owner"},
+    {"id":"dashboard_renderer","role":"render_owner"},
+    {"id":"route_test","role":"proof_owner"},
+    {"id":"live_observer","role":"observer"}
+  ],
+  "edges": [
+    {"id":"exec-health-projector","from":"cold_health_request","relation":"calls","to":"legacy_route_projector","events":["cold_health"]},
+    {"id":"authority-config-state","from":"legacy_config_reader","relation":"produces_for","to":"legacy_route_state","events":["legacy_health_projection"]},
+    {"id":"authority-state-projector","from":"legacy_route_state","relation":"passes_to","to":"legacy_route_projector","events":["legacy_health_projection"]},
+    {"id":"authority-projector-renderer","from":"legacy_route_projector","relation":"passes_to","to":"cold_health_renderer","events":["legacy_health_projection"]},
+    {"id":"authority-spool-state","from":"remote_spool","relation":"produces_for","to":"remote_transport_state","events":["transport_health_projection"]},
+    {"id":"authority-transport-projector","from":"remote_transport_state","relation":"passes_to","to":"remote_transport_projector","events":["transport_health_projection"]},
+    {"id":"authority-transport-renderer","from":"remote_transport_projector","relation":"passes_to","to":"cold_health_renderer","events":["transport_health_projection"]},
+    {"id":"authority-k1-api","from":"k1_summary","relation":"passes_to","to":"dashboard_api","events":["dashboard_refresh"]},
+    {"id":"authority-s1c-api","from":"s1c4_report","relation":"passes_to","to":"dashboard_api","events":["dashboard_refresh"]},
+    {"id":"authority-api-renderer","from":"dashboard_api","relation":"passes_to","to":"dashboard_renderer","events":["dashboard_refresh"]},
+    {"id":"proof-health","from":"legacy_route_projector","relation":"proves","to":"route_test","events":["health_test"]},
+    {"id":"proof-dashboard","from":"dashboard_api","relation":"proves","to":"route_test","events":["dashboard_test"]},
+    {"id":"observe-live","from":"dashboard_renderer","relation":"observes","to":"live_observer","events":["live_check"]}
+  ],
+  "routes": [
+    {"id":"cold-health-execution","event":"cold_health","kind":"execution","entry":"cold_health_request","terminal":"legacy_route_projector","required_roles":["interface","display_rank_owner"],"path_cardinality":[{"from":"cold_health_request","to":"legacy_route_projector","min":1,"max":1}]},
+    {"id":"legacy-health-authority","event":"legacy_health_projection","kind":"authority","entry":"legacy_config_reader","terminal":"cold_health_renderer","required_roles":["producer","evidence_owner","display_rank_owner","render_owner"],"path_cardinality":[{"from":"legacy_config_reader","to":"cold_health_renderer","min":1,"max":1}]},
+    {"id":"transport-health-authority","event":"transport_health_projection","kind":"authority","entry":"remote_spool","terminal":"cold_health_renderer","required_roles":["producer","evidence_owner","display_rank_owner","render_owner"],"path_cardinality":[{"from":"remote_spool","to":"cold_health_renderer","min":1,"max":1}]},
+    {"id":"dashboard-k1-authority","event":"dashboard_refresh","kind":"authority","entry":"k1_summary","terminal":"dashboard_renderer","required_roles":["candidate_rank_owner","display_rank_owner","render_owner"],"path_cardinality":[{"from":"k1_summary","to":"dashboard_renderer","min":1,"max":1}]},
+    {"id":"dashboard-s1c-authority","event":"dashboard_refresh","kind":"authority","entry":"s1c4_report","terminal":"dashboard_renderer","required_roles":["evidence_owner","display_rank_owner","render_owner"],"path_cardinality":[{"from":"s1c4_report","to":"dashboard_renderer","min":1,"max":1}]},
+    {"id":"health-proof","event":"health_test","kind":"proof","entry":"legacy_route_projector","terminal":"route_test","required_roles":["display_rank_owner","proof_owner"]},
+    {"id":"dashboard-proof","event":"dashboard_test","kind":"proof","entry":"dashboard_api","terminal":"route_test","required_roles":["display_rank_owner","proof_owner"]},
+    {"id":"live-observation","event":"live_check","kind":"observation","entry":"dashboard_renderer","terminal":"live_observer","required_roles":["render_owner","observer"]}
+  ]
+}

@@ -1,0 +1,316 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "s1c4-terminal-route-separation-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "transition-source",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-transition-serving/src/lib.rs",
+      "expect": {
+        "size_bytes": 453720,
+        "sha256": "74693f7c38194cc13e9342cafb3e374097b3167fa0e45c90f81af1057212bc6c",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "control-main-source",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/main.rs",
+      "expect": {
+        "size_bytes": 156851,
+        "sha256": "96fb4a3839686fd1e1ecec166124e308eb5a90958ed2555d076de40defb8c0ad",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "dashboard-source",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/live_dashboard.rs",
+      "expect": {
+        "size_bytes": 16914,
+        "sha256": "0c873c77a3287ec12d552d9383c66a47c68ff555c0ebf675f1edc22c13d076cd",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "dashboard-template",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/live_dashboard_v20.html",
+      "expect": {
+        "size_bytes": 15660,
+        "sha256": "c9950455427a0fdc85cf89ae8efc8ad67b804934d3df0cdd6b817f752d50713d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "transition-config",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/etc/nando-wave/roles/transition-serving.env",
+      "expect": {
+        "size_bytes": 1597,
+        "sha256": "1e6e6726d3d8df34dfcac6cb6644664cf3b066d0c31fe40652fa17cd524708d6",
+        "mode": "0644"
+      }
+    },
+    {
+      "id": "control-config",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/etc/nando-wave/roles/gateway-control.env",
+      "expect": {
+        "size_bytes": 287,
+        "sha256": "cecbe2a2503e22630bd1bef5011645be64f02444a237109be879378a22f0b7f6",
+        "mode": "0644"
+      }
+    },
+    {
+      "id": "s1c4-terminal-report",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/var/lib/nando-wave/s1c4/s1c4-natural-census-report-v1.json",
+      "expect": {
+        "size_bytes": 1419,
+        "sha256": "ae5107fc5e9b7f562d01beac8611d5f3dc3020413fa26982e29e25037c9202d1",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "k1-summary-observation",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/api/k1-natural-scheduler-summary.json",
+      "expect": {
+        "size_bytes": 702,
+        "sha256": "45e6aaf0ed96d9a7a75fa8d4972914a91e0389d9394db80c69dafccd0508e0bf",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "cold-health-observation",
+      "kind": "file",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/api/cold-health.json",
+      "expect": {
+        "size_bytes": 74492,
+        "sha256": "95109c13b6d82a107aed0c241e1a4933efacfbfb6553c8da445ee170ce22e027",
+        "mode": "0664"
+      }
+    }
+  ],
+  "source_checks": [
+    {
+      "id": "transition-health-source",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-transition-serving/src/lib.rs",
+      "sha256": "74693f7c38194cc13e9342cafb3e374097b3167fa0e45c90f81af1057212bc6c",
+      "forbidden_effect_patterns": [
+        {"effect": "generated_traffic", "regex": "generate_(synthetic|targeted)_traffic\\s*\\("},
+        {"effect": "synthetic_fixture", "regex": "write_(synthetic|generated)_fixture\\s*\\("},
+        {"effect": "legacy_ms3_activation", "regex": "multi_source_research_enabled\\s*=\\s*true"},
+        {"effect": "s1c4_reopen", "regex": "reopen_s1c4|rewrite_s1c4_terminal"},
+        {"effect": "k1_state_mutation", "regex": "mutate_k1_scheduler|promote_law_2"},
+        {"effect": "post_hoc_goal", "regex": "infer_goal_from_(action|outcome)"},
+        {"effect": "hot_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*response-serving"},
+        {"effect": "nginx_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},
+        {"effect": "connector_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*connector"}
+      ]
+    },
+    {
+      "id": "dashboard-source",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/main.rs",
+      "sha256": "96fb4a3839686fd1e1ecec166124e308eb5a90958ed2555d076de40defb8c0ad",
+      "forbidden_effect_patterns": [
+        {"effect": "generated_traffic", "regex": "generate_(synthetic|targeted)_traffic\\s*\\("},
+        {"effect": "synthetic_fixture", "regex": "write_(synthetic|generated)_fixture\\s*\\("},
+        {"effect": "legacy_ms3_activation", "regex": "multi_source_research_enabled\\s*=\\s*true"},
+        {"effect": "s1c4_reopen", "regex": "reopen_s1c4|rewrite_s1c4_terminal"},
+        {"effect": "k1_state_mutation", "regex": "mutate_k1_scheduler|promote_law_2"},
+        {"effect": "post_hoc_goal", "regex": "infer_goal_from_(action|outcome)"},
+        {"effect": "hot_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*response-serving"},
+        {"effect": "nginx_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},
+        {"effect": "connector_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*connector"}
+      ]
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {"id": "edit-health-projection", "kind": "bounded_source_edit"},
+      {"id": "edit-dashboard-projection", "kind": "bounded_source_and_template_edit"},
+      {"id": "build-scoped-binaries", "kind": "local_compile"},
+      {"id": "install-cold-control", "kind": "rollback_capable_binary_replace"},
+      {"id": "restart-cold-control", "kind": "bounded_cold_and_control_restart"},
+      {"id": "observe-live-runtime", "kind": "read_only_runtime_projection", "comparison_id": "live-route-separation"}
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "legacy_ms3_activation",
+      "s1c4_reopen",
+      "k1_state_mutation",
+      "post_hoc_goal",
+      "hot_restart",
+      "nginx_restart",
+      "connector_restart"
+    ]
+  },
+  "runtime_comparisons": [
+    {
+      "id": "live-route-separation",
+      "source": "cold health, K1 summary, terminal S1C-4 report, systemd and connector observations",
+      "comparison": "exact_stable_projection",
+      "stable_fields": [
+        "multi_source_research_enabled_false",
+        "k1_scheduler_authority_ready_false",
+        "k1_scheduler_phase_mutation_allowed_false",
+        "s1c4_report_sha256",
+        "s1c4_verdict_empty_goal_surface",
+        "s1c4_denominator_1024",
+        "s1c4_goal_bound_0",
+        "false_accepts_0",
+        "parity_failures_0",
+        "hot_pid",
+        "nginx_pid",
+        "connector_pid",
+        "connector_nrestarts"
+      ],
+      "expected_to_change_fields": [
+        "cold_pid",
+        "control_pid",
+        "cold_binary_sha256",
+        "control_binary_sha256",
+        "dashboard_build",
+        "legacy_route_blocker"
+      ],
+      "observed_not_compared_fields": [
+        "remote_frame_counts",
+        "k1_generated_at_unix",
+        "k1_report_root_sha256",
+        "ordinary_traffic_counters",
+        "timestamps"
+      ],
+      "reason": "natural transport and scheduler counters may advance while route ownership, terminal evidence and serving safety remain stable",
+      "test_id": "live-runtime-parity"
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "id": "s1c4-terminal-report",
+      "path": "/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/s1c4-natural-census-v1/s1c4-natural-census-report-v1.json",
+      "policy": "immutable",
+      "rollback_policy": "preserve_exact_bytes",
+      "cursor_policy": "terminal_window_never_reopened",
+      "baseline_check_id": "s1c4-terminal-report"
+    }
+  ],
+  "state_machine": {
+    "initial_state": "PAPER_PASS",
+    "terminal_states": [
+      "IMPLEMENTED",
+      "LOCAL_FAILURE",
+      "DEPLOYMENT_ROLLBACK_PASS",
+      "VETO"
+    ],
+    "steps": [
+      {
+        "id": "implement-projections",
+        "from": "PAPER_PASS",
+        "to": "PROJECTIONS_IMPLEMENTED",
+        "mutates": true,
+        "failure_state": "LOCAL_FAILURE",
+        "cleanup": "retain local diagnostics and leave production untouched",
+        "preserves": ["s1c4-terminal-report"],
+        "test_id": "projection-test-fault"
+      },
+      {
+        "id": "verify-local",
+        "from": "PROJECTIONS_IMPLEMENTED",
+        "to": "LOCAL_VERIFIED",
+        "mutates": false
+      },
+      {
+        "id": "stage-deployment",
+        "from": "LOCAL_VERIFIED",
+        "to": "ROLLBACK_ARMED",
+        "mutates": true,
+        "failure_state": "LOCAL_FAILURE",
+        "cleanup": "remove unreferenced staging only and leave production runtime untouched",
+        "preserves": ["s1c4-terminal-report"],
+        "test_id": "deployment-stage-fault"
+      },
+      {
+        "id": "install-cold-control",
+        "from": "ROLLBACK_ARMED",
+        "to": "SCOPED_RUNTIME_INSTALLED",
+        "mutates": true,
+        "failure_state": "DEPLOYMENT_ROLLBACK_PASS",
+        "cleanup": "restore previous cold and control binaries while preserving terminal and append-only evidence",
+        "preserves": ["s1c4-terminal-report"],
+        "test_id": "scoped-install-fault"
+      },
+      {
+        "id": "verify-live",
+        "from": "SCOPED_RUNTIME_INSTALLED",
+        "to": "IMPLEMENTED",
+        "mutates": true,
+        "failure_state": "DEPLOYMENT_ROLLBACK_PASS",
+        "cleanup": "persist diagnostics and restore previous cold and control binaries without touching hot, Nginx, connector or evidence",
+        "preserves": ["s1c4-terminal-report"],
+        "test_id": "live-runtime-fault"
+      }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "legacy-route-separated",
+      "statement": "disabled legacy MS3 reports LEGACY_MS3_RESEARCH_DISABLED and never presents a legacy blocker as active K1 state",
+      "test_id": "legacy-health-matrix"
+    },
+    {
+      "id": "enabled-matrix-preserved",
+      "statement": "enabled legacy MS3 retains the exact existing learning blocker precedence",
+      "test_id": "legacy-health-matrix"
+    },
+    {
+      "id": "terminal-report-preserved",
+      "statement": "S1C-4 report remains byte-identical and is rendered as a terminal 1024 of 1024 zero-goal result",
+      "test_id": "s1c4-report-parity"
+    },
+    {
+      "id": "k1-k2-not-promoted",
+      "statement": "dashboard route separation cannot grant Law 2, K2, model training, package activation or phase authority",
+      "test_id": "dashboard-claim-boundary"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "legacy-config-health-identity",
+      "producer": "NANDO_MULTI_SOURCE_RESEARCH_ENABLED configuration",
+      "consumer": "cold health legacy route projection",
+      "comparison": "exact enabled flag and blocker matrix parity",
+      "test_id": "legacy-health-matrix"
+    },
+    {
+      "id": "s1c4-report-dashboard-identity",
+      "producer": "validated immutable S1C-4 report",
+      "consumer": "gateway API and HTML renderer",
+      "comparison": "exact root verdict denominator classified count goal count and authority flags",
+      "test_id": "s1c4-report-parity"
+    },
+    {
+      "id": "k1-summary-dashboard-identity",
+      "producer": "live K1 scheduler summary",
+      "consumer": "gateway API and HTML K1 row",
+      "comparison": "exact state blocker generation readiness and authority projection",
+      "test_id": "dashboard-k1-parity"
+    }
+  ],
+  "tests": [
+    {"id": "projection-test-fault", "kind": "fault_injection", "expected": "invalid or missing sources fail closed without route promotion"},
+    {"id": "deployment-stage-fault", "kind": "fault_injection", "expected": "production remains untouched and staged files are unreferenced"},
+    {"id": "scoped-install-fault", "kind": "fault_injection", "expected": "previous cold and control binaries are restored without evidence loss"},
+    {"id": "live-runtime-fault", "kind": "fault_injection", "expected": "failed live projection restores only cold and control runtime"},
+    {"id": "legacy-health-matrix", "kind": "parity", "expected": "disabled route returns LEGACY_MS3_RESEARCH_DISABLED and enabled precedence is unchanged"},
+    {"id": "s1c4-report-parity", "kind": "parity", "expected": "immutable report root and terminal display fields match exactly"},
+    {"id": "dashboard-claim-boundary", "kind": "unit", "expected": "K1, S1C-4 and K2 are separate rows and all unavailable or closed states fail closed"},
+    {"id": "dashboard-k1-parity", "kind": "parity", "expected": "K1 scheduler fields are rendered without legacy or S1C substitution"},
+    {"id": "live-runtime-parity", "kind": "parity", "expected": "hot, Nginx, connector, false accepts, parity and terminal evidence remain stable"}
+  ]
+}

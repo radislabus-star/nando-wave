@@ -1,0 +1,393 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/S1C4_TERMINAL_ROUTE_SEPARATION_V1/code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 14,
+  "edge_count": 13,
+  "routes": [
+    {
+      "id": "cold-health-execution",
+      "event": "cold_health",
+      "kind": "execution",
+      "entry": "cold_health_request",
+      "via": [],
+      "terminal": "legacy_route_projector",
+      "path_count": 1,
+      "paths": [
+        [
+          "cold_health_request",
+          "legacy_route_projector"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "cold_health_request"
+        ],
+        "display_rank_owner": [
+          "legacy_route_projector"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "cold_health_request",
+          "to": "legacy_route_projector",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "cold_health_request",
+              "legacy_route_projector"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legacy-health-authority",
+      "event": "legacy_health_projection",
+      "kind": "authority",
+      "entry": "legacy_config_reader",
+      "via": [],
+      "terminal": "cold_health_renderer",
+      "path_count": 1,
+      "paths": [
+        [
+          "legacy_config_reader",
+          "legacy_route_state",
+          "legacy_route_projector",
+          "cold_health_renderer"
+        ]
+      ],
+      "role_owners": {
+        "render_owner": [
+          "cold_health_renderer"
+        ],
+        "producer": [
+          "legacy_config_reader"
+        ],
+        "display_rank_owner": [
+          "legacy_route_projector"
+        ],
+        "evidence_owner": [
+          "legacy_route_state"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "legacy_config_reader",
+          "to": "cold_health_renderer",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "legacy_config_reader",
+              "legacy_route_state",
+              "legacy_route_projector",
+              "cold_health_renderer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "transport-health-authority",
+      "event": "transport_health_projection",
+      "kind": "authority",
+      "entry": "remote_spool",
+      "via": [],
+      "terminal": "cold_health_renderer",
+      "path_count": 1,
+      "paths": [
+        [
+          "remote_spool",
+          "remote_transport_state",
+          "remote_transport_projector",
+          "cold_health_renderer"
+        ]
+      ],
+      "role_owners": {
+        "render_owner": [
+          "cold_health_renderer"
+        ],
+        "producer": [
+          "remote_spool"
+        ],
+        "display_rank_owner": [
+          "remote_transport_projector"
+        ],
+        "evidence_owner": [
+          "remote_transport_state"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "remote_spool",
+          "to": "cold_health_renderer",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "remote_spool",
+              "remote_transport_state",
+              "remote_transport_projector",
+              "cold_health_renderer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dashboard-k1-authority",
+      "event": "dashboard_refresh",
+      "kind": "authority",
+      "entry": "k1_summary",
+      "via": [],
+      "terminal": "dashboard_renderer",
+      "path_count": 1,
+      "paths": [
+        [
+          "k1_summary",
+          "dashboard_api",
+          "dashboard_renderer"
+        ]
+      ],
+      "role_owners": {
+        "display_rank_owner": [
+          "dashboard_api"
+        ],
+        "render_owner": [
+          "dashboard_renderer"
+        ],
+        "candidate_rank_owner": [
+          "k1_summary"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "k1_summary",
+          "to": "dashboard_renderer",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "k1_summary",
+              "dashboard_api",
+              "dashboard_renderer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dashboard-s1c-authority",
+      "event": "dashboard_refresh",
+      "kind": "authority",
+      "entry": "s1c4_report",
+      "via": [],
+      "terminal": "dashboard_renderer",
+      "path_count": 1,
+      "paths": [
+        [
+          "s1c4_report",
+          "dashboard_api",
+          "dashboard_renderer"
+        ]
+      ],
+      "role_owners": {
+        "display_rank_owner": [
+          "dashboard_api"
+        ],
+        "render_owner": [
+          "dashboard_renderer"
+        ],
+        "evidence_owner": [
+          "s1c4_report"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "s1c4_report",
+          "to": "dashboard_renderer",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "s1c4_report",
+              "dashboard_api",
+              "dashboard_renderer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "health-proof",
+      "event": "health_test",
+      "kind": "proof",
+      "entry": "legacy_route_projector",
+      "via": [],
+      "terminal": "route_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "legacy_route_projector",
+          "route_test"
+        ]
+      ],
+      "role_owners": {
+        "display_rank_owner": [
+          "legacy_route_projector"
+        ],
+        "proof_owner": [
+          "route_test"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "dashboard-proof",
+      "event": "dashboard_test",
+      "kind": "proof",
+      "entry": "dashboard_api",
+      "via": [],
+      "terminal": "route_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "dashboard_api",
+          "route_test"
+        ]
+      ],
+      "role_owners": {
+        "display_rank_owner": [
+          "dashboard_api"
+        ],
+        "proof_owner": [
+          "route_test"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "live-observation",
+      "event": "live_check",
+      "kind": "observation",
+      "entry": "dashboard_renderer",
+      "via": [],
+      "terminal": "live_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "dashboard_renderer",
+          "live_observer"
+        ]
+      ],
+      "role_owners": {
+        "render_owner": [
+          "dashboard_renderer"
+        ],
+        "observer": [
+          "live_observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "legacy_health_projection": {
+      "display_rank_owner": [
+        "legacy_route_projector"
+      ],
+      "render_owner": [
+        "cold_health_renderer"
+      ],
+      "evidence_owner": [
+        "legacy_route_state"
+      ],
+      "candidate_rank_owner": [],
+      "mutation_owner": [],
+      "authorization_owner": []
+    },
+    "transport_health_projection": {
+      "display_rank_owner": [
+        "remote_transport_projector"
+      ],
+      "render_owner": [
+        "cold_health_renderer"
+      ],
+      "evidence_owner": [
+        "remote_transport_state"
+      ],
+      "candidate_rank_owner": [],
+      "mutation_owner": [],
+      "authorization_owner": []
+    },
+    "dashboard_refresh": {
+      "display_rank_owner": [
+        "dashboard_api"
+      ],
+      "render_owner": [
+        "dashboard_renderer"
+      ],
+      "evidence_owner": [
+        "s1c4_report"
+      ],
+      "candidate_rank_owner": [
+        "k1_summary"
+      ],
+      "mutation_owner": [],
+      "authorization_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.13-control-v20";
+const DASHBOARD_BUILD: &str = "2026.08.13-control-v21";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -292,7 +292,7 @@ fn format_percent(numerator: u64, denominator: u64, decimals: usize) -> String {
     format!("{percent:.decimals$}%").replace('.', ",")
 }
 
-const TEMPLATE: &str = include_str!("live_dashboard_v20.html");
+const TEMPLATE: &str = include_str!("live_dashboard_v21.html");
 
 #[cfg(test)]
 mod tests {
@@ -353,8 +353,14 @@ mod tests {
         assert!(html.contains("id=\"k1-progress\""));
         assert!(html.contains("id=\"law2-state\""));
         assert!(html.contains("id=\"k1-blocker\""));
-        assert!(html.contains("id=\"s1c-verdict\""));
-        assert!(html.contains("id=\"s1c-goals\""));
+        assert!(html.contains("id=\"s1c4-state\""));
+        assert!(html.contains("id=\"s1c4-verdict\""));
+        assert!(html.contains("id=\"s1c4-window\""));
+        assert!(html.contains("id=\"s1c4-goals\""));
+        assert!(html.contains("id=\"k2-next\""));
+        assert!(html.contains("Ожидание не изменит это закрытое окно"));
+        assert!(html.contains("отдельная preregistered среда"));
+        assert_eq!(html.matches("class=\"status-line\"").count(), 3);
         assert_eq!(html.matches("class=\"route-row").count(), 3);
         assert!(!html.contains("Распознавание майнера"));
         assert!(!html.contains("CPU economics · вся история"));

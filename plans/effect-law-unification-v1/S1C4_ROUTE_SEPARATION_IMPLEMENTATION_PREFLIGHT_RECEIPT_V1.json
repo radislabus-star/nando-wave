@@ -1,0 +1,143 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "transition-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-transition-serving/src/lib.rs",
+      "sha256": "74693f7c38194cc13e9342cafb3e374097b3167fa0e45c90f81af1057212bc6c",
+      "size_bytes": 453720
+    },
+    {
+      "exists": true,
+      "id": "control-main-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/main.rs",
+      "sha256": "96fb4a3839686fd1e1ecec166124e308eb5a90958ed2555d076de40defb8c0ad",
+      "size_bytes": 156851
+    },
+    {
+      "exists": true,
+      "id": "dashboard-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/live_dashboard.rs",
+      "sha256": "0c873c77a3287ec12d552d9383c66a47c68ff555c0ebf675f1edc22c13d076cd",
+      "size_bytes": 16914
+    },
+    {
+      "exists": true,
+      "id": "dashboard-template",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/live_dashboard_v20.html",
+      "sha256": "c9950455427a0fdc85cf89ae8efc8ad67b804934d3df0cdd6b817f752d50713d",
+      "size_bytes": 15660
+    },
+    {
+      "exists": true,
+      "id": "transition-config",
+      "kind": "file",
+      "mode": "0644",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/etc/nando-wave/roles/transition-serving.env",
+      "sha256": "1e6e6726d3d8df34dfcac6cb6644664cf3b066d0c31fe40652fa17cd524708d6",
+      "size_bytes": 1597
+    },
+    {
+      "exists": true,
+      "id": "control-config",
+      "kind": "file",
+      "mode": "0644",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/etc/nando-wave/roles/gateway-control.env",
+      "sha256": "cecbe2a2503e22630bd1bef5011645be64f02444a237109be879378a22f0b7f6",
+      "size_bytes": 287
+    },
+    {
+      "exists": true,
+      "id": "s1c4-terminal-report",
+      "kind": "file",
+      "mode": "0600",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/var/lib/nando-wave/s1c4/s1c4-natural-census-report-v1.json",
+      "sha256": "ae5107fc5e9b7f562d01beac8611d5f3dc3020413fa26982e29e25037c9202d1",
+      "size_bytes": 1419
+    },
+    {
+      "exists": true,
+      "id": "k1-summary-observation",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/api/k1-natural-scheduler-summary.json",
+      "sha256": "45e6aaf0ed96d9a7a75fa8d4972914a91e0389d9394db80c69dafccd0508e0bf",
+      "size_bytes": 702
+    },
+    {
+      "exists": true,
+      "id": "cold-health-observation",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/remote/api/cold-health.json",
+      "sha256": "95109c13b6d82a107aed0c241e1a4933efacfbfb6553c8da445ee170ce22e027",
+      "size_bytes": 74492
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 9,
+    "forbidden_side_effect_kinds": [
+      "connector_restart",
+      "generated_traffic",
+      "hot_restart",
+      "k1_state_mutation",
+      "legacy_ms3_activation",
+      "nginx_restart",
+      "post_hoc_goal",
+      "s1c4_reopen",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 3,
+    "invariants": 4,
+    "planned_side_effect_kinds": [
+      "bounded_cold_and_control_restart",
+      "bounded_source_and_template_edit",
+      "bounded_source_edit",
+      "local_compile",
+      "read_only_runtime_projection",
+      "rollback_capable_binary_replace"
+    ],
+    "preserved_artifacts": 1,
+    "runtime_comparisons": 1,
+    "source_checks": 2,
+    "tests": 9
+  },
+  "manifest_sha256": "b2dea9b4ad06d472769414b513433fe36e605181293dd60a5e4efda893554473",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "transition-health-source",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-transition-serving/src/lib.rs",
+      "sha256": "74693f7c38194cc13e9342cafb3e374097b3167fa0e45c90f81af1057212bc6c",
+      "size_bytes": 453720
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "dashboard-source",
+      "path": "/tmp/nanda-s1c4-route-separation-preflight-ZHNFOWC5/local/crates/nando-gateway-control/src/main.rs",
+      "sha256": "96fb4a3839686fd1e1ecec166124e308eb5a90958ed2555d076de40defb8c0ad",
+      "size_bytes": 156851
+    }
+  ],
+  "task_id": "s1c4-terminal-route-separation-v1",
+  "verdict": "READY_TO_IMPLEMENT"
+}
