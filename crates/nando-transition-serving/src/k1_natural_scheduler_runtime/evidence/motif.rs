@@ -1272,6 +1272,14 @@ mod tests {
             motif_support_overflow_manifest_root_sha256: support
                 .overflow_manifest_root_sha256
                 .clone(),
+            candidate_queue_root_sha256: String::new(),
+            terminal_failure_quotient_root_sha256: String::new(),
+            terminal_failure_family_novelty_rank: 0,
+            identifier_causal_input_manifest: None,
+            evidence_source_snapshot_root_sha256: String::new(),
+            identifier_artifact_archive_manifest_root_sha256: String::new(),
+            exact_attempt_index_root_sha256: String::new(),
+            authority_binding_manifest_root_sha256: String::new(),
         }
     }
 

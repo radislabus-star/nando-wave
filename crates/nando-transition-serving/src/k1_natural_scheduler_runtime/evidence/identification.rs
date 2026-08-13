@@ -5,7 +5,12 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support_count(
     motif_archive: Option<&MotifEvidenceArchive>,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<u64, String> {
-    if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+    if matches!(
+        freeze.schema.as_str(),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+    ) {
         return frozen_motif_support_count(bindings, motif_archive, freeze);
     }
     let mut support = Vec::new();
@@ -219,7 +224,12 @@ fn evidence_row_for_freeze(
     binding: &EvidenceBinding,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<Option<K1NaturalEvidenceRowV1>, String> {
-    if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+    if matches!(
+        freeze.schema.as_str(),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+    ) {
         return Ok(exact_motif_occurrence_for_binding(binding, freeze)?.map(|value| value.row));
     }
     if matches!(
@@ -299,31 +309,35 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     trial_roots: &BTreeSet<String>,
 ) -> Result<MultiSourceT1IdentificationV3, String> {
     validate_installed_discovery_basis(freeze)?;
-    let (mut selected, motifs, occurrence_row_roots) =
-        if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
-            let (selected, motifs, row_roots) = frozen_motif_identification_evidence(
-                bindings,
-                motif_archive,
-                freeze,
-                applied_roots,
-                trial_roots,
-            )?;
-            (selected, Some(motifs), row_roots)
-        } else {
-            let selected = bindings
-                .iter()
-                .filter(|binding| {
-                    binding_is_eligible_for_freeze(binding, freeze)
-                        && (frozen_support_contains(
-                            binding.row.capture_sequence,
-                            freeze.support_watermark,
-                        ) || applied_roots.contains(binding.join_root_sha256())
-                            || trial_roots.contains(binding.join_root_sha256()))
-                })
-                .map(|binding| binding.joined().clone())
-                .collect::<Vec<_>>();
-            (selected, None, Vec::new())
-        };
+    let (mut selected, motifs, occurrence_row_roots) = if matches!(
+        freeze.schema.as_str(),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+    ) {
+        let (selected, motifs, row_roots) = frozen_motif_identification_evidence(
+            bindings,
+            motif_archive,
+            freeze,
+            applied_roots,
+            trial_roots,
+        )?;
+        (selected, Some(motifs), row_roots)
+    } else {
+        let selected = bindings
+            .iter()
+            .filter(|binding| {
+                binding_is_eligible_for_freeze(binding, freeze)
+                    && (frozen_support_contains(
+                        binding.row.capture_sequence,
+                        freeze.support_watermark,
+                    ) || applied_roots.contains(binding.join_root_sha256())
+                        || trial_roots.contains(binding.join_root_sha256()))
+            })
+            .map(|binding| binding.joined().clone())
+            .collect::<Vec<_>>();
+        (selected, None, Vec::new())
+    };
     let selected_motifs = motifs;
     if let Some(motifs) = selected_motifs.as_ref() {
         if motifs.len() != selected.len() {
@@ -346,10 +360,11 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
         })
         .map(|artifact| artifact.artifact_root_sha256.as_str())
         .collect::<Vec<_>>();
+    let identification_domain_root = identification_domain_root(freeze)?;
     let epoch = if let Some(motifs) = selected_motifs.as_ref() {
         canonical_json_sha256(&(
             "nando.k1-frozen-motif-identification-evidence.v1",
-            freeze.freeze_root_sha256.as_str(),
+            identification_domain_root,
             occurrence_row_roots,
             selected
                 .iter()
@@ -371,7 +386,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     } else {
         canonical_json_sha256(&(
             "nando.k1-frozen-identification-evidence.v1",
-            freeze.freeze_root_sha256.as_str(),
+            identification_domain_root,
             selected
                 .iter()
                 .map(|row| row.join_root_sha256.as_str())
@@ -381,7 +396,7 @@ pub(in crate::k1_natural_scheduler_runtime) fn identify_frozen_candidate(
     }
     .map_err(str::to_owned)?;
     let contract = FrozenRawPhaseT1ContractV1 {
-        frozen_domain_root_sha256: &freeze.freeze_root_sha256,
+        frozen_domain_root_sha256: identification_domain_root,
         support_watermark: freeze.support_watermark,
         candidate_generator_schema: &freeze.generator_schema,
     };
@@ -426,7 +441,12 @@ pub(in crate::k1_natural_scheduler_runtime) fn frozen_support_completed_frame_ro
     motif_archive: Option<&MotifEvidenceArchive>,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<BTreeSet<String>, String> {
-    let roots = if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+    let roots = if matches!(
+        freeze.schema.as_str(),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+    ) {
         let archive = motif_archive.ok_or_else(|| "k1_motif_archive_missing".to_owned())?;
         archive.validate(bindings)?;
         archive
@@ -549,7 +569,9 @@ fn capture_generation_matches(
                 && !row_generation.is_empty()
                 && row_generation == freeze_generation
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 => {
             row_schema == K1_NATURAL_EVIDENCE_ROW_SCHEMA_V4
                 && !row_generation.is_empty()
                 && row_generation == freeze_generation
@@ -576,7 +598,9 @@ fn validate_installed_discovery_basis_fields(
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 => {
             natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?
         }
         _ => return Ok(()),
@@ -585,6 +609,18 @@ fn validate_installed_discovery_basis_fields(
         return Err("k1_runtime_discovery_basis_unsupported".to_owned());
     }
     Ok(())
+}
+
+fn identification_domain_root(freeze: &K1NaturalCandidateFreezeV1) -> Result<&str, String> {
+    if freeze.schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 {
+        return Ok(freeze.freeze_root_sha256.as_str());
+    }
+    let manifest = freeze
+        .identifier_causal_input_manifest
+        .as_deref()
+        .ok_or_else(|| "k1_exact_identifier_causal_manifest_missing".to_owned())?;
+    manifest.validate().map_err(str::to_owned)?;
+    Ok(manifest.opportunity_root_sha256.as_str())
 }
 
 fn selected_shape_is_compatible(selected: Option<&str>, frozen: &str) -> bool {

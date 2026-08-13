@@ -5,11 +5,11 @@ use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
 use super::model::{
     K1_NATURAL_CANDIDATE_MAX_ROWS_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1,
-    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3,
-    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V4, K1_NATURAL_COHORT_CATALOG_SCHEMA_V1,
-    K1_NATURAL_COHORT_CATALOG_SCHEMA_V2, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3,
-    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V4, K1CandidateReadinessV1, K1CandidateScoreV1,
-    K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1MotifCandidateSupportV1,
+    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3,
+    K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V3, K1_NATURAL_COHORT_CANDIDATE_SCHEMA_V4,
+    K1_NATURAL_COHORT_CATALOG_SCHEMA_V1, K1_NATURAL_COHORT_CATALOG_SCHEMA_V2,
+    K1_NATURAL_EVIDENCE_ROW_SCHEMA_V3, K1_NATURAL_EVIDENCE_ROW_SCHEMA_V4, K1CandidateReadinessV1,
+    K1CandidateScoreV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1MotifCandidateSupportV1,
     K1MotifDispositionSummaryV1, K1NaturalCandidateQueueRowV1, K1NaturalCandidateQueueV1,
     K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1NaturalEvidenceClassV1,
     K1NaturalEvidenceRowV1, ValidatedK1NaturalCohortCatalogV1,
@@ -347,6 +347,10 @@ fn build_k1_natural_candidate_queue_from_validated_catalog_v1(
                     .readiness_receipt_root_sha256
                     .clone(),
                 score,
+                terminal_failure_family_novelty_rank: 0,
+                causal_manifest_root_sha256: String::new(),
+                opportunity_root_sha256: String::new(),
+                exact_attempt_state: String::new(),
             })
         })
         .collect::<Result<Vec<_>, &'static str>>()?;
@@ -388,6 +392,15 @@ fn build_k1_natural_candidate_queue_from_validated_catalog_v1(
         scored_candidates,
         capacity_excluded_candidates,
         readiness_rescue_included,
+        terminal_failure_quotient_root_sha256: String::new(),
+        terminal_failure_observations: 0,
+        terminal_failure_exhausted_families: 0,
+        terminal_failure_demoted_current_candidates: 0,
+        exact_attempt_index_root_sha256: String::new(),
+        artifact_source_snapshot_root_sha256: String::new(),
+        exact_unseen_opportunities: 0,
+        exact_attempted_deterministic_roots: 0,
+        legacy_unbound_terminals: 0,
         rows,
         authority_ready: false,
     };
@@ -581,7 +594,10 @@ fn rank_candidates(
         .total_k1_gain
         .cmp(&left.score.total_k1_gain)
         .then_with(|| right.score.readiness_rank.cmp(&left.score.readiness_rank));
-    let order = if queue_schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2 {
+    let order = if matches!(
+        queue_schema,
+        K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2 | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3
+    ) {
         order
             .then_with(|| {
                 left.score

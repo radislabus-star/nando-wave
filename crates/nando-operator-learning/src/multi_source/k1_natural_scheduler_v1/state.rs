@@ -7,12 +7,13 @@ use sha2::{Digest, Sha256};
 use super::model::K1_SCHEDULER_SCHEMA_V1;
 use super::{
     K1_DUPLICATE_PROTOCOL_BLOCKER_V1, K1_DURABLE_FUTURE_PREDICTION_SCHEMA_V1,
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1FutureOutcomeReceiptV1,
-    K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
-    K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1, K1IdentificationFreezeV1,
-    K1NaturalCandidateFreezeV1, K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1,
-    K1ProbeRoundStateV1, K1TransferSettlementV1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8,
+    K1FutureOutcomeReceiptV1, K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1,
+    K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
+    K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1ProbeBudgetRemainingV1,
+    K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1TransferSettlementV1,
 };
+use crate::multi_source::{TerminalDiagnosticV1, deterministic_initial_blocker_v1};
 
 const K1_SCHEDULER_EVENT_SCHEMA_V1: &str = "nando.k1-natural-scheduler-event.v1";
 
@@ -27,6 +28,7 @@ pub enum K1SchedulerEventPayloadV1 {
     FuturePredictionCensored(K1FuturePredictionCensorReceiptV1),
     FutureOutcome(K1FutureOutcomeReceiptV1),
     ProbeRound(K1ProbeRoundReceiptV1),
+    ExactTerminalDiagnostic(Box<TerminalDiagnosticV1>),
     TerminalVerdict(Box<K1GenerationTerminalVerdictV1>),
     TransferSettlement(K1TransferSettlementV1),
 }
@@ -62,6 +64,7 @@ struct ReplayState {
     future_outcomes: BTreeMap<String, K1FutureOutcomeReceiptV1>,
     pending: Option<K1ProbeRoundReceiptV1>,
     latest_outcome: Option<K1ProbeRoundReceiptV1>,
+    exact_terminal_diagnostic: Option<TerminalDiagnosticV1>,
     pending_transfer: Option<K1GenerationTerminalVerdictV1>,
 }
 
@@ -91,6 +94,7 @@ impl K1SchedulerEventPayloadV1 {
             Self::FuturePredictionCensored(receipt) => receipt.validate(),
             Self::FutureOutcome(receipt) => receipt.validate(),
             Self::ProbeRound(receipt) => receipt.validate(),
+            Self::ExactTerminalDiagnostic(receipt) => receipt.validate(),
             Self::TerminalVerdict(receipt) => receipt.validate(),
             Self::TransferSettlement(receipt) => receipt.validate(),
         }
@@ -105,6 +109,7 @@ impl K1SchedulerEventPayloadV1 {
             Self::FuturePredictionCensored(receipt) => &receipt.censor_root_sha256,
             Self::FutureOutcome(receipt) => &receipt.outcome_root_sha256,
             Self::ProbeRound(receipt) => &receipt.receipt_root_sha256,
+            Self::ExactTerminalDiagnostic(receipt) => &receipt.terminal_diagnostic_root_sha256,
             Self::TerminalVerdict(receipt) => &receipt.verdict_root_sha256,
             Self::TransferSettlement(receipt) => &receipt.settlement_root_sha256,
         }
@@ -271,6 +276,7 @@ impl ReplayState {
                 self.future_outcomes.clear();
                 self.pending = None;
                 self.latest_outcome = None;
+                self.exact_terminal_diagnostic = None;
             }
             K1SchedulerEventPayloadV1::IdentificationFreeze(freeze) => {
                 let candidate = self
@@ -300,6 +306,9 @@ impl ReplayState {
             K1SchedulerEventPayloadV1::ProbeRound(receipt) => {
                 self.apply_probe(receipt)?;
             }
+            K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(receipt) => {
+                self.apply_exact_terminal_diagnostic(receipt)?;
+            }
             K1SchedulerEventPayloadV1::TerminalVerdict(verdict) => {
                 self.apply_terminal(verdict)?;
             }
@@ -307,6 +316,31 @@ impl ReplayState {
                 self.apply_transfer_settlement(settlement)?;
             }
         }
+        Ok(())
+    }
+
+    fn apply_exact_terminal_diagnostic(
+        &mut self,
+        diagnostic: &TerminalDiagnosticV1,
+    ) -> Result<(), &'static str> {
+        let candidate = self
+            .candidate
+            .as_ref()
+            .ok_or("k1_scheduler_candidate_freeze_missing")?;
+        let opportunity_root = candidate
+            .identifier_causal_input_manifest
+            .as_deref()
+            .map(|manifest| manifest.opportunity_root_sha256.as_str());
+        if candidate.schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+            || self.identification.is_some()
+            || self.exact_terminal_diagnostic.is_some()
+            || !diagnostic.deterministic
+            || diagnostic.candidate_freeze_root_sha256 != candidate.freeze_root_sha256
+            || Some(diagnostic.opportunity_root_sha256.as_str()) != opportunity_root
+        {
+            return Err("k1_scheduler_exact_terminal_diagnostic_invalid");
+        }
+        self.exact_terminal_diagnostic = Some(diagnostic.clone());
         Ok(())
     }
 
@@ -497,6 +531,25 @@ impl ReplayState {
         if verdict.candidate_freeze_root_sha256 != candidate.freeze_root_sha256 {
             return Err("k1_scheduler_terminal_candidate_mismatch");
         }
+        if candidate.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+            && verdict.verdict == K1GenerationVerdictClassV1::AcquisitionFail
+            && self.identification.is_none()
+        {
+            let diagnostic = self
+                .exact_terminal_diagnostic
+                .as_ref()
+                .ok_or("k1_scheduler_exact_terminal_diagnostic_missing")?;
+            if !deterministic_initial_blocker_v1(&verdict.blocker)
+                || !verdict
+                    .evidence_roots_sha256
+                    .contains(&diagnostic.terminal_diagnostic_root_sha256)
+                || diagnostic.candidate_freeze_root_sha256 != candidate.freeze_root_sha256
+            {
+                return Err("k1_scheduler_exact_terminal_verdict_mismatch");
+            }
+        } else if self.exact_terminal_diagnostic.is_some() {
+            return Err("k1_scheduler_exact_terminal_diagnostic_unconsumed");
+        }
         if verdict.verdict != K1GenerationVerdictClassV1::AcquisitionFail {
             let identification = self
                 .identification
@@ -584,6 +637,7 @@ impl ReplayState {
         self.future_outcomes.clear();
         self.pending = None;
         self.latest_outcome = None;
+        self.exact_terminal_diagnostic = None;
         Ok(())
     }
 

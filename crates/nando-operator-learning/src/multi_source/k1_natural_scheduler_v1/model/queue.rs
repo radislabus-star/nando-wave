@@ -3,12 +3,22 @@ use std::collections::BTreeSet;
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 use serde::{Deserialize, Serialize};
 
+use super::super::{ExactAttemptIndexV1, IdentifierCausalInputManifestV1};
 use super::evidence::K1ConsequenceTypeV1;
 use super::{
     K1_DEFICIT_SNAPSHOT_SCHEMA_V1, K1_NATURAL_CANDIDATE_MAX_ROWS_V1,
     K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2,
+    K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3, K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4,
     canonical_root_slice, canonical_roots, strict_values,
 };
+
+fn is_zero_u8(value: &u8) -> bool {
+    *value == 0
+}
+
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -54,6 +64,14 @@ pub struct K1NaturalCandidateQueueRowV1 {
     pub candidate_root_sha256: String,
     pub readiness_receipt_root_sha256: String,
     pub score: K1CandidateScoreV1,
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub terminal_failure_family_novelty_rank: u8,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub causal_manifest_root_sha256: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub opportunity_root_sha256: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub exact_attempt_state: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -69,6 +87,24 @@ pub struct K1NaturalCandidateQueueV1 {
     pub scored_candidates: u64,
     pub capacity_excluded_candidates: u64,
     pub readiness_rescue_included: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub terminal_failure_quotient_root_sha256: String,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub terminal_failure_observations: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub terminal_failure_exhausted_families: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub terminal_failure_demoted_current_candidates: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub exact_attempt_index_root_sha256: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub artifact_source_snapshot_root_sha256: String,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub exact_unseen_opportunities: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub exact_attempted_deterministic_roots: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub legacy_unbound_terminals: u64,
     pub rows: Vec<K1NaturalCandidateQueueRowV1>,
     pub authority_ready: bool,
 }
@@ -227,6 +263,65 @@ impl K1CandidateScoreV1 {
 }
 
 impl K1NaturalCandidateQueueV1 {
+    pub fn bind_exact_opportunities_v4(
+        mut self,
+        exact_attempt_index: &ExactAttemptIndexV1,
+        artifact_source_snapshot_root_sha256: String,
+        causal_manifests_by_candidate: &std::collections::BTreeMap<
+            String,
+            IdentifierCausalInputManifestV1,
+        >,
+    ) -> Result<Self, &'static str> {
+        self.validate()?;
+        exact_attempt_index.validate()?;
+        if self.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2
+            || !valid_nonzero_sha256(&artifact_source_snapshot_root_sha256)
+        {
+            return Err("k1_exact_candidate_queue_input_invalid");
+        }
+        let mut unseen = 0u64;
+        let mut attempted = 0u64;
+        for row in &mut self.rows {
+            if row.score.readiness_rank == 0 {
+                if causal_manifests_by_candidate.contains_key(&row.candidate_root_sha256) {
+                    return Err("k1_exact_non_ready_candidate_manifest_forbidden");
+                }
+                continue;
+            }
+            let manifest = causal_manifests_by_candidate
+                .get(&row.candidate_root_sha256)
+                .ok_or("k1_exact_ready_candidate_manifest_missing")?;
+            manifest.validate()?;
+            row.causal_manifest_root_sha256 = manifest.manifest_root_sha256.clone();
+            row.opportunity_root_sha256 = manifest.opportunity_root_sha256.clone();
+            if exact_attempt_index.contains(&manifest.opportunity_root_sha256) {
+                row.exact_attempt_state = "attempted_deterministic".to_owned();
+                attempted = attempted.saturating_add(1);
+            } else {
+                row.exact_attempt_state = "unseen".to_owned();
+                unseen = unseen.saturating_add(1);
+            }
+        }
+        if causal_manifests_by_candidate.len()
+            != self
+                .rows
+                .iter()
+                .filter(|row| row.score.readiness_rank == 1)
+                .count()
+        {
+            return Err("k1_exact_candidate_manifest_set_invalid");
+        }
+        self.schema = K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4.to_owned();
+        self.exact_attempt_index_root_sha256 = exact_attempt_index.index_root_sha256.clone();
+        self.artifact_source_snapshot_root_sha256 = artifact_source_snapshot_root_sha256;
+        self.exact_unseen_opportunities = unseen;
+        self.exact_attempted_deterministic_roots = attempted;
+        self.legacy_unbound_terminals = exact_attempt_index.legacy_unbound_terminals;
+        self.queue_root_sha256 = self.expected_root()?;
+        self.validate()?;
+        Ok(self)
+    }
+
     pub fn validate(&self) -> Result<(), &'static str> {
         let retained_candidates =
             u64::try_from(self.rows.len()).map_err(|_| "k1_natural_candidate_queue_count")?;
@@ -236,7 +331,10 @@ impl K1NaturalCandidateQueueV1 {
         let scored_partition = retained_candidates.checked_add(self.capacity_excluded_candidates);
         if !matches!(
             self.schema.as_str(),
-            K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1 | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2
+            K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V1
+                | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2
+                | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3
+                | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4
         ) || !valid_nonzero_sha256(&self.queue_root_sha256)
             || !valid_nonzero_sha256(&self.catalog_root_sha256)
             || !valid_nonzero_sha256(&self.k1_deficit_snapshot_root_sha256)
@@ -250,8 +348,55 @@ impl K1NaturalCandidateQueueV1 {
             || self.rows.iter().any(|row| {
                 !valid_nonzero_sha256(&row.candidate_root_sha256)
                     || !valid_nonzero_sha256(&row.readiness_receipt_root_sha256)
+                    || row.terminal_failure_family_novelty_rank > 1
+                    || (self.schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4
+                        && if row.score.readiness_rank == 1 {
+                            !valid_nonzero_sha256(&row.causal_manifest_root_sha256)
+                                || !valid_nonzero_sha256(&row.opportunity_root_sha256)
+                                || !matches!(
+                                    row.exact_attempt_state.as_str(),
+                                    "unseen" | "attempted_deterministic"
+                                )
+                        } else {
+                            !row.causal_manifest_root_sha256.is_empty()
+                                || !row.opportunity_root_sha256.is_empty()
+                                || !row.exact_attempt_state.is_empty()
+                        })
+                    || (self.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4
+                        && (!row.causal_manifest_root_sha256.is_empty()
+                            || !row.opportunity_root_sha256.is_empty()
+                            || !row.exact_attempt_state.is_empty()))
                     || row.score.validate().is_err()
             })
+            || (self.schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3
+                && (!valid_nonzero_sha256(&self.terminal_failure_quotient_root_sha256)
+                    || self.terminal_failure_demoted_current_candidates > self.catalog_candidates))
+            || (self.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3
+                && (!self.terminal_failure_quotient_root_sha256.is_empty()
+                    || self.terminal_failure_observations != 0
+                    || self.terminal_failure_exhausted_families != 0
+                    || self.terminal_failure_demoted_current_candidates != 0
+                    || self
+                        .rows
+                        .iter()
+                        .any(|row| row.terminal_failure_family_novelty_rank != 0)))
+            || (self.schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4
+                && (!valid_nonzero_sha256(&self.exact_attempt_index_root_sha256)
+                    || !valid_nonzero_sha256(&self.artifact_source_snapshot_root_sha256)
+                    || self
+                        .exact_unseen_opportunities
+                        .saturating_add(self.exact_attempted_deterministic_roots)
+                        != self
+                            .rows
+                            .iter()
+                            .filter(|row| row.score.readiness_rank == 1)
+                            .count() as u64))
+            || (self.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4
+                && (!self.exact_attempt_index_root_sha256.is_empty()
+                    || !self.artifact_source_snapshot_root_sha256.is_empty()
+                    || self.exact_unseen_opportunities != 0
+                    || self.exact_attempted_deterministic_roots != 0
+                    || self.legacy_unbound_terminals != 0))
             || self
                 .rows
                 .iter()
@@ -272,6 +417,45 @@ impl K1NaturalCandidateQueueV1 {
     }
 
     pub(in super::super) fn expected_root(&self) -> Result<String, &'static str> {
+        if self.schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4 {
+            return canonical_json_sha256(&(
+                K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4,
+                self.catalog_root_sha256.as_str(),
+                self.k1_deficit_snapshot_root_sha256.as_str(),
+                self.fixture_exclusion_root_sha256.as_str(),
+                self.catalog_candidates,
+                self.completed_candidates_excluded,
+                self.scored_candidates,
+                self.capacity_excluded_candidates,
+                self.readiness_rescue_included,
+                self.exact_attempt_index_root_sha256.as_str(),
+                self.artifact_source_snapshot_root_sha256.as_str(),
+                self.exact_unseen_opportunities,
+                self.exact_attempted_deterministic_roots,
+                self.legacy_unbound_terminals,
+                &self.rows,
+                false,
+            ));
+        }
+        if self.schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3 {
+            return canonical_json_sha256(&(
+                K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3,
+                self.catalog_root_sha256.as_str(),
+                self.k1_deficit_snapshot_root_sha256.as_str(),
+                self.fixture_exclusion_root_sha256.as_str(),
+                self.catalog_candidates,
+                self.completed_candidates_excluded,
+                self.scored_candidates,
+                self.capacity_excluded_candidates,
+                self.readiness_rescue_included,
+                self.terminal_failure_quotient_root_sha256.as_str(),
+                self.terminal_failure_observations,
+                self.terminal_failure_exhausted_families,
+                self.terminal_failure_demoted_current_candidates,
+                &self.rows,
+                false,
+            ));
+        }
         canonical_json_sha256(&(
             self.schema.as_str(),
             self.catalog_root_sha256.as_str(),
@@ -288,7 +472,11 @@ impl K1NaturalCandidateQueueV1 {
     }
 
     pub fn first_readiness_pass(&self) -> Option<&K1NaturalCandidateQueueRowV1> {
-        self.rows.iter().find(|row| row.score.readiness_rank == 1)
+        self.rows.iter().find(|row| {
+            row.score.readiness_rank == 1
+                && (self.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4
+                    || row.exact_attempt_state == "unseen")
+        })
     }
 }
 
@@ -299,7 +487,21 @@ impl K1NaturalCandidateQueueRowV1 {
             .total_k1_gain
             .cmp(&self.score.total_k1_gain)
             .then_with(|| other.score.readiness_rank.cmp(&self.score.readiness_rank));
-        let order = if queue_schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2 {
+        let order = if matches!(
+            queue_schema,
+            K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V2
+                | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3
+                | K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4
+        ) {
+            let order = if queue_schema == K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V3 {
+                order.then_with(|| {
+                    other
+                        .terminal_failure_family_novelty_rank
+                        .cmp(&self.terminal_failure_family_novelty_rank)
+                })
+            } else {
+                order
+            };
             order
                 .then_with(|| {
                     self.score

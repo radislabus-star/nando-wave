@@ -26,6 +26,7 @@ use super::{
     source_neutral_topology_motif_config_root_v1,
 };
 
+pub mod diagnostic;
 mod natural_artifacts;
 use natural_artifacts::{
     ExternalProgramEvidence, collection_candidate_programs, index_candidate_artifacts,
@@ -606,14 +607,27 @@ fn identify_multi_source_t1_operator_internal_v1(
                 continue;
             }
         };
-        let seed_programs = motif.map_or(seed_programs.clone(), |motif| {
-            seed_programs
-                .into_iter()
-                .filter(|(_, program)| {
-                    bind_pre_action_t1_program_to_motif_v1(program, &joined.topology, motif).is_ok()
-                })
-                .collect()
-        });
+        let seed_programs = match motif {
+            Some(motif) => match diagnostic::evaluate_program_dispositions_v1(
+                &seed_programs,
+                &joined.topology,
+                motif,
+            ) {
+                Ok((_, accepted)) => accepted,
+                Err(blocker) => {
+                    if is_hypothesis_support {
+                        let blocked_tokens = candidate_generation_blocks
+                            .entry((cohort_shape_root_sha256.clone(), blocker))
+                            .or_default();
+                        if joined.accepted {
+                            *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                        }
+                    }
+                    continue;
+                }
+            },
+            None => seed_programs,
+        };
         if seed_programs.is_empty() {
             if is_hypothesis_support && joined.accepted {
                 *candidate_generation_blocks

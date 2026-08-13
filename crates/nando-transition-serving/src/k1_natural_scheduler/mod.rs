@@ -13,17 +13,19 @@ use nando_operator_kernel::{
     PreActionMultiSourceTopologyV1, canonical_json_sha256, valid_nonzero_sha256,
 };
 use nando_operator_learning::multi_source::{
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2,
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4,
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
-    K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1FutureOutcomeReceiptV1,
-    K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1, K1FuturePredictionReceiptV1,
-    K1GenerationTerminalVerdictV1, K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1,
-    K1NaturalCandidateQueueV1, K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1,
-    K1ProbeBudgetRemainingV1, K1ProbeRoundReceiptV1, K1ProbeRoundStateV1,
-    K1SchedulerEventPayloadV1, K1SchedulerEventV1, K1SchedulerLedgerV1, K1TransferSettlementV1,
-    NaturalT1ProgramArtifactV1, PreActionTopologyAuditRowV1,
-    bind_pre_action_t1_program_to_motif_v1, natural_t1_discovery_basis_root_v1,
+    ExactAttemptIndexV1, ExactAttemptRecordV1, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
+    K1FutureOutcomeReceiptV1, K1FuturePredictionCensorReceiptV1, K1FuturePredictionContractV1,
+    K1FuturePredictionReceiptV1, K1GenerationTerminalVerdictV1, K1GenerationVerdictClassV1,
+    K1IdentificationFreezeV1, K1NaturalCandidateFreezeV1, K1NaturalCandidateQueueV1,
+    K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1ProbeBudgetRemainingV1,
+    K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
+    K1SchedulerLedgerV1, K1TransferSettlementV1, NaturalT1ProgramArtifactV1,
+    PreActionTopologyAuditRowV1, TerminalDiagnosticV1, bind_pre_action_t1_program_to_motif_v1,
+    deterministic_initial_blocker_v1, natural_t1_discovery_basis_root_v1,
     natural_t1_discovery_basis_root_v2, natural_t1_discovery_basis_root_v3,
     natural_t1_discovery_basis_root_v4, pre_action_applicability_shape_root_v1,
     pre_action_t1_binding_root, source_neutral_topology_motifs_v1,
@@ -474,12 +476,14 @@ pub(crate) fn candidate_topology_root(
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             source_neutral_topology_quotient_root_v2(topology).map_err(str::to_owned)
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => source_neutral_topology_motifs_v1(topology)
-            .map_err(str::to_owned)?
-            .into_iter()
-            .find(|motif| motif.motif_root_sha256 == freeze.source_neutral_topology_root_sha256)
-            .map(|motif| motif.motif_root_sha256)
-            .ok_or_else(|| "k1_candidate_motif_topology_mismatch".to_owned()),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7 => {
+            source_neutral_topology_motifs_v1(topology)
+                .map_err(str::to_owned)?
+                .into_iter()
+                .find(|motif| motif.motif_root_sha256 == freeze.source_neutral_topology_root_sha256)
+                .map(|motif| motif.motif_root_sha256)
+                .ok_or_else(|| "k1_candidate_motif_topology_mismatch".to_owned())
+        }
         _ => Err("k1_candidate_topology_schema_unsupported".to_owned()),
     }
 }
@@ -489,7 +493,10 @@ pub(crate) fn candidate_program_binding_root(
     program: &ResponseProgram,
     topology: &PreActionMultiSourceTopologyV1,
 ) -> Result<String, String> {
-    if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 {
+    if matches!(
+        freeze.schema.as_str(),
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+    ) {
         if freeze.candidate_structural_root_sha256 != freeze.source_neutral_topology_root_sha256 {
             return Err("k1_candidate_motif_identity_mismatch".to_owned());
         }

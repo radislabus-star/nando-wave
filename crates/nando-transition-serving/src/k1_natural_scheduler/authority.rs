@@ -169,9 +169,11 @@ fn append_candidate_freeze_authoritative(
         &discovery_basis_root_sha256,
     )?;
     validate_queue_derivation(
+        &scheduler,
         &request.catalog,
         &request.deficit_snapshot,
         &completed_candidate_roots_sha256,
+        &discovery_basis_root_sha256,
         request.freeze.contract_watermark,
         &request.queue,
     )?;
@@ -240,7 +242,7 @@ pub(super) fn validate_discovery_basis_cas(
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 => {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7 => {
             natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?
         }
         _ => return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned()),

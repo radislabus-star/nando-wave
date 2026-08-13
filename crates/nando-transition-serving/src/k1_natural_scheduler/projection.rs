@@ -76,6 +76,7 @@ pub(super) fn projection_for(
                     }
                 }
             }
+            K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(_) => {}
             K1SchedulerEventPayloadV1::TerminalVerdict(verdict) => {
                 completed_generations = completed_generations.saturating_add(1);
                 completed_candidate_roots_sha256.push(
@@ -164,6 +165,64 @@ pub(super) fn projection_for(
     projection.projection_root_sha256 = projection.expected_root()?;
     projection.validate()?;
     Ok(projection)
+}
+
+pub(super) fn exact_attempt_index_for(
+    ledger: &K1SchedulerLedgerV1,
+) -> Result<ExactAttemptIndexV1, String> {
+    ledger.validate().map_err(str::to_owned)?;
+    let mut candidate: Option<K1NaturalCandidateFreezeV1> = None;
+    let mut diagnostic: Option<TerminalDiagnosticV1> = None;
+    let mut deterministic_attempts = Vec::new();
+    let mut legacy_unbound_terminals = 0u64;
+    for event in &ledger.events {
+        match &event.payload {
+            K1SchedulerEventPayloadV1::CandidateFreeze(freeze) => {
+                candidate = Some(freeze.clone());
+                diagnostic = None;
+            }
+            K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(value) => {
+                diagnostic = Some(value.as_ref().clone());
+            }
+            K1SchedulerEventPayloadV1::TerminalVerdict(verdict) => {
+                let freeze = candidate
+                    .take()
+                    .ok_or_else(|| "k1_exact_attempt_candidate_missing".to_owned())?;
+                if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 {
+                    if let Some(diagnostic) = diagnostic.take() {
+                        let opportunity_root_sha256 = freeze
+                            .identifier_causal_input_manifest
+                            .as_deref()
+                            .ok_or_else(|| "k1_exact_attempt_manifest_missing".to_owned())?
+                            .opportunity_root_sha256
+                            .clone();
+                        if verdict.verdict != K1GenerationVerdictClassV1::AcquisitionFail
+                            || !deterministic_initial_blocker_v1(&verdict.blocker)
+                            || !verdict
+                                .evidence_roots_sha256
+                                .contains(&diagnostic.terminal_diagnostic_root_sha256)
+                        {
+                            return Err("k1_exact_attempt_terminal_mismatch".to_owned());
+                        }
+                        deterministic_attempts.push(ExactAttemptRecordV1 {
+                            opportunity_root_sha256,
+                            identifier_result_root_sha256: diagnostic.identifier_result_root_sha256,
+                            terminal_diagnostic_root_sha256: diagnostic
+                                .terminal_diagnostic_root_sha256,
+                            candidate_freeze_root_sha256: freeze.freeze_root_sha256,
+                            generation_sequence: freeze.generation_sequence,
+                        });
+                    }
+                } else {
+                    legacy_unbound_terminals = legacy_unbound_terminals.saturating_add(1);
+                }
+                diagnostic = None;
+            }
+            _ => {}
+        }
+    }
+    ExactAttemptIndexV1::seal(deterministic_attempts, legacy_unbound_terminals)
+        .map_err(str::to_owned)
 }
 
 impl K1SchedulerProjectionV1 {

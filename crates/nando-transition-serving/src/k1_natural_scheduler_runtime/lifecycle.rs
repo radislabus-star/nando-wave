@@ -208,12 +208,19 @@ pub(super) fn advance(
     let deficit = current_deficit_snapshot(certification)?;
     let active_protocol_mode_set_root_sha256 = &prepared.active_protocol_mode_set_root_sha256;
     let mut projection = restore_projection_for(certification, lane)?;
-    let motif_v6 = projection
+    let motif_route = projection
         .active_candidate_freeze
         .as_ref()
-        .is_none_or(|freeze| freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6);
+        .is_none_or(|freeze| {
+            matches!(
+                freeze.schema.as_str(),
+                K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+                    | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+                    | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+            )
+        });
     let (validated_catalog, expected_evidence_epoch, candidate_freeze_schema, discovery_basis_root) =
-        if motif_v6 {
+        if motif_route {
             (
                 &prepared.motif_catalog,
                 &prepared.motif_evidence_epoch_root_sha256,

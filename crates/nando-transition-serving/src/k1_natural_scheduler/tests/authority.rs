@@ -193,10 +193,13 @@ fn authority_rebuilds_queue_and_rejects_a_valid_omission() {
     let proposed =
         build_k1_natural_candidate_queue_v1(&catalog, &deficit, contract_watermark).expect("queue");
     let completed = BTreeSet::new();
+    let ledger = K1SchedulerLedgerV1::empty().expect("empty scheduler ledger");
     validate_queue_derivation(
+        &ledger,
         &catalog,
         &deficit,
         &completed,
+        &natural_t1_discovery_basis_root_v3().expect("discovery basis"),
         contract_watermark,
         &proposed,
     )
@@ -213,9 +216,11 @@ fn authority_rebuilds_queue_and_rejects_a_valid_omission() {
         .expect("internally valid omitted queue");
     assert_eq!(
         validate_queue_derivation(
+            &ledger,
             &catalog,
             &deficit,
             &completed,
+            &natural_t1_discovery_basis_root_v3().expect("discovery basis"),
             contract_watermark,
             &tampered,
         ),

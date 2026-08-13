@@ -329,6 +329,45 @@ fn motif_catalog(
     .expect("motif catalog")
 }
 
+fn exact_manifest(
+    candidate_structural_root_sha256: String,
+    support_watermark: u64,
+    active_protocol_mode_set_root_sha256: String,
+) -> IdentifierCausalInputManifestV1 {
+    let support = build_identifier_support_manifest_v1(
+        candidate_structural_root_sha256.clone(),
+        support_watermark,
+        vec![
+            IdentifierSupportRowV1::seal(
+                support_watermark,
+                root(80_000 + support_watermark),
+                root(81_000 + support_watermark),
+                root(82_000 + support_watermark),
+                root(83_000 + support_watermark),
+                candidate_structural_root_sha256,
+                vec![root(84_000 + support_watermark)],
+                root(85_000 + support_watermark),
+                root(86_000 + support_watermark),
+                root(87_000 + support_watermark),
+            )
+            .expect("exact support row"),
+        ],
+        64,
+    )
+    .expect("exact support manifest");
+    let projection = build_relevant_identifier_artifact_projection_v1(&support, &[])
+        .expect("exact artifact projection");
+    build_identifier_causal_input_manifest_v1(
+        &support,
+        &projection,
+        "nando.operator-blind-version-space-generator.v4".to_owned(),
+        root(88_000),
+        active_protocol_mode_set_root_sha256,
+        IdentifierResourceLimitsV1::seal(64, 4_096, 4_096, 16).expect("exact limits"),
+    )
+    .expect("exact causal manifest")
+}
+
 fn candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV1 {
     candidate_freeze_for_basis(generation_sequence, root(706))
 }
