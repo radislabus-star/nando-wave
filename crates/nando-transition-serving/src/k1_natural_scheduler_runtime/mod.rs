@@ -47,7 +47,7 @@ use crate::k1_natural_scheduler::{
     K1_FUTURE_PREDICTION_CENSOR_AUTHORITY_REQUEST_SCHEMA_V1, K1CandidateFreezeAuthorityRequestV1,
     K1FutureContractAuthorityRequestV1, K1FutureOutcomeAuthorityRequestV1,
     K1FuturePredictionAuthorityRequestV1, K1FuturePredictionCensorAuthorityRequestV1,
-    K1SchedulerLaneV1, K1SchedulerProjectionV1, append_candidate_freeze_for,
+    K1SchedulerLaneV1, K1SchedulerProjectionV1, append_candidate_freeze_for, append_exact_terminal,
     append_future_contract, append_future_outcome, append_future_prediction,
     append_future_prediction_censor, append_scheduler_payload_for, candidate_exclusions_for,
     candidate_program_binding_root, candidate_topology_root, current_deficit_snapshot,
@@ -59,6 +59,7 @@ use crate::operator_certification::CertificationAuthorityConfigV1;
 mod advance;
 mod deadline;
 mod evidence;
+mod exact_opportunity;
 mod law_lab_eligibility;
 mod lifecycle;
 mod report;
@@ -72,6 +73,15 @@ pub(crate) use service::{
 
 use advance::*;
 use evidence::*;
+pub(crate) use exact_opportunity::{
+    ExactDurableSourceHeadsV1, build_exact_identifier_archive_v1,
+    evaluate_exact_initial_identifier_v1, restore_exact_durable_source_heads_v1,
+    restore_exact_identifier_inputs_v1, restore_exact_opportunity_v1,
+};
+
+pub(crate) fn exact_generation_budget_v1() -> K1GenerationBudgetV1 {
+    generation_budget()
+}
 #[cfg(test)]
 use lifecycle::prepare_tick_context_from_join_ledger;
 use lifecycle::{

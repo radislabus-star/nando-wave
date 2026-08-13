@@ -331,12 +331,20 @@ impl ReplayState {
             .identifier_causal_input_manifest
             .as_deref()
             .map(|manifest| manifest.opportunity_root_sha256.as_str());
+        let causal = candidate.identifier_causal_input_manifest.as_deref();
         if candidate.schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
             || self.identification.is_some()
             || self.exact_terminal_diagnostic.is_some()
-            || !diagnostic.deterministic
+            || diagnostic.terminal_disposition
+                != crate::multi_source::TerminalDispositionV1::DeterministicPreFuture
             || diagnostic.candidate_freeze_root_sha256 != candidate.freeze_root_sha256
             || Some(diagnostic.opportunity_root_sha256.as_str()) != opportunity_root
+            || causal.is_none_or(|manifest| {
+                diagnostic.support_manifest_root_sha256 != manifest.support_manifest_root_sha256
+                    || diagnostic.support_row_count != manifest.support_rows
+                    || diagnostic.relevant_artifact_projection_root_sha256
+                        != manifest.relevant_artifact_projection_root_sha256
+            })
         {
             return Err("k1_scheduler_exact_terminal_diagnostic_invalid");
         }
@@ -542,8 +550,19 @@ impl ReplayState {
             if !deterministic_initial_blocker_v1(&verdict.blocker)
                 || !verdict
                     .evidence_roots_sha256
+                    .contains(&candidate.freeze_root_sha256)
+                || !verdict
+                    .evidence_roots_sha256
                     .contains(&diagnostic.terminal_diagnostic_root_sha256)
+                || !verdict
+                    .evidence_roots_sha256
+                    .contains(&diagnostic.identifier_report_root_sha256)
+                || !verdict
+                    .evidence_roots_sha256
+                    .contains(&diagnostic.identifier_result_root_sha256)
                 || diagnostic.candidate_freeze_root_sha256 != candidate.freeze_root_sha256
+                || diagnostic.exact_result_blocker != verdict.blocker
+                || diagnostic.terminal_at_unix != verdict.terminal_at_unix
             {
                 return Err("k1_scheduler_exact_terminal_verdict_mismatch");
             }

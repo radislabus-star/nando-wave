@@ -6,9 +6,44 @@ use nando_operator_admission::{
 
 use super::*;
 use crate::k1_natural_scheduler::authority::{
-    certification_authorizes_settlement, validate_active_protocol_mode_cas,
-    validate_discovery_basis_cas, validate_registry_cas,
+    append_and_persist, append_payload_authoritative, certification_authorizes_settlement,
+    complete_exact_terminal_transaction, read_exact_scheduler_policy,
+    validate_active_protocol_mode_cas, validate_discovery_basis_cas, validate_exact_wake_cas,
+    validate_registry_cas,
 };
+use crate::k1_natural_scheduler::journal::{
+    persist_scheduler_event_for, restore_anchored_scheduler_for,
+};
+use crate::k1_natural_scheduler::projection::exact_attempt_index_for;
+use crate::operator_certification::K1ExactAuthoritySourceConfigV1;
+use nando_response_actor::{OnlineCollectionConfig, OnlineCollectionMiner};
+use std::path::Path;
+
+fn write_exact_policy(path: &Path, writer_enabled: bool, queue: &str) {
+    let policy_root_sha256 = canonical_json_sha256(&(
+        "nando.k1-exact-scheduler-policy.v1",
+        writer_enabled,
+        queue,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8,
+        K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1,
+        "nando.k1-operator-blind-scheduler.v4",
+    ))
+    .expect("policy root");
+    fs::write(
+        path,
+        serde_json::to_vec(&serde_json::json!({
+            "schema": "nando.k1-exact-scheduler-policy.v1",
+            "policy_root_sha256": policy_root_sha256,
+            "writer_enabled": writer_enabled,
+            "minimum_queue_schema": queue,
+            "minimum_freeze_schema": K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8,
+            "minimum_wire_schema": K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1,
+            "scheduler_schema": "nando.k1-operator-blind-scheduler.v4",
+        }))
+        .expect("policy bytes"),
+    )
+    .expect("policy write");
+}
 
 #[test]
 fn authority_rejects_a_valid_freeze_bound_to_an_uninstalled_discovery_basis() {
@@ -17,6 +52,372 @@ fn authority_rejects_a_valid_freeze_bound_to_an_uninstalled_discovery_basis() {
         validate_discovery_basis_cas(&candidate_freeze_with_basis(root(999))),
         Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned())
     );
+}
+
+#[test]
+fn exact_policy_distinguishes_disabled_writer_from_schema_downgrade() {
+    let (root_dir, _, _) = test_context();
+    let path = root_dir.join("policy.json");
+    write_exact_policy(&path, false, "nando.k1-natural-candidate-queue.v4");
+    assert_eq!(
+        read_exact_scheduler_policy(&path),
+        Err("k1_exact_writer_inactive".to_owned())
+    );
+    write_exact_policy(&path, true, "nando.k1-natural-candidate-queue.v3");
+    assert_eq!(
+        read_exact_scheduler_policy(&path),
+        Err("K1_AUTHORITY_SCHEMA_DOWNGRADE".to_owned())
+    );
+    std::fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn policy_change_after_snapshot_fails_stale_without_scheduler_event() {
+    let (root_dir, mut config, signing_key) = test_context();
+    let topology_path = root_dir.join("topology");
+    let frame_path = root_dir.join("frames");
+    let collection_path = root_dir.join("collection.cbor");
+    let artifact_path = root_dir.join("artifacts");
+    let policy_path = root_dir.join("policy.json");
+    fs::create_dir_all(&topology_path).expect("topology directory");
+    fs::create_dir_all(&frame_path).expect("frame directory");
+    let collection =
+        OnlineCollectionMiner::open(&collection_path, OnlineCollectionConfig::default())
+            .expect("empty collection");
+    collection.flush().expect("durable empty collection");
+    drop(collection);
+    write_exact_policy(&policy_path, true, "nando.k1-natural-candidate-queue.v4");
+    config.k1_exact_sources = Some(K1ExactAuthoritySourceConfigV1 {
+        topology_archive_path: topology_path,
+        frame_archive_path: frame_path,
+        collection_checkpoint_path: collection_path,
+        artifact_archive_path: artifact_path,
+        scheduler_policy_path: policy_path.clone(),
+    });
+    recover_authority(&config, &signing_key).expect("scheduler genesis");
+    let scheduler = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("epistemic scheduler");
+    let registry =
+        crate::operator_certification::restore_anchored_ledger(&config).expect("empty registry");
+    let active_protocol_mode_set_root_sha256 =
+        crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
+            &BTreeSet::new(),
+        )
+        .expect("empty active modes");
+    let policy = read_exact_scheduler_policy(&policy_path).expect("active policy");
+    let source_heads =
+        crate::k1_natural_scheduler_runtime::restore_exact_durable_source_heads_v1(&config)
+            .expect("durable heads");
+    validate_exact_wake_cas(
+        &config,
+        &scheduler,
+        &registry,
+        &active_protocol_mode_set_root_sha256,
+        &policy,
+        &source_heads,
+    )
+    .expect("unchanged snapshot");
+
+    write_exact_policy(&policy_path, false, "nando.k1-natural-candidate-queue.v4");
+    assert_eq!(
+        validate_exact_wake_cas(
+            &config,
+            &scheduler,
+            &registry,
+            &active_protocol_mode_set_root_sha256,
+            &policy,
+            &source_heads,
+        ),
+        Err("STALE_BEFORE_FREEZE".to_owned())
+    );
+    let unchanged = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("unchanged scheduler");
+    assert_eq!(unchanged.revision, 0);
+    assert!(unchanged.events.is_empty());
+    fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn exact_wake_wire_has_no_scientific_or_timestamp_fields() {
+    let value = serde_json::to_value(K1ExactWakeAuthorityRequestV1 {
+        schema: K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+        lane: K1SchedulerLaneV1::Epistemic,
+    })
+    .expect("wake");
+    assert_eq!(value.as_object().expect("object").len(), 2);
+    for forbidden in [
+        "catalog",
+        "queue",
+        "attempt_index",
+        "freeze",
+        "selected_at_unix",
+        "candidate",
+        "source_snapshot",
+    ] {
+        assert!(value.get(forbidden).is_none(), "forbidden {forbidden}");
+    }
+}
+
+#[test]
+fn exact_terminal_wire_has_only_active_freeze_identity() {
+    let value = serde_json::to_value(K1ExactTerminalAuthorityRequestV1 {
+        schema: K1_EXACT_TERMINAL_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+        lane: K1SchedulerLaneV1::Epistemic,
+        candidate_freeze_root_sha256: root(50_000),
+    })
+    .expect("terminal request");
+    assert_eq!(value.as_object().expect("object").len(), 3);
+    for forbidden in [
+        "identifier_result",
+        "diagnostic",
+        "disposition",
+        "blocker",
+        "terminal_at_unix",
+        "programs",
+        "histogram",
+    ] {
+        assert!(value.get(forbidden).is_none(), "forbidden {forbidden}");
+    }
+}
+
+#[test]
+fn generic_authority_rejects_v8_diagnostic_and_deterministic_verdict() {
+    let (root_dir, config, signing_key) = test_context();
+    recover_authority(&config, &signing_key).expect("genesis");
+    let freeze = exact_candidate_freeze(1);
+    let diagnostic = exact_terminal_diagnostic(&freeze);
+    let mut scheduler = K1SchedulerLedgerV1::empty().expect("scheduler");
+    append_and_persist(
+        &config,
+        K1SchedulerLaneV1::Epistemic,
+        &signing_key,
+        &mut scheduler,
+        K1SchedulerEventPayloadV1::CandidateFreeze(freeze.clone()),
+    )
+    .expect("freeze");
+    let diagnostic_error = append_payload_authoritative(
+        &config,
+        &signing_key,
+        K1SchedulerAppendAuthorityRequestV1 {
+            schema: K1_SCHEDULER_APPEND_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane: K1SchedulerLaneV1::Epistemic,
+            payload: K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(Box::new(
+                diagnostic.clone(),
+            )),
+        },
+    )
+    .expect_err("diagnostic must use exact authority");
+    assert_eq!(diagnostic_error, "k1_scheduler_append_request_invalid");
+    let verdict = K1GenerationTerminalVerdictV1::seal(
+        freeze.freeze_root_sha256.clone(),
+        None,
+        Vec::new(),
+        vec![freeze.freeze_root_sha256],
+        K1GenerationVerdictClassV1::AcquisitionFail,
+        "motif_program_candidates_empty".to_owned(),
+        1_700_000_100,
+        None,
+    )
+    .expect("verdict");
+    let verdict_error = append_payload_authoritative(
+        &config,
+        &signing_key,
+        K1SchedulerAppendAuthorityRequestV1 {
+            schema: K1_SCHEDULER_APPEND_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane: K1SchedulerLaneV1::Epistemic,
+            payload: K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
+        },
+    )
+    .expect_err("verdict must use exact authority");
+    assert_eq!(verdict_error, "k1_exact_terminal_requires_authority");
+    fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn diagnostic_crash_retry_appends_only_one_matching_verdict() {
+    let (root_dir, config, signing_key) = test_context();
+    recover_authority(&config, &signing_key).expect("mechanism genesis");
+    let freeze = exact_candidate_freeze(1);
+    let diagnostic = exact_terminal_diagnostic(&freeze);
+    let mut scheduler = K1SchedulerLedgerV1::empty().expect("scheduler");
+    for payload in [
+        K1SchedulerEventPayloadV1::CandidateFreeze(freeze.clone()),
+        K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(Box::new(diagnostic.clone())),
+    ] {
+        append_and_persist(
+            &config,
+            K1SchedulerLaneV1::Epistemic,
+            &signing_key,
+            &mut scheduler,
+            payload,
+        )
+        .expect("durable pre-crash event");
+    }
+
+    let mut restarted = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("restart after diagnostic");
+    complete_exact_terminal_transaction(
+        &config,
+        &signing_key,
+        K1SchedulerLaneV1::Epistemic,
+        &mut restarted,
+        &freeze,
+        &diagnostic.identifier_report_root_sha256,
+        &diagnostic.identifier_result_root_sha256,
+        diagnostic.clone(),
+    )
+    .expect("append missing verdict");
+
+    let restored = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("restored completed transaction");
+    assert_eq!(restored.revision, 3);
+    assert_eq!(
+        restored
+            .events
+            .iter()
+            .filter(|event| matches!(
+                &event.payload,
+                K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(_)
+            ))
+            .count(),
+        1
+    );
+    assert_eq!(
+        restored
+            .events
+            .iter()
+            .filter(|event| matches!(
+                &event.payload,
+                K1SchedulerEventPayloadV1::TerminalVerdict(_)
+            ))
+            .count(),
+        1
+    );
+    assert_eq!(
+        exact_attempt_index_for(&restored)
+            .expect("attempt index")
+            .deterministic_attempts
+            .len(),
+        1
+    );
+    let mut idempotent = restored.clone();
+    let projection = complete_exact_terminal_transaction(
+        &config,
+        &signing_key,
+        K1SchedulerLaneV1::Epistemic,
+        &mut idempotent,
+        &freeze,
+        &diagnostic.identifier_report_root_sha256,
+        &diagnostic.identifier_result_root_sha256,
+        diagnostic.clone(),
+    )
+    .expect("idempotent completed retry");
+    assert_eq!(projection.ledger_revision, 3);
+    assert_eq!(idempotent.revision, 3);
+    fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn exact_terminal_transaction_rejects_the_mechanism_lane() {
+    let (root_dir, config, signing_key) = test_context();
+    recover_authority(&config, &signing_key).expect("genesis");
+    let freeze = exact_candidate_freeze(1);
+    let diagnostic = exact_terminal_diagnostic(&freeze);
+    let mut mechanism = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Mechanism)
+        .expect("mechanism lane");
+
+    assert_eq!(
+        complete_exact_terminal_transaction(
+            &config,
+            &signing_key,
+            K1SchedulerLaneV1::Mechanism,
+            &mut mechanism,
+            &freeze,
+            &diagnostic.identifier_report_root_sha256,
+            &diagnostic.identifier_result_root_sha256,
+            diagnostic.clone(),
+        ),
+        Err("k1_exact_terminal_transaction_cas_invalid".to_owned())
+    );
+    assert_eq!(mechanism.revision, 0);
+    fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn lagging_anchor_after_verdict_recovers_one_exact_attempt() {
+    let (root_dir, config, signing_key) = test_context();
+    recover_authority(&config, &signing_key).expect("mechanism genesis");
+    let freeze = exact_candidate_freeze(1);
+    let diagnostic = exact_terminal_diagnostic(&freeze);
+    let mut scheduler = K1SchedulerLedgerV1::empty().expect("scheduler");
+    for payload in [
+        K1SchedulerEventPayloadV1::CandidateFreeze(freeze.clone()),
+        K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(Box::new(diagnostic.clone())),
+    ] {
+        append_and_persist(
+            &config,
+            K1SchedulerLaneV1::Epistemic,
+            &signing_key,
+            &mut scheduler,
+            payload,
+        )
+        .expect("anchored event");
+    }
+    let anchored_revision = scheduler.revision;
+    let anchored_root = scheduler
+        .latest_event()
+        .expect("diagnostic event")
+        .event_root_sha256
+        .clone();
+    let verdict = K1GenerationTerminalVerdictV1::seal(
+        freeze.freeze_root_sha256.clone(),
+        None,
+        Vec::new(),
+        vec![
+            freeze.freeze_root_sha256.clone(),
+            diagnostic.identifier_report_root_sha256.clone(),
+            diagnostic.identifier_result_root_sha256.clone(),
+            diagnostic.terminal_diagnostic_root_sha256.clone(),
+        ],
+        K1GenerationVerdictClassV1::AcquisitionFail,
+        diagnostic.exact_result_blocker.clone(),
+        diagnostic.terminal_at_unix,
+        None,
+    )
+    .expect("verdict");
+    let event = scheduler
+        .append(K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(
+            verdict,
+        )))
+        .expect("append verdict")
+        .clone();
+    let signed =
+        SignedSchedulerEventV1::seal(event, scheduler.ledger_root_sha256.clone(), &signing_key)
+            .expect("signed verdict");
+    persist_scheduler_event_for(&config, K1SchedulerLaneV1::Epistemic, &signed)
+        .expect("durable verdict, stale anchor");
+    assert_eq!(anchored_revision, 2);
+    assert_eq!(
+        restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic),
+        Err("k1_scheduler_rollback_detected".to_owned())
+    );
+
+    recover_authority(&config, &signing_key).expect("recover epistemic signed tail");
+    let restored = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("recovered ledger");
+    assert_eq!(restored.revision, 3);
+    assert_eq!(
+        exact_attempt_index_for(&restored)
+            .expect("attempt index")
+            .deterministic_attempts
+            .len(),
+        1
+    );
+    assert_ne!(
+        restored.latest_event().expect("verdict").event_root_sha256,
+        anchored_root
+    );
+    fs::remove_dir_all(root_dir).expect("cleanup");
 }
 
 #[test]

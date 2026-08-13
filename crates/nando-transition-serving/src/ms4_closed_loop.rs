@@ -1119,18 +1119,7 @@ fn certify_operator(
 fn certification_config(
     config: &crate::ServingConfig,
 ) -> crate::operator_certification::CertificationAuthorityConfigV1 {
-    crate::operator_certification::CertificationAuthorityConfigV1 {
-        root: config.ms4_closed_loop_path.clone(),
-        cleanup_receipts_path: config.operator_cleanup_receipts_path.clone(),
-        anchor_path: config.operator_certification_anchor_path.clone(),
-        authority_socket_path: config.operator_certification_authority_socket_path.clone(),
-        authority_public_key_path: config
-            .operator_certification_authority_public_key_path
-            .clone(),
-        cleanup_public_key_path: config.operator_cleanup_verifier_public_key_path.clone(),
-        response_registry_path: config.response_registry_path.clone(),
-        runtime_revocations_path: config.runtime_package_revocations_path.clone(),
-    }
+    crate::operator_certification::CertificationAuthorityConfigV1::from_serving_config(config)
 }
 
 fn role_topology_id(package: &ResponsePackage) -> Result<String, String> {

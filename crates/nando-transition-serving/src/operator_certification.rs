@@ -39,6 +39,15 @@ const AUTHORITY_RESPONSE_SCHEMA: &str = "nando.operator-certification-authority-
 const ROLE_TOPOLOGY_SCHEMA_V1: &str = "nando.operator-role-topology.v1";
 
 #[derive(Clone, Debug)]
+pub struct K1ExactAuthoritySourceConfigV1 {
+    pub topology_archive_path: PathBuf,
+    pub frame_archive_path: PathBuf,
+    pub collection_checkpoint_path: PathBuf,
+    pub artifact_archive_path: PathBuf,
+    pub scheduler_policy_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
 pub struct CertificationAuthorityConfigV1 {
     pub root: PathBuf,
     pub cleanup_receipts_path: PathBuf,
@@ -48,6 +57,32 @@ pub struct CertificationAuthorityConfigV1 {
     pub cleanup_public_key_path: PathBuf,
     pub response_registry_path: PathBuf,
     pub runtime_revocations_path: PathBuf,
+    pub k1_exact_sources: Option<K1ExactAuthoritySourceConfigV1>,
+}
+
+impl CertificationAuthorityConfigV1 {
+    #[must_use]
+    pub fn from_serving_config(config: &crate::ServingConfig) -> Self {
+        Self {
+            root: config.ms4_closed_loop_path.clone(),
+            cleanup_receipts_path: config.operator_cleanup_receipts_path.clone(),
+            anchor_path: config.operator_certification_anchor_path.clone(),
+            authority_socket_path: config.operator_certification_authority_socket_path.clone(),
+            authority_public_key_path: config
+                .operator_certification_authority_public_key_path
+                .clone(),
+            cleanup_public_key_path: config.operator_cleanup_verifier_public_key_path.clone(),
+            response_registry_path: config.response_registry_path.clone(),
+            runtime_revocations_path: config.runtime_package_revocations_path.clone(),
+            k1_exact_sources: Some(K1ExactAuthoritySourceConfigV1 {
+                topology_archive_path: config.multi_source_topology_archive_path.clone(),
+                frame_archive_path: config.multi_source_frame_archive_path.clone(),
+                collection_checkpoint_path: config.online_collection_checkpoint_path.clone(),
+                artifact_archive_path: config.k1_exact_artifact_archive_path.clone(),
+                scheduler_policy_path: config.k1_exact_scheduler_policy_path.clone(),
+            }),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -942,6 +977,7 @@ mod tests {
             cleanup_public_key_path: public_path,
             response_registry_path: root.join("registry.json"),
             runtime_revocations_path: root.join("revocations.json"),
+            k1_exact_sources: None,
         };
         let mut ledger = OperatorCertificationLedgerV1::empty().expect("empty");
         let first = entry();
@@ -993,6 +1029,7 @@ mod tests {
             cleanup_public_key_path: public_path,
             response_registry_path: root.join("registry.json"),
             runtime_revocations_path: root.join("revocations.json"),
+            k1_exact_sources: None,
         };
         let mut ledger = OperatorCertificationLedgerV1::empty().expect("empty");
         let first = entry();
@@ -1061,6 +1098,7 @@ mod tests {
             cleanup_public_key_path: public_path,
             response_registry_path: temp_root.join("registry.json"),
             runtime_revocations_path: temp_root.join("revocations.json"),
+            k1_exact_sources: None,
         };
         let mut ledger = OperatorCertificationLedgerV1::empty().expect("empty");
         let legacy = entry();
@@ -1228,6 +1266,7 @@ mod tests {
             cleanup_public_key_path: public_path,
             response_registry_path: root.join("registry.json"),
             runtime_revocations_path: root.join("revocations.json"),
+            k1_exact_sources: None,
         };
         let mut ledger = OperatorCertificationLedgerV1::empty().expect("empty");
         let first = entry();
@@ -1269,6 +1308,7 @@ mod tests {
             cleanup_public_key_path: public_path,
             response_registry_path: root.join("registry.json"),
             runtime_revocations_path: root.join("revocations.json"),
+            k1_exact_sources: None,
         };
         let mut ledger = OperatorCertificationLedgerV1::empty().expect("empty");
         let first = entry();

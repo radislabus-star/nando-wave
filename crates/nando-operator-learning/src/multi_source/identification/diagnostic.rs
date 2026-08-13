@@ -6,13 +6,23 @@ use nando_operator_kernel::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{MultiSourceT1IdentificationV3, SourceNeutralTopologyMotifV1};
+use super::{
+    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, SourceNeutralTopologyMotifV1,
+};
 use crate::multi_source::bind_pre_action_t1_program_to_motif_v1;
 
 pub const PROGRAM_DISPOSITION_SCHEMA_V1: &str = "nando.k1-program-disposition.v1";
 pub const PROGRAM_DISPOSITION_SET_SCHEMA_V1: &str = "nando.k1-program-disposition-set.v1";
 pub const IDENTIFIER_RESULT_SCHEMA_V1: &str = "nando.k1-identifier-result.v1";
 pub const TERMINAL_DIAGNOSTIC_SCHEMA_V1: &str = "nando.k1-terminal-diagnostic.v1";
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalDispositionV1 {
+    DeterministicPreFuture,
+    FutureContingent,
+    OperationalRetryable,
+}
 
 #[must_use]
 pub fn deterministic_initial_blocker_v1(blocker: &str) -> bool {
@@ -81,11 +91,55 @@ pub struct TerminalDiagnosticV1 {
     pub opportunity_root_sha256: String,
     pub candidate_freeze_root_sha256: String,
     pub identifier_result_root_sha256: String,
+    pub support_manifest_root_sha256: String,
+    pub support_row_count: u64,
+    pub relevant_artifact_projection_root_sha256: String,
+    pub relevant_artifact_object_count: u64,
     pub seed_count: u64,
+    pub seed_program_set_root_sha256: String,
+    pub disposition_set_root_sha256: String,
+    pub program_dispositions: Vec<ProgramDispositionV1>,
     pub accepted_count: u64,
+    pub accepted_set_root_sha256: String,
     pub rejected_count: u64,
     pub rejection_histogram: BTreeMap<ProgramRejectionCodeV1, u64>,
-    pub deterministic: bool,
+    pub rejection_histogram_root_sha256: String,
+    pub semantic_class_count: u64,
+    pub semantic_class_set_root_sha256: String,
+    pub identifier_report_root_sha256: String,
+    pub exact_result_state: MultiSourceT1IdentificationStateV1,
+    pub exact_result_blocker: String,
+    pub terminal_disposition: TerminalDispositionV1,
+    pub terminal_at_unix: u64,
+    pub authority_ready: bool,
+}
+
+#[derive(Serialize)]
+struct TerminalDiagnosticDigestV1<'a> {
+    schema: &'static str,
+    opportunity_root_sha256: &'a str,
+    candidate_freeze_root_sha256: &'a str,
+    identifier_result_root_sha256: &'a str,
+    support_manifest_root_sha256: &'a str,
+    support_row_count: u64,
+    relevant_artifact_projection_root_sha256: &'a str,
+    relevant_artifact_object_count: u64,
+    seed_count: u64,
+    seed_program_set_root_sha256: &'a str,
+    disposition_set_root_sha256: &'a str,
+    accepted_count: u64,
+    accepted_set_root_sha256: &'a str,
+    rejected_count: u64,
+    rejection_histogram: &'a BTreeMap<ProgramRejectionCodeV1, u64>,
+    rejection_histogram_root_sha256: &'a str,
+    semantic_class_count: u64,
+    semantic_class_set_root_sha256: &'a str,
+    identifier_report_root_sha256: &'a str,
+    exact_result_state: MultiSourceT1IdentificationStateV1,
+    exact_result_blocker: &'a str,
+    terminal_disposition: TerminalDispositionV1,
+    terminal_at_unix: u64,
+    authority_ready: bool,
 }
 
 impl ProgramDispositionV1 {
@@ -364,77 +418,205 @@ impl IdentifierResultV1 {
 }
 
 impl TerminalDiagnosticV1 {
+    #[allow(clippy::too_many_arguments)]
     pub fn seal(
         candidate_freeze_root_sha256: String,
         result: &IdentifierResultV1,
+        support_manifest_root_sha256: String,
+        support_row_count: u64,
+        relevant_artifact_projection_root_sha256: String,
+        relevant_artifact_object_count: u64,
         disposition: &ProgramDispositionSetV1,
+        semantic_class_roots_sha256: &[String],
+        exact_result_state: MultiSourceT1IdentificationStateV1,
+        exact_result_blocker: String,
+        terminal_at_unix: u64,
     ) -> Result<Self, &'static str> {
+        result.validate()?;
         disposition.validate()?;
-        if !valid_nonzero_sha256(&candidate_freeze_root_sha256) {
+        if !valid_nonzero_sha256(&candidate_freeze_root_sha256)
+            || !valid_nonzero_sha256(&support_manifest_root_sha256)
+            || !valid_nonzero_sha256(&relevant_artifact_projection_root_sha256)
+            || !semantic_class_roots_sha256
+                .iter()
+                .all(|root| valid_nonzero_sha256(root))
+            || !semantic_class_roots_sha256
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+            || exact_result_blocker.is_empty()
+            || terminal_at_unix == 0
+            || result.disposition_set_root_sha256 != disposition.disposition_set_root_sha256
+        {
             return Err("terminal_diagnostic_input_invalid");
         }
-        let deterministic = !disposition
-            .rejection_histogram
-            .contains_key(&ProgramRejectionCodeV1::InternalUnclassified);
-        let terminal_diagnostic_root_sha256 = canonical_json_sha256(&(
-            TERMINAL_DIAGNOSTIC_SCHEMA_V1,
-            result.opportunity_root_sha256.as_str(),
-            candidate_freeze_root_sha256.as_str(),
-            result.identifier_result_root_sha256.as_str(),
-            disposition.seed_count,
-            disposition.accepted_count,
-            disposition.rejected_count,
-            &disposition.rejection_histogram,
-            deterministic,
-        ))?;
-        let value = Self {
+        let seed_program_set_root_sha256 = seed_program_set_root(disposition)?;
+        let rejection_histogram_root_sha256 = rejection_histogram_root(disposition)?;
+        let semantic_class_count = u64::try_from(semantic_class_roots_sha256.len())
+            .map_err(|_| "terminal_diagnostic_semantic_class_count")?;
+        let semantic_class_set_root_sha256 = semantic_class_set_root(semantic_class_roots_sha256)?;
+        let terminal_disposition = classify_terminal_disposition_v1(
+            exact_result_state,
+            &exact_result_blocker,
+            disposition,
+        );
+        let mut value = Self {
             schema: TERMINAL_DIAGNOSTIC_SCHEMA_V1.to_owned(),
-            terminal_diagnostic_root_sha256,
+            terminal_diagnostic_root_sha256: String::new(),
             opportunity_root_sha256: result.opportunity_root_sha256.clone(),
             candidate_freeze_root_sha256,
             identifier_result_root_sha256: result.identifier_result_root_sha256.clone(),
+            support_manifest_root_sha256,
+            support_row_count,
+            relevant_artifact_projection_root_sha256,
+            relevant_artifact_object_count,
             seed_count: disposition.seed_count,
+            seed_program_set_root_sha256,
+            disposition_set_root_sha256: disposition.disposition_set_root_sha256.clone(),
+            program_dispositions: disposition.dispositions.clone(),
             accepted_count: disposition.accepted_count,
+            accepted_set_root_sha256: disposition.accepted_set_root_sha256.clone(),
             rejected_count: disposition.rejected_count,
             rejection_histogram: disposition.rejection_histogram.clone(),
-            deterministic,
+            rejection_histogram_root_sha256,
+            semantic_class_count,
+            semantic_class_set_root_sha256,
+            identifier_report_root_sha256: result.identifier_report_root_sha256.clone(),
+            exact_result_state,
+            exact_result_blocker,
+            terminal_disposition,
+            terminal_at_unix,
+            authority_ready: false,
         };
+        value.terminal_diagnostic_root_sha256 = value.expected_root()?;
         value.validate()?;
         Ok(value)
     }
 
     pub fn validate(&self) -> Result<(), &'static str> {
+        let disposition = ProgramDispositionSetV1 {
+            schema: PROGRAM_DISPOSITION_SET_SCHEMA_V1.to_owned(),
+            disposition_set_root_sha256: self.disposition_set_root_sha256.clone(),
+            seed_count: self.seed_count,
+            accepted_count: self.accepted_count,
+            rejected_count: self.rejected_count,
+            accepted_set_root_sha256: self.accepted_set_root_sha256.clone(),
+            rejection_histogram: self.rejection_histogram.clone(),
+            dispositions: self.program_dispositions.clone(),
+        };
+        disposition.validate()?;
+        let expected_disposition = classify_terminal_disposition_v1(
+            self.exact_result_state,
+            &self.exact_result_blocker,
+            &disposition,
+        );
         if self.schema != TERMINAL_DIAGNOSTIC_SCHEMA_V1
             || [
                 self.terminal_diagnostic_root_sha256.as_str(),
                 self.opportunity_root_sha256.as_str(),
                 self.candidate_freeze_root_sha256.as_str(),
                 self.identifier_result_root_sha256.as_str(),
+                self.support_manifest_root_sha256.as_str(),
+                self.relevant_artifact_projection_root_sha256.as_str(),
+                self.seed_program_set_root_sha256.as_str(),
+                self.disposition_set_root_sha256.as_str(),
+                self.accepted_set_root_sha256.as_str(),
+                self.rejection_histogram_root_sha256.as_str(),
+                self.semantic_class_set_root_sha256.as_str(),
+                self.identifier_report_root_sha256.as_str(),
             ]
             .into_iter()
             .any(|root| !valid_nonzero_sha256(root))
-            || self.seed_count != self.accepted_count.saturating_add(self.rejected_count)
-            || self.rejection_histogram.values().copied().sum::<u64>() != self.rejected_count
-            || self.deterministic
-                == self
-                    .rejection_histogram
-                    .contains_key(&ProgramRejectionCodeV1::InternalUnclassified)
-            || self.terminal_diagnostic_root_sha256
-                != canonical_json_sha256(&(
-                    TERMINAL_DIAGNOSTIC_SCHEMA_V1,
-                    self.opportunity_root_sha256.as_str(),
-                    self.candidate_freeze_root_sha256.as_str(),
-                    self.identifier_result_root_sha256.as_str(),
-                    self.seed_count,
-                    self.accepted_count,
-                    self.rejected_count,
-                    &self.rejection_histogram,
-                    self.deterministic,
-                ))?
+            || self.seed_program_set_root_sha256 != seed_program_set_root(&disposition)?
+            || self.rejection_histogram_root_sha256 != rejection_histogram_root(&disposition)?
+            || self.exact_result_blocker.is_empty()
+            || self.terminal_disposition != expected_disposition
+            || self.terminal_at_unix == 0
+            || self.authority_ready
+            || self.terminal_diagnostic_root_sha256 != self.expected_root()?
         {
             return Err("terminal_diagnostic_invalid");
         }
         Ok(())
+    }
+
+    fn expected_root(&self) -> Result<String, &'static str> {
+        canonical_json_sha256(&TerminalDiagnosticDigestV1 {
+            schema: TERMINAL_DIAGNOSTIC_SCHEMA_V1,
+            opportunity_root_sha256: &self.opportunity_root_sha256,
+            candidate_freeze_root_sha256: &self.candidate_freeze_root_sha256,
+            identifier_result_root_sha256: &self.identifier_result_root_sha256,
+            support_manifest_root_sha256: &self.support_manifest_root_sha256,
+            support_row_count: self.support_row_count,
+            relevant_artifact_projection_root_sha256: &self
+                .relevant_artifact_projection_root_sha256,
+            relevant_artifact_object_count: self.relevant_artifact_object_count,
+            seed_count: self.seed_count,
+            seed_program_set_root_sha256: &self.seed_program_set_root_sha256,
+            disposition_set_root_sha256: &self.disposition_set_root_sha256,
+            accepted_count: self.accepted_count,
+            accepted_set_root_sha256: &self.accepted_set_root_sha256,
+            rejected_count: self.rejected_count,
+            rejection_histogram: &self.rejection_histogram,
+            rejection_histogram_root_sha256: &self.rejection_histogram_root_sha256,
+            semantic_class_count: self.semantic_class_count,
+            semantic_class_set_root_sha256: &self.semantic_class_set_root_sha256,
+            identifier_report_root_sha256: &self.identifier_report_root_sha256,
+            exact_result_state: self.exact_result_state,
+            exact_result_blocker: &self.exact_result_blocker,
+            terminal_disposition: self.terminal_disposition,
+            terminal_at_unix: self.terminal_at_unix,
+            authority_ready: false,
+        })
+    }
+}
+
+fn seed_program_set_root(disposition: &ProgramDispositionSetV1) -> Result<String, &'static str> {
+    canonical_json_sha256(&(
+        "nando.k1-seed-program-set.v1",
+        disposition
+            .dispositions
+            .iter()
+            .map(|value| value.seed_program_root_sha256.as_str())
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn rejection_histogram_root(disposition: &ProgramDispositionSetV1) -> Result<String, &'static str> {
+    canonical_json_sha256(&(
+        "nando.k1-program-rejection-histogram.v1",
+        &disposition.rejection_histogram,
+    ))
+}
+
+fn semantic_class_set_root(roots: &[String]) -> Result<String, &'static str> {
+    canonical_json_sha256(&("nando.k1-semantic-class-set.v1", roots))
+}
+
+#[must_use]
+pub fn classify_terminal_disposition_v1(
+    state: MultiSourceT1IdentificationStateV1,
+    blocker: &str,
+    disposition: &ProgramDispositionSetV1,
+) -> TerminalDispositionV1 {
+    if deterministic_initial_blocker_v1(blocker)
+        && !disposition
+            .rejection_histogram
+            .contains_key(&ProgramRejectionCodeV1::InternalUnclassified)
+    {
+        TerminalDispositionV1::DeterministicPreFuture
+    } else if state == MultiSourceT1IdentificationStateV1::FutureContradiction
+        || matches!(
+            blocker,
+            "probe_exhausted"
+                | "independent_future_not_observed"
+                | "independent_future_contradiction"
+                | "probe_future_contradiction"
+                | "post_freeze_exact_parity_or_negative_control_failed"
+        )
+    {
+        TerminalDispositionV1::FutureContingent
+    } else {
+        TerminalDispositionV1::OperationalRetryable
     }
 }
 
@@ -660,8 +842,20 @@ mod tests {
         );
         let result = IdentifierResultV1::seal(root(2), &disposition, &identifier)
             .expect("identifier result");
-        let diagnostic = TerminalDiagnosticV1::seal(root(3), &result, &disposition)
-            .expect("terminal diagnostic");
+        let diagnostic = TerminalDiagnosticV1::seal(
+            root(3),
+            &result,
+            root(4),
+            0,
+            root(5),
+            0,
+            &disposition,
+            &[],
+            MultiSourceT1IdentificationStateV1::NoEligibleCohort,
+            "motif_program_candidates_empty".to_owned(),
+            1_700_000_000,
+        )
+        .expect("terminal diagnostic");
         result.validate().expect("valid result");
         diagnostic.validate().expect("valid diagnostic");
 
@@ -679,5 +873,52 @@ mod tests {
         let mut forged = diagnostic;
         forged.identifier_result_root_sha256 = root(99);
         assert_eq!(forged.validate(), Err("terminal_diagnostic_invalid"));
+    }
+
+    #[test]
+    fn terminal_disposition_policy_is_closed_and_fail_retryable() {
+        let topology = topology();
+        let disposition =
+            evaluate_program_dispositions_v1(&programs(), &topology, &motif(1, Some(1)))
+                .expect("disposition")
+                .0;
+        assert_eq!(
+            classify_terminal_disposition_v1(
+                MultiSourceT1IdentificationStateV1::NoEligibleCohort,
+                "motif_program_candidates_empty",
+                &disposition,
+            ),
+            TerminalDispositionV1::DeterministicPreFuture
+        );
+        assert_eq!(
+            classify_terminal_disposition_v1(
+                MultiSourceT1IdentificationStateV1::FutureContradiction,
+                "independent_future_contradiction",
+                &disposition,
+            ),
+            TerminalDispositionV1::FutureContingent
+        );
+        assert_eq!(
+            classify_terminal_disposition_v1(
+                MultiSourceT1IdentificationStateV1::InvalidEvidence,
+                "k1_exact_archive_object_read",
+                &disposition,
+            ),
+            TerminalDispositionV1::OperationalRetryable
+        );
+
+        let mut unclassified = disposition;
+        unclassified.rejection_histogram.insert(
+            ProgramRejectionCodeV1::InternalUnclassified,
+            unclassified.rejected_count,
+        );
+        assert_eq!(
+            classify_terminal_disposition_v1(
+                MultiSourceT1IdentificationStateV1::NoEligibleCohort,
+                "motif_program_candidates_empty",
+                &unclassified,
+            ),
+            TerminalDispositionV1::OperationalRetryable
+        );
     }
 }

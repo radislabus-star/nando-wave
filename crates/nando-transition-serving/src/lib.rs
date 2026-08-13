@@ -212,6 +212,8 @@ pub struct ServingConfig {
     pub terminal_receipt_archive_path: PathBuf,
     pub multi_source_frame_archive_path: PathBuf,
     pub multi_source_topology_archive_path: PathBuf,
+    pub k1_exact_artifact_archive_path: PathBuf,
+    pub k1_exact_scheduler_policy_path: PathBuf,
     pub ms3_linked_frame_acquisition_path: PathBuf,
     pub ms3_linked_frame_acquisition_max_topologies: u64,
     pub ms3_linked_frame_acquisition_max_seconds: u64,
@@ -448,6 +450,15 @@ impl ServingConfig {
                 "NANDO_MULTI_SOURCE_TOPOLOGY_ARCHIVE",
                 &state_dir,
                 "multi-source-live-v2/pre-action-topology-archive-v1",
+            ),
+            k1_exact_artifact_archive_path: env_path_join(
+                "NANDO_K1_EXACT_ARTIFACT_ARCHIVE",
+                &state_dir,
+                "multi-source-live-v2/k1-exact-opportunity-v1",
+            ),
+            k1_exact_scheduler_policy_path: env_path(
+                "NANDO_K1_EXACT_SCHEDULER_POLICY",
+                "/etc/nando-wave/k1-exact-scheduler-policy-v1.json",
             ),
             ms3_linked_frame_acquisition_path: env_path_join(
                 "NANDO_MS3_LINKED_FRAME_ACQUISITION",
@@ -1160,18 +1171,8 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
             runtime.observe_historical_topology(&row, observed_at)?;
         }
     }
-    let certification_config = operator_certification::CertificationAuthorityConfigV1 {
-        root: config.ms4_closed_loop_path.clone(),
-        cleanup_receipts_path: config.operator_cleanup_receipts_path.clone(),
-        anchor_path: config.operator_certification_anchor_path.clone(),
-        authority_socket_path: config.operator_certification_authority_socket_path.clone(),
-        authority_public_key_path: config
-            .operator_certification_authority_public_key_path
-            .clone(),
-        cleanup_public_key_path: config.operator_cleanup_verifier_public_key_path.clone(),
-        response_registry_path: config.response_registry_path.clone(),
-        runtime_revocations_path: config.runtime_package_revocations_path.clone(),
-    };
+    let certification_config =
+        operator_certification::CertificationAuthorityConfigV1::from_serving_config(&config);
     let restored_ms4_closed_loop_report =
         ms4_closed_loop::restore_report(&config.ms4_closed_loop_path, Some(&certification_config))?;
     let ms4_exact_wave_precommit_writer = if config.client_allow_local_accept {
@@ -9204,6 +9205,9 @@ mod tests {
                 .join("multi-source-live-v2/relation-frame-archive-v1"),
             multi_source_topology_archive_path: root
                 .join("multi-source-live-v2/pre-action-topology-archive-v1"),
+            k1_exact_artifact_archive_path: root
+                .join("multi-source-live-v2/k1-exact-opportunity-v1"),
+            k1_exact_scheduler_policy_path: root.join("k1-exact-scheduler-policy-v1.json"),
             ms3_linked_frame_acquisition_path: root
                 .join("multi-source-live-v2/linked-frame-acquisition-v1"),
             ms3_linked_frame_acquisition_max_topologies: 256,
@@ -9251,19 +9255,9 @@ mod tests {
             Duration::from_millis(100),
         )
         .expect("learning structure bridge");
-        let certification_config =
-            Arc::new(operator_certification::CertificationAuthorityConfigV1 {
-                root: config.ms4_closed_loop_path.clone(),
-                cleanup_receipts_path: config.operator_cleanup_receipts_path.clone(),
-                anchor_path: config.operator_certification_anchor_path.clone(),
-                authority_socket_path: config.operator_certification_authority_socket_path.clone(),
-                authority_public_key_path: config
-                    .operator_certification_authority_public_key_path
-                    .clone(),
-                cleanup_public_key_path: config.operator_cleanup_verifier_public_key_path.clone(),
-                response_registry_path: config.response_registry_path.clone(),
-                runtime_revocations_path: config.runtime_package_revocations_path.clone(),
-            });
+        let certification_config = Arc::new(
+            operator_certification::CertificationAuthorityConfigV1::from_serving_config(&config),
+        );
         let state = AppState {
             config: Arc::new(config),
             cache: Arc::new(RwLock::new(ExecutorCache::default())),

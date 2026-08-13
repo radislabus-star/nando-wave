@@ -39,7 +39,7 @@ pub(super) fn selected_observation_evidence_v1(
     }
 }
 
-pub(super) fn enumerate_source_neutral_t1_candidates(
+pub fn enumerate_source_neutral_t1_candidates(
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> Result<BTreeMap<String, ResponseProgram>, &'static str> {

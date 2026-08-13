@@ -197,10 +197,23 @@ pub(super) fn exact_attempt_index_for(
                             .opportunity_root_sha256
                             .clone();
                         if verdict.verdict != K1GenerationVerdictClassV1::AcquisitionFail
+                            || diagnostic.terminal_disposition
+                                != TerminalDispositionV1::DeterministicPreFuture
                             || !deterministic_initial_blocker_v1(&verdict.blocker)
                             || !verdict
                                 .evidence_roots_sha256
                                 .contains(&diagnostic.terminal_diagnostic_root_sha256)
+                            || !verdict
+                                .evidence_roots_sha256
+                                .contains(&diagnostic.identifier_report_root_sha256)
+                            || !verdict
+                                .evidence_roots_sha256
+                                .contains(&diagnostic.identifier_result_root_sha256)
+                            || !verdict
+                                .evidence_roots_sha256
+                                .contains(&freeze.freeze_root_sha256)
+                            || diagnostic.exact_result_blocker != verdict.blocker
+                            || diagnostic.terminal_at_unix != verdict.terminal_at_unix
                         {
                             return Err("k1_exact_attempt_terminal_mismatch".to_owned());
                         }

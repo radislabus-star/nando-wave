@@ -62,6 +62,7 @@ impl OnlineCollectionMiner {
                 checkpoint,
                 _owner_lock: None,
             },
+            checkpoint_root_sha256: Some(sha256_bytes(&bytes)),
         })
     }
 

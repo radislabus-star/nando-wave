@@ -68,10 +68,43 @@ fn archive_retains_rows_across_restart() {
     let prefix = archive.prefix_root(40).expect("prefix");
     drop(archive);
 
+    let read_only = MultiSourceTopologyArchiveReadSnapshot::read(&root).expect("read only");
+    assert_eq!(read_only.len(), 40);
+    assert_eq!(read_only.prefix_root_sha256(), prefix);
+    assert_eq!(read_only.rows().len(), 40);
+
     let restored = MultiSourceTopologyArchive::open(&root).expect("restore");
     assert_eq!(restored.rows().len(), 40);
     assert_eq!(restored.prefix_root(40).expect("restored prefix"), prefix);
     assert!(restored.rows_after(40).expect("tail").is_empty());
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn read_snapshot_verifies_a_frozen_prefix_and_ignores_later_tail() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-topology-prefix-{}",
+        std::process::id()
+    ));
+    let mut archive = MultiSourceTopologyArchive::open(&root).expect("archive");
+    for index in 0..6 {
+        archive.append(&row(index)).expect("append prefix");
+    }
+    let frozen_root = archive.prefix_root(6).expect("frozen root");
+    for index in 6..10 {
+        archive.append(&row(index)).expect("append tail");
+    }
+    drop(archive);
+
+    let snapshot = MultiSourceTopologyArchiveReadSnapshot::read(&root).expect("snapshot");
+    let frozen = snapshot
+        .verified_prefix(6, &frozen_root)
+        .expect("verified prefix");
+    assert_eq!(frozen.len(), 6);
+    assert_eq!(
+        snapshot.verified_prefix(6, &sha256_bytes(b"forged")),
+        Err("multi_source_topology_archive_prefix_root_mismatch".to_owned())
+    );
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 

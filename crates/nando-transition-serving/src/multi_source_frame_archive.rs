@@ -22,6 +22,82 @@ pub(super) struct MultiSourceFrameArchive {
     payload_bytes: u64,
 }
 
+#[derive(Clone)]
+pub(super) struct MultiSourceFrameArchiveReadSnapshot {
+    frames: Vec<Arc<RelationFrame>>,
+    prefix_root_sha256: String,
+}
+
+impl MultiSourceFrameArchiveReadSnapshot {
+    pub(super) fn read(directory: &Path) -> Result<Self, String> {
+        let frames = read_framed_cbor::<RelationFrame>(directory, LEDGER_PREFIX)?;
+        let mut by_frame = BTreeMap::<String, Arc<RelationFrame>>::new();
+        let mut canonical_roots = BTreeSet::new();
+        let mut append_order = Vec::new();
+        let mut payload_bytes = 0_u64;
+        for frame in frames {
+            validate_frame(&frame)?;
+            let bytes = frame_bytes(&frame)?;
+            match by_frame.get(&frame.frame_id_sha256) {
+                Some(existing) if existing.as_ref() == &frame => continue,
+                Some(_) => return Err("multi_source_frame_archive_rebound".to_owned()),
+                None => {}
+            }
+            payload_bytes = payload_bytes.saturating_add(bytes);
+            if payload_bytes > MAX_ARCHIVE_BYTES || by_frame.len() >= MAX_ARCHIVE_ROWS {
+                return Err("multi_source_frame_archive_budget".to_owned());
+            }
+            let canonical_root = canonical_json_sha256(&frame)
+                .map_err(|error| format!("multi_source_frame_archive_root:{error}"))?;
+            if !canonical_roots.insert(canonical_root) {
+                return Err("multi_source_frame_archive_canonical_root_reused".to_owned());
+            }
+            append_order.push(frame.frame_id_sha256.clone());
+            by_frame.insert(frame.frame_id_sha256.clone(), Arc::new(frame));
+        }
+        let prefix_root_sha256 = frame_prefix_root(&append_order)?;
+        Ok(Self {
+            frames: append_order
+                .iter()
+                .filter_map(|root| by_frame.get(root).cloned())
+                .collect(),
+            prefix_root_sha256,
+        })
+    }
+
+    pub(super) fn frames(&self) -> &[Arc<RelationFrame>] {
+        &self.frames
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.frames.len()
+    }
+
+    pub(super) fn prefix_root_sha256(&self) -> &str {
+        &self.prefix_root_sha256
+    }
+
+    pub(super) fn verified_prefix(
+        &self,
+        rows: u64,
+        expected_root_sha256: &str,
+    ) -> Result<&[Arc<RelationFrame>], String> {
+        let rows = usize::try_from(rows)
+            .map_err(|_| "multi_source_frame_archive_prefix_out_of_range".to_owned())?;
+        if rows > self.frames.len() {
+            return Err("multi_source_frame_archive_prefix_out_of_range".to_owned());
+        }
+        let roots = self.frames[..rows]
+            .iter()
+            .map(|frame| frame.frame_id_sha256.clone())
+            .collect::<Vec<_>>();
+        if frame_prefix_root(&roots)? != expected_root_sha256 {
+            return Err("multi_source_frame_archive_prefix_root_mismatch".to_owned());
+        }
+        Ok(&self.frames[..rows])
+    }
+}
+
 impl MultiSourceFrameArchive {
     pub(super) fn open(directory: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(directory)
@@ -158,6 +234,14 @@ impl MultiSourceFrameArchive {
     pub(super) fn len(&self) -> usize {
         self.by_frame.len()
     }
+}
+
+fn frame_prefix_root(roots: &[String]) -> Result<String, String> {
+    canonical_json_sha256(&(
+        "nando.multi-source-frame-archive-prefix.v1",
+        roots.iter().map(String::as_str).collect::<Vec<_>>(),
+    ))
+    .map_err(|error| format!("multi_source_frame_archive_prefix:{error}"))
 }
 
 pub(crate) fn completed_frame_exists_for_intent(

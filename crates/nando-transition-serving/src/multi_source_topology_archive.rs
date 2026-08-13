@@ -21,6 +21,77 @@ pub(super) struct MultiSourceTopologyArchive {
     payload_bytes: u64,
 }
 
+#[derive(Clone)]
+pub(super) struct MultiSourceTopologyArchiveReadSnapshot {
+    rows: Vec<Arc<PreActionTopologyAuditRowV1>>,
+    prefix_root_sha256: String,
+}
+
+impl MultiSourceTopologyArchiveReadSnapshot {
+    pub(super) fn read(directory: &Path) -> Result<Self, String> {
+        let rows = read_framed_cbor::<PreActionTopologyAuditRowV1>(directory, LEDGER_PREFIX)?;
+        let mut by_commitment = BTreeMap::<String, Arc<PreActionTopologyAuditRowV1>>::new();
+        let mut append_order = Vec::new();
+        let mut payload_bytes = 0_u64;
+        for row in rows {
+            validate_row(&row)?;
+            let bytes = row_bytes(&row)?;
+            let root = row.commit.commitment_root_sha256.clone();
+            match by_commitment.get(&root) {
+                Some(existing) if existing.as_ref() == &row => continue,
+                Some(_) => return Err("multi_source_topology_archive_rebound".to_owned()),
+                None => {}
+            }
+            payload_bytes = payload_bytes.saturating_add(bytes);
+            if payload_bytes > MAX_ARCHIVE_BYTES || by_commitment.len() >= MAX_ARCHIVE_ROWS {
+                return Err("multi_source_topology_archive_budget".to_owned());
+            }
+            append_order.push(root.clone());
+            by_commitment.insert(root, Arc::new(row));
+        }
+        let prefix_root_sha256 = topology_prefix_root(&append_order)?;
+        Ok(Self {
+            rows: append_order
+                .iter()
+                .filter_map(|root| by_commitment.get(root).cloned())
+                .collect(),
+            prefix_root_sha256,
+        })
+    }
+
+    pub(super) fn rows(&self) -> &[Arc<PreActionTopologyAuditRowV1>] {
+        &self.rows
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub(super) fn prefix_root_sha256(&self) -> &str {
+        &self.prefix_root_sha256
+    }
+
+    pub(super) fn verified_prefix(
+        &self,
+        rows: u64,
+        expected_root_sha256: &str,
+    ) -> Result<&[Arc<PreActionTopologyAuditRowV1>], String> {
+        let rows = usize::try_from(rows)
+            .map_err(|_| "multi_source_topology_archive_prefix_out_of_range".to_owned())?;
+        if rows > self.rows.len() {
+            return Err("multi_source_topology_archive_prefix_out_of_range".to_owned());
+        }
+        let roots = self.rows[..rows]
+            .iter()
+            .map(|row| row.commit.commitment_root_sha256.clone())
+            .collect::<Vec<_>>();
+        if topology_prefix_root(&roots)? != expected_root_sha256 {
+            return Err("multi_source_topology_archive_prefix_root_mismatch".to_owned());
+        }
+        Ok(&self.rows[..rows])
+    }
+}
+
 impl MultiSourceTopologyArchive {
     pub(super) fn open(directory: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(directory)
@@ -198,14 +269,7 @@ impl MultiSourceTopologyArchive {
         if rows > self.append_order.len() {
             return Err("multi_source_topology_archive_prefix_out_of_range".to_owned());
         }
-        canonical_json_sha256(&(
-            "nando.multi-source-topology-archive-prefix.v1",
-            self.append_order[..rows]
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-        ))
-        .map_err(|error| format!("multi_source_topology_archive_prefix:{error}"))
+        topology_prefix_root(&self.append_order[..rows])
     }
 
     pub(super) fn rows_after(
@@ -244,6 +308,14 @@ impl MultiSourceTopologyArchive {
             })
             .collect()
     }
+}
+
+fn topology_prefix_root(roots: &[String]) -> Result<String, String> {
+    canonical_json_sha256(&(
+        "nando.multi-source-topology-archive-prefix.v1",
+        roots.iter().map(String::as_str).collect::<Vec<_>>(),
+    ))
+    .map_err(|error| format!("multi_source_topology_archive_prefix:{error}"))
 }
 
 pub(crate) fn read_topology_row_by_root(

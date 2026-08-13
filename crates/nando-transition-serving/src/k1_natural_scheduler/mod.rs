@@ -24,12 +24,13 @@ use nando_operator_learning::multi_source::{
     K1NaturalCohortCandidateV1, K1NaturalCohortCatalogV1, K1ProbeBudgetRemainingV1,
     K1ProbeRoundReceiptV1, K1ProbeRoundStateV1, K1SchedulerEventPayloadV1, K1SchedulerEventV1,
     K1SchedulerLedgerV1, K1TransferSettlementV1, NaturalT1ProgramArtifactV1,
-    PreActionTopologyAuditRowV1, TerminalDiagnosticV1, bind_pre_action_t1_program_to_motif_v1,
-    deterministic_initial_blocker_v1, natural_t1_discovery_basis_root_v1,
-    natural_t1_discovery_basis_root_v2, natural_t1_discovery_basis_root_v3,
-    natural_t1_discovery_basis_root_v4, pre_action_applicability_shape_root_v1,
-    pre_action_t1_binding_root, source_neutral_topology_motifs_v1,
-    source_neutral_topology_quotient_root_v2, source_neutral_topology_root_v1,
+    PreActionTopologyAuditRowV1, TerminalDiagnosticV1, TerminalDispositionV1,
+    bind_pre_action_t1_program_to_motif_v1, deterministic_initial_blocker_v1,
+    natural_t1_discovery_basis_root_v1, natural_t1_discovery_basis_root_v2,
+    natural_t1_discovery_basis_root_v3, natural_t1_discovery_basis_root_v4,
+    pre_action_applicability_shape_root_v1, pre_action_t1_binding_root,
+    source_neutral_topology_motifs_v1, source_neutral_topology_quotient_root_v2,
+    source_neutral_topology_root_v1,
 };
 use nando_response_actor::{
     CollectionOutputRenderer, ResponseOperation, ResponseProgram, ResponseRegistry,
@@ -77,6 +78,10 @@ pub(crate) const K1_PRE_ACTION_EVIDENCE_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-pre-action-evidence-authority-request.v1";
 pub(crate) const K1_FUTURE_OUTCOME_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-future-outcome-authority-request.v1";
+pub(crate) const K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1: &str =
+    "nando.k1-exact-wake-authority-request.v1";
+pub(crate) const K1_EXACT_TERMINAL_AUTHORITY_REQUEST_SCHEMA_V1: &str =
+    "nando.k1-exact-terminal-authority-request.v1";
 const K1_SCHEDULER_AUTHORITY_RESPONSE_SCHEMA_V1: &str = "nando.k1-scheduler-authority-response.v1";
 const K1_SCHEDULER_SIGNED_EVENT_SCHEMA_V1: &str = "nando.k1-scheduler-signed-event.v1";
 const K1_SCHEDULER_ANCHOR_SCHEMA_V1: &str = "nando.k1-scheduler-anchor.v1";
@@ -182,6 +187,21 @@ pub(crate) struct K1FutureOutcomeAuthorityRequestV1 {
     pub frame: nando_operator_kernel::RelationFrame,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub program_evidence: Option<NaturalT1ProgramArtifactV1>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct K1ExactWakeAuthorityRequestV1 {
+    pub schema: String,
+    pub lane: K1SchedulerLaneV1,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct K1ExactTerminalAuthorityRequestV1 {
+    pub schema: String,
+    pub lane: K1SchedulerLaneV1,
+    pub candidate_freeze_root_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -342,6 +362,7 @@ pub(crate) fn append_scheduler_payload_for(
         payload,
         K1SchedulerEventPayloadV1::CandidateFreeze(_)
             | K1SchedulerEventPayloadV1::TransferSettlement(_)
+            | K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(_)
     ) {
         return Err("k1_scheduler_payload_requires_authority_cas".to_owned());
     }
@@ -351,6 +372,20 @@ pub(crate) fn append_scheduler_payload_for(
             schema: K1_SCHEDULER_APPEND_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
             lane,
             payload,
+        },
+    )
+}
+
+pub(crate) fn append_exact_terminal(
+    config: &CertificationAuthorityConfigV1,
+    candidate_freeze_root_sha256: String,
+) -> Result<K1SchedulerProjectionV1, String> {
+    send_authority_request(
+        config,
+        &K1ExactTerminalAuthorityRequestV1 {
+            schema: K1_EXACT_TERMINAL_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane: K1SchedulerLaneV1::Epistemic,
+            candidate_freeze_root_sha256,
         },
     )
 }

@@ -545,12 +545,16 @@ impl K1NaturalCandidateFreezeV1 {
             motif_support_overflow_manifest_root_sha256: candidate
                 .motif_support_overflow_manifest_root_sha256
                 .clone(),
-            candidate_queue_root_sha256: motif_v7
-                .then(|| queue.queue_root_sha256.clone())
-                .unwrap_or_default(),
-            terminal_failure_quotient_root_sha256: motif_v7
-                .then(|| queue.terminal_failure_quotient_root_sha256.clone())
-                .unwrap_or_default(),
+            candidate_queue_root_sha256: if motif_v7 {
+                queue.queue_root_sha256.clone()
+            } else {
+                String::new()
+            },
+            terminal_failure_quotient_root_sha256: if motif_v7 {
+                queue.terminal_failure_quotient_root_sha256.clone()
+            } else {
+                String::new()
+            },
             terminal_failure_family_novelty_rank: if motif_v7 {
                 queued.terminal_failure_family_novelty_rank
             } else {

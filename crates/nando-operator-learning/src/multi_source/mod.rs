@@ -76,7 +76,8 @@ pub use identification::diagnostic::{
     IDENTIFIER_RESULT_SCHEMA_V1, IdentifierResultV1, PROGRAM_DISPOSITION_SCHEMA_V1,
     PROGRAM_DISPOSITION_SET_SCHEMA_V1, ProgramDispositionSetV1, ProgramDispositionV1,
     ProgramRejectionCodeV1, TERMINAL_DIAGNOSTIC_SCHEMA_V1, TerminalDiagnosticV1,
-    deterministic_initial_blocker_v1, evaluate_program_dispositions_v1,
+    TerminalDispositionV1, classify_terminal_disposition_v1, deterministic_initial_blocker_v1,
+    evaluate_program_dispositions_v1,
 };
 pub use identification::{
     FrozenRawPhaseT1ContractV1, MULTI_SOURCE_T1_CANDIDATE_GENERATOR_V2,
@@ -228,7 +229,9 @@ pub use representation_gap::{
     RepresentationGapAdjudicationReportV1, RepresentationGapAdjudicationV1,
     RepresentationGapClassV1, build_representation_gap_adjudication_report_v1,
 };
-pub use source_neutral_t1::{pre_action_t1_binding_root, t1_program_is_consistent};
+pub use source_neutral_t1::{
+    enumerate_source_neutral_t1_candidates, pre_action_t1_binding_root, t1_program_is_consistent,
+};
 pub use source_neutral_t1_binding::pre_action_t1_consumed_role_ids_v1;
 pub use source_neutral_t1_manifest::{
     PreActionT1ConsumedInputV1, PreActionT1InputBindingManifestV1, PreActionT1SelectorOriginV1,

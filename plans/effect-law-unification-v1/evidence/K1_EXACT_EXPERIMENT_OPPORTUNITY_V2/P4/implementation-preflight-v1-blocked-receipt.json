@@ -1,0 +1,260 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "identifier-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification.rs",
+      "sha256": "1f1aaa0d24945e0bf6f3961a5bc10cc67e1431a123f9e5ef97d118d024b02fe6",
+      "size_bytes": 100290
+    },
+    {
+      "exists": true,
+      "id": "natural-artifact-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification/natural_artifacts.rs",
+      "sha256": "8f02f91df30999b6585e00c4e0a97729ed3e6cd084cb6a9027b4980be40a0289",
+      "size_bytes": 3228
+    },
+    {
+      "exists": true,
+      "id": "freeze-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/freeze.rs",
+      "sha256": "9bf7ff7a2d72708e059b5512f1d141cb5912e283cd65a91495afb199bf018e0d",
+      "size_bytes": 50333
+    },
+    {
+      "exists": true,
+      "id": "queue-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/queue.rs",
+      "sha256": "3bc155effc4ffd08f580a75f72f2f67cae8eed1c8fdc41e9ae93061dc2d74447",
+      "size_bytes": 23044
+    },
+    {
+      "exists": true,
+      "id": "scheduler-state-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/state.rs",
+      "sha256": "d2afb2e86d9afea95a56c7c4cbb25cac567beae97bf6277a5cc45618f79dc825",
+      "size_bytes": 29040
+    },
+    {
+      "exists": true,
+      "id": "authority-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "1baa910b7bdc3b035cfd9f74141cd906f875b6f2e886a4d1db9dd27ce0a84071",
+      "size_bytes": 21091
+    },
+    {
+      "exists": true,
+      "id": "selection-authority-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/selection_authority.rs",
+      "sha256": "674b5f8ca6e04fd101bb936abd51b59224bd8b7fb98c69829c6143f4a08da8c7",
+      "size_bytes": 1133
+    },
+    {
+      "exists": true,
+      "id": "motif-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/motif.rs",
+      "sha256": "224157d324019b12dd1c8f733c50d6c1fc746508c1303bff81f77d971ecf7c0b",
+      "size_bytes": 63218
+    },
+    {
+      "exists": true,
+      "id": "runtime-identifier-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs",
+      "sha256": "0725302408026c0bdb9b03416cc48dc13a69d79ce5b9bf6e18f2ad1b2c29f56a",
+      "size_bytes": 29961
+    },
+    {
+      "exists": true,
+      "id": "scheduler-service-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs",
+      "sha256": "0660dd230c62f75b8e560519d2e9da90d743255f4b2a87b13321a86c6639bb76",
+      "size_bytes": 61637
+    },
+    {
+      "exists": true,
+      "id": "collection-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-response-actor/src/online_collection.rs",
+      "sha256": "27f81fd3ad3bf7554bfdb7c73d69866659ff0b8a6ca360768be11eaf0412a9ae",
+      "size_bytes": 15333
+    },
+    {
+      "exists": true,
+      "id": "production-ledger-copy",
+      "kind": "file",
+      "mode": "0640",
+      "path": "/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-ledger-v1.json",
+      "sha256": "00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362",
+      "size_bytes": 2246130
+    },
+    {
+      "exists": true,
+      "id": "production-anchor-copy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-anchor-v1.json",
+      "sha256": "882fb350544622c7f2e616eb5157e442379d7549bc286cbdf58c09fd55e4c197",
+      "size_bytes": 576
+    }
+  ],
+  "blockers": [
+    {
+      "code": "baseline_byte_length_mismatch",
+      "field": "baseline_checks[0]",
+      "message": "expected 99749 bytes, observed 100290"
+    },
+    {
+      "code": "baseline_sha256_mismatch",
+      "field": "baseline_checks[0]",
+      "message": "file SHA-256 differs"
+    },
+    {
+      "code": "baseline_byte_length_mismatch",
+      "field": "baseline_checks[2]",
+      "message": "expected 38643 bytes, observed 50333"
+    },
+    {
+      "code": "baseline_sha256_mismatch",
+      "field": "baseline_checks[2]",
+      "message": "file SHA-256 differs"
+    },
+    {
+      "code": "baseline_byte_length_mismatch",
+      "field": "baseline_checks[3]",
+      "message": "expected 16120 bytes, observed 23044"
+    },
+    {
+      "code": "baseline_sha256_mismatch",
+      "field": "baseline_checks[3]",
+      "message": "file SHA-256 differs"
+    },
+    {
+      "code": "baseline_byte_length_mismatch",
+      "field": "baseline_checks[4]",
+      "message": "expected 26415 bytes, observed 29040"
+    },
+    {
+      "code": "baseline_sha256_mismatch",
+      "field": "baseline_checks[4]",
+      "message": "file SHA-256 differs"
+    },
+    {
+      "code": "baseline_byte_length_mismatch",
+      "field": "baseline_checks[6]",
+      "message": "expected 1714 bytes, observed 1133"
+    },
+    {
+      "code": "baseline_sha256_mismatch",
+      "field": "baseline_checks[6]",
+      "message": "file SHA-256 differs"
+    },
+    {
+      "code": "baseline_byte_length_mismatch",
+      "field": "baseline_checks[7]",
+      "message": "expected 62897 bytes, observed 63218"
+    },
+    {
+      "code": "baseline_sha256_mismatch",
+      "field": "baseline_checks[7]",
+      "message": "file SHA-256 differs"
+    },
+    {
+      "code": "baseline_byte_length_mismatch",
+      "field": "baseline_checks[8]",
+      "message": "expected 29044 bytes, observed 29961"
+    },
+    {
+      "code": "baseline_sha256_mismatch",
+      "field": "baseline_checks[8]",
+      "message": "file SHA-256 differs"
+    },
+    {
+      "code": "source_sha256_mismatch",
+      "field": "source_checks[0].sha256",
+      "message": "reused source SHA-256 differs"
+    }
+  ],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 13,
+    "forbidden_side_effect_kinds": [
+      "coarse_family_suppression",
+      "connector_restart",
+      "generated_traffic",
+      "hot_restart",
+      "law_promotion",
+      "ledger_rewrite",
+      "legacy_terminal_backfill",
+      "manual_program_family_mapping",
+      "nginx_restart",
+      "phase_mutation",
+      "pre_v8_binary_rollback_after_v8_append",
+      "synthetic_fixture",
+      "teacher_output"
+    ],
+    "identity_contracts": 5,
+    "invariants": 8,
+    "planned_side_effect_kinds": [
+      "authority_recomputed_signed_append_only_event",
+      "content_addressed_append_only_write",
+      "observation_only_projection",
+      "pure_bounded_projection",
+      "rollback_capable_compatible_writer_restart",
+      "rollback_capable_reader_only_restart",
+      "signed_append_only_event"
+    ],
+    "preserved_artifacts": 2,
+    "runtime_comparisons": 2,
+    "source_checks": 2,
+    "tests": 19
+  },
+  "manifest_sha256": "94720ad01bee74577ea848ce584b31700737fb86e9f3f6c00ef59a763c9f8c03",
+  "safe_to_implement": false,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "identifier-source-guard",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification.rs",
+      "sha256": "1f1aaa0d24945e0bf6f3961a5bc10cc67e1431a123f9e5ef97d118d024b02fe6",
+      "size_bytes": 100290
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "authority-source-guard",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "1baa910b7bdc3b035cfd9f74141cd906f875b6f2e886a4d1db9dd27ce0a84071",
+      "size_bytes": 21091
+    }
+  ],
+  "task_id": "k1-exact-experiment-opportunity-v1",
+  "verdict": "BLOCKED_BEFORE_CODE"
+}

@@ -34,16 +34,7 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
     let serving = ServingConfig::from_env()?;
-    let config = CertificationAuthorityConfigV1 {
-        root: serving.ms4_closed_loop_path,
-        cleanup_receipts_path: serving.operator_cleanup_receipts_path,
-        anchor_path: serving.operator_certification_anchor_path,
-        authority_socket_path: serving.operator_certification_authority_socket_path,
-        authority_public_key_path: serving.operator_certification_authority_public_key_path,
-        cleanup_public_key_path: serving.operator_cleanup_verifier_public_key_path,
-        response_registry_path: serving.response_registry_path,
-        runtime_revocations_path: serving.runtime_package_revocations_path,
-    };
+    let config = CertificationAuthorityConfigV1::from_serving_config(&serving);
     let private_key_path = std::env::var_os("NANDO_OPERATOR_CERTIFICATION_AUTHORITY_PRIVATE_KEY")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/etc/nando-wave/certification/authority-ed25519.key"));

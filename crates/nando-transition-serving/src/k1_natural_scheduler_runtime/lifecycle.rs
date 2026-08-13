@@ -438,6 +438,28 @@ pub(super) fn advance(
                 .blocker
                 .clone()
                 .unwrap_or_else(|| "identification_did_not_produce_version_space".to_owned());
+            if candidate_freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+                && lane == K1SchedulerLaneV1::Epistemic
+                && nando_operator_learning::multi_source::deterministic_initial_blocker_v1(&blocker)
+            {
+                projection = append_exact_terminal(
+                    certification,
+                    candidate_freeze.freeze_root_sha256.clone(),
+                )?;
+                return runtime_report(
+                    generated_at_unix,
+                    lane,
+                    K1NaturalSchedulerRuntimeStateV1::TerminalAcquisitionFail,
+                    blocker,
+                    projection,
+                    join_report,
+                    catalog,
+                    queue,
+                    Some(base_identification),
+                    frozen_evidence_rows,
+                    future_eligible_rows,
+                );
+            }
             let mut terminal_evidence = vec![
                 candidate_freeze.evidence_manifest_root_sha256.clone(),
                 base_identification.report_root_sha256.clone(),

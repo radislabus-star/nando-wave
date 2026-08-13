@@ -32,6 +32,30 @@ fn checkpoint_allows_only_one_writable_owner() {
 }
 
 #[test]
+fn read_only_checkpoint_exposes_the_exact_durable_byte_root() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-online-collection-byte-root-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let miner = OnlineCollectionMiner::open(&path, legacy_default_config()).expect("miner");
+    miner.persist().expect("persist empty checkpoint");
+    drop(miner);
+    let expected = sha256_bytes(&fs::read(&path).expect("checkpoint bytes"));
+    let snapshot = OnlineCollectionMiner::open_read_only(&path).expect("read only");
+    assert_eq!(
+        snapshot.checkpoint_root_sha256().expect("durable root"),
+        expected
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
 fn oversized_checkpoint_is_rejected_before_decode() {
     let root = std::env::temp_dir().join(format!(
         "nando-online-collection-oversized-{}-{}",

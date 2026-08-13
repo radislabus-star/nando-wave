@@ -1020,6 +1020,7 @@ mod tests {
             cleanup_public_key_path: measurement_path("NANDO_K1_MEASURE_CLEANUP_PUBLIC_KEY"),
             response_registry_path: measurement_path("NANDO_K1_MEASURE_RESPONSE_REGISTRY"),
             runtime_revocations_path: measurement_path("NANDO_K1_MEASURE_REVOCATIONS"),
+            k1_exact_sources: None,
         };
         assert!(!config.authority_socket_path.exists());
 
@@ -1164,6 +1165,7 @@ mod tests {
             cleanup_public_key_path: measurement_path("NANDO_K1_MEASURE_CLEANUP_PUBLIC_KEY"),
             response_registry_path: measurement_path("NANDO_K1_MEASURE_RESPONSE_REGISTRY"),
             runtime_revocations_path: measurement_path("NANDO_K1_MEASURE_REVOCATIONS"),
+            k1_exact_sources: None,
         };
         assert!(!config.authority_socket_path.exists());
         assert!(state_root.to_string_lossy().contains("disposable-proof"));

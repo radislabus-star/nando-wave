@@ -3,8 +3,28 @@ use serde_json::Value;
 use super::*;
 use crate::k1_natural_scheduler::journal::{
     persist_scheduler_anchor, persist_scheduler_event, restore_anchored_scheduler,
-    scheduler_anchor_path, scheduler_genesis_root, scheduler_journal_path,
+    restore_anchored_scheduler_for, scheduler_anchor_path, scheduler_anchor_path_for,
+    scheduler_genesis_root, scheduler_journal_path,
 };
+
+#[test]
+fn fresh_authority_recovery_initializes_both_lane_anchors_without_events() {
+    let (root, config, signing_key) = test_context();
+    recover_authority(&config, &signing_key).expect("fresh recovery");
+
+    for lane in [K1SchedulerLaneV1::Mechanism, K1SchedulerLaneV1::Epistemic] {
+        let ledger = restore_anchored_scheduler_for(&config, lane).expect("anchored empty lane");
+        assert_eq!(ledger.revision, 0);
+        assert!(ledger.latest_event().is_none());
+        assert!(
+            scheduler_anchor_path_for(&config, lane)
+                .expect("anchor path")
+                .is_file()
+        );
+    }
+
+    fs::remove_dir_all(root).expect("cleanup");
+}
 
 #[test]
 fn genesis_anchor_detects_unsigned_first_event_rollback() {

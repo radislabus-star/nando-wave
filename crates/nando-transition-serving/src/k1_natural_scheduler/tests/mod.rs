@@ -7,14 +7,14 @@ use nando_operator_kernel::{
     canonical_json_sha256,
 };
 use nando_operator_learning::multi_source::{
-    IdentifierResourceLimitsV1, IdentifierSupportRowV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1,
-    K1GenerationBudgetV1, K1MotifCandidateSupportV1, K1MotifDispositionSummaryV1,
-    K1NaturalCandidateFreezeV1, K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1,
-    ProgramRejectionCodeV1, TERMINAL_DIAGNOSTIC_SCHEMA_V1, TerminalDiagnosticV1,
-    build_identifier_causal_input_manifest_v1, build_identifier_support_manifest_v1,
-    build_k1_motif_cohort_catalog_v1, build_k1_natural_candidate_queue_v1,
-    build_k1_natural_cohort_catalog_v1, build_relevant_identifier_artifact_projection_v1,
-    source_neutral_topology_motifs_v1,
+    IDENTIFIER_RESULT_SCHEMA_V1, IdentifierResourceLimitsV1, IdentifierResultV1,
+    IdentifierSupportRowV1, K1ConsequenceTypeV1, K1DeficitSnapshotV1, K1GenerationBudgetV1,
+    K1MotifCandidateSupportV1, K1MotifDispositionSummaryV1, K1NaturalCandidateFreezeV1,
+    K1NaturalEvidenceClassV1, K1NaturalEvidenceRowV1, MultiSourceT1IdentificationStateV1,
+    ProgramDispositionSetV1, TerminalDiagnosticV1, build_identifier_causal_input_manifest_v1,
+    build_identifier_support_manifest_v1, build_k1_motif_cohort_catalog_v1,
+    build_k1_natural_candidate_queue_v1, build_k1_natural_cohort_catalog_v1,
+    build_relevant_identifier_artifact_projection_v1, source_neutral_topology_motifs_v1,
 };
 
 use super::journal::encode_hex;
@@ -68,6 +68,7 @@ fn test_context() -> (PathBuf, CertificationAuthorityConfigV1, SigningKey) {
         cleanup_public_key_path: public_key_path,
         response_registry_path: root.join("registry.json"),
         runtime_revocations_path: root.join("revocations.json"),
+        k1_exact_sources: None,
     };
     (root, config, signing_key)
 }
@@ -412,38 +413,40 @@ fn exact_candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV
 }
 
 fn exact_terminal_diagnostic(freeze: &K1NaturalCandidateFreezeV1) -> TerminalDiagnosticV1 {
-    let opportunity_root_sha256 = freeze
+    let causal = freeze
         .identifier_causal_input_manifest
         .as_deref()
-        .expect("causal manifest")
-        .opportunity_root_sha256
-        .clone();
-    let identifier_result_root_sha256 = root(15_000 + freeze.generation_sequence);
-    let rejection_histogram = std::collections::BTreeMap::<ProgramRejectionCodeV1, u64>::new();
-    let terminal_diagnostic_root_sha256 = canonical_json_sha256(&(
-        TERMINAL_DIAGNOSTIC_SCHEMA_V1,
-        opportunity_root_sha256.as_str(),
-        freeze.freeze_root_sha256.as_str(),
-        identifier_result_root_sha256.as_str(),
-        0_u64,
-        0_u64,
-        0_u64,
-        &rejection_histogram,
-        true,
+        .expect("causal manifest");
+    let disposition = ProgramDispositionSetV1::seal(Vec::new()).expect("empty dispositions");
+    let identifier_report_root_sha256 = root(15_000 + freeze.generation_sequence);
+    let identifier_result_root_sha256 = canonical_json_sha256(&(
+        IDENTIFIER_RESULT_SCHEMA_V1,
+        causal.opportunity_root_sha256.as_str(),
+        disposition.accepted_set_root_sha256.as_str(),
+        disposition.disposition_set_root_sha256.as_str(),
+        identifier_report_root_sha256.as_str(),
     ))
-    .expect("diagnostic root");
-    let diagnostic = TerminalDiagnosticV1 {
-        schema: TERMINAL_DIAGNOSTIC_SCHEMA_V1.to_owned(),
-        terminal_diagnostic_root_sha256,
-        opportunity_root_sha256,
-        candidate_freeze_root_sha256: freeze.freeze_root_sha256.clone(),
+    .expect("identifier result root");
+    let result = IdentifierResultV1 {
+        schema: IDENTIFIER_RESULT_SCHEMA_V1.to_owned(),
         identifier_result_root_sha256,
-        seed_count: 0,
-        accepted_count: 0,
-        rejected_count: 0,
-        rejection_histogram,
-        deterministic: true,
+        opportunity_root_sha256: causal.opportunity_root_sha256.clone(),
+        accepted_set_root_sha256: disposition.accepted_set_root_sha256.clone(),
+        disposition_set_root_sha256: disposition.disposition_set_root_sha256.clone(),
+        identifier_report_root_sha256,
     };
-    diagnostic.validate().expect("diagnostic");
-    diagnostic
+    TerminalDiagnosticV1::seal(
+        freeze.freeze_root_sha256.clone(),
+        &result,
+        causal.support_manifest_root_sha256.clone(),
+        causal.support_rows,
+        causal.relevant_artifact_projection_root_sha256.clone(),
+        0,
+        &disposition,
+        &[],
+        MultiSourceT1IdentificationStateV1::NoEligibleCohort,
+        "motif_program_candidates_empty".to_owned(),
+        1_700_000_100,
+    )
+    .expect("diagnostic")
 }

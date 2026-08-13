@@ -1,0 +1,60 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "nodes": [
+    {"id":"terminal_request","role":"interface","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":146,"contains":"fn exact_terminal_authoritative("}},
+    {"id":"archive_restore","role":"producer","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/exact_opportunity.rs","line":426,"contains":"pub(crate) fn restore_exact_identifier_inputs_v1("}},
+    {"id":"shared_evaluator","role":"evidence_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/exact_opportunity.rs","line":548,"contains":"pub(crate) fn evaluate_exact_initial_identifier_v1("}},
+    {"id":"terminal_authorizer","role":"authorization_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":251,"contains":"pub(super) fn complete_exact_terminal_transaction("}},
+    {"id":"signed_journal","role":"mutation_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":935,"contains":"pub(super) fn append_and_persist("}},
+    {"id":"restart_recovery","role":"orchestrator","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":628,"contains":"pub(crate) fn recover_authority("}},
+    {"id":"attempt_projection","role":"producer","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs","line":170,"contains":"pub(super) fn exact_attempt_index_for("}},
+    {"id":"crash_parity_test","role":"proof_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","line":237,"contains":"fn diagnostic_crash_retry_appends_only_one_matching_verdict()"}}
+  ],
+  "edges": [
+    {"id":"exec-request-restore","from":"terminal_request","relation":"calls","to":"archive_restore","events":["terminal_authorization"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":183,"contains":"restore_exact_identifier_inputs_v1(config, &freeze)"}},
+    {"id":"exec-restore-evaluate","from":"archive_restore","relation":"delegates","to":"shared_evaluator","events":["terminal_authorization"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":184,"contains":"evaluate_exact_initial_identifier_v1("}},
+    {"id":"auth-evaluate-authorize","from":"shared_evaluator","relation":"passes_to","to":"terminal_authorizer","events":["terminal_authorization"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":238,"contains":"complete_exact_terminal_transaction("}},
+    {"id":"auth-authorize-journal","from":"terminal_authorizer","relation":"authorizes","to":"signed_journal","events":["terminal_authorization"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":314,"contains":"append_and_persist("}},
+    {"id":"exec-restart-project","from":"restart_recovery","relation":"calls","to":"attempt_projection","events":["restart_recovery"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","line":410,"contains":"exact_attempt_index_for(&restored)"}},
+    {"id":"proof-projection","from":"attempt_projection","relation":"proves","to":"crash_parity_test","events":["restart_recovery"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","line":347,"contains":"fn lagging_anchor_after_verdict_recovers_one_exact_attempt()"}}
+  ],
+  "routes": [
+    {
+      "id":"terminal-execution",
+      "event":"terminal_authorization",
+      "kind":"execution",
+      "entry":"terminal_request",
+      "terminal":"shared_evaluator",
+      "required_roles":["interface","producer","evidence_owner"],
+      "path_cardinality":[{"from":"terminal_request","to":"shared_evaluator","min":1,"max":1}]
+    },
+    {
+      "id":"terminal-authority",
+      "event":"terminal_authorization",
+      "kind":"authority",
+      "entry":"shared_evaluator",
+      "terminal":"signed_journal",
+      "required_roles":["evidence_owner","authorization_owner","mutation_owner"],
+      "path_cardinality":[{"from":"shared_evaluator","to":"signed_journal","min":1,"max":1}]
+    },
+    {
+      "id":"restart-execution",
+      "event":"restart_recovery",
+      "kind":"execution",
+      "entry":"restart_recovery",
+      "terminal":"attempt_projection",
+      "required_roles":["orchestrator","producer"],
+      "path_cardinality":[{"from":"restart_recovery","to":"attempt_projection","min":1,"max":1}]
+    },
+    {
+      "id":"restart-proof",
+      "event":"restart_recovery",
+      "kind":"proof",
+      "entry":"attempt_projection",
+      "terminal":"crash_parity_test",
+      "required_roles":["producer","proof_owner"]
+    }
+  ]
+}

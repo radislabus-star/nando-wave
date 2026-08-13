@@ -39,11 +39,49 @@ fn archive_retains_more_than_one_signature_reservoir_and_restarts() {
             .expect("append");
     }
     assert_eq!(archive.len(), 40);
+    let expected_prefix = frame_prefix_root(&archive.append_order).expect("prefix");
     drop(archive);
+
+    let read_only = MultiSourceFrameArchiveReadSnapshot::read(&root).expect("read only");
+    assert_eq!(read_only.len(), 40);
+    assert_eq!(read_only.prefix_root_sha256(), expected_prefix);
+    assert_eq!(read_only.frames().len(), 40);
 
     let restored = MultiSourceFrameArchive::open(&root).expect("restore");
     let intents = BTreeSet::from([sha256_bytes(b"same-intent")]);
     assert_eq!(restored.frames_for_intents(&intents).len(), 40);
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn read_snapshot_verifies_a_frozen_prefix_and_ignores_later_tail() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-multi-source-frame-prefix-{}",
+        std::process::id()
+    ));
+    let mut archive = MultiSourceFrameArchive::open(&root).expect("archive");
+    for index in 0..6 {
+        archive
+            .append(&frame(index, "intent"))
+            .expect("append prefix");
+    }
+    let frozen_root = frame_prefix_root(&archive.append_order[..6]).expect("frozen root");
+    for index in 6..10 {
+        archive
+            .append(&frame(index, "intent"))
+            .expect("append tail");
+    }
+    drop(archive);
+
+    let snapshot = MultiSourceFrameArchiveReadSnapshot::read(&root).expect("snapshot");
+    let frozen = snapshot
+        .verified_prefix(6, &frozen_root)
+        .expect("verified prefix");
+    assert_eq!(frozen.len(), 6);
+    assert_eq!(
+        snapshot.verified_prefix(6, &sha256_bytes(b"forged")),
+        Err("multi_source_frame_archive_prefix_root_mismatch".to_owned())
+    );
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 

@@ -300,6 +300,7 @@ pub struct OnlineCollectionMiner {
 
 pub struct OnlineCollectionReadSnapshot {
     miner: OnlineCollectionMiner,
+    checkpoint_root_sha256: Option<String>,
 }
 
 impl OnlineCollectionMiner {
@@ -318,11 +319,18 @@ impl OnlineCollectionMiner {
                 checkpoint: self.checkpoint.clone(),
                 _owner_lock: None,
             },
+            checkpoint_root_sha256: None,
         }
     }
 }
 
 impl OnlineCollectionReadSnapshot {
+    pub fn checkpoint_root_sha256(&self) -> Result<&str, String> {
+        self.checkpoint_root_sha256
+            .as_deref()
+            .ok_or_else(|| "online_collection_snapshot_not_durable".to_owned())
+    }
+
     #[must_use]
     pub fn status(&self) -> OnlineCollectionStatus {
         self.miner.status()

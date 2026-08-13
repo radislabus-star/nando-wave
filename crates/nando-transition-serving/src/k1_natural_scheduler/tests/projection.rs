@@ -10,6 +10,8 @@ fn acquisition_fail(
     let mut evidence = vec![freeze.freeze_root_sha256.clone()];
     if let Some(diagnostic) = diagnostic {
         evidence.push(diagnostic.terminal_diagnostic_root_sha256.clone());
+        evidence.push(diagnostic.identifier_report_root_sha256.clone());
+        evidence.push(diagnostic.identifier_result_root_sha256.clone());
     }
     K1GenerationTerminalVerdictV1::seal(
         freeze.freeze_root_sha256.clone(),
@@ -18,7 +20,7 @@ fn acquisition_fail(
         evidence,
         K1GenerationVerdictClassV1::AcquisitionFail,
         "motif_program_candidates_empty".to_owned(),
-        1_700_000_100,
+        diagnostic.map_or(1_700_000_100, |value| value.terminal_at_unix),
         None,
     )
     .expect("terminal verdict")
@@ -108,6 +110,43 @@ fn forged_or_unbound_terminal_verdict_is_rejected() {
     assert_eq!(
         ledger.append(K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(
             acquisition_fail(&freeze, None),
+        ))),
+        Err("k1_scheduler_exact_terminal_verdict_mismatch")
+    );
+}
+
+#[test]
+fn exact_verdict_missing_identifier_result_root_is_rejected() {
+    let freeze = exact_candidate_freeze(1);
+    let diagnostic = exact_terminal_diagnostic(&freeze);
+    let incomplete = K1GenerationTerminalVerdictV1::seal(
+        freeze.freeze_root_sha256.clone(),
+        None,
+        Vec::new(),
+        vec![
+            freeze.freeze_root_sha256.clone(),
+            diagnostic.terminal_diagnostic_root_sha256.clone(),
+            diagnostic.identifier_report_root_sha256.clone(),
+        ],
+        K1GenerationVerdictClassV1::AcquisitionFail,
+        diagnostic.exact_result_blocker.clone(),
+        diagnostic.terminal_at_unix,
+        None,
+    )
+    .expect("incomplete terminal verdict");
+    let mut ledger = K1SchedulerLedgerV1::empty().expect("ledger");
+    ledger
+        .append(K1SchedulerEventPayloadV1::CandidateFreeze(freeze))
+        .expect("freeze");
+    ledger
+        .append(K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(
+            Box::new(diagnostic),
+        ))
+        .expect("diagnostic");
+
+    assert_eq!(
+        ledger.append(K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(
+            incomplete,
         ))),
         Err("k1_scheduler_exact_terminal_verdict_mismatch")
     );
