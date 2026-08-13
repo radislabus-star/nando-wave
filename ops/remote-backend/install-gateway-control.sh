@@ -108,7 +108,7 @@ projection_is_exact() {
     curl --config - --fail --silent --show-error --max-time 2 |
     jq -e '
       .available == true and
-      .dashboard_build == "2026.08.13-control-v19" and
+      .dashboard_build == "2026.08.13-control-v20" and
       .s1c3_operational.stage == "S1C-3H" and
       .s1c3_operational.verdict == "S1C3H_DEPLOYMENT_PASS" and
       .s1c3_operational.capture_installed == true and

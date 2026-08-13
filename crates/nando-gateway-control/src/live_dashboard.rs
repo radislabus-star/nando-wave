@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.13-control-v19";
+const DASHBOARD_BUILD: &str = "2026.08.13-control-v20";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -205,6 +205,14 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
             &format_number(initial.epoch_avoided_calls),
         )
         .replace(
+            "__EPOCH_UPSTREAM__",
+            &format_number(
+                initial
+                    .epoch_total_events
+                    .saturating_sub(initial.epoch_avoided_calls),
+            ),
+        )
+        .replace(
             "__LIFETIME_TOTAL__",
             &format_number(initial.server_total_tokens),
         )
@@ -284,443 +292,7 @@ fn format_percent(numerator: u64, denominator: u64, decimals: usize) -> String {
     format!("{percent:.decimals$}%").replace('.', ",")
 }
 
-const TEMPLATE: &str = r#"
-<style>
-.nando-live {
-  --bg:#0d1012;
-  --line:#30363a;
-  --text:#edf0f1;
-  --muted:#90999e;
-  --green:#72c98a;
-  --amber:#c9a75c;
-  --red:#df746e;
-  width:100%; max-width:none; min-height:100vh; margin:0; padding:0;
-  background:var(--bg); color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:0;
-}
-.nando-live * { box-sizing:border-box; letter-spacing:0; }
-.nd-inner { width:min(1040px,100%); margin:0 auto; padding:24px 28px; }
-.nd-head { border-bottom:1px solid var(--line); background:#090b0c; }
-.nd-head .nd-inner { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:64px; padding-top:14px; padding-bottom:14px; }
-.nd-brand { display:flex; align-items:baseline; gap:10px; min-width:0; }
-.nd-brand strong { color:#fff; font-size:21px; font-weight:760; }
-.nd-brand span { color:var(--muted); font-size:12px; font-weight:600; }
-.nd-live { color:var(--muted); font-size:12px; font-weight:600; text-align:right; }
-.nd-live b { color:var(--green); }
-.nd-status { color:var(--amber); font-weight:700; }
-.nd-status.good { color:var(--green); }
-.nd-status.bad { color:var(--red); }
-.nd-foot .nd-inner { display:flex; justify-content:space-between; gap:20px; padding-top:12px; padding-bottom:12px; color:#667075; font-size:9px; }
-.safety-line { display:flex; flex-wrap:wrap; gap:6px 22px; color:#7f898e; font-size:10px; }
-.safety-line b { color:#bfc6c9; font-weight:680; }
-/* control-v7 is a single operator ledger: no staged flow or dashboard cards. */
-.control-v6 .nd-inner { width:min(1080px,100%); margin:0 auto; padding-left:28px; padding-right:28px; }
-.control-v6 .nd-head .nd-inner { min-height:58px; padding-top:0; padding-bottom:0; }
-.control-v6 .nd-brand strong { font-size:19px; }
-.control-v6 .nd-brand span,.control-v6 .nd-live { font-size:11px; }
-.control-v6 .nd-main { padding-top:34px; padding-bottom:38px; }
-.control-v6 .section-head { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:14px; }
-.control-v6 .section-head h1 { margin:0; color:#f4f6f7; font-size:20px; font-weight:730; line-height:1.25; }
-.control-v6 .section-head p { margin:0; color:var(--muted); font-size:11px; line-height:1.45; text-align:right; }
-.control-v6 .ledger { border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.control-v6 .ledger-row { display:grid; grid-template-columns:minmax(220px,1.25fr) repeat(3,minmax(150px,1fr)); gap:20px; align-items:center; min-height:92px; border-bottom:1px solid var(--line); }
-.control-v6 .ledger-row:last-child { border-bottom:0; }
-.control-v6 .ledger-head { min-height:32px; color:var(--muted); font-size:10px; font-weight:700; }
-.control-v6 .ledger-title,.control-v6 .ledger-cell { min-width:0; }
-.control-v6 .ledger-title strong { display:block; color:#e3e7e9; font-size:14px; font-weight:720; }
-.control-v6 .ledger-title span { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.4; }
-.control-v6 .ledger-cell strong { display:block; color:#f2f4f5; font-size:22px; font-weight:720; line-height:1.15; overflow-wrap:anywhere; }
-.control-v6 .ledger-cell strong.good,.control-v6 .ledger-share strong { color:var(--green); }
-.control-v6 .ledger-cell span { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.35; }
-.control-v6 .ledger-cell span b { color:#cbd1d4; font-weight:680; }
-.control-v6 .live-window { display:flex; flex-wrap:wrap; gap:6px 22px; padding:12px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; line-height:1.45; }
-.control-v6 .live-window strong { color:#e5e9eb; font-weight:700; }
-.control-v6 .law { margin-top:34px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-.control-v6 .law-head { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:64px; border-bottom:1px solid var(--line); }
-.control-v6 .law-title { display:flex; align-items:baseline; gap:12px; min-width:0; }
-.control-v6 .law-title h2 { margin:0; color:#f4f6f7; font-size:18px; font-weight:730; }
-.control-v6 .law-title span { color:var(--muted); font-size:11px; }
-.control-v6 .law-verdict { color:var(--amber); font-size:13px; font-weight:760; line-height:1.25; text-align:right; }
-.control-v6 .law-verdict.good { color:var(--green); }
-.control-v6 .law-verdict.bad { color:var(--red); }
-.control-v6 .law-body { padding:18px 0 20px; }
-.control-v6 .operational-boundary { border-bottom:1px solid var(--line); }
-.control-v6 .law-counts { display:flex; flex-wrap:wrap; gap:7px 24px; margin:0; color:#c9cfd2; font-size:12px; line-height:1.5; }
-.control-v6 .law-counts span { white-space:nowrap; }
-.control-v6 .law-counts b { color:#f0f3f4; font-size:15px; font-weight:720; }
-.control-v6 .vocabulary-slots { padding-bottom:16px; border-bottom:1px solid var(--line); }
-.control-v6 .discovery-label { margin:16px 0 8px; color:#e5e9eb; font-size:12px; font-weight:720; }
-.control-v6 .law-blocker { margin:14px 0 0; color:#b7bec1; font-size:12px; line-height:1.55; }
-.control-v6 .law-blocker span,.control-v6 .law-next { color:var(--muted); }
-.control-v6 .law-blocker b { color:#e4e8ea; font-weight:680; }
-.control-v6 .law-next { margin:7px 0 0; font-size:11px; line-height:1.5; }
-.control-v6 .law-next b { color:#cbd1d4; font-weight:650; }
-.control-v6 .nd-foot { border-top:1px solid var(--line); }
-.control-v6 .nd-foot .nd-inner { padding-top:12px; padding-bottom:12px; }
-@media (max-width:760px) {
-  .control-v6 .nd-inner { padding-left:16px; padding-right:16px; }
-  .control-v6 .nd-head .nd-inner { align-items:flex-start; flex-direction:column; justify-content:center; gap:4px; min-height:68px; }
-  .control-v6 .nd-live { text-align:left; }
-  .control-v6 .nd-main { padding-top:24px; padding-bottom:28px; }
-  .control-v6 .section-head { align-items:flex-start; flex-direction:column; gap:5px; }
-  .control-v6 .section-head p { text-align:left; }
-  .control-v6 .ledger-head { display:none; }
-  .control-v6 .ledger-row { grid-template-columns:1fr; gap:12px; min-height:0; padding:18px 0; }
-  .control-v6 .ledger-cell { display:grid; grid-template-columns:112px minmax(0,1fr); align-items:baseline; gap:12px; }
-  .control-v6 .ledger-cell::before { content:attr(data-label); color:var(--muted); font-size:10px; font-weight:700; }
-  .control-v6 .ledger-cell strong { font-size:20px; }
-  .control-v6 .ledger-cell span { grid-column:2; margin-top:-7px; }
-  .control-v6 .law-head { align-items:flex-start; padding:15px 0; }
-  .control-v6 .law-title { align-items:flex-start; flex-direction:column; gap:3px; }
-  .control-v6 .law-verdict { max-width:44%; }
-  .control-v6 .law-counts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 14px; }
-  .control-v6 .law-counts span { white-space:normal; }
-}
-</style>
-<main class="nando-live control-v6" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live control">
-  <header class="nd-head"><div class="nd-inner">
-    <div class="nd-brand"><strong>NANDO LIVE</strong><span>факты, не прогнозы</span></div>
-    <div class="nd-live"><b>LIVE</b> · снимок <span id="snapshot-age">0</span> с · источник <span id="source-age">—</span> с · сервисы <span id="services">—/3</span></div>
-  </div></header>
-
-  <div class="nd-inner nd-main">
-    <section aria-labelledby="traffic-title">
-      <div class="section-head">
-        <h1 id="traffic-title">Трафик и CPU</h1>
-        <p>Каждая доля считается только внутри своей строки.</p>
-      </div>
-      <div class="ledger" role="table" aria-label="Фактический трафик и результат">
-        <div class="ledger-row ledger-head" role="row">
-          <span role="columnheader">Контур</span><span role="columnheader">Вход</span><span role="columnheader">Результат</span><span role="columnheader">Доля</span>
-        </div>
-        <div class="ledger-row" role="row">
-          <div class="ledger-title" role="rowheader"><strong>Весь ingress сервера</strong><span>все ordinary-запросы, дошедшие до gateway</span></div>
-          <div class="ledger-cell" data-label="Токены" role="cell"><strong id="ingress-total">__MINER_SEEN__</strong><span>входных токенов</span></div>
-          <div class="ledger-cell" data-label="Запросы" role="cell"><strong id="ingress-requests">__MINER_SEEN_INTENTS__</strong><span>ordinary-запросов</span></div>
-          <div class="ledger-cell ledger-share" data-label="Граница" role="cell"><strong id="ingress-since">С WATERMARK</strong><span>непрерывный счётчик · до watermark: <b class="nd-status bad">UNKNOWN</b></span></div>
-        </div>
-        <div class="ledger-row" role="row">
-          <div class="ledger-title" role="rowheader"><strong>Распознавание майнера</strong><span id="miner-window-start">тот же ingress watermark</span></div>
-          <div class="ledger-cell" data-label="Увидел" role="cell"><strong id="miner-seen">__MINER_SEEN__</strong><span><b id="miner-seen-intents">__MINER_SEEN_INTENTS__</b> запросов</span></div>
-          <div class="ledger-cell" data-label="Распознал" role="cell"><strong id="miner-recognized" class="good">__MINER_RECOGNIZED__</strong><span><b id="miner-recognized-intents">__MINER_RECOGNIZED_INTENTS__</b> запросов</span></div>
-          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="miner-share">__MINER_RECOGNIZED_SHARE__</strong><span>распознано / весь измеряемый ingress</span></div>
-        </div>
-        <div class="ledger-row" role="row">
-          <div class="ledger-title" role="rowheader"><strong>CPU savings · текущая V4-эпоха</strong><span>только запросы текущего accounting epoch</span></div>
-          <div class="ledger-cell" data-label="Вход" role="cell"><strong id="epoch-total">__EPOCH_TOTAL__</strong><span><b id="epoch-requests">__EPOCH_REQUESTS__</b> учтённых запросов</span></div>
-          <div class="ledger-cell" data-label="CPU" role="cell"><strong id="epoch-cpu" class="good">__EPOCH_CPU__</strong><span><b id="epoch-accepts">__EPOCH_ACCEPTS__</b> CPU accepts · <b id="epoch-avoided">__EPOCH_AVOIDED__</b> upstream не вызван</span></div>
-          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="epoch-share">__EPOCH_SHARE__</strong><span>CPU / текущая V4-эпоха · допуск <b id="cpu-gate" class="nd-status __CPU_GATE_TONE__">__CPU_GATE__</b></span></div>
-        </div>
-        <div class="ledger-row" role="row">
-          <div class="ledger-title" role="rowheader"><strong>CPU economics · вся история</strong><span>отдельный учётный знаменатель · это не весь ingress</span></div>
-          <div class="ledger-cell" data-label="Учтено" role="cell"><strong id="economics-total">__LIFETIME_TOTAL__</strong><span>токенов в accounting partitions</span></div>
-          <div class="ledger-cell" data-label="CPU" role="cell"><strong id="economics-cpu" class="good">__LIFETIME_CPU__</strong><span>воспроизведено на CPU</span></div>
-          <div class="ledger-cell ledger-share" data-label="Доля" role="cell"><strong id="economics-share">__LIFETIME_SHARE__</strong><span>CPU / вся учтённая история</span></div>
-        </div>
-      </div>
-      <div class="live-window" aria-label="Изменения с момента открытия страницы">
-        <strong>С момента открытия страницы</strong>
-        <span>ingress: <b id="live-ingress-tokens">+0</b> токенов · <b id="live-ingress-requests">+0</b> запросов</span>
-        <span>CPU: <b id="live-cpu-tokens">+0</b> токенов · <b id="live-cpu-accepts">+0</b> accepts</span>
-        <span>upstream не вызван: <b id="live-avoided">+0</b></span>
-      </div>
-    </section>
-
-    <section class="law" aria-labelledby="k1-title">
-      <div class="law-head">
-        <div class="law-title"><h2 id="k1-title">K1 · операционные законы</h2><span>минимальный базис · источник <b id="k1-source">—</b></span></div>
-        <strong id="k1-progress" class="law-verdict">ЗАГРУЗКА</strong>
-      </div>
-      <div class="law-body">
-        <p class="law-counts vocabulary-slots">
-          <span>Law #1 <b id="law1-state">—</b></span>
-          <span>Law #2 <b id="law2-state">—</b></span>
-          <span>Law #3 <b id="law3-state">—</b></span>
-        </p>
-        <p class="discovery-label">Поиск Law #2</p>
-        <p class="law-counts">
-          <span>live-когорт <b id="catalog-cohorts">—</b></span>
-          <span>readiness-PASS сейчас <b id="ready-now">—</b></span>
-          <span>terminal generations <b id="generations-checked">—</b></span>
-          <span id="generation-label">следующая generation <b id="next-generation">—</b></span>
-        </p>
-        <p class="law-blocker"><span>Discovery сейчас:</span> <b id="discovery-state">—</b>. <span>Текущий blocker:</span> <b id="current-blocker">—</b>.</p>
-        <p class="law-blocker"><span>Последний terminal:</span> <b id="latest-verdict">—</b> · <b id="latest-verdict-blocker">—</b>.</p>
-        <p class="law-next"><b>Law #2 появится только после:</b> unique semantic class → independent post-freeze future → BundleV4 → verified ordinary CPU → exact economics → cleanup → LawCertificate.</p>
-      </div>
-    </section>
-
-    <section class="law" aria-labelledby="k2-title">
-      <div class="law-head">
-        <div class="law-title"><h2 id="k2-title">K2 · grounded decision meaning</h2><span>S1A transitions → S1B census → S1C natural decisions</span></div>
-        <strong id="decision-status" class="law-verdict">ЗАГРУЗКА</strong>
-      </div>
-        <div class="law-body operational-boundary" aria-label="S1C-4 natural census">
-        <p class="discovery-label"><b>S1C-4</b> · конечный natural census · K2 CLOSED</p>
-        <p class="law-counts vocabulary-slots">
-          <span>окно <b id="s1c4-state">—</b></span>
-          <span>классифицировано <b id="s1c4-classified">—</b></span>
-          <span>цель до action <b id="s1c4-goals">—</b></span>
-          <span>K1-варианты <b id="s1c4-alternatives">—</b></span>
-          <span>verified satisfaction <b id="s1c4-satisfied">—</b></span>
-          <span>lineages <b id="s1c4-lineages">—</b></span>
-        </p>
-        <p class="law-blocker"><span>Verdict:</span> <b id="s1c4-verdict">—</b>. <span>Blocker:</span> <b id="s1c-blocker">—</b>.</p>
-      </div>
-      <div class="law-body">
-        <p class="law-counts vocabulary-slots">
-          <span>durable CPU completions <b id="decision-scanned">—</b></span>
-          <span>S1A transitions <b id="decision-projected">—</b></span>
-          <span>transition lineages <b id="transition-lineages">—</b></span>
-          <span>censored <b id="decision-censored">—</b></span>
-        </p>
-        <p class="law-blocker"><span>Transition censors:</span> <b id="transition-censors">—</b>.</p>
-        <p class="discovery-label">Условия настоящего решения</p>
-        <p class="law-counts">
-          <span>goal до action <b id="decision-goals">—</b></span>
-          <span>K1 alternatives <b id="decision-alternatives">—</b></span>
-          <span>frozen horizon <b id="decision-horizons">—</b></span>
-          <span>verified satisfaction <b id="decision-satisfaction">—</b></span>
-          <span>decision episodes <b id="decision-episodes">—</b></span>
-        </p>
-        <p class="law-blocker"><span>Научная граница:</span> <b id="decision-stage">—</b>. <span>Blocker:</span> <b id="decision-blocker">—</b>.</p>
-        <p class="law-next">Переход показывает динамику. Смысл начинается только там, где цель зафиксирована до действия, существует проверяемая альтернатива и исход независимо подтверждает достижение цели.</p>
-      </div>
-    </section>
-  </div>
-
-  <footer class="nd-foot"><div class="nd-inner"><div class="safety-line"><span>false accepts <b id="false-accepts">—</b></span><span>parity failures <b id="parity-failures">—</b></span><span>transport failures cumulative <b id="transport-failures">—</b></span><span>pending structural/opportunity <b id="pending-work">—</b></span></div><span>build __DASHBOARD_BUILD__</span></div></footer>
-</main>
-<script>
-(() => {
-  const base = window.location.pathname.replace(/\/legacy$/, "").replace(/\/$/, "");
-  const expectedBuild = document.querySelector(".nando-live")?.dataset.dashboardBuild || "";
-  const number = new Intl.NumberFormat("ru-RU");
-  let lastSuccess = Date.now();
-  let sourceGeneratedAt = 0;
-  let refreshing = false;
-  let liveBaseline = null;
-  const node = id => document.getElementById(id);
-  const text = (id, value) => { const target = node(id); if (target) target.textContent = value; };
-  const className = (id, value) => { const target = node(id); if (target) target.className = value; };
-  const percent = (part, total, digits = 2) => total > 0 ? `${(part * 100 / total).toFixed(digits).replace(".", ",")}%` : `0,${"0".repeat(digits)}%`;
-  const localTime = unix => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short", timeStyle:"medium"}) : "—";
-  const readable = value => ({
-    waiting_for_evidence:"WAITING FOR EVIDENCE",
-    candidate_frozen:"CANDIDATE FROZEN",
-    identifying:"IDENTIFYING",
-    future_pending:"FUTURE PENDING",
-    no_readiness_pass_candidate:"нет readiness-PASS кандидата",
-    settled_evidence_below_freeze_minimum:"мало завершённых наблюдений",
-    verified_evidence_below_freeze_minimum:"мало независимо проверенных наблюдений",
-    independent_lineages_below_freeze_minimum:"мало независимых lineage",
-    selected_role_witness_missing:"capture не сохранил типизированную роль",
-    all_supported_t1_protocol_modes_already_active:"кандидат дублирует уже активный T1 protocol mode",
-    durable_future_prediction_pending_outcome:"prediction записана, ожидается настоящий outcome",
-    independent_post_identification_future_pending:"ожидается independent future после identification",
-    independent_future_not_observed:"independent future не появился в bounded window",
-    generation_deadline_exhausted:"bounded window завершён без доказательства",
-    acquisition_fail:"ACQUISITION FAIL",
-    probe_pending:"PROBE PENDING",
-    probe_exhausted:"PROBE EXHAUSTED",
-    abstain:"ABSTAIN",
-    pass:"PASS",
-    live_ms4_projection:"LIVE MS4",
-    durable_operator_certification_ledger:"DURABLE LEDGER",
-    missing_pre_action_topology:"нет pre-action topology",
-    ambiguous_pre_action_topology:"неоднозначная pre-action topology",
-    missing_transport_binding:"нет transport binding",
-    ambiguous_transport_binding:"неоднозначный transport binding",
-    missing_certified_k1_binding:"нет certified K1 binding",
-    missing_verified_outcome:"нет verified outcome",
-    identity_mismatch:"identity mismatch",
-    invalid_source_receipt:"invalid source receipt",
-    provenance_failure:"provenance failure",
-    capacity_exhausted:"capacity exhausted",
-    missing_pre_action_goal:"нет pre-action goal receipt",
-    grounded_decision_census_missing_or_invalid:"decision census отсутствует или невалиден",
-    s1c4_natural_census_missing_or_invalid:"новое natural-окно ещё не открыто или report невалиден",
-    finite_natural_window_open:"идёт конечное окно обычного трафика",
-    awaiting_durable_classification_quiescence:"окно закрыто, ждём durable writer не более 60 секунд",
-    no_pre_action_exact_goal_in_frozen_window:"в замороженном окне нет точной цели до action",
-    no_applicable_certified_k1_alternative_in_frozen_window:"цели есть, но нет доступного certified K1-варианта",
-    fewer_than_two_independent_decision_lineages:"меньше двух независимых decision lineage",
-    natural_grounded_decision_surface_observed:"полная natural decision surface подтверждена",
-    evidence_integrity_veto:"потеря, mismatch или safety failure делают измерение неинтерпретируемым",
-    heterogeneous_unresolved_surface:"смешанная неполная поверхность не допускает вывода",
-    NOT_OPEN:"NOT OPEN",
-    QUIESCING:"QUIESCING",
-    TERMINAL:"TERMINAL",
-    EMPTY_GOAL_SURFACE:"EMPTY GOAL SURFACE",
-    EMPTY_ALTERNATIVE_SURFACE:"EMPTY ALTERNATIVE SURFACE",
-    INSUFFICIENT_LINEAGES:"INSUFFICIENT LINEAGES",
-    EMPTY_DECISION_SURFACE:"EMPTY DECISION SURFACE",
-    DECISION_SURFACE_LINEAGE_BLOCKED:"DECISION LINEAGE BLOCKED",
-    READY_FOR_BASELINES:"READY FOR BASELINES",
-    REPORT_UNAVAILABLE:"REPORT UNAVAILABLE",
-    S1C3G_ROLLBACK_PASS:"ROLLBACK PASS",
-    S1C3H_DEPLOYMENT_PASS:"DEPLOYMENT PASS",
-    ROLLBACK_SEALED:"ROLLBACK SEALED",
-    INSTALLATION_VERIFIED:"INSTALLATION VERIFIED",
-    RECORDER_ACTIVE:"RECORDER ACTIVE",
-    COLLECTING:"COLLECTING",
-    awaiting_natural_decision_evidence:"ждём естественные решения после установки",
-    post_install_stable_route_projection_mismatch_before_survival:"stable route projection mismatch до survival",
-    response_authority_runtime_build_mismatch:"runtime build mismatch при старте",
-    PROXIMATE_ONLY_NOT_PROVED_CAUSE:"сопутствующая диагностика, причина не доказана",
-    unavailable:"UNKNOWN",
-  }[value] || String(value || "—").replaceAll("_", " "));
-
-  const renderDashboard = snapshot => {
-    if (!snapshot?.available) return;
-    if (snapshot.dashboard_build && snapshot.dashboard_build !== expectedBuild) {
-      window.location.reload();
-      return;
-    }
-    const ingress = snapshot.ingress || {};
-    const epoch = snapshot.product?.current_epoch || {};
-    const lifetime = snapshot.product?.lifetime || {};
-    const miner = snapshot.miner || {};
-    const discovery = snapshot.discovery || {};
-    const safety = snapshot.safety || {};
-    const k1 = snapshot.k1 || {};
-    const decision = snapshot.k2_decision_evidence || {};
-    const s1c4 = snapshot.s1c4_natural_census || {};
-    const s1c = snapshot.s1c3_operational || {};
-    sourceGeneratedAt = snapshot.generated_at_unix || 0;
-
-    text("ingress-total", number.format(ingress.input_tokens || 0));
-    text("ingress-requests", number.format(ingress.requests || 0));
-    text("ingress-since", ingress.started_at_unix > 0 ? `С ${localTime(ingress.started_at_unix)}` : "WATERMARK UNKNOWN");
-    text("economics-total", number.format(lifetime.input_tokens || 0));
-    text("economics-cpu", number.format(lifetime.cpu_tokens || 0));
-    text("economics-share", percent(lifetime.cpu_tokens || 0, lifetime.input_tokens || 0));
-    text("epoch-total", number.format(epoch.input_tokens || 0));
-    text("epoch-requests", number.format(epoch.requests || 0));
-    text("epoch-cpu", number.format(epoch.cpu_tokens || 0));
-    text("epoch-accepts", number.format(epoch.cpu_accepts || 0));
-    text("epoch-avoided", number.format(epoch.avoided_upstream_calls || 0));
-    text("epoch-share", percent(epoch.cpu_tokens || 0, epoch.input_tokens || 0));
-    text("cpu-gate", safety.cpu_allowed ? "ОТКРЫТ" : "ЗАКРЫТ");
-    className("cpu-gate", `nd-status ${safety.cpu_allowed ? "good" : "bad"}`);
-
-    text("miner-seen", number.format(miner.seen_tokens || 0));
-    text("miner-seen-intents", number.format(miner.seen_intents || 0));
-    text("miner-recognized", number.format(miner.recognized_tokens || 0));
-    text("miner-recognized-intents", number.format(miner.recognized_intents || 0));
-    text("miner-share", percent(miner.recognized_tokens || 0, miner.seen_tokens || 0));
-    text("miner-window-start", `окно с ${localTime(miner.started_at_unix || 0)} · отдельный watermark`);
-
-    const k1Available = k1.available === true && Number.isFinite(k1.law_certificates);
-    const lawCount = k1Available ? k1.law_certificates : null;
-    const law2Active = discovery.active_candidate === true;
-    const minimumLaws = k1.min_law_certificates || 3;
-    const slotState = threshold => !k1Available
-      ? "UNKNOWN"
-      : lawCount >= threshold
-        ? "PASS"
-        : lawCount + 1 === threshold
-          ? "ПОИСК"
-          : "WAIT";
-    text("k1-progress", k1Available ? `${number.format(lawCount)} / ${number.format(minimumLaws)} В БАЗИСЕ` : "UNKNOWN");
-    className("k1-progress", `law-verdict ${k1Available && lawCount >= minimumLaws ? "good" : ""}`);
-    text("law1-state", slotState(1));
-    text("law2-state", slotState(2));
-    text("law3-state", slotState(3));
-    text("catalog-cohorts", number.format(discovery.catalog_cohorts || 0));
-    text("generations-checked", number.format(discovery.completed_generations || 0));
-    text("ready-now", number.format(discovery.ready_now || 0));
-    text("discovery-state", readable(discovery.state));
-    text("current-blocker", readable(discovery.blocker || "нет"));
-    text("latest-verdict", readable(discovery.latest_verdict));
-    text("latest-verdict-blocker", readable(discovery.latest_verdict_blocker || "нет"));
-    text("generation-label", law2Active ? "active generation " : "следующая generation ");
-    const generationLabel = node("generation-label");
-    if (generationLabel) {
-      const generation = document.createElement("b");
-      generation.id = "next-generation";
-      generation.textContent = number.format(discovery.next_generation_sequence || 0);
-      generationLabel.appendChild(generation);
-    }
-    text("next-generation", number.format(discovery.next_generation_sequence || 0));
-
-    text("false-accepts", number.format(safety.false_accepts || 0));
-    text("parity-failures", number.format(safety.parity_failures || 0));
-    text("transport-failures", number.format(safety.transport_failures || 0));
-    text("pending-work", `${number.format(safety.structural_pending || 0)} / ${number.format(safety.opportunity_pending || 0)}`);
-    text("k1-source", readable(k1.source || "unavailable"));
-
-    const decisionAvailable = decision.available === true;
-    const decisionReady = decision.verdict === "READY_FOR_BASELINES";
-    const s1c4Available = s1c4.available === true;
-    text("decision-status", "K2 CLOSED");
-    className("decision-status", "law-verdict");
-    text("decision-scanned", decisionAvailable ? number.format(decision.transition_rows_scanned || 0) : "—");
-    text("decision-projected", decisionAvailable ? number.format(decision.transition_rows_projected || 0) : "—");
-    text("transition-lineages", decisionAvailable ? number.format(decision.distinct_transition_lineages || 0) : "—");
-    text("decision-censored", decisionAvailable ? number.format(decision.transition_rows_censored || 0) : "—");
-    const transitionCensors = Object.entries(decision.transition_censor_counts || {})
-      .filter(([, count]) => Number(count) > 0)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([reason, count]) => `${readable(reason)} ${number.format(count)}`)
-      .join(" · ");
-    text("transition-censors", decisionAvailable ? transitionCensors || "нет" : "—");
-    text("decision-goals", decisionAvailable ? number.format(decision.goal_bound || 0) : "—");
-    text("decision-alternatives", decisionAvailable ? number.format(decision.alternative_bearing || 0) : "—");
-    text("decision-horizons", decisionAvailable ? number.format(decision.horizon_bound || 0) : "—");
-    text("decision-satisfaction", decisionAvailable ? number.format(decision.satisfaction_verifiable || 0) : "—");
-    text("decision-episodes", decisionAvailable ? number.format(decision.decision_episodes || 0) : "—");
-    text("decision-stage", !decisionAvailable ? "S1A/S1B REPORT UNAVAILABLE" : `S1A PASS · S1B ${readable(decision.verdict)} · S1C-4 ${readable(s1c4.state)}`);
-    text("decision-blocker", s1c4Available ? readable(s1c4.blocker) : readable(decision.blocker));
-    text("s1c4-state", readable(s1c4.state));
-    text("s1c4-classified", s1c4Available ? `${number.format(s1c4.classified_requests || 0)} / ${number.format(s1c4.denominator_requests || 0)}` : "—");
-    text("s1c4-goals", s1c4Available ? number.format(s1c4.goal_bound || 0) : "—");
-    text("s1c4-alternatives", s1c4Available ? number.format(s1c4.alternative_bearing || 0) : "—");
-    text("s1c4-satisfied", s1c4Available ? number.format(s1c4.satisfied_episodes || 0) : "—");
-    text("s1c4-lineages", s1c4Available ? number.format(s1c4.distinct_decision_lineages || 0) : "—");
-    text("s1c4-verdict", s1c4Available ? readable(s1c4.verdict) : "REPORT UNAVAILABLE");
-    text("s1c-blocker", readable(s1c4.blocker));
-
-    const current = {
-      ingressTokens: ingress.input_tokens || 0,
-      ingressRequests: ingress.requests || 0,
-      cpuTokens: epoch.cpu_tokens || 0,
-      cpuAccepts: epoch.cpu_accepts || 0,
-      avoided: epoch.avoided_upstream_calls || 0,
-    };
-    if (!liveBaseline) liveBaseline = current;
-    const delta = (value, baseline) => Math.max(0, value - baseline);
-    text("live-ingress-tokens", `+${number.format(delta(current.ingressTokens, liveBaseline.ingressTokens))}`);
-    text("live-ingress-requests", `+${number.format(delta(current.ingressRequests, liveBaseline.ingressRequests))}`);
-    text("live-cpu-tokens", `+${number.format(delta(current.cpuTokens, liveBaseline.cpuTokens))}`);
-    text("live-cpu-accepts", `+${number.format(delta(current.cpuAccepts, liveBaseline.cpuAccepts))}`);
-    text("live-avoided", `+${number.format(delta(current.avoided, liveBaseline.avoided))}`);
-
-    text("services", `${number.format(safety.services_active || 0)}/${number.format(safety.services_expected || 3)}`);
-    lastSuccess = Date.now();
-  };
-
-  const refreshDashboard = async () => {
-    if (refreshing) return;
-    refreshing = true;
-    try {
-      const response = await fetch(`${base}/api/v1/dashboard`, {cache:"no-store"});
-      if (!response.ok) return;
-      const payload = await response.text();
-      renderDashboard(JSON.parse(payload));
-    } catch (_) {
-    } finally {
-      refreshing = false;
-    }
-  };
-  window.setInterval(() => {
-    text("snapshot-age", Math.floor((Date.now() - lastSuccess) / 1000));
-    text("source-age", sourceGeneratedAt > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - sourceGeneratedAt) : "—");
-  }, 1000);
-  refreshDashboard();
-  window.setInterval(refreshDashboard, 3000);
-})();
-</script>
-"#;
+const TEMPLATE: &str = include_str!("live_dashboard_v20.html");
 
 #[cfg(test)]
 mod tests {
@@ -746,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn dashboard_separates_ingress_miner_and_economics_denominators() {
+    fn dashboard_leads_with_one_llm_denominator_and_its_s1c_subset() {
         let html = render(InitialMetrics {
             server_total_tokens: 7_694_807_361,
             server_cpu_tokens: 207_619_587,
@@ -761,69 +333,34 @@ mod tests {
             miner_window_cpu_intents: 9_832,
             cpu_allowed: true,
         });
-        assert!(html.contains("Трафик и CPU"));
-        assert!(html.contains("Весь ingress сервера"));
-        assert!(html.contains("все ordinary-запросы, дошедшие до gateway"));
-        assert!(html.contains("до watermark: <b class=\"nd-status bad\">UNKNOWN</b>"));
-        assert!(html.contains("7 694 807 361"));
-        assert!(html.contains("207 619 587"));
-        assert!(html.contains("2,70%"));
+        assert!(html.contains("Маршрут запросов к модели"));
+        assert!(html.contains("Служебный HTTP"));
+        assert!(html.contains("НЕ ВХОДИТ"));
+        assert!(html.contains("Реальные LLM-запросы"));
+        assert!(html.contains("/v1|v2/responses · /v1|v2/chat/completions"));
+        assert!(html.contains("S1C post-freeze выборка"));
+        assert!(html.contains("конечное подмножество LLM ingress, не вся история"));
         assert!(html.contains("10 882 437 482"));
-        assert!(html.contains("1 613 584 240"));
-        assert!(html.contains("Распознавание майнера"));
-        assert!(html.contains("CPU savings · текущая V4-эпоха"));
-        assert!(html.contains("CPU economics · вся история"));
-        assert!(html.contains("677</b> CPU accepts"));
-        assert!(html.contains("677</b> upstream не вызван"));
-        assert!(html.contains("это не весь ingress"));
-        assert!(html.contains("С момента открытия страницы"));
-        assert!(html.contains("K1 · операционные законы"));
-        assert!(html.contains("минимальный базис"));
-        assert!(html.contains("Law #1"));
-        assert!(html.contains("Law #2"));
-        assert!(html.contains("Law #3"));
+        assert!(html.contains("49 122"));
+        assert!(html.contains("Результат текущей accounting epoch"));
+        assert!(html.contains("1 733 026 637"));
+        assert!(html.contains("165 104 290"));
+        assert!(html.contains("9,53%"));
+        assert!(html.contains("id=\"epoch-upstream\""));
+        assert!(html.contains("upstream-вызовов предотвращено"));
+        assert!(html.contains("С открытия страницы"));
+        assert!(html.contains("Исследовательский статус"));
         assert!(html.contains("id=\"k1-progress\""));
-        assert!(html.contains("id=\"k1-source\""));
-        assert!(html.contains("id=\"catalog-cohorts\""));
-        assert!(html.contains("readiness-PASS сейчас"));
-        assert!(html.contains("id=\"generations-checked\""));
-        assert!(html.contains("id=\"discovery-state\""));
-        assert!(html.contains("id=\"current-blocker\""));
-        assert!(html.contains("id=\"latest-verdict\""));
-        assert!(html.contains("verified ordinary CPU"));
-        assert!(html.contains("K2 · grounded decision meaning"));
-        assert!(html.contains("S1A transitions → S1B census → S1C natural decisions"));
-        assert!(html.contains("конечный natural census"));
-        assert!(html.contains("id=\"s1c4-state\""));
-        assert!(html.contains("id=\"s1c4-classified\""));
-        assert!(html.contains("id=\"s1c4-goals\""));
-        assert!(html.contains("id=\"s1c4-alternatives\""));
-        assert!(html.contains("id=\"s1c4-satisfied\""));
-        assert!(html.contains("id=\"s1c4-lineages\""));
-        assert!(html.contains("id=\"s1c4-verdict\""));
-        assert!(html.contains("id=\"s1c-blocker\""));
-        assert!(html.contains("K2 CLOSED"));
-        assert!(html.contains("id=\"decision-scanned\""));
-        assert!(html.contains("id=\"decision-projected\""));
-        assert!(html.contains("id=\"transition-censors\""));
-        assert!(html.contains("id=\"decision-goals\""));
-        assert!(html.contains("id=\"decision-alternatives\""));
-        assert!(html.contains("id=\"decision-horizons\""));
-        assert!(html.contains("id=\"decision-satisfaction\""));
-        assert!(html.contains("id=\"decision-episodes\""));
-        assert!(html.contains("S1A PASS"));
-        assert!(html.contains("нет pre-action goal receipt"));
-        assert!(!html.contains("повторяемых <b"));
-        assert!(!html.contains("все доступные epistemic modes уже доказаны"));
-        assert_eq!(html.matches("class=\"ledger-row\"").count(), 4);
-        assert!(!html.contains("class=\"flow-index\""));
-        assert!(html.contains("/api/v1/dashboard"));
-        assert!(!html.contains("Диагностика"));
-        assert!(!html.contains("Доказанные пакеты"));
-        assert!(!html.contains("/connections"));
+        assert!(html.contains("id=\"law2-state\""));
+        assert!(html.contains("id=\"k1-blocker\""));
+        assert!(html.contains("id=\"s1c-verdict\""));
+        assert!(html.contains("id=\"s1c-goals\""));
+        assert_eq!(html.matches("class=\"route-row").count(), 3);
+        assert!(!html.contains("Распознавание майнера"));
+        assert!(!html.contains("CPU economics · вся история"));
+        assert!(!html.contains("Transition censors"));
         assert!(!html.contains("CANDIDATE INPUT"));
-        assert!(!html.contains("CRYSTALLIZER"));
-        assert!(!html.contains("/tokens"));
+        assert!(html.contains("/api/v1/dashboard"));
         assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
     }
 
@@ -843,7 +380,7 @@ mod tests {
             miner_window_cpu_intents: 0,
             cpu_allowed: false,
         });
-        assert!(html.contains("class=\"nd-status bad\">ЗАКРЫТ"));
+        assert!(html.contains("id=\"cpu-gate\" class=\"bad\">ЗАКРЫТ"));
         assert!(!html.contains("__CPU_GATE__"));
     }
 }

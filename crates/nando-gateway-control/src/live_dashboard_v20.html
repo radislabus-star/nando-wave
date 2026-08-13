@@ -1,0 +1,238 @@
+<style>
+.nando-live {
+  --bg:#0d1012;
+  --surface:#14181b;
+  --line:#31383d;
+  --text:#edf1f2;
+  --muted:#929da3;
+  --cyan:#68b8c8;
+  --green:#70c58a;
+  --amber:#d1a75c;
+  --red:#db746e;
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  letter-spacing:0;
+}
+.nando-live * { box-sizing:border-box; letter-spacing:0; }
+.nd-inner { width:min(1040px,100%); margin:0 auto; padding:0 28px; }
+.nd-head { border-bottom:1px solid var(--line); background:#090b0c; }
+.nd-head .nd-inner { min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.nd-brand { display:flex; align-items:baseline; gap:10px; min-width:0; }
+.nd-brand strong { color:#fff; font-size:19px; font-weight:760; }
+.nd-brand span,.nd-live { color:var(--muted); font-size:11px; font-weight:600; }
+.nd-live { text-align:right; }
+.nd-live b,.good { color:var(--green); }
+.warn { color:var(--amber); }
+.bad { color:var(--red); }
+.nd-main { padding-top:32px; padding-bottom:38px; }
+.section-head { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:14px; }
+.section-head h1,.section-head h2 { margin:0; color:#f5f7f7; font-weight:740; line-height:1.2; }
+.section-head h1 { font-size:21px; }
+.section-head h2 { font-size:17px; }
+.section-head p { margin:0; color:var(--muted); font-size:11px; line-height:1.45; text-align:right; }
+.route-tree { border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.route-row { display:grid; grid-template-columns:minmax(230px,1.3fr) minmax(155px,.8fr) minmax(220px,1.15fr); gap:24px; align-items:center; min-height:96px; border-bottom:1px solid var(--line); }
+.route-row:last-child { border-bottom:0; }
+.route-copy,.route-value { min-width:0; }
+.route-copy strong { display:block; color:#e9edef; font-size:14px; font-weight:730; }
+.route-copy span,.route-value span { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.45; }
+.route-value > strong { display:block; color:#f5f7f8; font-size:23px; font-weight:740; line-height:1.1; overflow-wrap:anywhere; }
+.route-value > strong.cyan { color:var(--cyan); }
+.route-value > strong.green { color:var(--green); }
+.transport-row { min-height:66px; background:#101315; }
+.transport-row .route-copy strong,.transport-row .route-value > strong { color:#9aa4a9; }
+.transport-row .route-value > strong { font-size:13px; }
+.tree-mark { color:#667178; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+.outcome-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; background:var(--line); border-bottom:1px solid var(--line); }
+.outcome { min-height:102px; padding:18px 20px; background:var(--surface); }
+.outcome span { display:block; color:var(--muted); font-size:10px; line-height:1.4; }
+.outcome strong { display:block; margin-top:6px; color:#f4f6f7; font-size:22px; line-height:1.1; font-weight:740; overflow-wrap:anywhere; }
+.outcome em { display:block; margin-top:6px; color:#aeb7bb; font-size:10px; font-style:normal; line-height:1.4; }
+.live-delta { display:flex; flex-wrap:wrap; gap:7px 24px; padding:11px 0; color:var(--muted); font-size:10px; border-bottom:1px solid var(--line); }
+.live-delta strong { color:#dce1e3; }
+.status-section { margin-top:32px; }
+.status-lines { border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.status-line { display:grid; grid-template-columns:120px 150px minmax(0,1fr); gap:20px; align-items:center; min-height:70px; border-bottom:1px solid var(--line); }
+.status-line:last-child { border-bottom:0; }
+.status-line > strong { color:#f2f4f5; font-size:15px; }
+.status-state { color:var(--amber); font-size:13px; font-weight:760; }
+.status-state.good { color:var(--green); }
+.status-copy { color:#bac2c6; font-size:11px; line-height:1.5; }
+.status-copy b { color:#eef1f2; font-weight:700; }
+.nd-foot { border-top:1px solid var(--line); }
+.nd-foot .nd-inner { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:20px; color:#758086; font-size:9px; }
+.safety-line { display:flex; flex-wrap:wrap; gap:6px 20px; }
+.safety-line b { color:#bcc4c8; }
+@media (max-width:760px) {
+  .nd-inner { padding-left:16px; padding-right:16px; }
+  .nd-head .nd-inner { min-height:70px; align-items:flex-start; justify-content:center; flex-direction:column; gap:4px; }
+  .nd-live { text-align:left; }
+  .nd-main { padding-top:24px; padding-bottom:28px; }
+  .section-head { align-items:flex-start; flex-direction:column; gap:5px; }
+  .section-head p { text-align:left; }
+  .route-row { grid-template-columns:1fr; gap:11px; min-height:0; padding:17px 0; }
+  .transport-row { padding:14px 0; }
+  .route-value { display:grid; grid-template-columns:92px minmax(0,1fr); align-items:baseline; gap:10px; }
+  .route-value::before { content:attr(data-label); color:var(--muted); font-size:9px; font-weight:700; }
+  .route-value span { grid-column:2; margin-top:-5px; }
+  .outcome-grid { grid-template-columns:1fr; }
+  .outcome { min-height:0; padding:16px; }
+  .status-line { grid-template-columns:82px minmax(0,1fr); gap:10px 14px; padding:15px 0; }
+  .status-copy { grid-column:1 / -1; }
+  .nd-foot .nd-inner { align-items:flex-start; flex-direction:column; padding-top:11px; padding-bottom:11px; }
+}
+</style>
+<main class="nando-live" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live control">
+  <header class="nd-head"><div class="nd-inner">
+    <div class="nd-brand"><strong>NANDO LIVE</strong><span>только LLM-трафик и результат</span></div>
+    <div class="nd-live"><b>LIVE</b> · снимок <span id="snapshot-age">0</span> с · источник <span id="source-age">—</span> с · сервисы <span id="services">—/3</span></div>
+  </div></header>
+
+  <div class="nd-inner nd-main">
+    <section aria-labelledby="traffic-title">
+      <div class="section-head">
+        <h1 id="traffic-title">Маршрут запросов к модели</h1>
+        <p>Один знаменатель: ordinary OpenAI-compatible model requests.</p>
+      </div>
+      <div class="route-tree">
+        <div class="route-row transport-row">
+          <div class="route-copy"><strong><span class="tree-mark">×</span> Служебный HTTP</strong><span>health, dashboard, admin, replay и transport fallback</span></div>
+          <div class="route-value" data-label="Статус"><strong>НЕ ВХОДИТ</strong><span>не является запросом к модели</span></div>
+          <div class="route-value" data-label="Учёт"><strong>ИСКЛЮЧЁН</strong><span>connector HTTP не используется в продуктовой доле</span></div>
+        </div>
+        <div class="route-row">
+          <div class="route-copy"><strong><span class="tree-mark">└─</span> Реальные LLM-запросы</strong><span>/v1|v2/responses · /v1|v2/chat/completions</span></div>
+          <div class="route-value" data-label="Запросы"><strong id="llm-requests" class="cyan">__MINER_SEEN_INTENTS__</strong><span>ordinary model requests</span></div>
+          <div class="route-value" data-label="Токены"><strong id="llm-tokens">__MINER_SEEN__</strong><span>input-токенов · <b id="llm-since">с watermark</b></span></div>
+        </div>
+        <div class="route-row">
+          <div class="route-copy"><strong><span class="tree-mark">  └─</span> S1C post-freeze выборка</strong><span>конечное подмножество LLM ingress, не вся история</span></div>
+          <div class="route-value" data-label="Выборка"><strong id="s1c-requests">—</strong><span><b id="s1c-tokens">—</b> input-токенов</span></div>
+          <div class="route-value" data-label="Capture"><strong id="s1c-captured" class="green">—</strong><span id="s1c-result">точный join</span></div>
+        </div>
+      </div>
+
+      <div class="section-head" style="margin-top:24px">
+        <h2>Результат текущей accounting epoch</h2>
+        <p>Этот блок не смешивается со всей историей ingress.</p>
+      </div>
+      <div class="outcome-grid">
+        <div class="outcome"><span>Учтено в epoch</span><strong id="epoch-requests">__EPOCH_REQUESTS__</strong><em><b id="epoch-total">__EPOCH_TOTAL__</b> input-токенов</em></div>
+        <div class="outcome"><span>Исполнено на CPU</span><strong id="epoch-accepts" class="good">__EPOCH_ACCEPTS__</strong><em><b id="epoch-cpu">__EPOCH_CPU__</b> токенов · <b id="epoch-share">__EPOCH_SHARE__</b></em></div>
+        <div class="outcome"><span>Ушло к upstream LLM</span><strong id="epoch-upstream">__EPOCH_UPSTREAM__</strong><em><b id="epoch-avoided">__EPOCH_AVOIDED__</b> upstream-вызовов предотвращено</em></div>
+      </div>
+      <div class="live-delta"><strong>С открытия страницы</strong><span>LLM ingress <b id="live-llm-requests">+0</b> запросов · <b id="live-llm-tokens">+0</b> токенов</span><span>CPU <b id="live-cpu-accepts">+0</b> accepts</span></div>
+    </section>
+
+    <section class="status-section" aria-labelledby="research-title">
+      <div class="section-head"><h2 id="research-title">Исследовательский статус</h2><p>Коротко: что доказано и что блокирует следующий переход.</p></div>
+      <div class="status-lines">
+        <div class="status-line"><strong>K1</strong><span id="k1-progress" class="status-state">—</span><div class="status-copy">Law #2: <b id="law2-state">—</b> · <span id="k1-blocker">—</span></div></div>
+        <div class="status-line"><strong>K2</strong><span id="k2-progress" class="status-state">CLOSED</span><div class="status-copy">S1C: <b id="s1c-verdict">—</b> · exact pre-action goals <b id="s1c-goals">—</b></div></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="nd-foot"><div class="nd-inner"><div class="safety-line"><span>CPU admission <b id="cpu-gate" class="__CPU_GATE_TONE__">__CPU_GATE__</b></span><span>false accepts <b id="false-accepts">—</b></span><span>parity failures <b id="parity-failures">—</b></span><span>pending <b id="pending-work">—</b></span></div><span>build __DASHBOARD_BUILD__</span></div></footer>
+</main>
+<script>
+(() => {
+  const base = window.location.pathname.replace(/\/legacy$/, "").replace(/\/$/, "");
+  const expectedBuild = document.querySelector(".nando-live")?.dataset.dashboardBuild || "";
+  const number = new Intl.NumberFormat("ru-RU");
+  const node = id => document.getElementById(id);
+  const text = (id, value) => { const target = node(id); if (target) target.textContent = value; };
+  const percent = (part, total) => total > 0 ? `${(part * 100 / total).toFixed(2).replace(".", ",")}%` : "0,00%";
+  const localTime = unix => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short",timeStyle:"medium"}) : "watermark unknown";
+  const readable = value => ({
+    waiting_for_evidence:"ждёт evidence",
+    no_readiness_pass_candidate:"нет readiness-PASS кандидата",
+    acquisition_fail:"acquisition fail",
+    selected_role_witness_missing:"capture не сохранил типизированную роль",
+    EMPTY_GOAL_SURFACE:"EMPTY GOAL SURFACE",
+    EMPTY_ALTERNATIVE_SURFACE:"EMPTY ALTERNATIVE SURFACE",
+    INSUFFICIENT_LINEAGES:"INSUFFICIENT LINEAGES",
+    PASS:"PASS",
+    VETO:"VETO",
+    COLLECTING:"COLLECTING",
+    TERMINAL:"TERMINAL"
+  }[value] || String(value || "—").replaceAll("_", " "));
+  let lastSuccess = Date.now();
+  let sourceGeneratedAt = 0;
+  let refreshing = false;
+  let baseline = null;
+
+  const render = snapshot => {
+    if (!snapshot?.available) return;
+    if (snapshot.dashboard_build && snapshot.dashboard_build !== expectedBuild) {
+      window.location.reload();
+      return;
+    }
+    const llm = snapshot.llm_ingress || snapshot.ingress || {};
+    const epoch = snapshot.product?.current_epoch || {};
+    const s1c = snapshot.s1c4_natural_census || {};
+    const k1 = snapshot.k1 || {};
+    const discovery = snapshot.discovery || {};
+    const safety = snapshot.safety || {};
+    sourceGeneratedAt = snapshot.generated_at_unix || 0;
+
+    text("llm-requests", number.format(llm.requests || 0));
+    text("llm-tokens", number.format(llm.input_tokens || 0));
+    text("llm-since", `с ${localTime(llm.started_at_unix || 0)}`);
+    text("epoch-requests", number.format(epoch.requests || 0));
+    text("epoch-total", number.format(epoch.input_tokens || 0));
+    text("epoch-accepts", number.format(epoch.cpu_accepts || 0));
+    text("epoch-cpu", number.format(epoch.cpu_tokens || 0));
+    text("epoch-share", percent(epoch.cpu_tokens || 0, epoch.input_tokens || 0));
+    text("epoch-upstream", number.format(epoch.upstream_calls || 0));
+    text("epoch-avoided", number.format(epoch.avoided_upstream_calls || 0));
+
+    const s1cAvailable = s1c.available === true;
+    text("s1c-requests", s1cAvailable ? number.format(s1c.denominator_requests || 0) : "—");
+    text("s1c-tokens", s1cAvailable ? number.format(s1c.denominator_input_tokens || 0) : "—");
+    text("s1c-captured", s1cAvailable ? `${number.format(s1c.classified_requests || 0)} / ${number.format(s1c.denominator_requests || 0)}` : "—");
+    text("s1c-result", s1cAvailable && s1c.source_complete && s1c.exact_join_complete ? "captured · exact join" : "capture incomplete");
+    text("s1c-verdict", s1cAvailable ? readable(s1c.verdict) : "REPORT UNAVAILABLE");
+    text("s1c-goals", s1cAvailable ? number.format(s1c.goal_bound || 0) : "—");
+
+    const laws = Number.isFinite(k1.law_certificates) ? k1.law_certificates : null;
+    const minimum = k1.min_law_certificates || 3;
+    text("k1-progress", laws === null ? "UNKNOWN" : `${number.format(laws)} / ${number.format(minimum)}`);
+    text("law2-state", laws !== null && laws >= 2 ? "PASS" : "ПОИСК");
+    text("k1-blocker", `${readable(discovery.state)} · ${readable(discovery.blocker)}`);
+
+    text("cpu-gate", safety.cpu_allowed ? "OPEN" : "CLOSED");
+    text("false-accepts", number.format(safety.false_accepts || 0));
+    text("parity-failures", number.format(safety.parity_failures || 0));
+    text("pending-work", `${number.format(safety.structural_pending || 0)} / ${number.format(safety.opportunity_pending || 0)}`);
+    text("services", `${number.format(safety.services_active || 0)}/${number.format(safety.services_expected || 3)}`);
+
+    const current = {requests:llm.requests || 0,tokens:llm.input_tokens || 0,cpu:epoch.cpu_accepts || 0};
+    if (!baseline) baseline = current;
+    text("live-llm-requests", `+${number.format(Math.max(0,current.requests-baseline.requests))}`);
+    text("live-llm-tokens", `+${number.format(Math.max(0,current.tokens-baseline.tokens))}`);
+    text("live-cpu-accepts", `+${number.format(Math.max(0,current.cpu-baseline.cpu))}`);
+    lastSuccess = Date.now();
+  };
+
+  const refresh = async () => {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      const response = await fetch(`${base}/api/v1/dashboard`, {cache:"no-store"});
+      if (response.ok) render(JSON.parse(await response.text()));
+    } catch (_) {
+    } finally {
+      refreshing = false;
+    }
+  };
+  window.setInterval(() => {
+    text("snapshot-age", Math.floor((Date.now()-lastSuccess)/1000));
+    text("source-age", sourceGeneratedAt > 0 ? Math.max(0,Math.floor(Date.now()/1000)-sourceGeneratedAt) : "—");
+  },1000);
+  refresh();
+  window.setInterval(refresh,3000);
+})();
+</script>

@@ -1620,6 +1620,8 @@ async fn control_dashboard_snapshot(
     let economics_false_accepts = metric_u64(economics, "false_accepts");
     let economics_parity = metric_u64(economics, "runtime_parity_mismatches");
     let admission = admission_status(&state.config);
+    let (llm_requests, llm_input_tokens, llm_durable_suffix_reconciled) =
+        live_llm_ingress_totals(miner, &bridge);
 
     (
         [(header::CACHE_CONTROL, "no-store")],
@@ -1636,6 +1638,28 @@ async fn control_dashboard_snapshot(
                 "historical_prefix": "unknown",
                 "complete_since_watermark": true,
             },
+            "llm_ingress": {
+                "scope": "ordinary_openai_model_requests_since_watermark",
+                "started_at_unix": metric_u64(miner, "window_started_at_unix"),
+                "input_tokens": llm_input_tokens,
+                "requests": llm_requests,
+                "routes": [
+                    "/v1/responses",
+                    "/v2/responses",
+                    "/v1/chat/completions",
+                    "/v2/chat/completions",
+                ],
+                "excludes_transport_http": true,
+                "excludes_generated_fixtures": true,
+                "complete_since_watermark": true,
+                "durable_suffix_reconciled": llm_durable_suffix_reconciled,
+                "durable_suffix": {
+                    "requests": bridge.request_events,
+                    "input_tokens": bridge.request_tokens,
+                    "pending_events": bridge.opportunity_pending,
+                    "producer_sequence": bridge.opportunity_produced_sequence,
+                },
+            },
             "product": {
                 "current_epoch": {
                     "scope": "current_v4_accounting_epoch",
@@ -1645,6 +1669,8 @@ async fn control_dashboard_snapshot(
                     "requests": metric_u64(economics, "terminal_request_events"),
                     "cpu_accepts": metric_u64(economics, "actual_local_accepts"),
                     "avoided_upstream_calls": metric_u64(economics, "avoided_calls"),
+                    "upstream_calls": metric_u64(economics, "terminal_request_events")
+                        .saturating_sub(metric_u64(economics, "avoided_calls")),
                 },
                 "lifetime": {
                     "scope": "all_recorded_accounting_partitions",
@@ -2350,6 +2376,30 @@ fn opportunity_ingestion_reconciliation(bridge: &live_dashboard::BridgeView) -> 
         && bridge.request_events == bridge.miner_request_events
         && bridge.request_tokens == bridge.miner_request_tokens;
     (durable_prefix_closed, counters_reconciled)
+}
+
+fn live_llm_ingress_totals(miner: &Value, bridge: &live_dashboard::BridgeView) -> (u64, u64, bool) {
+    let miner_requests = metric_u64(miner, "ordinary_intents");
+    let miner_tokens = metric_u64(miner, "ordinary_tokens");
+    let reconciled = bridge.hot_available
+        && bridge.cold_available
+        && bridge.failures == 0
+        && bridge.request_events >= bridge.miner_request_events
+        && bridge.request_tokens >= bridge.miner_request_tokens
+        && miner_requests >= bridge.miner_request_events
+        && miner_tokens >= bridge.miner_request_tokens;
+    if !reconciled {
+        return (miner_requests, miner_tokens, false);
+    }
+    (
+        miner_requests
+            .saturating_sub(bridge.miner_request_events)
+            .saturating_add(bridge.request_events),
+        miner_tokens
+            .saturating_sub(bridge.miner_request_tokens)
+            .saturating_add(bridge.request_tokens),
+        true,
+    )
 }
 
 fn exact_miner_opportunity<'a>(live: &'a Value, persisted: &'a Value) -> Option<&'a Value> {
@@ -3163,5 +3213,36 @@ mod tests {
         bridge.miner_request_events = bridge.request_events;
         bridge.miner_request_tokens = bridge.request_tokens;
         assert_eq!(opportunity_ingestion_reconciliation(&bridge), (true, true));
+    }
+
+    #[test]
+    fn llm_ingress_keeps_historical_prefix_and_adds_live_durable_suffix() {
+        let miner = json!({
+            "ordinary_intents": 98_254,
+            "ordinary_tokens": 20_347_537_104_u64,
+        });
+        let bridge = live_dashboard::BridgeView {
+            hot_available: true,
+            cold_available: true,
+            request_events: 91_618,
+            request_tokens: 19_157_448_768,
+            miner_request_events: 91_614,
+            miner_request_tokens: 19_156_897_858,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            live_llm_ingress_totals(&miner, &bridge),
+            (98_258, 20_348_088_014, true),
+        );
+    }
+
+    #[test]
+    fn llm_ingress_falls_back_to_validated_miner_when_bridge_is_unavailable() {
+        let miner = json!({"ordinary_intents": 7, "ordinary_tokens": 70});
+        assert_eq!(
+            live_llm_ingress_totals(&miner, &live_dashboard::BridgeView::default()),
+            (7, 70, false),
+        );
     }
 }
