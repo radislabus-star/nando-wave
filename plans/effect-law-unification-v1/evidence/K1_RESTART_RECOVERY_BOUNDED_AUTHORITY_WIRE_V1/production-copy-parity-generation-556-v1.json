@@ -1,0 +1,20 @@
+{
+  "schema": "nando.k1-generation-556-production-copy-parity.v1",
+  "proved_at": "2026-08-13",
+  "disposable_proof_root": "/home/e/build/k1-wire-disposable-proof-20260813T135839Z",
+  "disposable_before_manifest_sha256": "2e82ec1d11f4a1591162d8d839b87a5f7e9a832305a6a2f55b4510c1b6c908b3",
+  "before_revision": 1113,
+  "before_ledger_root_sha256": "a872744f55538ab56f35661c6944122b82212f46cd9b8f2b0639d56fb2582cfc",
+  "after_revision": 1114,
+  "after_ledger_root_sha256": "f21189901d8950e60c9aafd3dd201f5fb13cdd878c875733e882a7dac9332cc4",
+  "after_projection_root_sha256": "c86face6af0e25c54686846fa6fa9b406b350af2382fd3bc95c8a6b773158bae",
+  "candidate_root_sha256": "47f92efa3db6ef2f374ec51595df8fb5093b411e3528ae899c2729079d31305b",
+  "freeze_root_sha256": "105f84eb5e2650bb7fc137d85be0f02dd05b8a723045397eec0de55c1b98a5f3",
+  "duplicate_projection_identical": true,
+  "restart_projection_identical": true,
+  "disposable_after_revision": 1114,
+  "production_after_revision": 1113,
+  "authority_ready": false,
+  "phase_mutation_allowed": false,
+  "verdict": "PASS"
+}

@@ -1,0 +1,69 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k1-restart-recovery-bounded-authority-wire-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"authority-module","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","expect":{"size_bytes":19580,"sha256":"74b01b11cf489f221f675703545028681ef90ee3a10d7835af02332ae3a5f2ab","mode":"0664"}},
+    {"id":"scheduler-module","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs","expect":{"size_bytes":22233,"sha256":"2f3f2b483a2ac81e159e91b161b0569dfd3bb76fc06d13ce195e6d67a676d467","mode":"0664"}},
+    {"id":"lifecycle-module","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/lifecycle.rs","expect":{"size_bytes":25046,"sha256":"fa384ba1ff6ca92f30cdcc68004b35470eef8192f826c9e421cf52f270600df7","mode":"0664"}},
+    {"id":"service-module","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","expect":{"size_bytes":46792,"sha256":"654445dc6ba5e1053f1095ac1aff4d9ae88b81a535378ace7e6d3b01e3ad83aa","mode":"0664"}},
+    {"id":"production-ledger-copy","kind":"file","path":"/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/k1-epistemic-scheduler-ledger-v1.json","expect":{"size_bytes":2124299,"sha256":"65c1f1f9a300558cbb6dd4116c2f3a0a65c5c3ad1d9d088d4c317063a311ed7b","mode":"0664"}},
+    {"id":"production-anchor-copy","kind":"file","path":"/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/k1-epistemic-scheduler-anchor-v1.json","expect":{"size_bytes":577,"sha256":"a0af4c57e81a29a75cf260cee42637d9b3379812fea15e4ee276243bec66cda9","mode":"0664"}},
+    {"id":"frontier-report-copy","kind":"file","path":"/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/latest.json","expect":{"size_bytes":1504581,"sha256":"f12afaab9ed3a4c9637df6e0a7e2f4ae2d6f3c8a3f6a37a0690411059fc0e21b","mode":"0664"}},
+    {"id":"s1c4-terminal-copy","kind":"file","path":"/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/s1c4-natural-census-report-v1.json","expect":{"size_bytes":1419,"sha256":"ae5107fc5e9b7f562d01beac8611d5f3dc3020413fa26982e29e25037c9202d1","mode":"0664"}}
+  ],
+  "source_checks": [
+    {"id":"authority-source","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","sha256":"74b01b11cf489f221f675703545028681ef90ee3a10d7835af02332ae3a5f2ab","forbidden_effect_patterns":[{"effect":"generated_traffic","regex":"generate_(synthetic|targeted)_traffic\\s*\\("},{"effect":"synthetic_fixture","regex":"write_(synthetic|generated)_fixture\\s*\\("},{"effect":"phase_mutation","regex":"phase_mutation_allowed\\s*:\\s*true"},{"effect":"s1c4_reopen","regex":"reopen_s1c4|rewrite_s1c4_terminal"},{"effect":"hot_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*response-serving"},{"effect":"nginx_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},{"effect":"connector_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*connector"}]},
+    {"id":"runtime-source","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","sha256":"654445dc6ba5e1053f1095ac1aff4d9ae88b81a535378ace7e6d3b01e3ad83aa","forbidden_effect_patterns":[{"effect":"generated_traffic","regex":"generate_(synthetic|targeted)_traffic\\s*\\("},{"effect":"retrospective_goal","regex":"infer_goal_from_(action|outcome)"},{"effect":"law_promotion","regex":"promote_law_2"}]}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"measure-copy","kind":"read_only_test_oracle"},
+      {"id":"edit-wire","kind":"bounded_protocol_edit"},
+      {"id":"append-generation","kind":"signed_append_only_event"},
+      {"id":"scoped-deploy","kind":"rollback_capable_authority_cold_control_restart"}
+    ],
+    "forbidden": ["generated_traffic","synthetic_fixture","retrospective_goal","law_promotion","phase_mutation","s1c4_reopen","hot_restart","nginx_restart","connector_restart"]
+  },
+  "runtime_comparisons": [
+    {"id":"restart-oracle","source":"production scheduler prefix copy and signed journal replay","comparison":"exact_stable_projection","stable_fields":["completed_generations_555","next_generation_556","authority_ready_false","phase_mutation_allowed_false","ledger_prefix_root","s1c4_report_sha256","hot_pid","nginx_pid","connector_pid"],"expected_to_change_fields":["cold_pid","authority_pid","control_pid","active_candidate_freeze","ledger_append_suffix"],"observed_not_compared_fields":["natural_archive_suffixes","traffic_counters","timestamps"],"reason":"natural evidence and counters may append while proof authority and frozen prefix remain stable","test_id":"production-copy-restart-parity"}
+  ],
+  "preserved_artifacts": [
+    {"id":"k1-ledger-prefix","path":"/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1/k1-epistemic-scheduler-ledger-v1.json","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"production-ledger-copy"},
+    {"id":"s1c4-terminal-report","path":"/var/lib/nando-wave/transition/grounded-meaning-v1/decision-contract-precommits-v1/s1c4-natural-census-v1/s1c4-natural-census-report-v1.json","policy":"immutable","rollback_policy":"preserve_exact_bytes","cursor_policy":"terminal_window_never_reopened","baseline_check_id":"s1c4-terminal-copy"}
+  ],
+  "identity_contracts": [
+    {"id":"logical-wire-parity","producer":"V1 logical candidate freeze request","consumer":"authority-decoded V2 logical request","comparison":"canonical JSON byte identity before validation","test_id":"wire-logical-parity"},
+    {"id":"selection-parity","producer":"operator-blind runtime queue selection","consumer":"authority recomputed queue and resealed freeze","comparison":"exact catalog queue candidate and freeze roots","test_id":"authority-selection-parity"},
+    {"id":"restart-projection-parity","producer":"post-append signed journal projection","consumer":"fresh restart projection","comparison":"exact revision ledger root event root projection root and freeze root","test_id":"production-copy-restart-parity"}
+  ],
+  "invariants": [
+    {"id":"outer-budget-preserved","statement":"outer authority request remains at or below four MiB","test_id":"wire-budget-negatives"},
+    {"id":"logical-budget-bounded","statement":"decoded logical request never exceeds sixteen MiB","test_id":"wire-budget-negatives"},
+    {"id":"authority-recomputes-selection","statement":"client candidate cannot bypass queue derivation CAS or freeze reseal","test_id":"authority-selection-parity"},
+    {"id":"restart-idempotent","statement":"one valid generation 556 append is idempotent and restart byte-identical","test_id":"production-copy-restart-parity"},
+    {"id":"claim-boundary","statement":"transport recovery leaves authority and phase false and does not prove Law 2","test_id":"claim-boundary"}
+  ],
+  "state_machine": {
+    "initial_state":"PAPER_PASS",
+    "terminal_states":["IMPLEMENTED","MEASUREMENT_VETO","LOCAL_FAILURE","DEPLOYMENT_ROLLBACK_PASS"],
+    "steps":[
+      {"id":"measure-isolated-copy","from":"PAPER_PASS","to":"MEASURED","mutates":true,"failure_state":"MEASUREMENT_VETO","cleanup":"remove only isolated diagnostic copy and retain compact receipt","preserves":["k1-ledger-prefix","s1c4-terminal-report"],"test_id":"measurement-isolation"},
+      {"id":"implement-bounded-wire","from":"MEASURED","to":"WIRE_IMPLEMENTED","mutates":true,"failure_state":"LOCAL_FAILURE","cleanup":"retain source diagnostics and leave production untouched","preserves":["k1-ledger-prefix","s1c4-terminal-report"],"test_id":"wire-budget-negatives"},
+      {"id":"verify-production-copy","from":"WIRE_IMPLEMENTED","to":"LOCAL_VERIFIED","mutates":true,"failure_state":"LOCAL_FAILURE","cleanup":"remove only isolated appended copy","preserves":["k1-ledger-prefix","s1c4-terminal-report"],"test_id":"production-copy-fault"},
+      {"id":"scoped-deployment","from":"LOCAL_VERIFIED","to":"IMPLEMENTED","mutates":true,"failure_state":"DEPLOYMENT_ROLLBACK_PASS","cleanup":"restore matching previous authority cold and control binaries while preserving append-only evidence","preserves":["k1-ledger-prefix","s1c4-terminal-report"],"test_id":"deployment-rollback"}
+    ]
+  },
+  "tests": [
+    {"id":"measurement-isolation","kind":"fault_injection","expected":"diagnostic has no production socket and cannot change production ledger or PIDs"},
+    {"id":"wire-budget-negatives","kind":"fault_injection","expected":"outer compressed decompressed truncated trailing and unknown-field violations fail closed"},
+    {"id":"wire-logical-parity","kind":"parity","expected":"decoded logical request equals V1 canonical request bytes"},
+    {"id":"authority-selection-parity","kind":"parity","expected":"queue candidate and resealed freeze roots match independently"},
+    {"id":"production-copy-restart-parity","kind":"parity","expected":"one append then duplicate retry and restart preserve exact roots"},
+    {"id":"production-copy-fault","kind":"fault_injection","expected":"crash before or after isolated append leaves no partial event and production remains untouched"},
+    {"id":"claim-boundary","kind":"unit","expected":"authority_ready and phase_mutation_allowed remain false and no Law 2 claim is emitted"},
+    {"id":"deployment-rollback","kind":"fault_injection","expected":"previous matching binaries return without touching hot Nginx connector or immutable evidence"}
+  ]
+}

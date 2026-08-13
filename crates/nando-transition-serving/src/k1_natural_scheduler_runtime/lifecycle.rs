@@ -341,6 +341,7 @@ pub(super) fn advance(
                 freeze,
                 active_protocol_mode_set_root_sha256: active_protocol_mode_set_root_sha256.clone(),
             },
+            &projection,
         )?;
         return runtime_report(
             generated_at_unix,

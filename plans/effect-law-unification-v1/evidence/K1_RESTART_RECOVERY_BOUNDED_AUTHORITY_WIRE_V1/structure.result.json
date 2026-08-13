@@ -1,0 +1,882 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k1-restart-recovery-bounded-authority-wire-v1",
+  "domain": "code",
+  "complexity_score": 46,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8",
+    "c9",
+    "c10"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1,
+      "c10": 0.1,
+      "c2": 0.1,
+      "c3": 0.1,
+      "c4": 0.1,
+      "c5": 0.1,
+      "c6": 0.1,
+      "c7": 0.1,
+      "c8": 0.1,
+      "c9": 0.1
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 20,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3121,
+      "c10": 0.332,
+      "c2": 0.3196,
+      "c3": 0.2812,
+      "c4": 0.3072,
+      "c5": 0.3307,
+      "c6": 0.3307,
+      "c7": 0.3221,
+      "c8": 0.3208,
+      "c9": 0.2973
+    },
+    "source_self_score": 0.3154,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "claim-boundary": "claim-boundary",
+      "decode-budget": "decode-budget",
+      "deployment": "deployment",
+      "diagnosis": "diagnosis",
+      "idempotency": "idempotency",
+      "measurement": "measurement",
+      "monotonicity": "monotonicity",
+      "restart": "restart",
+      "selection": "selection",
+      "wire-budget": "wire-budget"
+    },
+    "scores": {
+      "claim-boundary": 1.0,
+      "decode-budget": 1.0,
+      "deployment": 1.0,
+      "diagnosis": 1.0,
+      "idempotency": 1.0,
+      "measurement": 1.0,
+      "monotonicity": 1.0,
+      "restart": 1.0,
+      "selection": 1.0,
+      "wire-budget": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "claim-boundary": 1,
+      "decode-budget": 1,
+      "deployment": 1,
+      "diagnosis": 1,
+      "idempotency": 1,
+      "measurement": 1,
+      "monotonicity": 1,
+      "restart": 1,
+      "selection": 1,
+      "wire-budget": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3154,
+      "norm": 100.9158,
+      "triads": 10
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "claim-boundary": "claim-boundary",
+      "decode-budget": "decode-budget",
+      "deployment": "deployment",
+      "diagnosis": "diagnosis",
+      "idempotency": "idempotency",
+      "measurement": "measurement",
+      "monotonicity": "monotonicity",
+      "restart": "restart",
+      "selection": "selection",
+      "wire-budget": "wire-budget"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "decode-budget": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deployment": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "diagnosis": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "idempotency": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "measurement": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "monotonicity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "restart": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "selection": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "wire-budget": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "decode-budget": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "deployment": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "diagnosis": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "idempotency": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "measurement": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "monotonicity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "restart": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "selection": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "wire-budget": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "claim-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "claim-boundary",
+        "exact_source_groups": [
+          "claim-boundary"
+        ]
+      },
+      "decode-budget": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "decode-budget",
+        "exact_source_groups": [
+          "decode-budget"
+        ]
+      },
+      "deployment": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "deployment",
+        "exact_source_groups": [
+          "deployment"
+        ]
+      },
+      "diagnosis": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "diagnosis",
+        "exact_source_groups": [
+          "diagnosis"
+        ]
+      },
+      "idempotency": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "idempotency",
+        "exact_source_groups": [
+          "idempotency"
+        ]
+      },
+      "measurement": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "measurement",
+        "exact_source_groups": [
+          "measurement"
+        ]
+      },
+      "monotonicity": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "monotonicity",
+        "exact_source_groups": [
+          "monotonicity"
+        ]
+      },
+      "restart": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "restart",
+        "exact_source_groups": [
+          "restart"
+        ]
+      },
+      "selection": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "selection",
+        "exact_source_groups": [
+          "selection"
+        ]
+      },
+      "wire-budget": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "wire-budget",
+        "exact_source_groups": [
+          "wire-budget"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "claim-boundary": {
+        "claim-boundary": 1.0,
+        "decode-budget": 0.0254,
+        "deployment": 0.0273,
+        "diagnosis": 0.0039,
+        "idempotency": 0.0039,
+        "measurement": 0.0176,
+        "monotonicity": 0.0254,
+        "restart": -0.0508,
+        "selection": 0.0117,
+        "wire-budget": -0.0176
+      },
+      "decode-budget": {
+        "claim-boundary": 0.0254,
+        "decode-budget": 1.0,
+        "deployment": 0.0527,
+        "diagnosis": 0.0098,
+        "idempotency": -0.0449,
+        "measurement": -0.0352,
+        "monotonicity": -0.0078,
+        "restart": 0.002,
+        "selection": 0.0098,
+        "wire-budget": -0.043
+      },
+      "deployment": {
+        "claim-boundary": 0.0273,
+        "decode-budget": 0.0527,
+        "deployment": 1.0,
+        "diagnosis": -0.0117,
+        "idempotency": -0.0469,
+        "measurement": -0.0566,
+        "monotonicity": -0.0215,
+        "restart": 0.0195,
+        "selection": 0.0039,
+        "wire-budget": -0.0293
+      },
+      "diagnosis": {
+        "claim-boundary": 0.0039,
+        "decode-budget": 0.0098,
+        "deployment": -0.0117,
+        "diagnosis": 1.0,
+        "idempotency": 0.0391,
+        "measurement": -0.0332,
+        "monotonicity": 0.0293,
+        "restart": -0.0469,
+        "selection": -0.0039,
+        "wire-budget": -0.002
+      },
+      "idempotency": {
+        "claim-boundary": 0.0039,
+        "decode-budget": -0.0449,
+        "deployment": -0.0469,
+        "diagnosis": 0.0391,
+        "idempotency": 1.0,
+        "measurement": 0.0723,
+        "monotonicity": -0.0098,
+        "restart": 0.0117,
+        "selection": 0.0078,
+        "wire-budget": -0.0176
+      },
+      "measurement": {
+        "claim-boundary": 0.0176,
+        "decode-budget": -0.0352,
+        "deployment": -0.0566,
+        "diagnosis": -0.0332,
+        "idempotency": 0.0723,
+        "measurement": 1.0,
+        "monotonicity": 0.0313,
+        "restart": 0.0098,
+        "selection": -0.0137,
+        "wire-budget": 0.0156
+      },
+      "monotonicity": {
+        "claim-boundary": 0.0254,
+        "decode-budget": -0.0078,
+        "deployment": -0.0215,
+        "diagnosis": 0.0293,
+        "idempotency": -0.0098,
+        "measurement": 0.0313,
+        "monotonicity": 1.0,
+        "restart": 0.0098,
+        "selection": 0.0059,
+        "wire-budget": -0.0195
+      },
+      "restart": {
+        "claim-boundary": -0.0508,
+        "decode-budget": 0.002,
+        "deployment": 0.0195,
+        "diagnosis": -0.0469,
+        "idempotency": 0.0117,
+        "measurement": 0.0098,
+        "monotonicity": 0.0098,
+        "restart": 1.0,
+        "selection": 0.0391,
+        "wire-budget": 0.0176
+      },
+      "selection": {
+        "claim-boundary": 0.0117,
+        "decode-budget": 0.0098,
+        "deployment": 0.0039,
+        "diagnosis": -0.0039,
+        "idempotency": 0.0078,
+        "measurement": -0.0137,
+        "monotonicity": 0.0059,
+        "restart": 0.0391,
+        "selection": 1.0,
+        "wire-budget": -0.0176
+      },
+      "wire-budget": {
+        "claim-boundary": -0.0176,
+        "decode-budget": -0.043,
+        "deployment": -0.0293,
+        "diagnosis": -0.002,
+        "idempotency": -0.0176,
+        "measurement": 0.0156,
+        "monotonicity": -0.0195,
+        "restart": 0.0176,
+        "selection": -0.0176,
+        "wire-budget": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "claim-boundary": {
+          "gravity": 1.0,
+          "owner": "independent checks",
+          "owners": {
+            "independent checks": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "decode-budget": {
+          "gravity": 1.0,
+          "owner": "certification authority",
+          "owners": {
+            "certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "deployment": {
+          "gravity": 1.0,
+          "owner": "deployment transaction",
+          "owners": {
+            "deployment transaction": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "diagnosis": {
+          "gravity": 1.0,
+          "owner": "cold learner",
+          "owners": {
+            "cold learner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "idempotency": {
+          "gravity": 1.0,
+          "owner": "certification authority",
+          "owners": {
+            "certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "measurement": {
+          "gravity": 1.0,
+          "owner": "test harness",
+          "owners": {
+            "test harness": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "monotonicity": {
+          "gravity": 1.0,
+          "owner": "certification authority",
+          "owners": {
+            "certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "restart": {
+          "gravity": 1.0,
+          "owner": "scheduler journal",
+          "owners": {
+            "scheduler journal": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "selection": {
+          "gravity": 1.0,
+          "owner": "certification authority",
+          "owners": {
+            "certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "wire-budget": {
+          "gravity": 1.0,
+          "owner": "unix socket protocol",
+          "owners": {
+            "unix socket protocol": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.6667,
+          "owner": "certification authority",
+          "owners": {
+            "certification authority": 8,
+            "deployment transaction": 2,
+            "unix socket protocol": 2
+          },
+          "support": 8,
+          "total": 12
+        },
+        "observation": {
+          "gravity": 0.5,
+          "owner": "cold learner",
+          "owners": {
+            "cold learner": 2,
+            "test harness": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "proof": {
+          "gravity": 0.5,
+          "owner": "independent checks",
+          "owners": {
+            "independent checks": 2,
+            "scheduler journal": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 6,
+          "entrypoints": [
+            "binary install",
+            "decoded request",
+            "repeated v2 request",
+            "request decode",
+            "v2 envelope",
+            "validated freeze"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c3",
+            "candidate_answer:c4",
+            "candidate_answer:c5",
+            "candidate_answer:c6",
+            "candidate_answer:c7",
+            "candidate_answer:c9",
+            "plans/effect-law-unification-v1/k1_restart_recovery_bounded_authority_wire_critique_v1.md",
+            "plans/effect-law-unification-v1/k1_restart_recovery_bounded_authority_wire_preregistration_v1.md"
+          ],
+          "layers": [
+            "operations",
+            "persistence",
+            "runtime",
+            "science"
+          ],
+          "outputs": [
+            "bounded cutover or rollback",
+            "bounded request",
+            "one signed event",
+            "resealed freeze",
+            "unchanged roots",
+            "validated logical request"
+          ],
+          "owners": [
+            "certification authority",
+            "deployment transaction",
+            "unix socket protocol"
+          ],
+          "scopes": [
+            "production",
+            "restart oracle"
+          ],
+          "source_triads": 6,
+          "triads": 12
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "one scheduler tick",
+            "scheduler tick"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c1",
+            "candidate_answer:c2",
+            "plans/effect-law-unification-v1/k1_restart_recovery_bounded_authority_wire_preregistration_v1.md"
+          ],
+          "layers": [
+            "evidence",
+            "runtime"
+          ],
+          "outputs": [
+            "exact request sizes",
+            "schema and byte count"
+          ],
+          "owners": [
+            "cold learner",
+            "test harness"
+          ],
+          "scopes": [
+            "isolated",
+            "production copy"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "live receipt",
+            "process restart"
+          ],
+          "evidence_paths": [
+            "candidate_answer:c10",
+            "candidate_answer:c8",
+            "plans/effect-law-unification-v1/k1_restart_recovery_bounded_authority_wire_preregistration_v1.md"
+          ],
+          "layers": [
+            "persistence",
+            "science"
+          ],
+          "outputs": [
+            "identical roots",
+            "no scientific promotion"
+          ],
+          "owners": [
+            "independent checks",
+            "scheduler journal"
+          ],
+          "scopes": [
+            "restart oracle",
+            "science"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 76.0263,
+          "self_coherence": 0.396,
+          "triads": 6
+        },
+        "observation": {
+          "norm": 44.4972,
+          "self_coherence": 0.6953,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 44.0908,
+          "self_coherence": 0.6889,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "observation": 0.0225,
+          "proof": 0.0537
+        },
+        "observation": {
+          "authority": 0.0225,
+          "observation": 1.0,
+          "proof": -0.0082
+        },
+        "proof": {
+          "authority": 0.0537,
+          "observation": -0.0082,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 76.0263,
+          "self_coherence": 0.396,
+          "triads": 6
+        },
+        "observation": {
+          "norm": 44.4972,
+          "self_coherence": 0.6953,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 44.0908,
+          "self_coherence": 0.6889,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "claim-boundary": 1,
+      "decode-budget": 1,
+      "deployment": 1,
+      "diagnosis": 1,
+      "idempotency": 1,
+      "measurement": 1,
+      "monotonicity": 1,
+      "restart": 1,
+      "selection": 1,
+      "wire-budget": 1
+    },
+    "stable_groups": [
+      "claim-boundary",
+      "decode-budget",
+      "deployment",
+      "diagnosis",
+      "idempotency",
+      "measurement",
+      "monotonicity",
+      "restart",
+      "selection",
+      "wire-budget"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k1-restart-recovery-bounded-authority-wire-v1.trace.json"
+}

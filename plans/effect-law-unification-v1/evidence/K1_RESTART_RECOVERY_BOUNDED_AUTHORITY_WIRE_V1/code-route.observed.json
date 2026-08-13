@@ -1,0 +1,146 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": ".",
+  "nodes": [
+    {
+      "id": "cold_scheduler",
+      "role": "producer",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/lifecycle.rs","line":331,"contains":"projection = append_candidate_freeze_for("}
+    },
+    {
+      "id": "bounded_wire_encoder",
+      "role": "interface",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs","line":286,"contains":"bounded_wire::encode_candidate_freeze_v2"}
+    },
+    {
+      "id": "authority_bounded_decoder",
+      "role": "evidence_owner",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":30,"contains":"bounded_wire::decode_candidate_freeze_v2"}
+    },
+    {
+      "id": "queue_recomputation",
+      "role": "candidate_rank_owner",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":171,"contains":"validate_queue_derivation("}
+    },
+    {
+      "id": "registry_scheduler_cas",
+      "role": "authorization_owner",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":188,"contains":"validate_registry_cas(&registry, &request.deficit_snapshot)?;"}
+    },
+    {
+      "id": "signed_scheduler_journal",
+      "role": "mutation_owner",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":207,"contains":"append_and_persist("}
+    },
+    {
+      "id": "journal_replay_reader",
+      "role": "producer",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/bounded_wire.rs","line":280,"contains":"restore_anchored_scheduler_for(&config"}
+    },
+    {
+      "id": "restart_parity_test",
+      "role": "proof_owner",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/bounded_wire.rs","line":215,"contains":"fn bounded_v2_append_is_idempotent_and_restart_identical()"}
+    },
+    {
+      "id": "restart_projection",
+      "role": "observer",
+      "evidence": {"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/bounded_wire.rs","line":276,"contains":"let restarted = restore_projection_for(&config"}
+    }
+  ],
+  "edges": [
+    {
+      "id":"encode-freeze-request",
+      "from":"cold_scheduler",
+      "relation":"calls",
+      "to":"bounded_wire_encoder",
+      "events":["candidate_freeze_execution"],
+      "evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs","line":286,"contains":"bounded_wire::encode_candidate_freeze_v2"}
+    },
+    {
+      "id":"decode-freeze-request",
+      "from":"bounded_wire_encoder",
+      "relation":"delegates",
+      "to":"authority_bounded_decoder",
+      "events":["candidate_freeze_execution"],
+      "evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":30,"contains":"bounded_wire::decode_candidate_freeze_v2"}
+    },
+    {
+      "id":"rank-decoded-request",
+      "from":"authority_bounded_decoder",
+      "relation":"passes_to",
+      "to":"queue_recomputation",
+      "events":["candidate_freeze"],
+      "evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":171,"contains":"validate_queue_derivation("}
+    },
+    {
+      "id":"authorize-recomputed-request",
+      "from":"queue_recomputation",
+      "relation":"passes_to",
+      "to":"registry_scheduler_cas",
+      "events":["candidate_freeze"],
+      "evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":184,"contains":"if let Some(cas) = scheduler_cas"}
+    },
+    {
+      "id":"persist-authorized-freeze",
+      "from":"registry_scheduler_cas",
+      "relation":"authorizes",
+      "to":"signed_scheduler_journal",
+      "events":["candidate_freeze"],
+      "evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":207,"contains":"append_and_persist("}
+    },
+    {
+      "id":"prove-restart",
+      "from":"journal_replay_reader",
+      "relation":"proves",
+      "to":"restart_parity_test",
+      "events":["restart"],
+      "evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/bounded_wire.rs","line":276,"contains":"let restarted = restore_projection_for(&config"}
+    },
+    {
+      "id":"observe-restart-projection",
+      "from":"restart_parity_test",
+      "relation":"observes",
+      "to":"restart_projection",
+      "events":["restart_observation"],
+      "evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/bounded_wire.rs","line":277,"contains":".expect(\"restarted projection\")"}
+    }
+  ],
+  "routes": [
+    {
+      "id":"bounded-freeze-execution",
+      "event":"candidate_freeze_execution",
+      "kind":"execution",
+      "entry":"cold_scheduler",
+      "terminal":"authority_bounded_decoder",
+      "required_roles":["producer","interface","evidence_owner"],
+      "path_cardinality":[{"from":"cold_scheduler","to":"authority_bounded_decoder","min":1,"max":1}]
+    },
+    {
+      "id":"bounded-freeze-authority",
+      "event":"candidate_freeze",
+      "kind":"authority",
+      "entry":"authority_bounded_decoder",
+      "terminal":"signed_scheduler_journal",
+      "required_roles":["evidence_owner","candidate_rank_owner","authorization_owner","mutation_owner"],
+      "path_cardinality":[{"from":"authority_bounded_decoder","to":"signed_scheduler_journal","min":1,"max":1}]
+    },
+    {
+      "id":"restart-proof",
+      "event":"restart",
+      "kind":"proof",
+      "entry":"journal_replay_reader",
+      "terminal":"restart_parity_test",
+      "required_roles":["producer","proof_owner"]
+    },
+    {
+      "id":"restart-observation",
+      "event":"restart_observation",
+      "kind":"observation",
+      "entry":"restart_parity_test",
+      "terminal":"restart_projection",
+      "required_roles":["proof_owner","observer"]
+    }
+  ]
+}

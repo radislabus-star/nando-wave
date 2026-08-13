@@ -1,0 +1,41 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id":"production_prefix_copy","role":"producer"},
+    {"id":"measurement_oracle","role":"observer"},
+    {"id":"measurement_receipt","role":"proof_owner"},
+    {"id":"cold_scheduler","role":"producer"},
+    {"id":"bounded_wire_encoder","role":"interface"},
+    {"id":"authority_bounded_decoder","role":"evidence_owner"},
+    {"id":"registry_scheduler_cas","role":"authorization_owner"},
+    {"id":"queue_recomputation","role":"candidate_rank_owner"},
+    {"id":"signed_scheduler_journal","role":"mutation_owner"},
+    {"id":"journal_replay_reader","role":"producer"},
+    {"id":"restart_parity_test","role":"proof_owner"},
+    {"id":"restart_projection","role":"observer"},
+    {"id":"deployment_transaction","role":"mutation_owner"},
+    {"id":"deployment_verifier","role":"authorization_owner"}
+  ],
+  "edges": [
+    {"id":"observe-copy","from":"production_prefix_copy","relation":"observes","to":"measurement_oracle","events":["measure"]},
+    {"id":"prove-measurement","from":"measurement_oracle","relation":"proves","to":"measurement_receipt","events":["measurement_proof"]},
+    {"id":"encode-request","from":"cold_scheduler","relation":"calls","to":"bounded_wire_encoder","events":["candidate_freeze_execution"]},
+    {"id":"decode-request","from":"bounded_wire_encoder","relation":"delegates","to":"authority_bounded_decoder","events":["candidate_freeze_execution"]},
+    {"id":"rank-decoded-evidence","from":"authority_bounded_decoder","relation":"passes_to","to":"queue_recomputation","events":["candidate_freeze"]},
+    {"id":"authorize-selection","from":"queue_recomputation","relation":"passes_to","to":"registry_scheduler_cas","events":["candidate_freeze"]},
+    {"id":"persist-authorized-freeze","from":"registry_scheduler_cas","relation":"authorizes","to":"signed_scheduler_journal","events":["candidate_freeze"]},
+    {"id":"read-journal","from":"journal_replay_reader","relation":"proves","to":"restart_parity_test","events":["restart"]},
+    {"id":"observe-restart","from":"restart_parity_test","relation":"observes","to":"restart_projection","events":["restart_observation"]},
+    {"id":"verify-deployment","from":"deployment_transaction","relation":"calls","to":"deployment_verifier","events":["deploy"]}
+  ],
+  "routes": [
+    {"id":"read-only-measurement","event":"measure","kind":"observation","entry":"production_prefix_copy","terminal":"measurement_oracle","required_roles":["producer","observer"],"path_cardinality":[{"from":"production_prefix_copy","to":"measurement_oracle","min":1,"max":1}]},
+    {"id":"measurement-proof","event":"measurement_proof","kind":"proof","entry":"measurement_oracle","terminal":"measurement_receipt","required_roles":["observer","proof_owner"]},
+    {"id":"bounded-freeze-execution","event":"candidate_freeze_execution","kind":"execution","entry":"cold_scheduler","terminal":"authority_bounded_decoder","required_roles":["producer","interface","evidence_owner"],"path_cardinality":[{"from":"cold_scheduler","to":"authority_bounded_decoder","min":1,"max":1}]},
+    {"id":"bounded-freeze-authority","event":"candidate_freeze","kind":"authority","entry":"authority_bounded_decoder","terminal":"signed_scheduler_journal","required_roles":["evidence_owner","candidate_rank_owner","authorization_owner","mutation_owner"],"path_cardinality":[{"from":"authority_bounded_decoder","to":"signed_scheduler_journal","min":1,"max":1}]},
+    {"id":"restart-proof","event":"restart","kind":"proof","entry":"journal_replay_reader","terminal":"restart_parity_test","required_roles":["producer","proof_owner"]},
+    {"id":"restart-observation","event":"restart_observation","kind":"observation","entry":"restart_parity_test","terminal":"restart_projection","required_roles":["proof_owner","observer"]},
+    {"id":"scoped-deployment","event":"deploy","kind":"execution","entry":"deployment_transaction","terminal":"deployment_verifier","required_roles":["mutation_owner","authorization_owner"],"path_cardinality":[{"from":"deployment_transaction","to":"deployment_verifier","min":1,"max":1}]}
+  ]
+}

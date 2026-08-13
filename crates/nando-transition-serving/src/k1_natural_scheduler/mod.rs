@@ -42,6 +42,7 @@ use crate::operator_certification::{
 use crate::write_bytes_atomic;
 
 mod authority;
+mod bounded_wire;
 pub(crate) mod duplicate_cohorts;
 mod fork;
 mod future_authority;
@@ -58,6 +59,8 @@ use projection::projection_for;
 
 pub(crate) const K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-candidate-freeze-authority-request.v1";
+pub(crate) const K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V2: &str =
+    "nando.k1-candidate-freeze-authority-request.v2";
 pub(crate) const K1_SCHEDULER_APPEND_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-scheduler-append-authority-request.v1";
 pub(crate) const K1_TRANSFER_SETTLEMENT_AUTHORITY_REQUEST_SCHEMA_V1: &str =
@@ -272,9 +275,60 @@ pub(crate) fn append_candidate_freeze_for(
     config: &CertificationAuthorityConfigV1,
     lane: K1SchedulerLaneV1,
     mut request: K1CandidateFreezeAuthorityRequestV1,
+    expected_projection: &K1SchedulerProjectionV1,
 ) -> Result<K1SchedulerProjectionV1, String> {
     request.lane = lane;
-    send_authority_request(config, &request)
+    let logical_bytes = serde_json::to_vec(&request)
+        .map_err(|error| format!("k1_scheduler_authority_encode:{error}"))?;
+    if logical_bytes.len() <= K1_SCHEDULER_MAX_REQUEST_BYTES {
+        return authority::send_authority_bytes(config, logical_bytes);
+    }
+    let envelope = bounded_wire::encode_candidate_freeze_v2(&request, expected_projection)?;
+    send_authority_request(config, &envelope)
+}
+
+#[cfg(test)]
+pub(crate) fn measure_candidate_freeze_v2(
+    request: &K1CandidateFreezeAuthorityRequestV1,
+    projection: &K1SchedulerProjectionV1,
+) -> Result<(u64, usize), String> {
+    let envelope = bounded_wire::encode_candidate_freeze_v2(request, projection)?;
+    let compressed_bytes = envelope.compressed_bytes;
+    let outer_wire_bytes = serde_json::to_vec(&envelope)
+        .map_err(|error| format!("k1_candidate_freeze_v2_measurement_encode:{error}"))?
+        .len();
+    Ok((compressed_bytes, outer_wire_bytes))
+}
+
+#[cfg(test)]
+pub(crate) fn exercise_candidate_freeze_v2_for_test(
+    config: &CertificationAuthorityConfigV1,
+    signing_key: &SigningKey,
+    request: &K1CandidateFreezeAuthorityRequestV1,
+    projection: &K1SchedulerProjectionV1,
+) -> Result<(K1SchedulerProjectionV1, K1SchedulerProjectionV1), String> {
+    let envelope = bounded_wire::encode_candidate_freeze_v2(request, projection)?;
+    let line = serde_json::to_string(&envelope)
+        .map_err(|error| format!("k1_candidate_freeze_v2_test_encode:{error}"))?;
+    let decode_response = |value: String| -> Result<K1SchedulerProjectionV1, String> {
+        let response: K1SchedulerAuthorityResponseV1 = serde_json::from_str(&value)
+            .map_err(|error| format!("k1_candidate_freeze_v2_test_response:{error}"))?;
+        if !response.error.is_empty() {
+            return Err(response.error);
+        }
+        response
+            .projection
+            .ok_or_else(|| "k1_candidate_freeze_v2_test_projection_missing".to_owned())
+    };
+    let first = decode_response(
+        handle_authority_line(config, signing_key, &line)
+            .ok_or_else(|| "k1_candidate_freeze_v2_test_unhandled".to_owned())?,
+    )?;
+    let duplicate = decode_response(
+        handle_authority_line(config, signing_key, &line)
+            .ok_or_else(|| "k1_candidate_freeze_v2_test_unhandled".to_owned())?,
+    )?;
+    Ok((first, duplicate))
 }
 
 pub(crate) fn append_scheduler_payload_for(

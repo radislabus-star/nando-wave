@@ -1,0 +1,132 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "authority-module",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "74b01b11cf489f221f675703545028681ef90ee3a10d7835af02332ae3a5f2ab",
+      "size_bytes": 19580
+    },
+    {
+      "exists": true,
+      "id": "scheduler-module",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs",
+      "sha256": "2f3f2b483a2ac81e159e91b161b0569dfd3bb76fc06d13ce195e6d67a676d467",
+      "size_bytes": 22233
+    },
+    {
+      "exists": true,
+      "id": "lifecycle-module",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/lifecycle.rs",
+      "sha256": "fa384ba1ff6ca92f30cdcc68004b35470eef8192f826c9e421cf52f270600df7",
+      "size_bytes": 25046
+    },
+    {
+      "exists": true,
+      "id": "service-module",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs",
+      "sha256": "654445dc6ba5e1053f1095ac1aff4d9ae88b81a535378ace7e6d3b01e3ad83aa",
+      "size_bytes": 46792
+    },
+    {
+      "exists": true,
+      "id": "production-ledger-copy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/k1-epistemic-scheduler-ledger-v1.json",
+      "sha256": "65c1f1f9a300558cbb6dd4116c2f3a0a65c5c3ad1d9d088d4c317063a311ed7b",
+      "size_bytes": 2124299
+    },
+    {
+      "exists": true,
+      "id": "production-anchor-copy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/k1-epistemic-scheduler-anchor-v1.json",
+      "sha256": "a0af4c57e81a29a75cf260cee42637d9b3379812fea15e4ee276243bec66cda9",
+      "size_bytes": 577
+    },
+    {
+      "exists": true,
+      "id": "frontier-report-copy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/latest.json",
+      "sha256": "f12afaab9ed3a4c9637df6e0a7e2f4ae2d6f3c8a3f6a37a0690411059fc0e21b",
+      "size_bytes": 1504581
+    },
+    {
+      "exists": true,
+      "id": "s1c4-terminal-copy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/nanda-k1-restart-wire-preflight-UIpk2iig/remote/s1c4-natural-census-report-v1.json",
+      "sha256": "ae5107fc5e9b7f562d01beac8611d5f3dc3020413fa26982e29e25037c9202d1",
+      "size_bytes": 1419
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 8,
+    "forbidden_side_effect_kinds": [
+      "connector_restart",
+      "generated_traffic",
+      "hot_restart",
+      "law_promotion",
+      "nginx_restart",
+      "phase_mutation",
+      "retrospective_goal",
+      "s1c4_reopen",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 3,
+    "invariants": 5,
+    "planned_side_effect_kinds": [
+      "bounded_protocol_edit",
+      "read_only_test_oracle",
+      "rollback_capable_authority_cold_control_restart",
+      "signed_append_only_event"
+    ],
+    "preserved_artifacts": 2,
+    "runtime_comparisons": 1,
+    "source_checks": 2,
+    "tests": 8
+  },
+  "manifest_sha256": "8223b630d05399c6fc63681117866062adbe35e4221aa5278a31f73e08887406",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "authority-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "74b01b11cf489f221f675703545028681ef90ee3a10d7835af02332ae3a5f2ab",
+      "size_bytes": 19580
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "runtime-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs",
+      "sha256": "654445dc6ba5e1053f1095ac1aff4d9ae88b81a535378ace7e6d3b01e3ad83aa",
+      "size_bytes": 46792
+    }
+  ],
+  "task_id": "k1-restart-recovery-bounded-authority-wire-v1",
+  "verdict": "READY_TO_IMPLEMENT"
+}

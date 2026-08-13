@@ -10,6 +10,7 @@ use super::journal::encode_hex;
 use super::*;
 
 mod authority;
+mod bounded_wire;
 mod candidate_binding;
 mod duplicate_cohorts;
 mod fork;
@@ -71,6 +72,19 @@ fn candidate_freeze_for_generation_and_basis(
     generation_sequence: u64,
     discovery_basis_root_sha256: String,
 ) -> K1NaturalCandidateFreezeV1 {
+    candidate_freeze_material(generation_sequence, discovery_basis_root_sha256).4
+}
+
+fn candidate_freeze_material(
+    generation_sequence: u64,
+    discovery_basis_root_sha256: String,
+) -> (
+    K1NaturalCohortCatalogV1,
+    K1DeficitSnapshotV1,
+    K1NaturalCandidateQueueV1,
+    K1NaturalCohortCandidateV1,
+    K1NaturalCandidateFreezeV1,
+) {
     let rows = (1..=8)
         .map(|index| {
             K1NaturalEvidenceRowV1::seal(
@@ -117,6 +131,26 @@ fn candidate_freeze_for_generation_and_basis(
         false,
     )
     .expect("deficit");
+    candidate_freeze_material_with_deficit(
+        generation_sequence,
+        discovery_basis_root_sha256,
+        catalog,
+        deficit,
+    )
+}
+
+fn candidate_freeze_material_with_deficit(
+    generation_sequence: u64,
+    discovery_basis_root_sha256: String,
+    catalog: K1NaturalCohortCatalogV1,
+    deficit: K1DeficitSnapshotV1,
+) -> (
+    K1NaturalCohortCatalogV1,
+    K1DeficitSnapshotV1,
+    K1NaturalCandidateQueueV1,
+    K1NaturalCohortCandidateV1,
+    K1NaturalCandidateFreezeV1,
+) {
     let queue =
         build_k1_natural_candidate_queue_v1(&catalog, &deficit, candidate_watermark(&catalog))
             .expect("queue");
@@ -126,12 +160,13 @@ fn candidate_freeze_for_generation_and_basis(
         .iter()
         .find(|candidate| candidate.candidate_root_sha256 == row.candidate_root_sha256)
         .expect("candidate");
-    K1NaturalCandidateFreezeV1::seal(
+    let candidate = candidate.clone();
+    let freeze = K1NaturalCandidateFreezeV1::seal(
         generation_sequence,
         &catalog,
         &deficit,
         &queue,
-        candidate,
+        &candidate,
         row.score.clone(),
         "nando.k1-operator-blind-scheduler.v1".to_owned(),
         discovery_basis_root_sha256,
@@ -145,5 +180,6 @@ fn candidate_freeze_for_generation_and_basis(
         candidate.last_capture_sequence,
         1_700_000_000,
     )
-    .expect("freeze")
+    .expect("freeze");
+    (catalog, deficit, queue, candidate, freeze)
 }

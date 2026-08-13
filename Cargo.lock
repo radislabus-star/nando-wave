@@ -803,6 +803,7 @@ name = "nando-transition-serving"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64",
  "bytes",
  "ed25519-dalek",
  "hmac",
@@ -826,6 +827,7 @@ dependencies = [
  "tiktoken-rs",
  "time",
  "tokio",
+ "zstd",
 ]
 
 [[package]]

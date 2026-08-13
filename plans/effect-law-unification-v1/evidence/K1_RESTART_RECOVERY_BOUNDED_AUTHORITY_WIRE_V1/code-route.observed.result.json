@@ -1,0 +1,199 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K1_RESTART_RECOVERY_BOUNDED_AUTHORITY_WIRE_V1/code-route.observed.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "node_count": 9,
+  "edge_count": 7,
+  "routes": [
+    {
+      "id": "bounded-freeze-execution",
+      "event": "candidate_freeze_execution",
+      "kind": "execution",
+      "entry": "cold_scheduler",
+      "via": [],
+      "terminal": "authority_bounded_decoder",
+      "path_count": 1,
+      "paths": [
+        [
+          "cold_scheduler",
+          "bounded_wire_encoder",
+          "authority_bounded_decoder"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "authority_bounded_decoder"
+        ],
+        "interface": [
+          "bounded_wire_encoder"
+        ],
+        "producer": [
+          "cold_scheduler"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "cold_scheduler",
+          "to": "authority_bounded_decoder",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "cold_scheduler",
+              "bounded_wire_encoder",
+              "authority_bounded_decoder"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bounded-freeze-authority",
+      "event": "candidate_freeze",
+      "kind": "authority",
+      "entry": "authority_bounded_decoder",
+      "via": [],
+      "terminal": "signed_scheduler_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "authority_bounded_decoder",
+          "queue_recomputation",
+          "registry_scheduler_cas",
+          "signed_scheduler_journal"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "authority_bounded_decoder"
+        ],
+        "candidate_rank_owner": [
+          "queue_recomputation"
+        ],
+        "authorization_owner": [
+          "registry_scheduler_cas"
+        ],
+        "mutation_owner": [
+          "signed_scheduler_journal"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "authority_bounded_decoder",
+          "to": "signed_scheduler_journal",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "authority_bounded_decoder",
+              "queue_recomputation",
+              "registry_scheduler_cas",
+              "signed_scheduler_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restart-proof",
+      "event": "restart",
+      "kind": "proof",
+      "entry": "journal_replay_reader",
+      "via": [],
+      "terminal": "restart_parity_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "journal_replay_reader",
+          "restart_parity_test"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "journal_replay_reader"
+        ],
+        "proof_owner": [
+          "restart_parity_test"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "restart-observation",
+      "event": "restart_observation",
+      "kind": "observation",
+      "entry": "restart_parity_test",
+      "via": [],
+      "terminal": "restart_projection",
+      "path_count": 1,
+      "paths": [
+        [
+          "restart_parity_test",
+          "restart_projection"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "restart_parity_test"
+        ],
+        "observer": [
+          "restart_projection"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "candidate_freeze": {
+      "render_owner": [],
+      "authorization_owner": [
+        "registry_scheduler_cas"
+      ],
+      "candidate_rank_owner": [
+        "queue_recomputation"
+      ],
+      "evidence_owner": [
+        "authority_bounded_decoder"
+      ],
+      "mutation_owner": [
+        "signed_scheduler_journal"
+      ],
+      "display_rank_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 16,
+    "verified": 16,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

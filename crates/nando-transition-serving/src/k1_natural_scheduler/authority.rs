@@ -17,11 +17,26 @@ pub(crate) fn handle_authority_line(
     };
     let schema = value.get("schema").and_then(Value::as_str)?;
     let result = match schema {
-        K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1 => serde_json::from_value::<
-            K1CandidateFreezeAuthorityRequestV1,
-        >(value)
-        .map_err(|error| format!("k1_candidate_freeze_request_decode:{error}"))
-        .and_then(|request| append_candidate_freeze_authoritative(config, signing_key, request)),
+        K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1 => {
+            serde_json::from_value::<K1CandidateFreezeAuthorityRequestV1>(value)
+                .map_err(|error| format!("k1_candidate_freeze_request_decode:{error}"))
+                .and_then(|request| {
+                    append_candidate_freeze_authoritative(config, signing_key, request, None)
+                })
+        }
+        K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V2 => {
+            serde_json::from_value::<bounded_wire::K1CandidateFreezeAuthorityRequestV2>(value)
+                .map_err(|error| format!("k1_candidate_freeze_v2_request_decode:{error}"))
+                .and_then(bounded_wire::decode_candidate_freeze_v2)
+                .and_then(|(request, scheduler_cas)| {
+                    append_candidate_freeze_authoritative(
+                        config,
+                        signing_key,
+                        request,
+                        Some(&scheduler_cas),
+                    )
+                })
+        }
         K1_SCHEDULER_APPEND_AUTHORITY_REQUEST_SCHEMA_V1 => {
             serde_json::from_value::<K1SchedulerAppendAuthorityRequestV1>(value)
                 .map_err(|error| format!("k1_scheduler_append_request_decode:{error}"))
@@ -130,6 +145,7 @@ fn append_candidate_freeze_authoritative(
     config: &CertificationAuthorityConfigV1,
     signing_key: &SigningKey,
     request: K1CandidateFreezeAuthorityRequestV1,
+    scheduler_cas: Option<&bounded_wire::K1SchedulerCasV2>,
 ) -> Result<K1SchedulerProjectionV1, String> {
     if request.schema != K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1 {
         return Err("k1_candidate_freeze_request_schema_invalid".to_owned());
@@ -165,6 +181,9 @@ fn append_candidate_freeze_authoritative(
     {
         return projection_for(&scheduler);
     }
+    if let Some(cas) = scheduler_cas {
+        validate_scheduler_cas(&scheduler, cas)?;
+    }
     let registry = restore_anchored_ledger(config)?;
     validate_registry_cas(&registry, &request.deficit_snapshot)?;
     let expected = K1NaturalCandidateFreezeV1::seal(
@@ -192,6 +211,20 @@ fn append_candidate_freeze_authoritative(
         &mut scheduler,
         K1SchedulerEventPayloadV1::CandidateFreeze(request.freeze),
     )
+}
+
+pub(super) fn validate_scheduler_cas(
+    scheduler: &K1SchedulerLedgerV1,
+    claimed: &bounded_wire::K1SchedulerCasV2,
+) -> Result<(), String> {
+    let projection = projection_for(scheduler)?;
+    if claimed.ledger_revision != projection.ledger_revision
+        || claimed.ledger_root_sha256 != projection.ledger_root_sha256
+        || claimed.projection_root_sha256 != projection.projection_root_sha256
+    {
+        return Err("k1_candidate_freeze_scheduler_cas_failed".to_owned());
+    }
+    Ok(())
 }
 
 pub(super) fn validate_discovery_basis_cas(
@@ -433,41 +466,47 @@ pub(super) fn send_authority_request<T: Serialize>(
     }
     #[cfg(unix)]
     {
-        let mut stream = UnixStream::connect(&config.authority_socket_path)
-            .map_err(|error| format!("k1_scheduler_authority_connect:{error}"))?;
-        stream
-            .set_read_timeout(Some(K1_SCHEDULER_AUTHORITY_READ_TIMEOUT))
-            .map_err(|error| format!("k1_scheduler_authority_read_timeout:{error}"))?;
-        stream
-            .set_write_timeout(Some(Duration::from_secs(5)))
-            .map_err(|error| format!("k1_scheduler_authority_write_timeout:{error}"))?;
         let bytes = serde_json::to_vec(request)
             .map_err(|error| format!("k1_scheduler_authority_encode:{error}"))?;
-        if bytes.len() > K1_SCHEDULER_MAX_REQUEST_BYTES {
-            return Err("k1_scheduler_authority_request_budget".to_owned());
-        }
-        stream
-            .write_all(&bytes)
-            .and_then(|_| stream.write_all(b"\n"))
-            .map_err(|error| format!("k1_scheduler_authority_write:{error}"))?;
-        stream
-            .shutdown(std::net::Shutdown::Write)
-            .map_err(|error| format!("k1_scheduler_authority_shutdown:{error}"))?;
-        let response: K1SchedulerAuthorityResponseV1 = serde_json::from_reader(&mut stream)
-            .map_err(|error| format!("k1_scheduler_authority_decode:{error}"))?;
-        if response.schema != K1_SCHEDULER_AUTHORITY_RESPONSE_SCHEMA_V1
-            || !response.error.is_empty()
-        {
-            return Err(if response.error.is_empty() {
-                "k1_scheduler_authority_response_invalid".to_owned()
-            } else {
-                response.error
-            });
-        }
-        let projection = response
-            .projection
-            .ok_or_else(|| "k1_scheduler_authority_projection_missing".to_owned())?;
-        projection.validate()?;
-        Ok(projection)
+        send_authority_bytes(config, bytes)
     }
+}
+
+#[cfg(unix)]
+pub(super) fn send_authority_bytes(
+    config: &CertificationAuthorityConfigV1,
+    bytes: Vec<u8>,
+) -> Result<K1SchedulerProjectionV1, String> {
+    if bytes.len() > K1_SCHEDULER_MAX_REQUEST_BYTES {
+        return Err("k1_scheduler_authority_request_budget".to_owned());
+    }
+    let mut stream = UnixStream::connect(&config.authority_socket_path)
+        .map_err(|error| format!("k1_scheduler_authority_connect:{error}"))?;
+    stream
+        .set_read_timeout(Some(K1_SCHEDULER_AUTHORITY_READ_TIMEOUT))
+        .map_err(|error| format!("k1_scheduler_authority_read_timeout:{error}"))?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .map_err(|error| format!("k1_scheduler_authority_write_timeout:{error}"))?;
+    stream
+        .write_all(&bytes)
+        .and_then(|_| stream.write_all(b"\n"))
+        .map_err(|error| format!("k1_scheduler_authority_write:{error}"))?;
+    stream
+        .shutdown(std::net::Shutdown::Write)
+        .map_err(|error| format!("k1_scheduler_authority_shutdown:{error}"))?;
+    let response: K1SchedulerAuthorityResponseV1 = serde_json::from_reader(&mut stream)
+        .map_err(|error| format!("k1_scheduler_authority_decode:{error}"))?;
+    if response.schema != K1_SCHEDULER_AUTHORITY_RESPONSE_SCHEMA_V1 || !response.error.is_empty() {
+        return Err(if response.error.is_empty() {
+            "k1_scheduler_authority_response_invalid".to_owned()
+        } else {
+            response.error
+        });
+    }
+    let projection = response
+        .projection
+        .ok_or_else(|| "k1_scheduler_authority_projection_missing".to_owned())?;
+    projection.validate()?;
+    Ok(projection)
 }

@@ -952,6 +952,8 @@ fn store_mechanism_report(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
     use nando_operator_kernel::{
         AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2,
         LearningRequestStructureV2, MultiSourceCardinalityClassV1, MultiSourceContainerClassV1,
@@ -960,7 +962,18 @@ mod tests {
         PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA,
         RelationAtom, sha256_bytes,
     };
-    use nando_operator_learning::SOURCE_NEUTRAL_EXTRACTOR_VERSION;
+    use nando_operator_learning::multi_source::{
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6, natural_t1_discovery_basis_root_v4,
+    };
+    use nando_operator_learning::{SOURCE_NEUTRAL_EXTRACTOR_VERSION, read_framed_cbor};
+
+    use crate::k1_natural_scheduler::{
+        K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1, K1CandidateFreezeAuthorityRequestV1,
+        candidate_exclusions_for, exercise_candidate_freeze_v2_for_test,
+        measure_candidate_freeze_v2, recover_authority,
+    };
+    use crate::k1_natural_scheduler_runtime::{K1_SCHEDULER_SCHEMA_V2, generation_budget};
+    use crate::operator_certification::CertificationAuthorityConfigV1;
 
     #[test]
     fn compact_summary_counts_only_current_queue_readiness() {
@@ -982,6 +995,309 @@ mod tests {
 
     fn root(label: &str) -> String {
         sha256_bytes(label.as_bytes())
+    }
+
+    fn measurement_path(name: &str) -> PathBuf {
+        std::env::var_os(name)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| panic!("missing {name}"))
+    }
+
+    #[test]
+    #[ignore = "read-only production-prefix diagnostic; requires explicit paths"]
+    fn measure_generation_556_authority_request_bytes() {
+        assert_eq!(
+            std::env::var("NANDO_K1_MEASURE_READ_ONLY").as_deref(),
+            Ok("1")
+        );
+        let state_root = measurement_path("NANDO_K1_MEASURE_STATE_ROOT");
+        let config = CertificationAuthorityConfigV1 {
+            root: state_root.clone(),
+            cleanup_receipts_path: measurement_path("NANDO_K1_MEASURE_CLEANUP_RECEIPTS"),
+            anchor_path: measurement_path("NANDO_K1_MEASURE_CERTIFICATION_ANCHOR"),
+            authority_socket_path: state_root.join("measurement-authority.sock"),
+            authority_public_key_path: measurement_path("NANDO_K1_MEASURE_AUTHORITY_PUBLIC_KEY"),
+            cleanup_public_key_path: measurement_path("NANDO_K1_MEASURE_CLEANUP_PUBLIC_KEY"),
+            response_registry_path: measurement_path("NANDO_K1_MEASURE_RESPONSE_REGISTRY"),
+            runtime_revocations_path: measurement_path("NANDO_K1_MEASURE_REVOCATIONS"),
+        };
+        assert!(!config.authority_socket_path.exists());
+
+        let topologies = read_framed_cbor::<PreActionTopologyAuditRowV1>(
+            &measurement_path("NANDO_K1_MEASURE_TOPOLOGY_ARCHIVE"),
+            "multi-source-topology",
+        )
+        .expect("topology prefix");
+        let frames = read_framed_cbor::<RelationFrame>(
+            &measurement_path("NANDO_K1_MEASURE_FRAME_ARCHIVE"),
+            "multi-source-frame",
+        )
+        .expect("frame prefix");
+        let certification = crate::operator_certification::restore_anchored_ledger(&config)
+            .expect("certification prefix");
+        let active_protocols = multi_source_live::known_epistemic_protocol_mode_roots(
+            &config.response_registry_path,
+            &certification,
+        )
+        .expect("active protocols");
+
+        let mut accumulator = EvidenceBindingAccumulator::new(true);
+        let join_report =
+            stream_multi_source_joins_from_iter(topologies.iter(), frames.iter(), |joined| {
+                accumulator.push(joined)
+            })
+            .expect("streamed join");
+        let prepared = prepare_tick_context_from_bindings(
+            join_report,
+            accumulator.finish().expect("evidence bindings"),
+            &active_protocols,
+        )
+        .expect("prepared context");
+        let projection = restore_projection_for(&config, K1SchedulerLaneV1::Epistemic)
+            .expect("epistemic projection");
+        assert_eq!(projection.completed_generations, 555);
+        assert_eq!(projection.next_generation_sequence, 556);
+        assert!(projection.active_candidate_freeze.is_none());
+
+        let deficit = current_deficit_snapshot(&config).expect("deficit snapshot");
+        let discovery_basis_root_sha256 =
+            natural_t1_discovery_basis_root_v4().expect("discovery basis");
+        let catalog = prepared.motif_catalog.as_ref().clone();
+        let exclusions = candidate_exclusions_for(
+            &config,
+            K1SchedulerLaneV1::Epistemic,
+            &catalog,
+            &prepared.active_protocol_mode_set_root_sha256,
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
+            &discovery_basis_root_sha256,
+        )
+        .expect("candidate exclusions");
+        let queue = prepared
+            .motif_catalog
+            .build_candidate_queue_with_exclusions(
+                &deficit,
+                &exclusions,
+                prepared.contract_watermark,
+            )
+            .expect("candidate queue");
+        let queue_row = queue.first_readiness_pass().expect("readiness-pass row");
+        let candidate = catalog
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_root_sha256 == queue_row.candidate_root_sha256)
+            .cloned()
+            .expect("selected candidate");
+        let freeze = prepared
+            .motif_catalog
+            .seal_candidate_freeze(
+                projection.next_generation_sequence,
+                &deficit,
+                &queue,
+                &candidate,
+                queue_row.score.clone(),
+                K1_SCHEDULER_SCHEMA_V2.to_owned(),
+                discovery_basis_root_sha256,
+                generation_budget(),
+                candidate.last_capture_sequence,
+                prepared.contract_watermark,
+                1_786_623_000,
+            )
+            .expect("candidate freeze");
+        let request = K1CandidateFreezeAuthorityRequestV1 {
+            schema: K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane: K1SchedulerLaneV1::Epistemic,
+            catalog: catalog.clone(),
+            deficit_snapshot: deficit.clone(),
+            queue: queue.clone(),
+            candidate: candidate.clone(),
+            freeze: freeze.clone(),
+            active_protocol_mode_set_root_sha256: prepared
+                .active_protocol_mode_set_root_sha256
+                .clone(),
+        };
+        let (compressed_bytes, outer_wire_bytes) =
+            measure_candidate_freeze_v2(&request, &projection).expect("bounded V2 measurement");
+        let receipt = serde_json::json!({
+            "schema": "nando.k1-authority-request-measurement.v1",
+            "ledger_revision": projection.ledger_revision,
+            "ledger_root_sha256": projection.ledger_root_sha256,
+            "projection_root_sha256": projection.projection_root_sha256,
+            "completed_generations": projection.completed_generations,
+            "next_generation_sequence": projection.next_generation_sequence,
+            "topology_rows": topologies.len(),
+            "frame_rows": frames.len(),
+            "joined_rows": prepared.join_report.joined_rows,
+            "catalog_candidates": catalog.candidates.len(),
+            "queue_rows": queue.rows.len(),
+            "candidate_root_sha256": candidate.candidate_root_sha256,
+            "freeze_root_sha256": freeze.freeze_root_sha256,
+            "catalog_bytes": serde_json::to_vec(&catalog).expect("catalog bytes").len(),
+            "deficit_snapshot_bytes": serde_json::to_vec(&deficit).expect("deficit bytes").len(),
+            "queue_bytes": serde_json::to_vec(&queue).expect("queue bytes").len(),
+            "candidate_bytes": serde_json::to_vec(&candidate).expect("candidate bytes").len(),
+            "freeze_bytes": serde_json::to_vec(&freeze).expect("freeze bytes").len(),
+            "request_bytes": serde_json::to_vec(&request).expect("request bytes").len(),
+            "compressed_bytes": compressed_bytes,
+            "outer_wire_bytes": outer_wire_bytes,
+            "wire_limit_bytes": 4 * 1024 * 1024,
+            "logical_limit_bytes": 16 * 1024 * 1024,
+            "authority_ready": false,
+            "phase_mutation_allowed": false
+        });
+        println!("K1_AUTHORITY_MEASUREMENT={receipt}");
+    }
+
+    #[test]
+    #[ignore = "mutates only a disposable production-state copy; requires explicit private key"]
+    fn prove_generation_556_v2_append_retry_restart_parity() {
+        assert_eq!(
+            std::env::var("NANDO_K1_PROVE_DISPOSABLE_COPY").as_deref(),
+            Ok("1")
+        );
+        let state_root = measurement_path("NANDO_K1_MEASURE_STATE_ROOT");
+        let config = CertificationAuthorityConfigV1 {
+            root: state_root.clone(),
+            cleanup_receipts_path: measurement_path("NANDO_K1_MEASURE_CLEANUP_RECEIPTS"),
+            anchor_path: measurement_path("NANDO_K1_MEASURE_CERTIFICATION_ANCHOR"),
+            authority_socket_path: state_root.join("proof-authority.sock"),
+            authority_public_key_path: measurement_path("NANDO_K1_MEASURE_AUTHORITY_PUBLIC_KEY"),
+            cleanup_public_key_path: measurement_path("NANDO_K1_MEASURE_CLEANUP_PUBLIC_KEY"),
+            response_registry_path: measurement_path("NANDO_K1_MEASURE_RESPONSE_REGISTRY"),
+            runtime_revocations_path: measurement_path("NANDO_K1_MEASURE_REVOCATIONS"),
+        };
+        assert!(!config.authority_socket_path.exists());
+        assert!(state_root.to_string_lossy().contains("disposable-proof"));
+        let signing_key = crate::operator_certification::read_signing_key(&measurement_path(
+            "NANDO_K1_MEASURE_AUTHORITY_PRIVATE_KEY",
+        ))
+        .expect("authority private key");
+        assert_eq!(
+            signing_key.verifying_key(),
+            crate::operator_certification::read_verifying_key(&config.authority_public_key_path)
+                .expect("authority public key")
+        );
+
+        let topologies = read_framed_cbor::<PreActionTopologyAuditRowV1>(
+            &measurement_path("NANDO_K1_MEASURE_TOPOLOGY_ARCHIVE"),
+            "multi-source-topology",
+        )
+        .expect("topology prefix");
+        let frames = read_framed_cbor::<RelationFrame>(
+            &measurement_path("NANDO_K1_MEASURE_FRAME_ARCHIVE"),
+            "multi-source-frame",
+        )
+        .expect("frame prefix");
+        let certification = crate::operator_certification::restore_anchored_ledger(&config)
+            .expect("certification prefix");
+        let active_protocols = multi_source_live::known_epistemic_protocol_mode_roots(
+            &config.response_registry_path,
+            &certification,
+        )
+        .expect("active protocols");
+        let mut accumulator = EvidenceBindingAccumulator::new(true);
+        let join_report =
+            stream_multi_source_joins_from_iter(topologies.iter(), frames.iter(), |joined| {
+                accumulator.push(joined)
+            })
+            .expect("streamed join");
+        let prepared = prepare_tick_context_from_bindings(
+            join_report,
+            accumulator.finish().expect("evidence bindings"),
+            &active_protocols,
+        )
+        .expect("prepared context");
+        let before = restore_projection_for(&config, K1SchedulerLaneV1::Epistemic)
+            .expect("epistemic projection");
+        assert_eq!(before.ledger_revision, 1113);
+        assert_eq!(before.completed_generations, 555);
+        assert_eq!(before.next_generation_sequence, 556);
+        assert!(before.active_candidate_freeze.is_none());
+
+        let deficit = current_deficit_snapshot(&config).expect("deficit snapshot");
+        let discovery_basis = natural_t1_discovery_basis_root_v4().expect("discovery basis");
+        let catalog = prepared.motif_catalog.as_ref().clone();
+        let exclusions = candidate_exclusions_for(
+            &config,
+            K1SchedulerLaneV1::Epistemic,
+            &catalog,
+            &prepared.active_protocol_mode_set_root_sha256,
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
+            &discovery_basis,
+        )
+        .expect("candidate exclusions");
+        let queue = prepared
+            .motif_catalog
+            .build_candidate_queue_with_exclusions(
+                &deficit,
+                &exclusions,
+                prepared.contract_watermark,
+            )
+            .expect("candidate queue");
+        let queue_row = queue.first_readiness_pass().expect("readiness-pass row");
+        let candidate = catalog
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_root_sha256 == queue_row.candidate_root_sha256)
+            .cloned()
+            .expect("selected candidate");
+        let freeze = prepared
+            .motif_catalog
+            .seal_candidate_freeze(
+                before.next_generation_sequence,
+                &deficit,
+                &queue,
+                &candidate,
+                queue_row.score.clone(),
+                K1_SCHEDULER_SCHEMA_V2.to_owned(),
+                discovery_basis,
+                generation_budget(),
+                candidate.last_capture_sequence,
+                prepared.contract_watermark,
+                1_786_623_000,
+            )
+            .expect("candidate freeze");
+        let request = K1CandidateFreezeAuthorityRequestV1 {
+            schema: K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+            lane: K1SchedulerLaneV1::Epistemic,
+            catalog,
+            deficit_snapshot: deficit,
+            queue,
+            candidate,
+            freeze,
+            active_protocol_mode_set_root_sha256: prepared.active_protocol_mode_set_root_sha256,
+        };
+        let (first, duplicate) =
+            exercise_candidate_freeze_v2_for_test(&config, &signing_key, &request, &before)
+                .expect("append and duplicate");
+        assert_eq!(first, duplicate);
+        assert_eq!(first.ledger_revision, 1114);
+        assert_eq!(first.completed_generations, 555);
+        assert_eq!(first.next_generation_sequence, 556);
+        assert_eq!(
+            first.active_candidate_freeze.as_ref(),
+            Some(&request.freeze)
+        );
+        assert!(!first.authority_ready);
+        assert!(!first.phase_mutation_allowed);
+        recover_authority(&config, &signing_key).expect("restart recovery");
+        let restarted = restore_projection_for(&config, K1SchedulerLaneV1::Epistemic)
+            .expect("restart projection");
+        assert_eq!(restarted, first);
+        let receipt = serde_json::json!({
+            "schema": "nando.k1-generation-556-production-copy-parity.v1",
+            "before_revision": before.ledger_revision,
+            "before_ledger_root_sha256": before.ledger_root_sha256,
+            "after_revision": first.ledger_revision,
+            "after_ledger_root_sha256": first.ledger_root_sha256,
+            "after_projection_root_sha256": first.projection_root_sha256,
+            "candidate_root_sha256": request.candidate.candidate_root_sha256,
+            "freeze_root_sha256": request.freeze.freeze_root_sha256,
+            "duplicate_projection_identical": duplicate == first,
+            "restart_projection_identical": restarted == first,
+            "authority_ready": first.authority_ready,
+            "phase_mutation_allowed": first.phase_mutation_allowed
+        });
+        println!("K1_AUTHORITY_PRODUCTION_COPY_PARITY={receipt}");
     }
 
     fn topology(label: &str, capture_sequence: u64) -> PreActionTopologyAuditRowV1 {
