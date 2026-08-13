@@ -1,0 +1,816 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k1-exact-opportunity-compatibility-budget-claim-v2",
+  "domain": "code",
+  "complexity_score": 42,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c6",
+    "c7",
+    "c8",
+    "c9",
+    "c10",
+    "c11",
+    "c12"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1111,
+      "c10": 0.1111,
+      "c11": 0.1111,
+      "c12": 0.1111,
+      "c2": 0.1111,
+      "c6": 0.1111,
+      "c7": 0.1111,
+      "c8": 0.1111,
+      "c9": 0.1111
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 18,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "c1",
+      "c2",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3523,
+      "c10": 0.3627,
+      "c11": 0.3122,
+      "c12": 0.3874,
+      "c2": 0.3535,
+      "c6": 0.3757,
+      "c7": 0.3652,
+      "c8": 0.3337,
+      "c9": 0.3233
+    },
+    "source_self_score": 0.3518,
+    "stable": [
+      "c1",
+      "c2",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "claim-boundary": "claim-boundary",
+      "control-separation": "control-separation",
+      "dashboard-parity": "dashboard-parity",
+      "legacy-boundary": "legacy-boundary",
+      "protected-services": "protected-services",
+      "reader-migration": "reader-migration",
+      "research-budget": "research-budget",
+      "rollback-fence": "rollback-fence",
+      "state-separation": "state-separation"
+    },
+    "scores": {
+      "claim-boundary": 1.0,
+      "control-separation": 1.0,
+      "dashboard-parity": 1.0,
+      "legacy-boundary": 1.0,
+      "protected-services": 1.0,
+      "reader-migration": 1.0,
+      "research-budget": 1.0,
+      "rollback-fence": 1.0,
+      "state-separation": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "claim-boundary": 1,
+      "control-separation": 1,
+      "dashboard-parity": 1,
+      "legacy-boundary": 1,
+      "protected-services": 1,
+      "reader-migration": 1,
+      "research-budget": 1,
+      "rollback-fence": 1,
+      "state-separation": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3518,
+      "norm": 101.3114,
+      "triads": 9
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "claim-boundary": "claim-boundary",
+      "control-separation": "control-separation",
+      "dashboard-parity": "dashboard-parity",
+      "legacy-boundary": "legacy-boundary",
+      "protected-services": "protected-services",
+      "reader-migration": "reader-migration",
+      "research-budget": "research-budget",
+      "rollback-fence": "rollback-fence",
+      "state-separation": "state-separation"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "control-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "dashboard-parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "legacy-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "protected-services": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "reader-migration": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "research-budget": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rollback-fence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "state-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "claim-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "control-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "dashboard-parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "legacy-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "protected-services": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "reader-migration": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "research-budget": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rollback-fence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "state-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "claim-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "claim-boundary",
+        "exact_source_groups": [
+          "claim-boundary"
+        ]
+      },
+      "control-separation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "control-separation",
+        "exact_source_groups": [
+          "control-separation"
+        ]
+      },
+      "dashboard-parity": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "dashboard-parity",
+        "exact_source_groups": [
+          "dashboard-parity"
+        ]
+      },
+      "legacy-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "legacy-boundary",
+        "exact_source_groups": [
+          "legacy-boundary"
+        ]
+      },
+      "protected-services": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "protected-services",
+        "exact_source_groups": [
+          "protected-services"
+        ]
+      },
+      "reader-migration": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "reader-migration",
+        "exact_source_groups": [
+          "reader-migration"
+        ]
+      },
+      "research-budget": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "research-budget",
+        "exact_source_groups": [
+          "research-budget"
+        ]
+      },
+      "rollback-fence": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "rollback-fence",
+        "exact_source_groups": [
+          "rollback-fence"
+        ]
+      },
+      "state-separation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "state-separation",
+        "exact_source_groups": [
+          "state-separation"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "claim-boundary": {
+        "claim-boundary": 1.0,
+        "control-separation": 0.0176,
+        "dashboard-parity": 0.0078,
+        "legacy-boundary": -0.0039,
+        "protected-services": 0.0,
+        "reader-migration": 0.0078,
+        "research-budget": 0.0176,
+        "rollback-fence": 0.0254,
+        "state-separation": 0.0762
+      },
+      "control-separation": {
+        "claim-boundary": 0.0176,
+        "control-separation": 1.0,
+        "dashboard-parity": -0.0645,
+        "legacy-boundary": 0.0527,
+        "protected-services": 0.0254,
+        "reader-migration": 0.0371,
+        "research-budget": 0.0352,
+        "rollback-fence": 0.0234,
+        "state-separation": -0.0117
+      },
+      "dashboard-parity": {
+        "claim-boundary": 0.0078,
+        "control-separation": -0.0645,
+        "dashboard-parity": 1.0,
+        "legacy-boundary": 0.0313,
+        "protected-services": 0.0352,
+        "reader-migration": 0.0156,
+        "research-budget": -0.0254,
+        "rollback-fence": 0.0098,
+        "state-separation": 0.0137
+      },
+      "legacy-boundary": {
+        "claim-boundary": -0.0039,
+        "control-separation": 0.0527,
+        "dashboard-parity": 0.0313,
+        "legacy-boundary": 1.0,
+        "protected-services": 0.0117,
+        "reader-migration": 0.0234,
+        "research-budget": 0.0488,
+        "rollback-fence": 0.0098,
+        "state-separation": 0.0527
+      },
+      "protected-services": {
+        "claim-boundary": 0.0,
+        "control-separation": 0.0254,
+        "dashboard-parity": 0.0352,
+        "legacy-boundary": 0.0117,
+        "protected-services": 1.0,
+        "reader-migration": -0.0234,
+        "research-budget": -0.0137,
+        "rollback-fence": -0.0176,
+        "state-separation": -0.0293
+      },
+      "reader-migration": {
+        "claim-boundary": 0.0078,
+        "control-separation": 0.0371,
+        "dashboard-parity": 0.0156,
+        "legacy-boundary": 0.0234,
+        "protected-services": -0.0234,
+        "reader-migration": 1.0,
+        "research-budget": 0.0332,
+        "rollback-fence": 0.0137,
+        "state-separation": 0.0488
+      },
+      "research-budget": {
+        "claim-boundary": 0.0176,
+        "control-separation": 0.0352,
+        "dashboard-parity": -0.0254,
+        "legacy-boundary": 0.0488,
+        "protected-services": -0.0137,
+        "reader-migration": 0.0332,
+        "research-budget": 1.0,
+        "rollback-fence": -0.0117,
+        "state-separation": 0.0352
+      },
+      "rollback-fence": {
+        "claim-boundary": 0.0254,
+        "control-separation": 0.0234,
+        "dashboard-parity": 0.0098,
+        "legacy-boundary": 0.0098,
+        "protected-services": -0.0176,
+        "reader-migration": 0.0137,
+        "research-budget": -0.0117,
+        "rollback-fence": 1.0,
+        "state-separation": 0.0039
+      },
+      "state-separation": {
+        "claim-boundary": 0.0762,
+        "control-separation": -0.0117,
+        "dashboard-parity": 0.0137,
+        "legacy-boundary": 0.0527,
+        "protected-services": -0.0293,
+        "reader-migration": 0.0488,
+        "research-budget": 0.0352,
+        "rollback-fence": 0.0039,
+        "state-separation": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "claim-boundary": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "control-separation": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "dashboard-parity": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "legacy-boundary": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "protected-services": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "reader-migration": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "research-budget": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "rollback-fence": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "state-separation": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 8
+          },
+          "support": 8,
+          "total": 8
+        },
+        "observation": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "v8 release policy",
+          "owners": {
+            "v8 release policy": 6
+          },
+          "support": 6,
+          "total": 6
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [
+            "cold authority control install",
+            "legacy suffix and v8 fixture",
+            "natural signed suffix",
+            "signed history clock and readiness queue"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:306",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:722",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:899",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:902",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:460",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:507",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:520",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:614"
+          ],
+          "layers": [
+            "deployment",
+            "scheduler"
+          ],
+          "outputs": [
+            "bounded freeze decision",
+            "preserved readable history",
+            "uninterrupted data plane",
+            "writer gate"
+          ],
+          "owners": [
+            "v8 release policy"
+          ],
+          "scopes": [
+            "deployment",
+            "production",
+            "v8 policy"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "scheduler projection",
+            "summary api"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:289",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:914",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:408",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:635"
+          ],
+          "layers": [
+            "control"
+          ],
+          "outputs": [
+            "exact state",
+            "truthful html"
+          ],
+          "owners": [
+            "v8 release policy"
+          ],
+          "scopes": [
+            "dashboard",
+            "v8 status"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [
+            "deployed scheduler repair",
+            "legacy signed events",
+            "signed history and clock"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:302",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:741",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:949",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:373",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:454",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:649"
+          ],
+          "layers": [
+            "deployment",
+            "scheduler",
+            "science"
+          ],
+          "outputs": [
+            "no law claim",
+            "separate decisions",
+            "zero attempted entries"
+          ],
+          "owners": [
+            "v8 release policy"
+          ],
+          "scopes": [
+            "legacy compatibility",
+            "science",
+            "v8 policy"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 63.6867,
+          "self_coherence": 0.4976,
+          "triads": 4
+        },
+        "observation": {
+          "norm": 45.5631,
+          "self_coherence": 0.7119,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 56.6392,
+          "self_coherence": 0.59,
+          "triads": 3
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "observation": 0.0331,
+          "proof": 0.0754
+        },
+        "observation": {
+          "authority": 0.0331,
+          "observation": 1.0,
+          "proof": 0.0364
+        },
+        "proof": {
+          "authority": 0.0754,
+          "observation": 0.0364,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 63.6867,
+          "self_coherence": 0.4976,
+          "triads": 4
+        },
+        "observation": {
+          "norm": 45.5631,
+          "self_coherence": 0.7119,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 56.6392,
+          "self_coherence": 0.59,
+          "triads": 3
+        }
+      }
+    },
+    "source_group_sizes": {
+      "claim-boundary": 1,
+      "control-separation": 1,
+      "dashboard-parity": 1,
+      "legacy-boundary": 1,
+      "protected-services": 1,
+      "reader-migration": 1,
+      "research-budget": 1,
+      "rollback-fence": 1,
+      "state-separation": 1
+    },
+    "stable_groups": [
+      "claim-boundary",
+      "control-separation",
+      "dashboard-parity",
+      "legacy-boundary",
+      "protected-services",
+      "reader-migration",
+      "research-budget",
+      "rollback-fence",
+      "state-separation"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k1-exact-opportunity-compatibility-budget-claim-v2.trace.json"
+}

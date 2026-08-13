@@ -1,0 +1,763 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k1-exact-opportunity-authority-persistence-v2",
+  "domain": "code",
+  "complexity_score": 41,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8",
+    "c9"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1154,
+      "c2": 0.1154,
+      "c3": 0.1154,
+      "c4": 0.1154,
+      "c5": 0.1154,
+      "c6": 0.1154,
+      "c7": 0.1154,
+      "c8": 0.1154,
+      "c9": 0.1154
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 18,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3387,
+      "c2": 0.3543,
+      "c3": 0.3668,
+      "c4": 0.3555,
+      "c5": 0.3113,
+      "c6": 0.3668,
+      "c7": 0.353,
+      "c8": 0.3418,
+      "c9": 0.3431
+    },
+    "source_self_score": 0.3479,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "append-separation": "append-separation",
+      "attempt-index": "attempt-index",
+      "checkpoint-cas": "checkpoint-cas",
+      "diagnostic-recovery": "diagnostic-recovery",
+      "disposition-boundary": "disposition-boundary",
+      "freeze-rebuild": "freeze-rebuild",
+      "freeze-transaction": "freeze-transaction",
+      "terminal-order": "terminal-order",
+      "terminal-rebuild": "terminal-rebuild"
+    },
+    "scores": {
+      "append-separation": 1.0,
+      "attempt-index": 1.0,
+      "checkpoint-cas": 1.0,
+      "diagnostic-recovery": 1.0,
+      "disposition-boundary": 1.0,
+      "freeze-rebuild": 1.0,
+      "freeze-transaction": 1.0,
+      "terminal-order": 1.0,
+      "terminal-rebuild": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "append-separation": 1,
+      "attempt-index": 1,
+      "checkpoint-cas": 1,
+      "diagnostic-recovery": 1,
+      "disposition-boundary": 1,
+      "freeze-rebuild": 1,
+      "freeze-transaction": 1,
+      "terminal-order": 1,
+      "terminal-rebuild": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3479,
+      "norm": 100.1998,
+      "triads": 9
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "append-separation": "append-separation",
+      "attempt-index": "attempt-index",
+      "checkpoint-cas": "checkpoint-cas",
+      "diagnostic-recovery": "diagnostic-recovery",
+      "disposition-boundary": "disposition-boundary",
+      "freeze-rebuild": "freeze-rebuild",
+      "freeze-transaction": "freeze-transaction",
+      "terminal-order": "terminal-order",
+      "terminal-rebuild": "terminal-rebuild"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "append-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "attempt-index": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "checkpoint-cas": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "diagnostic-recovery": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "disposition-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze-rebuild": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze-transaction": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-order": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-rebuild": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "append-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "attempt-index": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "checkpoint-cas": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "diagnostic-recovery": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "disposition-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze-rebuild": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze-transaction": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-order": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-rebuild": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "append-separation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "append-separation",
+        "exact_source_groups": [
+          "append-separation"
+        ]
+      },
+      "attempt-index": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "attempt-index",
+        "exact_source_groups": [
+          "attempt-index"
+        ]
+      },
+      "checkpoint-cas": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "checkpoint-cas",
+        "exact_source_groups": [
+          "checkpoint-cas"
+        ]
+      },
+      "diagnostic-recovery": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "diagnostic-recovery",
+        "exact_source_groups": [
+          "diagnostic-recovery"
+        ]
+      },
+      "disposition-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "disposition-boundary",
+        "exact_source_groups": [
+          "disposition-boundary"
+        ]
+      },
+      "freeze-rebuild": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "freeze-rebuild",
+        "exact_source_groups": [
+          "freeze-rebuild"
+        ]
+      },
+      "freeze-transaction": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "freeze-transaction",
+        "exact_source_groups": [
+          "freeze-transaction"
+        ]
+      },
+      "terminal-order": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-order",
+        "exact_source_groups": [
+          "terminal-order"
+        ]
+      },
+      "terminal-rebuild": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-rebuild",
+        "exact_source_groups": [
+          "terminal-rebuild"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "append-separation": {
+        "append-separation": 1.0,
+        "attempt-index": -0.0039,
+        "checkpoint-cas": 0.0313,
+        "diagnostic-recovery": 0.0234,
+        "disposition-boundary": -0.0039,
+        "freeze-rebuild": 0.0488,
+        "freeze-transaction": -0.0234,
+        "terminal-order": 0.0391,
+        "terminal-rebuild": 0.002
+      },
+      "attempt-index": {
+        "append-separation": -0.0039,
+        "attempt-index": 1.0,
+        "checkpoint-cas": 0.0313,
+        "diagnostic-recovery": 0.0117,
+        "disposition-boundary": 0.0391,
+        "freeze-rebuild": 0.0293,
+        "freeze-transaction": 0.0,
+        "terminal-order": 0.0352,
+        "terminal-rebuild": -0.0371
+      },
+      "checkpoint-cas": {
+        "append-separation": 0.0313,
+        "attempt-index": 0.0313,
+        "checkpoint-cas": 1.0,
+        "diagnostic-recovery": -0.0039,
+        "disposition-boundary": 0.0,
+        "freeze-rebuild": -0.0215,
+        "freeze-transaction": 0.0469,
+        "terminal-order": 0.0391,
+        "terminal-rebuild": -0.0137
+      },
+      "diagnostic-recovery": {
+        "append-separation": 0.0234,
+        "attempt-index": 0.0117,
+        "checkpoint-cas": -0.0039,
+        "diagnostic-recovery": 1.0,
+        "disposition-boundary": 0.0195,
+        "freeze-rebuild": 0.0059,
+        "freeze-transaction": 0.0117,
+        "terminal-order": -0.0508,
+        "terminal-rebuild": 0.0566
+      },
+      "disposition-boundary": {
+        "append-separation": -0.0039,
+        "attempt-index": 0.0391,
+        "checkpoint-cas": 0.0,
+        "diagnostic-recovery": 0.0195,
+        "disposition-boundary": 1.0,
+        "freeze-rebuild": 0.002,
+        "freeze-transaction": 0.0391,
+        "terminal-order": 0.0273,
+        "terminal-rebuild": -0.0527
+      },
+      "freeze-rebuild": {
+        "append-separation": 0.0488,
+        "attempt-index": 0.0293,
+        "checkpoint-cas": -0.0215,
+        "diagnostic-recovery": 0.0059,
+        "disposition-boundary": 0.002,
+        "freeze-rebuild": 1.0,
+        "freeze-transaction": 0.0332,
+        "terminal-order": -0.0137,
+        "terminal-rebuild": -0.0234
+      },
+      "freeze-transaction": {
+        "append-separation": -0.0234,
+        "attempt-index": 0.0,
+        "checkpoint-cas": 0.0469,
+        "diagnostic-recovery": 0.0117,
+        "disposition-boundary": 0.0391,
+        "freeze-rebuild": 0.0332,
+        "freeze-transaction": 1.0,
+        "terminal-order": 0.0352,
+        "terminal-rebuild": 0.0059
+      },
+      "terminal-order": {
+        "append-separation": 0.0391,
+        "attempt-index": 0.0352,
+        "checkpoint-cas": 0.0391,
+        "diagnostic-recovery": -0.0508,
+        "disposition-boundary": 0.0273,
+        "freeze-rebuild": -0.0137,
+        "freeze-transaction": 0.0352,
+        "terminal-order": 1.0,
+        "terminal-rebuild": 0.0371
+      },
+      "terminal-rebuild": {
+        "append-separation": 0.002,
+        "attempt-index": -0.0371,
+        "checkpoint-cas": -0.0137,
+        "diagnostic-recovery": 0.0566,
+        "disposition-boundary": -0.0527,
+        "freeze-rebuild": -0.0234,
+        "freeze-transaction": 0.0059,
+        "terminal-order": 0.0371,
+        "terminal-rebuild": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "append-separation": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "attempt-index": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "checkpoint-cas": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "diagnostic-recovery": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "disposition-boundary": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "freeze-rebuild": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "freeze-transaction": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "terminal-order": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "terminal-rebuild": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 14
+          },
+          "support": 14,
+          "total": 14
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "k1 certification authority",
+          "owners": {
+            "k1 certification authority": 4
+          },
+          "support": 4,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 7,
+          "entrypoints": [
+            "archived freeze inputs",
+            "authority transaction",
+            "checkpoint double read",
+            "client event proposal",
+            "durable source prefixes",
+            "rebuilt selection",
+            "signed diagnostic without verdict"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:260",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:583",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:612",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:626",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:639",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:645",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:647",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:211",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:257",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:269",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:331",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:476",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:492"
+          ],
+          "layers": [
+            "persistence",
+            "serving"
+          ],
+          "outputs": [
+            "authority diagnostic",
+            "authority parity",
+            "complete event pair",
+            "fail-closed rejection",
+            "signed event pair",
+            "signed freeze event",
+            "stale_before_freeze"
+          ],
+          "owners": [
+            "k1 certification authority"
+          ],
+          "scopes": [
+            "v8 authority",
+            "v8 restart",
+            "v8 terminal"
+          ],
+          "source_triads": 7,
+          "triads": 14
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "signed scheduler history",
+            "terminal classification"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:661",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:680",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:340",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:364"
+          ],
+          "layers": [
+            "persistence"
+          ],
+          "outputs": [
+            "attempted root set",
+            "no attempted entry"
+          ],
+          "owners": [
+            "k1 certification authority"
+          ],
+          "scopes": [
+            "v8 attempt"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 87.818,
+          "self_coherence": 0.392,
+          "triads": 7
+        },
+        "proof": {
+          "norm": 46.1303,
+          "self_coherence": 0.7208,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "proof": 0.0247
+        },
+        "proof": {
+          "authority": 0.0247,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 87.818,
+          "self_coherence": 0.392,
+          "triads": 7
+        },
+        "proof": {
+          "norm": 46.1303,
+          "self_coherence": 0.7208,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "append-separation": 1,
+      "attempt-index": 1,
+      "checkpoint-cas": 1,
+      "diagnostic-recovery": 1,
+      "disposition-boundary": 1,
+      "freeze-rebuild": 1,
+      "freeze-transaction": 1,
+      "terminal-order": 1,
+      "terminal-rebuild": 1
+    },
+    "stable_groups": [
+      "append-separation",
+      "attempt-index",
+      "checkpoint-cas",
+      "diagnostic-recovery",
+      "disposition-boundary",
+      "freeze-rebuild",
+      "freeze-transaction",
+      "terminal-order",
+      "terminal-rebuild"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k1-exact-opportunity-authority-persistence-v2.trace.json"
+}

@@ -1,0 +1,700 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k1-exact-opportunity-identity-raw-phase-v2",
+  "domain": "code",
+  "complexity_score": 38,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1364,
+      "c2": 0.1364,
+      "c3": 0.1364,
+      "c4": 0.1364,
+      "c5": 0.1364,
+      "c6": 0.1364,
+      "c7": 0.1364,
+      "c8": 0.1364
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 16,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3675,
+      "c2": 0.3866,
+      "c3": 0.3485,
+      "c4": 0.373,
+      "c5": 0.3158,
+      "c6": 0.3771,
+      "c7": 0.3267,
+      "c8": 0.3743
+    },
+    "source_self_score": 0.3587,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "artifact-metamorphism": "artifact-metamorphism",
+      "causal-manifest": "causal-manifest",
+      "causal-metamorphism": "causal-metamorphism",
+      "excluded-fields": "excluded-fields",
+      "freeze-provenance": "freeze-provenance",
+      "opportunity-root": "opportunity-root",
+      "raw-phase-domain": "raw-phase-domain",
+      "relevant-artifacts": "relevant-artifacts"
+    },
+    "scores": {
+      "artifact-metamorphism": 1.0,
+      "causal-manifest": 1.0,
+      "causal-metamorphism": 1.0,
+      "excluded-fields": 1.0,
+      "freeze-provenance": 1.0,
+      "opportunity-root": 1.0,
+      "raw-phase-domain": 1.0,
+      "relevant-artifacts": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "artifact-metamorphism": 1,
+      "causal-manifest": 1,
+      "causal-metamorphism": 1,
+      "excluded-fields": 1,
+      "freeze-provenance": 1,
+      "opportunity-root": 1,
+      "raw-phase-domain": 1,
+      "relevant-artifacts": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3587,
+      "norm": 91.8259,
+      "triads": 8
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "artifact-metamorphism": "artifact-metamorphism",
+      "causal-manifest": "causal-manifest",
+      "causal-metamorphism": "causal-metamorphism",
+      "excluded-fields": "excluded-fields",
+      "freeze-provenance": "freeze-provenance",
+      "opportunity-root": "opportunity-root",
+      "raw-phase-domain": "raw-phase-domain",
+      "relevant-artifacts": "relevant-artifacts"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "artifact-metamorphism": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "causal-manifest": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "causal-metamorphism": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "excluded-fields": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze-provenance": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "opportunity-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "raw-phase-domain": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "relevant-artifacts": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "artifact-metamorphism": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "causal-manifest": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "causal-metamorphism": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "excluded-fields": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze-provenance": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "opportunity-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "raw-phase-domain": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "relevant-artifacts": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "artifact-metamorphism": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "artifact-metamorphism",
+        "exact_source_groups": [
+          "artifact-metamorphism"
+        ]
+      },
+      "causal-manifest": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "causal-manifest",
+        "exact_source_groups": [
+          "causal-manifest"
+        ]
+      },
+      "causal-metamorphism": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "causal-metamorphism",
+        "exact_source_groups": [
+          "causal-metamorphism"
+        ]
+      },
+      "excluded-fields": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "excluded-fields",
+        "exact_source_groups": [
+          "excluded-fields"
+        ]
+      },
+      "freeze-provenance": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "freeze-provenance",
+        "exact_source_groups": [
+          "freeze-provenance"
+        ]
+      },
+      "opportunity-root": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "opportunity-root",
+        "exact_source_groups": [
+          "opportunity-root"
+        ]
+      },
+      "raw-phase-domain": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "raw-phase-domain",
+        "exact_source_groups": [
+          "raw-phase-domain"
+        ]
+      },
+      "relevant-artifacts": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "relevant-artifacts",
+        "exact_source_groups": [
+          "relevant-artifacts"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "artifact-metamorphism": {
+        "artifact-metamorphism": 1.0,
+        "causal-manifest": -0.0293,
+        "causal-metamorphism": 0.0176,
+        "excluded-fields": -0.041,
+        "freeze-provenance": -0.043,
+        "opportunity-root": 0.0098,
+        "raw-phase-domain": -0.0234,
+        "relevant-artifacts": 0.0156
+      },
+      "causal-manifest": {
+        "artifact-metamorphism": -0.0293,
+        "causal-manifest": 1.0,
+        "causal-metamorphism": 0.0195,
+        "excluded-fields": 0.043,
+        "freeze-provenance": -0.0059,
+        "opportunity-root": 0.0195,
+        "raw-phase-domain": -0.0254,
+        "relevant-artifacts": 0.0332
+      },
+      "causal-metamorphism": {
+        "artifact-metamorphism": 0.0176,
+        "causal-manifest": 0.0195,
+        "causal-metamorphism": 1.0,
+        "excluded-fields": -0.0117,
+        "freeze-provenance": -0.0371,
+        "opportunity-root": 0.0195,
+        "raw-phase-domain": 0.041,
+        "relevant-artifacts": 0.0254
+      },
+      "excluded-fields": {
+        "artifact-metamorphism": -0.041,
+        "causal-manifest": 0.043,
+        "causal-metamorphism": -0.0117,
+        "excluded-fields": 1.0,
+        "freeze-provenance": -0.0176,
+        "opportunity-root": -0.0078,
+        "raw-phase-domain": 0.0371,
+        "relevant-artifacts": -0.002
+      },
+      "freeze-provenance": {
+        "artifact-metamorphism": -0.043,
+        "causal-manifest": -0.0059,
+        "causal-metamorphism": -0.0371,
+        "excluded-fields": -0.0176,
+        "freeze-provenance": 1.0,
+        "opportunity-root": 0.0449,
+        "raw-phase-domain": 0.0352,
+        "relevant-artifacts": -0.0391
+      },
+      "opportunity-root": {
+        "artifact-metamorphism": 0.0098,
+        "causal-manifest": 0.0195,
+        "causal-metamorphism": 0.0195,
+        "excluded-fields": -0.0078,
+        "freeze-provenance": 0.0449,
+        "opportunity-root": 1.0,
+        "raw-phase-domain": 0.002,
+        "relevant-artifacts": 0.0215
+      },
+      "raw-phase-domain": {
+        "artifact-metamorphism": -0.0234,
+        "causal-manifest": -0.0254,
+        "causal-metamorphism": 0.041,
+        "excluded-fields": 0.0371,
+        "freeze-provenance": 0.0352,
+        "opportunity-root": 0.002,
+        "raw-phase-domain": 1.0,
+        "relevant-artifacts": 0.0156
+      },
+      "relevant-artifacts": {
+        "artifact-metamorphism": 0.0156,
+        "causal-manifest": 0.0332,
+        "causal-metamorphism": 0.0254,
+        "excluded-fields": -0.002,
+        "freeze-provenance": -0.0391,
+        "opportunity-root": 0.0215,
+        "raw-phase-domain": 0.0156,
+        "relevant-artifacts": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "artifact-metamorphism": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "causal-manifest": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "causal-metamorphism": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "excluded-fields": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "freeze-provenance": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "opportunity-root": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "raw-phase-domain": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "relevant-artifacts": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "execution": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "pure causal model",
+          "owners": {
+            "pure causal model": 12
+          },
+          "support": 12,
+          "total": 12
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "execution": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "v8 causal manifest",
+            "validated checkpoint and support"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:475",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:483",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:135",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:230"
+          ],
+          "layers": [
+            "scheduler",
+            "wave"
+          ],
+          "outputs": [
+            "canonical bounded projection",
+            "stable hypothesis domain"
+          ],
+          "owners": [
+            "pure causal model"
+          ],
+          "scopes": [
+            "v8 identity"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 6,
+          "entrypoints": [
+            "authority freeze receipt",
+            "canonical manifest",
+            "changed support artifact mode basis or limit",
+            "frozen typed inputs",
+            "timestamp generation queue score",
+            "unrelated checkpoint row"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:230",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:237",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:243",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:486",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:495",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md:497",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:109",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:137",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:142",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:150",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:165",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_preregistration_v1.md:247"
+          ],
+          "layers": [
+            "scheduler"
+          ],
+          "outputs": [
+            "canonical manifest",
+            "exact root",
+            "novel exact root",
+            "provenance root",
+            "stable exact root",
+            "unchanged exact root"
+          ],
+          "owners": [
+            "pure causal model"
+          ],
+          "scopes": [
+            "v8 identity"
+          ],
+          "source_triads": 6,
+          "triads": 12
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "execution": {
+          "norm": 45.607,
+          "self_coherence": 0.7126,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 78.1281,
+          "self_coherence": 0.4069,
+          "triads": 6
+        }
+      },
+      "interference_matrix": {
+        "execution": {
+          "execution": 1.0,
+          "proof": 0.0348
+        },
+        "proof": {
+          "execution": 0.0348,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "execution": {
+          "norm": 45.607,
+          "self_coherence": 0.7126,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 78.1281,
+          "self_coherence": 0.4069,
+          "triads": 6
+        }
+      }
+    },
+    "source_group_sizes": {
+      "artifact-metamorphism": 1,
+      "causal-manifest": 1,
+      "causal-metamorphism": 1,
+      "excluded-fields": 1,
+      "freeze-provenance": 1,
+      "opportunity-root": 1,
+      "raw-phase-domain": 1,
+      "relevant-artifacts": 1
+    },
+    "stable_groups": [
+      "artifact-metamorphism",
+      "causal-manifest",
+      "causal-metamorphism",
+      "excluded-fields",
+      "freeze-provenance",
+      "opportunity-root",
+      "raw-phase-domain",
+      "relevant-artifacts"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k1-exact-opportunity-identity-raw-phase-v2.trace.json"
+}

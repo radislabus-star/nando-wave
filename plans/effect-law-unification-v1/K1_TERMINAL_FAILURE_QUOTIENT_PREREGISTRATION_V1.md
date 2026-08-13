@@ -1,6 +1,7 @@
 # K1 Terminal Failure Quotient V1 Preregistration
 
-Status: preregistered implementation contract. No Law #2 claim.
+Status: REJECTED by `K1_TERMINAL_FAILURE_QUOTIENT_CRITIQUE_V2.md`. Historical
+contract only. It MUST NOT authorize implementation or deployment.
 
 Date: 2026-08-13.
 

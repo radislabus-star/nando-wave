@@ -1,0 +1,73 @@
+{
+  "schema": "nando.k1-exact-opportunity-paper-gate.v2",
+  "task_id": "k1-exact-experiment-opportunity-v2",
+  "recorded_at": "2026-08-13",
+  "paper_baseline_commit": "ded3d18cd0235ba36e8507c7091c2629d5b837da",
+  "production_touched": false,
+  "coherence_only": true,
+  "authority_ready": false,
+  "structural_packets": [
+    {
+      "id": "identity-and-raw-phase",
+      "verdict": "PASS",
+      "safe_to_edit": true,
+      "weak_triads": 0,
+      "conflicts": 0,
+      "evidence_gaps": 0,
+      "repair_queue": 0,
+      "worksheet_sha256": "ed5b2923692d6df21b870db78cf856c84b0210c8e44845282424894dd631eff8",
+      "result_sha256": "d051a37b65dea580a73e95e648a57fad6a85fef7091c352b1e9acbdc585cc8c5"
+    },
+    {
+      "id": "authority-and-persistence",
+      "verdict": "PASS",
+      "safe_to_edit": true,
+      "weak_triads": 0,
+      "conflicts": 0,
+      "evidence_gaps": 0,
+      "repair_queue": 0,
+      "worksheet_sha256": "590f56b4f1ac7df84d59ce213913d23340da9c418f1f9d094566b1de68abbb9e",
+      "result_sha256": "881192e7dd5deaf23bf03956d91029f4f47a248cc0670ec9530d13d0c28a9113"
+    },
+    {
+      "id": "compatibility-budget-claim",
+      "verdict": "PASS",
+      "safe_to_edit": true,
+      "weak_triads": 0,
+      "conflicts": 0,
+      "evidence_gaps": 0,
+      "repair_queue": 0,
+      "worksheet_sha256": "60729f97bd2ba81ee6b5e780ebdd0c820849f6600db38b6df60549743a4214fd",
+      "result_sha256": "be9c4dda7364c459a8d1c1096f68ec43fedb5159849c104b823f2bbf153b73eb"
+    }
+  ],
+  "code_route": {
+    "verdict": "PASS",
+    "design_sha256": "9df5680071eab8cd1113b7673959d2cb0f7b07986bcbf6ffaedfc4267eefcead",
+    "result_sha256": "84b9a3f1534175ee3f6a7c5e5debcfbb4f3fef2f498685fc97f74b8c5d837666"
+  },
+  "implementation_preflight": {
+    "verdict": "READY_TO_IMPLEMENT",
+    "safe_to_implement": true,
+    "blockers": 0,
+    "baseline_checks_matching": 13,
+    "baseline_checks_total": 13,
+    "manifest_sha256": "726b860dbe0808144831a7f7fb490d1e307765239a8e949c1f9acd8ac4aa82e9",
+    "receipt_sha256": "778b6bab7147d9835e9cd99e2c050b34504fb78f2b3a30d3e7bf29b0c8c6710e",
+    "resume_rule": "rerun from a new read-only baseline when any bound source or temporary baseline is missing or changed"
+  },
+  "plan": {
+    "status": "PAPER_GATED",
+    "execution_plan_v2_sha256": "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+    "critique_v2_sha256": "3cb5c25c8ab6ba4305c77505dc78c364bf381ebdf744ff4a98e070b0639794f1",
+    "next_phase": "P1_REMOVE_REJECTED_COARSE_FAMILY_AUTHORITY"
+  },
+  "authority": {
+    "scoped_nonproduction_implementation_authorized": true,
+    "deployment_authorized": false,
+    "law_2_claim_authorized": false,
+    "k1_open_authorized": false,
+    "phase_mutation_authorized": false,
+    "package_activation_authorized": false
+  }
+}

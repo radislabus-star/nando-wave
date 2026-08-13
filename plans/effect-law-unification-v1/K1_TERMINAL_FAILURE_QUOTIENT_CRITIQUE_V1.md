@@ -1,6 +1,8 @@
 # K1 Terminal Failure Quotient V1 Critique
 
-Status: preregistration critique, resolved before implementation.
+Status: SUPERSEDED by `K1_TERMINAL_FAILURE_QUOTIENT_CRITIQUE_V2.md`. The V1
+critique did not detect that its repaired family key still collapsed unrelated
+causal experiments.
 
 Date: 2026-08-13.
 

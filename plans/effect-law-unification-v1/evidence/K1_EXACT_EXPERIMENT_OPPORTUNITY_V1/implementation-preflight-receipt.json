@@ -1,0 +1,184 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "identifier-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification.rs",
+      "sha256": "f889e48823862983a2e2e8b6e8f58d2890e51a815bb209e3774542bfb70c537c",
+      "size_bytes": 99749
+    },
+    {
+      "exists": true,
+      "id": "natural-artifact-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification/natural_artifacts.rs",
+      "sha256": "8f02f91df30999b6585e00c4e0a97729ed3e6cd084cb6a9027b4980be40a0289",
+      "size_bytes": 3228
+    },
+    {
+      "exists": true,
+      "id": "freeze-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/freeze.rs",
+      "sha256": "0f10d7a130ed1754a3e5dc1995c87546fa8786a1e4d258a225f2b350b6dcb327",
+      "size_bytes": 38643
+    },
+    {
+      "exists": true,
+      "id": "queue-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/queue.rs",
+      "sha256": "6cb4b31287851023e7c3f38fe6f6693d7377203b91f9e208398b318f1f2c05cc",
+      "size_bytes": 16120
+    },
+    {
+      "exists": true,
+      "id": "scheduler-state-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/state.rs",
+      "sha256": "0be3daa9c93e8079933693ee5b3fb0ac1cd9eb70667243ebd21d521af1c323c7",
+      "size_bytes": 26415
+    },
+    {
+      "exists": true,
+      "id": "authority-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "1baa910b7bdc3b035cfd9f74141cd906f875b6f2e886a4d1db9dd27ce0a84071",
+      "size_bytes": 21091
+    },
+    {
+      "exists": true,
+      "id": "selection-authority-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/selection_authority.rs",
+      "sha256": "24303a0b906f4354b4b758a96233a6dd7382e42db03d8af8c2a1f2d29adce5a9",
+      "size_bytes": 1714
+    },
+    {
+      "exists": true,
+      "id": "motif-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/motif.rs",
+      "sha256": "a77e634a3e89b623f696273be16c8f2f480986b3c940e2c9cbe9ffde46a60249",
+      "size_bytes": 62897
+    },
+    {
+      "exists": true,
+      "id": "runtime-identifier-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs",
+      "sha256": "0a99e6946f3e07c4083b01f8ef448f9beea03740eda797bcd735ca8ec8717b65",
+      "size_bytes": 29044
+    },
+    {
+      "exists": true,
+      "id": "scheduler-service-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs",
+      "sha256": "0660dd230c62f75b8e560519d2e9da90d743255f4b2a87b13321a86c6639bb76",
+      "size_bytes": 61637
+    },
+    {
+      "exists": true,
+      "id": "collection-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-response-actor/src/online_collection.rs",
+      "sha256": "27f81fd3ad3bf7554bfdb7c73d69866659ff0b8a6ca360768be11eaf0412a9ae",
+      "size_bytes": 15333
+    },
+    {
+      "exists": true,
+      "id": "production-ledger-copy",
+      "kind": "file",
+      "mode": "0640",
+      "path": "/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-ledger-v1.json",
+      "sha256": "00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362",
+      "size_bytes": 2246130
+    },
+    {
+      "exists": true,
+      "id": "production-anchor-copy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-anchor-v1.json",
+      "sha256": "882fb350544622c7f2e616eb5157e442379d7549bc286cbdf58c09fd55e4c197",
+      "size_bytes": 576
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 13,
+    "forbidden_side_effect_kinds": [
+      "coarse_family_suppression",
+      "connector_restart",
+      "generated_traffic",
+      "hot_restart",
+      "law_promotion",
+      "ledger_rewrite",
+      "legacy_terminal_backfill",
+      "manual_program_family_mapping",
+      "nginx_restart",
+      "phase_mutation",
+      "pre_v8_binary_rollback_after_v8_append",
+      "synthetic_fixture",
+      "teacher_output"
+    ],
+    "identity_contracts": 5,
+    "invariants": 8,
+    "planned_side_effect_kinds": [
+      "authority_recomputed_signed_append_only_event",
+      "content_addressed_append_only_write",
+      "observation_only_projection",
+      "pure_bounded_projection",
+      "rollback_capable_compatible_writer_restart",
+      "rollback_capable_reader_only_restart",
+      "signed_append_only_event"
+    ],
+    "preserved_artifacts": 2,
+    "runtime_comparisons": 2,
+    "source_checks": 2,
+    "tests": 19
+  },
+  "manifest_sha256": "94720ad01bee74577ea848ce584b31700737fb86e9f3f6c00ef59a763c9f8c03",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "identifier-source-guard",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification.rs",
+      "sha256": "f889e48823862983a2e2e8b6e8f58d2890e51a815bb209e3774542bfb70c537c",
+      "size_bytes": 99749
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "authority-source-guard",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+      "sha256": "1baa910b7bdc3b035cfd9f74141cd906f875b6f2e886a4d1db9dd27ce0a84071",
+      "size_bytes": 21091
+    }
+  ],
+  "task_id": "k1-exact-experiment-opportunity-v1",
+  "verdict": "READY_TO_IMPLEMENT"
+}

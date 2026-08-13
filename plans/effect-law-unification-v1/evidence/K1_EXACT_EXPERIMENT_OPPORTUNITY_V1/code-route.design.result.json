@@ -1,0 +1,368 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V1/code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "node_count": 21,
+  "edge_count": 17,
+  "routes": [
+    {
+      "id": "learner-proposal-execution",
+      "event": "learner_proposal",
+      "kind": "execution",
+      "entry": "cold_wake",
+      "via": [],
+      "terminal": "cold_manifest_builder",
+      "path_count": 1,
+      "paths": [
+        [
+          "cold_wake",
+          "cold_source_restore",
+          "cold_manifest_builder"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "cold_manifest_builder"
+        ],
+        "producer": [
+          "cold_source_restore"
+        ],
+        "interface": [
+          "cold_wake"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "cold_wake",
+          "to": "cold_manifest_builder",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "cold_wake",
+              "cold_source_restore",
+              "cold_manifest_builder"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "learner-proposal-authority-free-ranking",
+      "event": "learner_proposal",
+      "kind": "authority",
+      "entry": "cold_source_restore",
+      "via": [],
+      "terminal": "cold_queue_builder",
+      "path_count": 1,
+      "paths": [
+        [
+          "cold_source_restore",
+          "cold_manifest_builder",
+          "cold_queue_builder"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "cold_manifest_builder"
+        ],
+        "candidate_rank_owner": [
+          "cold_queue_builder"
+        ],
+        "producer": [
+          "cold_source_restore"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "freeze-authority",
+      "event": "freeze_authorization",
+      "kind": "authority",
+      "entry": "freeze_request",
+      "via": [],
+      "terminal": "signed_journal_append",
+      "path_count": 1,
+      "paths": [
+        [
+          "freeze_request",
+          "authority_source_restore",
+          "authority_manifest_builder",
+          "authority_queue_builder",
+          "freeze_authorizer",
+          "signed_journal_append"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "authority_manifest_builder"
+        ],
+        "candidate_rank_owner": [
+          "authority_queue_builder"
+        ],
+        "producer": [
+          "authority_source_restore"
+        ],
+        "authorization_owner": [
+          "freeze_authorizer"
+        ],
+        "interface": [
+          "freeze_request"
+        ],
+        "mutation_owner": [
+          "signed_journal_append"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "freeze_request",
+          "to": "signed_journal_append",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "freeze_request",
+              "authority_source_restore",
+              "authority_manifest_builder",
+              "authority_queue_builder",
+              "freeze_authorizer",
+              "signed_journal_append"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "identifier-execution",
+      "event": "identifier_run",
+      "kind": "execution",
+      "entry": "active_freeze",
+      "via": [],
+      "terminal": "identifier_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "active_freeze",
+          "frozen_archive_restore",
+          "identifier_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "active_freeze"
+        ],
+        "evidence_owner": [
+          "frozen_archive_restore"
+        ],
+        "producer": [
+          "identifier_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "active_freeze",
+          "to": "identifier_evaluator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "active_freeze",
+              "frozen_archive_restore",
+              "identifier_evaluator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terminal-authority",
+      "event": "terminal_authorization",
+      "kind": "authority",
+      "entry": "terminal_request",
+      "via": [],
+      "terminal": "signed_journal_append",
+      "path_count": 1,
+      "paths": [
+        [
+          "terminal_request",
+          "terminal_source_restore",
+          "terminal_evaluator",
+          "terminal_authorizer",
+          "signed_journal_append"
+        ]
+      ],
+      "role_owners": {
+        "mutation_owner": [
+          "signed_journal_append"
+        ],
+        "authorization_owner": [
+          "terminal_authorizer"
+        ],
+        "evidence_owner": [
+          "terminal_evaluator"
+        ],
+        "interface": [
+          "terminal_request"
+        ],
+        "producer": [
+          "terminal_source_restore"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "terminal_request",
+          "to": "signed_journal_append",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "terminal_request",
+              "terminal_source_restore",
+              "terminal_evaluator",
+              "terminal_authorizer",
+              "signed_journal_append"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attempt-restart-proof",
+      "event": "restart_parity",
+      "kind": "proof",
+      "entry": "attempt_projection",
+      "via": [],
+      "terminal": "attempt_parity_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "attempt_projection",
+          "attempt_parity_test"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "attempt_parity_test"
+        ],
+        "producer": [
+          "attempt_projection"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "dashboard-observation",
+      "event": "dashboard_refresh",
+      "kind": "observation",
+      "entry": "summary_projection",
+      "via": [],
+      "terminal": "control_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "summary_projection",
+          "control_observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "control_observer"
+        ],
+        "producer": [
+          "summary_projection"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "learner_proposal": {
+      "mutation_owner": [],
+      "authorization_owner": [],
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "cold_manifest_builder"
+      ],
+      "candidate_rank_owner": [
+        "cold_queue_builder"
+      ],
+      "render_owner": []
+    },
+    "freeze_authorization": {
+      "mutation_owner": [
+        "signed_journal_append"
+      ],
+      "authorization_owner": [
+        "freeze_authorizer"
+      ],
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "authority_manifest_builder"
+      ],
+      "candidate_rank_owner": [
+        "authority_queue_builder"
+      ],
+      "render_owner": []
+    },
+    "terminal_authorization": {
+      "mutation_owner": [
+        "signed_journal_append"
+      ],
+      "authorization_owner": [
+        "terminal_authorizer"
+      ],
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "terminal_evaluator"
+      ],
+      "candidate_rank_owner": [],
+      "render_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

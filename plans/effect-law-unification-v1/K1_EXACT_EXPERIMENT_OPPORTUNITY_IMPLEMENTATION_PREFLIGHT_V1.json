@@ -1,0 +1,126 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k1-exact-experiment-opportunity-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"identifier-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification.rs","expect":{"size_bytes":99749,"sha256":"f889e48823862983a2e2e8b6e8f58d2890e51a815bb209e3774542bfb70c537c","mode":"0664"}},
+    {"id":"natural-artifact-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification/natural_artifacts.rs","expect":{"size_bytes":3228,"sha256":"8f02f91df30999b6585e00c4e0a97729ed3e6cd084cb6a9027b4980be40a0289","mode":"0664"}},
+    {"id":"freeze-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/freeze.rs","expect":{"size_bytes":38643,"sha256":"0f10d7a130ed1754a3e5dc1995c87546fa8786a1e4d258a225f2b350b6dcb327","mode":"0664"}},
+    {"id":"queue-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/queue.rs","expect":{"size_bytes":16120,"sha256":"6cb4b31287851023e7c3f38fe6f6693d7377203b91f9e208398b318f1f2c05cc","mode":"0664"}},
+    {"id":"scheduler-state-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/state.rs","expect":{"size_bytes":26415,"sha256":"0be3daa9c93e8079933693ee5b3fb0ac1cd9eb70667243ebd21d521af1c323c7","mode":"0664"}},
+    {"id":"authority-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","expect":{"size_bytes":21091,"sha256":"1baa910b7bdc3b035cfd9f74141cd906f875b6f2e886a4d1db9dd27ce0a84071","mode":"0664"}},
+    {"id":"selection-authority-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/selection_authority.rs","expect":{"size_bytes":1714,"sha256":"24303a0b906f4354b4b758a96233a6dd7382e42db03d8af8c2a1f2d29adce5a9","mode":"0664"}},
+    {"id":"motif-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/motif.rs","expect":{"size_bytes":62897,"sha256":"a77e634a3e89b623f696273be16c8f2f480986b3c940e2c9cbe9ffde46a60249","mode":"0664"}},
+    {"id":"runtime-identifier-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs","expect":{"size_bytes":29044,"sha256":"0a99e6946f3e07c4083b01f8ef448f9beea03740eda797bcd735ca8ec8717b65","mode":"0664"}},
+    {"id":"scheduler-service-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","expect":{"size_bytes":61637,"sha256":"0660dd230c62f75b8e560519d2e9da90d743255f4b2a87b13321a86c6639bb76","mode":"0664"}},
+    {"id":"collection-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-response-actor/src/online_collection.rs","expect":{"size_bytes":15333,"sha256":"27f81fd3ad3bf7554bfdb7c73d69866659ff0b8a6ca360768be11eaf0412a9ae","mode":"0664"}},
+    {"id":"production-ledger-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-ledger-v1.json","expect":{"size_bytes":2246130,"sha256":"00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362","mode":"0640"}},
+    {"id":"production-anchor-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-anchor-v1.json","expect":{"size_bytes":576,"sha256":"882fb350544622c7f2e616eb5157e442379d7549bc286cbdf58c09fd55e4c197","mode":"0664"}}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"build-causal-manifest","kind":"pure_bounded_projection"},
+      {"id":"archive-relevant-artifacts","kind":"content_addressed_append_only_write"},
+      {"id":"append-v8-freeze","kind":"signed_append_only_event"},
+      {"id":"append-terminal-diagnostic","kind":"authority_recomputed_signed_append_only_event"},
+      {"id":"append-terminal-verdict","kind":"signed_append_only_event"},
+      {"id":"phase-a-reader-deploy","kind":"rollback_capable_reader_only_restart"},
+      {"id":"phase-b-writer-deploy","kind":"rollback_capable_compatible_writer_restart"},
+      {"id":"update-summary-and-control","kind":"observation_only_projection"}
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "teacher_output",
+      "manual_program_family_mapping",
+      "coarse_family_suppression",
+      "law_promotion",
+      "phase_mutation",
+      "hot_restart",
+      "nginx_restart",
+      "connector_restart",
+      "ledger_rewrite",
+      "legacy_terminal_backfill",
+      "pre_v8_binary_rollback_after_v8_append"
+    ]
+  },
+  "source_checks": [
+    {"id":"identifier-source-guard","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/identification.rs","sha256":"f889e48823862983a2e2e8b6e8f58d2890e51a815bb209e3774542bfb70c537c","forbidden_effect_patterns":[
+      {"effect":"generated_traffic","regex":"generate_(synthetic|targeted)_traffic\\s*\\("},
+      {"effect":"synthetic_fixture","regex":"write_(synthetic|generated)_fixture\\s*\\("},
+      {"effect":"teacher_output","regex":"teacher_(output|label)"},
+      {"effect":"phase_mutation","regex":"phase_mutation_allowed\\s*:\\s*true"},
+      {"effect":"manual_program_family_mapping","regex":"manual_(program_)?family_mapping\\s*\\("},
+      {"effect":"coarse_family_suppression","regex":"coarse_family_suppression\\s*:\\s*true"},
+      {"effect":"legacy_terminal_backfill","regex":"backfill_legacy_terminal\\s*\\("}
+    ]},
+    {"id":"authority-source-guard","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","sha256":"1baa910b7bdc3b035cfd9f74141cd906f875b6f2e886a4d1db9dd27ce0a84071","forbidden_effect_patterns":[
+      {"effect":"law_promotion","regex":"promote_law_2"},
+      {"effect":"ledger_rewrite","regex":"rewrite_scheduler_ledger\\s*\\("},
+      {"effect":"pre_v8_binary_rollback_after_v8_append","regex":"rollback_to_pre_v8\\s*\\("},
+      {"effect":"hot_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*transition-serving"},
+      {"effect":"nginx_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},
+      {"effect":"connector_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*connector"}
+    ]}
+  ],
+  "state_machine": {
+    "initial_state":"PAPER_GATED",
+    "terminal_states":["IMPLEMENTATION_READY","LOCAL_FAILURE","REPLAY_VETO","PHASE_A_ROLLBACK_PASS","PHASE_B_PASS","PHASE_B_ROLLBACK_TO_A_PASS"],
+    "steps":[
+      {"id":"pure-causal-model","from":"PAPER_GATED","to":"CAUSAL_MODEL_PASS","mutates":true,"failure_state":"LOCAL_FAILURE","cleanup":"retain scoped diff and diagnostics; production untouched","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"pure-model-abort"},
+      {"id":"diagnostic-authority","from":"CAUSAL_MODEL_PASS","to":"DIAGNOSTIC_PASS","mutates":true,"failure_state":"LOCAL_FAILURE","cleanup":"retain scoped diff and diagnostics; production untouched","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"diagnostic-abort"},
+      {"id":"scheduler-compatibility","from":"DIAGNOSTIC_PASS","to":"LOCAL_IMPLEMENTED","mutates":true,"failure_state":"LOCAL_FAILURE","cleanup":"retain scoped diff and diagnostics; production untouched","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"compatibility-abort"},
+      {"id":"production-copy-replay","from":"LOCAL_IMPLEMENTED","to":"IMPLEMENTATION_READY","mutates":true,"failure_state":"REPLAY_VETO","cleanup":"remove only disposable replay outputs after preserving compact receipt","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"replay-abort"},
+      {"id":"phase-a-readers","from":"IMPLEMENTATION_READY","to":"PHASE_A_PASS","mutates":true,"failure_state":"PHASE_A_ROLLBACK_PASS","cleanup":"restore pre-Phase-A cold authority and control binaries; preserve ledger suffix and anchor","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"phase-a-rollback"},
+      {"id":"phase-b-writer","from":"PHASE_A_PASS","to":"PHASE_B_PASS","mutates":true,"failure_state":"PHASE_B_ROLLBACK_TO_A_PASS","cleanup":"restore Phase A compatible binaries only; preserve V8 suffix and newest anchor","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"phase-b-rollback"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id":"scheduler-ledger-prefix","path":"/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1/k1-epistemic-scheduler-ledger-v1.json","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"production-ledger-copy"},
+    {"id":"scheduler-anchor","path":"/var/lib/nando-wave/verification/20260810-motif-ordering/k1-epistemic-scheduler-anchor-v1.json","policy":"monotonic_external_anchor","rollback_policy":"never restore an older revision over a natural suffix","cursor_policy":"compare prefix then preserve current revision","baseline_check_id":"production-anchor-copy"}
+  ],
+  "identity_contracts": [
+    {"id":"opportunity-metamorphism","producer":"pure causal manifest under excluded receipt field mutations","consumer":"OpportunityRoot comparison","comparison":"same causal inputs produce exact same root; any causal input change produces a different root","test_id":"opportunity-root-metamorphism"},
+    {"id":"learner-authority-selection-parity","producer":"cold learner frozen source projection","consumer":"authority independently restored source projection","comparison":"exact source snapshot catalog queue causal manifest opportunity and freeze roots","test_id":"authority-selection-parity"},
+    {"id":"terminal-authority-parity","producer":"cold learner proposed terminal evaluation","consumer":"authority independently restored and rerun terminal evaluation","comparison":"exact IdentifierResultRoot diagnostic root disposition and verdict root","test_id":"terminal-authority-parity"},
+    {"id":"restart-attempt-parity","producer":"signed V8 journal before restart","consumer":"fresh signed journal replay","comparison":"exact attempt index root and attempted OpportunityRoots","test_id":"restart-attempt-parity"},
+    {"id":"summary-control-parity","producer":"backend K1 summary API","consumer":"control HTML","comparison":"exact counts states blockers and claim boundary","test_id":"summary-control-parity"}
+  ],
+  "runtime_comparisons": [
+    {"id":"phase-a-live","source":"production services scheduler journal and health","comparison":"exact_stable_projection","stable_fields":["legacy_ledger_prefix","anchor_monotonic","v8_events_zero","hot_pid","nginx_pid","connector_pid","false_accepts_zero","parity_failures_zero"],"expected_to_change_fields":["cold_pid","authority_pid","control_pid","reader_schema_support","writer_enabled_false"],"observed_not_compared_fields":["natural_traffic_suffix","timestamps","traffic_counters"],"reason":"natural traffic may advance while reader-compatible binaries are installed","test_id":"phase-a-live-parity"},
+    {"id":"phase-b-live","source":"production services scheduler journal and health","comparison":"exact_stable_projection","stable_fields":["legacy_ledger_prefix","anchor_monotonic","hot_pid","nginx_pid","connector_pid","false_accepts_zero","parity_failures_zero"],"expected_to_change_fields":["cold_pid","authority_pid","control_pid","writer_policy_root","scheduler_revision","exact_opportunity_counts"],"observed_not_compared_fields":["natural_traffic_suffix","timestamps","traffic_counters"],"reason":"natural V8 work may append after writer activation","test_id":"phase-b-live-parity"}
+  ],
+  "invariants": [
+    {"id":"exact-only-suppression","statement":"only a matching authority-recomputed deterministic V8 freeze diagnostic verdict triple marks an OpportunityRoot attempted","test_id":"exact-attempt-policy"},
+    {"id":"coarse-family-observation-only","statement":"consequence and semantic novelty families cannot rank demote exclude or suppress a candidate","test_id":"coarse-family-no-authority"},
+    {"id":"raw-phase-causal-domain","statement":"V8 Raw Phase uses OpportunityRoot rather than receipt-dependent Freeze V8 root","test_id":"raw-phase-domain-metamorphism"},
+    {"id":"authority-rebuilds","statement":"authority independently restores bounded source prefixes and rebuilds catalog queue causal manifest terminal result and final receipts","test_id":"authority-selection-parity"},
+    {"id":"bounded-research","statement":"one new freeze per wake five minute freeze interval 48 per trailing day and 256 rows per wake are separately enforced","test_id":"research-budget"},
+    {"id":"legacy-diagnostic-only","statement":"V1 through V7 terminals never create authoritative attempted roots","test_id":"legacy-no-backfill"},
+    {"id":"rollback-fence","statement":"after first V8 append rollback target is Phase A only and all natural suffix events remain preserved","test_id":"phase-b-rollback"},
+    {"id":"claim-boundary","statement":"exact opportunity repair cannot issue Law 2 K1 OPEN phase authority or package activation","test_id":"claim-boundary"}
+  ],
+  "tests": [
+    {"id":"pure-model-abort","kind":"fault_injection","expected":"any pure model failure leaves production state and binaries untouched"},
+    {"id":"diagnostic-abort","kind":"fault_injection","expected":"any diagnostic or authority test failure leaves production state and binaries untouched"},
+    {"id":"compatibility-abort","kind":"fault_injection","expected":"any local compatibility failure leaves production state and binaries untouched"},
+    {"id":"replay-abort","kind":"fault_injection","expected":"disposable replay cannot reach production sockets or paths and a VETO prevents deployment"},
+    {"id":"opportunity-root-metamorphism","kind":"parity","expected":"excluded receipt mutations preserve root and every causal input mutation changes root"},
+    {"id":"raw-phase-domain-metamorphism","kind":"parity","expected":"excluded freeze fields do not change V8 Raw Phase or initial semantic identifier result"},
+    {"id":"exact-attempt-policy","kind":"unit","expected":"same completed deterministic V8 root creates no second generation or event while a new root creates exactly one"},
+    {"id":"coarse-family-no-authority","kind":"unit","expected":"coarse family mutations have no selection or suppression effect"},
+    {"id":"authority-selection-parity","kind":"parity","expected":"learner and authority derive exact source catalog queue causal opportunity and freeze roots"},
+    {"id":"terminal-authority-parity","kind":"parity","expected":"authority rerun derives exact result diagnostic disposition and verdict roots and rejects forged client fields"},
+    {"id":"restart-attempt-parity","kind":"parity","expected":"signed journal replay reproduces exact attempt index and attempted roots"},
+    {"id":"research-budget","kind":"unit","expected":"novel work stops at preregistered wake interval daily and row bounds without claiming missing evidence"},
+    {"id":"legacy-no-backfill","kind":"unit","expected":"legacy V1 through V7 history contributes diagnostics only and zero attempted roots"},
+    {"id":"claim-boundary","kind":"unit","expected":"authority and phase remain false Law 2 remains unproved and no package activates"},
+    {"id":"summary-control-parity","kind":"parity","expected":"HTML values equal API values and all epistemic cooldown and active states remain separate"},
+    {"id":"phase-a-live-parity","kind":"parity","expected":"reader deployment preserves protected PIDs safety counters legacy suffix and writes no V8 event"},
+    {"id":"phase-b-live-parity","kind":"parity","expected":"writer deployment preserves protected PIDs safety counters and all natural suffix records"},
+    {"id":"phase-a-rollback","kind":"fault_injection","expected":"pre-Phase-A binaries restore before any V8 event while suffix and anchor remain monotonic"},
+    {"id":"phase-b-rollback","kind":"fault_injection","expected":"Phase A compatible binaries restore after a V8 event while V8 suffix and newest anchor remain intact"}
+  ]
+}

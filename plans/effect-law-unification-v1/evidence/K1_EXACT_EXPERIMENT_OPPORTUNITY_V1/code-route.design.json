@@ -1,0 +1,59 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id":"cold_wake","role":"interface"},
+    {"id":"cold_source_restore","role":"producer"},
+    {"id":"cold_manifest_builder","role":"evidence_owner"},
+    {"id":"cold_queue_builder","role":"candidate_rank_owner"},
+    {"id":"freeze_request","role":"interface"},
+    {"id":"authority_source_restore","role":"producer"},
+    {"id":"authority_manifest_builder","role":"evidence_owner"},
+    {"id":"authority_queue_builder","role":"candidate_rank_owner"},
+    {"id":"freeze_authorizer","role":"authorization_owner"},
+    {"id":"signed_journal_append","role":"mutation_owner"},
+    {"id":"active_freeze","role":"interface"},
+    {"id":"frozen_archive_restore","role":"evidence_owner"},
+    {"id":"identifier_evaluator","role":"producer"},
+    {"id":"terminal_request","role":"interface"},
+    {"id":"terminal_source_restore","role":"producer"},
+    {"id":"terminal_evaluator","role":"evidence_owner"},
+    {"id":"terminal_authorizer","role":"authorization_owner"},
+    {"id":"attempt_projection","role":"producer"},
+    {"id":"attempt_parity_test","role":"proof_owner"},
+    {"id":"summary_projection","role":"producer"},
+    {"id":"control_observer","role":"observer"}
+  ],
+  "edges": [
+    {"id":"exec-cold-restore","from":"cold_wake","relation":"calls","to":"cold_source_restore","events":["learner_proposal"]},
+    {"id":"exec-cold-manifest","from":"cold_source_restore","relation":"delegates","to":"cold_manifest_builder","events":["learner_proposal"]},
+    {"id":"auth-cold-manifest","from":"cold_source_restore","relation":"produces_for","to":"cold_manifest_builder","events":["learner_proposal"]},
+    {"id":"auth-cold-rank","from":"cold_manifest_builder","relation":"passes_to","to":"cold_queue_builder","events":["learner_proposal"]},
+
+    {"id":"auth-freeze-restore","from":"freeze_request","relation":"passes_to","to":"authority_source_restore","events":["freeze_authorization"]},
+    {"id":"auth-freeze-manifest","from":"authority_source_restore","relation":"produces_for","to":"authority_manifest_builder","events":["freeze_authorization"]},
+    {"id":"auth-freeze-rank","from":"authority_manifest_builder","relation":"passes_to","to":"authority_queue_builder","events":["freeze_authorization"]},
+    {"id":"auth-freeze-authorize","from":"authority_queue_builder","relation":"passes_to","to":"freeze_authorizer","events":["freeze_authorization"]},
+    {"id":"auth-freeze-append","from":"freeze_authorizer","relation":"authorizes","to":"signed_journal_append","events":["freeze_authorization"]},
+
+    {"id":"exec-ident-restore","from":"active_freeze","relation":"calls","to":"frozen_archive_restore","events":["identifier_run"]},
+    {"id":"exec-ident-evaluate","from":"frozen_archive_restore","relation":"delegates","to":"identifier_evaluator","events":["identifier_run"]},
+
+    {"id":"auth-terminal-restore","from":"terminal_request","relation":"passes_to","to":"terminal_source_restore","events":["terminal_authorization"]},
+    {"id":"auth-terminal-evaluate","from":"terminal_source_restore","relation":"produces_for","to":"terminal_evaluator","events":["terminal_authorization"]},
+    {"id":"auth-terminal-authorize","from":"terminal_evaluator","relation":"passes_to","to":"terminal_authorizer","events":["terminal_authorization"]},
+    {"id":"auth-terminal-append","from":"terminal_authorizer","relation":"authorizes","to":"signed_journal_append","events":["terminal_authorization"]},
+
+    {"id":"proof-attempt","from":"attempt_projection","relation":"proves","to":"attempt_parity_test","events":["restart_parity"]},
+    {"id":"observe-summary","from":"summary_projection","relation":"observes","to":"control_observer","events":["dashboard_refresh"]}
+  ],
+  "routes": [
+    {"id":"learner-proposal-execution","event":"learner_proposal","kind":"execution","entry":"cold_wake","terminal":"cold_manifest_builder","required_roles":["interface","producer","evidence_owner"],"path_cardinality":[{"from":"cold_wake","to":"cold_manifest_builder","min":1,"max":1}]},
+    {"id":"learner-proposal-authority-free-ranking","event":"learner_proposal","kind":"authority","entry":"cold_source_restore","terminal":"cold_queue_builder","required_roles":["producer","evidence_owner","candidate_rank_owner"]},
+    {"id":"freeze-authority","event":"freeze_authorization","kind":"authority","entry":"freeze_request","terminal":"signed_journal_append","required_roles":["interface","evidence_owner","producer","candidate_rank_owner","authorization_owner","mutation_owner"],"path_cardinality":[{"from":"freeze_request","to":"signed_journal_append","min":1,"max":1}]},
+    {"id":"identifier-execution","event":"identifier_run","kind":"execution","entry":"active_freeze","terminal":"identifier_evaluator","required_roles":["interface","evidence_owner","producer"],"path_cardinality":[{"from":"active_freeze","to":"identifier_evaluator","min":1,"max":1}]},
+    {"id":"terminal-authority","event":"terminal_authorization","kind":"authority","entry":"terminal_request","terminal":"signed_journal_append","required_roles":["interface","evidence_owner","producer","authorization_owner","mutation_owner"],"path_cardinality":[{"from":"terminal_request","to":"signed_journal_append","min":1,"max":1}]},
+    {"id":"attempt-restart-proof","event":"restart_parity","kind":"proof","entry":"attempt_projection","terminal":"attempt_parity_test","required_roles":["producer","proof_owner"]},
+    {"id":"dashboard-observation","event":"dashboard_refresh","kind":"observation","entry":"summary_projection","terminal":"control_observer","required_roles":["producer","observer"]}
+  ]
+}
