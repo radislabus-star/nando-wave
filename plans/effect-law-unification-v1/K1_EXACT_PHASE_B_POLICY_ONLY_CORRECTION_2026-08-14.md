@@ -37,9 +37,20 @@ The restarts were unnecessary:
 - `exact_wake_authoritative` reads and validates the policy document on every
   exact wake;
 - health reads the same policy document for every health projection;
+- the multi-source snapshot runtime calls the scheduler in a persistent poll
+  loop rather than only once at process startup;
+- a report carrying `WriterInactive` is not eligible for waiting-tick reuse, so
+  the first poll after the policy replacement must issue a new exact wake;
+- with writer ON, an already-active V1-V7 generation can still advance under
+  its original freeze, while creation of another legacy freeze is disabled;
 - Phase A and Phase B use the same V8-compatible binary bytes;
 - the execution plan permits cold, authority, and control to restart, but does
   not require a restart.
+
+The cache boundary is asymmetric in the safe direction. After rollback, an old
+`WaitingForEvidence` report may remain reusable until evidence changes, but the
+policy bytes are already OFF and no write occurs while the report is reused.
+The next evidence-caused wake rereads OFF before any new freeze can be created.
 
 ## Corrected One-Shot Transaction
 
