@@ -13,6 +13,7 @@ pub mod grounded_decision_capture;
 pub mod grounded_decision_census;
 pub mod grounded_decision_natural_census;
 pub mod grounded_decision_natural_census_runtime;
+pub mod k1_exact_opportunity_replay;
 mod k1_natural_scheduler;
 mod k1_natural_scheduler_runtime;
 mod k1_pre_action_prediction;

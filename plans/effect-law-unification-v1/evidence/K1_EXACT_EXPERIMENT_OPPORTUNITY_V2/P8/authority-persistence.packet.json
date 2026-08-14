@@ -1,0 +1,159 @@
+{
+   "candidate_answer" : "Observed release code reruns the frozen evaluator in terminal authority and records only matched deterministic V8 terminals.",
+   "candidate_triads" : [
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:639",
+         "evidence_binding" : {
+            "artifact" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+            "artifact_sha256" : "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+            "extractor" : {
+               "config_sha256" : "4a415e081c00dbbfb1e3f4c55b173483a2ec66572182e967fe92a650a9e4a459",
+               "id" : "release-plan",
+               "version" : "1"
+            },
+            "object" : "frozen initial identifier evaluator",
+            "object_role" : "deterministic causal result",
+            "relation" : "independently_reruns",
+            "role_binding_sha256" : "5db089e300aef7daa54e84345218c6886af3cd2aabff515490621f16a9999a07",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:639",
+            "span_sha256" : "63cb0fe1a246f7dd5163909e4fb1514bceb8533207c487893d6a3a6820fde4e0",
+            "subject" : "terminal authority",
+            "subject_role" : "terminal authorization owner"
+         },
+         "evidence_path" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+         "group" : "candidate",
+         "id" : "c1",
+         "layer" : "release",
+         "object" : "frozen initial identifier evaluator",
+         "object_role" : "deterministic causal result",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "independently_reruns",
+         "route" : "authority-persistence",
+         "scope" : "authority-persistence",
+         "subject" : "terminal authority",
+         "subject_role" : "terminal authorization owner"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:680",
+         "evidence_binding" : {
+            "artifact" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+            "artifact_sha256" : "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+            "extractor" : {
+               "config_sha256" : "4a415e081c00dbbfb1e3f4c55b173483a2ec66572182e967fe92a650a9e4a459",
+               "id" : "release-plan",
+               "version" : "1"
+            },
+            "object" : "matched deterministic V8 terminals",
+            "object_role" : "completed exact attempt",
+            "relation" : "records_only",
+            "role_binding_sha256" : "b8263eda5c8a6f574902bb0f5c3e45b023346535219e7da69c4e9a371cbd384a",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:680",
+            "span_sha256" : "ce2d53f9ca15fd0ab2362f00f5cffe593a97df1ef37fbae36425ed2565f6a132",
+            "subject" : "ExactAttemptIndexV1",
+            "subject_role" : "append-only projection"
+         },
+         "evidence_path" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+         "group" : "candidate",
+         "id" : "c2",
+         "layer" : "release",
+         "object" : "matched deterministic V8 terminals",
+         "object_role" : "completed exact attempt",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "records_only",
+         "route" : "authority-persistence",
+         "scope" : "authority-persistence",
+         "subject" : "ExactAttemptIndexV1",
+         "subject_role" : "append-only projection"
+      }
+   ],
+   "domain" : "code",
+   "quality_contract" : {
+      "require_derived_claims" : false,
+      "require_evidence_bindings" : true,
+      "schema" : "nanda.quality-contract.v1"
+   },
+   "query" : "Does the observed release keep deterministic terminal authority server-owned and project attempts only from matched signed history?",
+   "task_id" : "k1-exact-opportunity-release-authority-persistence-v1",
+   "triads" : [
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs:226",
+         "evidence_binding" : {
+            "artifact" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+            "artifact_sha256" : "82961c5783074ff7be8c16530ea7980068f67961af76f983f63543a1d24ec266",
+            "extractor" : {
+               "config_sha256" : "d42adf671a42050711da388510589979fb3eae116793d79cadb1133611476925",
+               "id" : "release-source",
+               "version" : "1"
+            },
+            "object" : "frozen initial identifier evaluator",
+            "object_role" : "deterministic causal result",
+            "relation" : "independently_reruns",
+            "role_binding_sha256" : "5db089e300aef7daa54e84345218c6886af3cd2aabff515490621f16a9999a07",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs:226",
+            "span_sha256" : "9e45b358e1cb06245d7ec01fb1e507dc6fb4727d633b75c19c98980b91df8cc9",
+            "subject" : "terminal authority",
+            "subject_role" : "terminal authorization owner"
+         },
+         "evidence_path" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+         "group" : "source",
+         "id" : "t1",
+         "layer" : "release",
+         "object" : "frozen initial identifier evaluator",
+         "object_role" : "deterministic causal result",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "independently_reruns",
+         "route" : "authority-persistence",
+         "scope" : "authority-persistence",
+         "subject" : "terminal authority",
+         "subject_role" : "terminal authorization owner"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs:190",
+         "evidence_binding" : {
+            "artifact" : "crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs",
+            "artifact_sha256" : "46e26f1a8d3c924c5ca02ea939fb4185f4d5b5d735b00945778f10cd34d62fd6",
+            "extractor" : {
+               "config_sha256" : "d42adf671a42050711da388510589979fb3eae116793d79cadb1133611476925",
+               "id" : "release-source",
+               "version" : "1"
+            },
+            "object" : "matched deterministic V8 terminals",
+            "object_role" : "completed exact attempt",
+            "relation" : "records_only",
+            "role_binding_sha256" : "b8263eda5c8a6f574902bb0f5c3e45b023346535219e7da69c4e9a371cbd384a",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs:190",
+            "span_sha256" : "0dc670ff26de3b9c4b72b945fb531a5cd93a6248ccc60b46cac1557e58ca95da",
+            "subject" : "ExactAttemptIndexV1",
+            "subject_role" : "append-only projection"
+         },
+         "evidence_path" : "crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs",
+         "group" : "source",
+         "id" : "t2",
+         "layer" : "release",
+         "object" : "matched deterministic V8 terminals",
+         "object_role" : "completed exact attempt",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "records_only",
+         "route" : "authority-persistence",
+         "scope" : "authority-persistence",
+         "subject" : "ExactAttemptIndexV1",
+         "subject_role" : "append-only projection"
+      }
+   ]
+}

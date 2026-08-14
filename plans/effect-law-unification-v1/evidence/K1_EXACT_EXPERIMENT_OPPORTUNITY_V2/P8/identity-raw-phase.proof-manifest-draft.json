@@ -1,0 +1,6 @@
+{
+  "manifest_file_sha256": "97a68b36f7c8f39ea1f1765fbf7712caacf6fb46a72ed3c1ea7b57856dba3254",
+  "manifest_path": "plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P8/identity-raw-phase.proof-manifest.json",
+  "schema": "nanda.proof-manifest-draft-report.v1",
+  "trust_state": "UNTRUSTED_DRAFT_REQUIRES_EXTERNAL_PIN"
+}

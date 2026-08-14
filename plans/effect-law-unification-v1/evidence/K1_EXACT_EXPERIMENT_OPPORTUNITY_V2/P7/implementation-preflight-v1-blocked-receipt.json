@@ -1,0 +1,131 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "exact-opportunity-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/exact_opportunity.rs",
+      "sha256": "6c3d6517ebd7dac24358473d4ce1bf22019c946bf5b4fb6b07e0ddb0efb0fb0d",
+      "size_bytes": 36787
+    },
+    {
+      "exists": true,
+      "id": "scheduler-model-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs",
+      "sha256": "7e25bb3ddf6c5a93ac02d34fd76ce169051303116b063379c6f8323579fede83",
+      "size_bytes": 31171
+    },
+    {
+      "exists": true,
+      "id": "scheduler-projection-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs",
+      "sha256": "05ead774cc16ffef17dff3a372ea20d6684b207e0b822611ab4a7775e7f87ce8",
+      "size_bytes": 20778
+    },
+    {
+      "exists": true,
+      "id": "scheduler-journal-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/journal.rs",
+      "sha256": "8bfbe5a41c5e97b69356be0facd50bd354c9847acf88914c34bfd03fa4b5b001",
+      "size_bytes": 16974
+    },
+    {
+      "exists": true,
+      "id": "certification-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/operator_certification.rs",
+      "sha256": "3b924ade81e0916fb489f4634b8edffc971d0726636525987ac399a3542cee8e",
+      "size_bytes": 54616
+    },
+    {
+      "exists": true,
+      "id": "frozen-source-manifest",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P7/frozen-source-manifest.json",
+      "sha256": "eb7937538468f370a5c0186187cd5261fd6df6697c56eacd2e63f13404878f60",
+      "size_bytes": 2830
+    },
+    {
+      "exists": true,
+      "id": "p6-verification",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P6/implementation-verification-2026-08-14.md",
+      "sha256": "566e4d758337585e2aa744e8c8578761311869b79e1e38be1ef12578bc37003f",
+      "size_bytes": 3379
+    }
+  ],
+  "blockers": [
+    {
+      "code": "runtime_comparison_policy_invalid",
+      "field": "runtime_comparisons[0].comparison",
+      "message": "only exact_stable_projection is accepted in V1"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[2].test_id",
+      "message": "identity contract requires a parity test"
+    }
+  ],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 7,
+    "forbidden_side_effect_kinds": [
+      "artifact_archive_publish",
+      "connector_restart",
+      "dashboard_mutation",
+      "deployment",
+      "generated_traffic",
+      "hot_restart",
+      "law_promotion",
+      "nginx_restart",
+      "phase_mutation",
+      "private_key_read",
+      "production_socket",
+      "production_state_write",
+      "scheduler_event_append",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 3,
+    "invariants": 5,
+    "planned_side_effect_kinds": [
+      "filesystem_read",
+      "isolated_build",
+      "repository_document_write",
+      "temporary_state_mutation"
+    ],
+    "preserved_artifacts": 2,
+    "runtime_comparisons": 1,
+    "source_checks": 1,
+    "tests": 6
+  },
+  "manifest_sha256": "8cdee6cf65ca1c74da62dc5789ea751961908ef7095b6fa6ee7510dc65252cd2",
+  "safe_to_implement": false,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "read-only-exact-evaluator",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/exact_opportunity.rs",
+      "sha256": "6c3d6517ebd7dac24358473d4ce1bf22019c946bf5b4fb6b07e0ddb0efb0fb0d",
+      "size_bytes": 36787
+    }
+  ],
+  "task_id": "k1-exact-experiment-opportunity-p7-v1",
+  "verdict": "BLOCKED_BEFORE_CODE"
+}

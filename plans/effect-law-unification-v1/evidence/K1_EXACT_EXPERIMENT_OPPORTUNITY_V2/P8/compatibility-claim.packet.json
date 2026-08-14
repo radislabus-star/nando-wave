@@ -1,0 +1,231 @@
+{
+   "candidate_answer" : "Observed release code fences pre-V8 readers after a V8 suffix and reports replay as quality UNKNOWN without proving Law number two.",
+   "candidate_triads" : [
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:902",
+         "evidence_binding" : {
+            "artifact" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+            "artifact_sha256" : "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+            "extractor" : {
+               "config_sha256" : "4a415e081c00dbbfb1e3f4c55b173483a2ec66572182e967fe92a650a9e4a459",
+               "id" : "release-plan",
+               "version" : "1"
+            },
+            "object" : "pre-V8 rollback reader",
+            "object_role" : "legacy reader",
+            "relation" : "forbids",
+            "role_binding_sha256" : "a719583b687744de483a99035ec9bf258c85f84c4c485c12b337b06ff491c5f8",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:902",
+            "span_sha256" : "010dec8abcf8a798efd9ba89936a0c8e32333e9ab837e8a8f39ca1c4c09d197b",
+            "subject" : "first V8 suffix",
+            "subject_role" : "rollback fence event"
+         },
+         "evidence_path" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+         "group" : "candidate",
+         "id" : "c1",
+         "layer" : "release",
+         "object" : "pre-V8 rollback reader",
+         "object_role" : "legacy reader",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "forbids",
+         "route" : "compatibility-claim",
+         "scope" : "compatibility-claim",
+         "subject" : "first V8 suffix",
+         "subject_role" : "rollback fence event"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:949",
+         "evidence_binding" : {
+            "artifact" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+            "artifact_sha256" : "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+            "extractor" : {
+               "config_sha256" : "4a415e081c00dbbfb1e3f4c55b173483a2ec66572182e967fe92a650a9e4a459",
+               "id" : "release-plan",
+               "version" : "1"
+            },
+            "object" : "Law number two",
+            "object_role" : "scientific promotion",
+            "relation" : "cannot_grant",
+            "role_binding_sha256" : "881433e444b56fea953bb5630b21b264ebb991af086a7b25c6421f1f87e40d22",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:949",
+            "span_sha256" : "27eff8584d74ef4c704f9a6f0992aef6eb1ed07bad173d32d11c491fdbe05739",
+            "subject" : "exact opportunity replay",
+            "subject_role" : "engineering observation"
+         },
+         "evidence_path" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+         "group" : "candidate",
+         "id" : "c2",
+         "layer" : "release",
+         "object" : "Law number two",
+         "object_role" : "scientific promotion",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "cannot_grant",
+         "route" : "compatibility-claim",
+         "scope" : "compatibility-claim",
+         "subject" : "exact opportunity replay",
+         "subject_role" : "engineering observation"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:924",
+         "evidence_binding" : {
+            "artifact" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+            "artifact_sha256" : "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+            "extractor" : {
+               "config_sha256" : "4a415e081c00dbbfb1e3f4c55b173483a2ec66572182e967fe92a650a9e4a459",
+               "id" : "release-plan",
+               "version" : "1"
+            },
+            "object" : "quality UNKNOWN",
+            "object_role" : "answer quality",
+            "relation" : "reports",
+            "role_binding_sha256" : "9d1cf92a777b46cfb7846fcdb65044fb1c504687bdf9ef94dd1a5da8388c3279",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:924",
+            "span_sha256" : "1ef45fc8b1689d4befc83a37d1c2b6d16da1ebf4ee5ada1c6abbb77e8fb3cc98",
+            "subject" : "unverified replay",
+            "subject_role" : "routing observation"
+         },
+         "evidence_path" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+         "group" : "candidate",
+         "id" : "c3",
+         "layer" : "release",
+         "object" : "quality UNKNOWN",
+         "object_role" : "answer quality",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "reports",
+         "route" : "compatibility-claim",
+         "scope" : "compatibility-claim",
+         "subject" : "unverified replay",
+         "subject_role" : "routing observation"
+      }
+   ],
+   "domain" : "code",
+   "quality_contract" : {
+      "require_derived_claims" : false,
+      "require_evidence_bindings" : true,
+      "schema" : "nanda.quality-contract.v1"
+   },
+   "query" : "Does the observed release fence pre-V8 rollback and keep replay results from implying Law number two?",
+   "task_id" : "k1-exact-opportunity-release-compatibility-claim-v1",
+   "triads" : [
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs:1051",
+         "evidence_binding" : {
+            "artifact" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+            "artifact_sha256" : "82961c5783074ff7be8c16530ea7980068f67961af76f983f63543a1d24ec266",
+            "extractor" : {
+               "config_sha256" : "d42adf671a42050711da388510589979fb3eae116793d79cadb1133611476925",
+               "id" : "release-source",
+               "version" : "1"
+            },
+            "object" : "pre-V8 rollback reader",
+            "object_role" : "legacy reader",
+            "relation" : "forbids",
+            "role_binding_sha256" : "a719583b687744de483a99035ec9bf258c85f84c4c485c12b337b06ff491c5f8",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs:1051",
+            "span_sha256" : "8da19d12e0e0f48c339ab7b1fe7ce64307cfdc2da8bd1f60861b9cadbd0ea3d7",
+            "subject" : "first V8 suffix",
+            "subject_role" : "rollback fence event"
+         },
+         "evidence_path" : "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+         "group" : "source",
+         "id" : "t1",
+         "layer" : "release",
+         "object" : "pre-V8 rollback reader",
+         "object_role" : "legacy reader",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "forbids",
+         "route" : "compatibility-claim",
+         "scope" : "compatibility-claim",
+         "subject" : "first V8 suffix",
+         "subject_role" : "rollback fence event"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs:195",
+         "evidence_binding" : {
+            "artifact" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs",
+            "artifact_sha256" : "0a386a7ec09ea08d45c4f5923d9202cdffbcd645ea39bd24c98d958b452eda87",
+            "extractor" : {
+               "config_sha256" : "d42adf671a42050711da388510589979fb3eae116793d79cadb1133611476925",
+               "id" : "release-source",
+               "version" : "1"
+            },
+            "object" : "Law number two",
+            "object_role" : "scientific promotion",
+            "relation" : "cannot_grant",
+            "role_binding_sha256" : "881433e444b56fea953bb5630b21b264ebb991af086a7b25c6421f1f87e40d22",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs:195",
+            "span_sha256" : "319fb2c9f47e6c211296d759e932517bce7193cf92ad3bf1a11873f73f01a818",
+            "subject" : "exact opportunity replay",
+            "subject_role" : "engineering observation"
+         },
+         "evidence_path" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs",
+         "group" : "source",
+         "id" : "t2",
+         "layer" : "release",
+         "object" : "Law number two",
+         "object_role" : "scientific promotion",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "cannot_grant",
+         "route" : "compatibility-claim",
+         "scope" : "compatibility-claim",
+         "subject" : "exact opportunity replay",
+         "subject_role" : "engineering observation"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs:198",
+         "evidence_binding" : {
+            "artifact" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs",
+            "artifact_sha256" : "0a386a7ec09ea08d45c4f5923d9202cdffbcd645ea39bd24c98d958b452eda87",
+            "extractor" : {
+               "config_sha256" : "d42adf671a42050711da388510589979fb3eae116793d79cadb1133611476925",
+               "id" : "release-source",
+               "version" : "1"
+            },
+            "object" : "quality UNKNOWN",
+            "object_role" : "answer quality",
+            "relation" : "reports",
+            "role_binding_sha256" : "9d1cf92a777b46cfb7846fcdb65044fb1c504687bdf9ef94dd1a5da8388c3279",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs:198",
+            "span_sha256" : "cc684046aa5398f3c5034a314f3239b6a78eba0f3f8a90fc6a27641a2a824a19",
+            "subject" : "unverified replay",
+            "subject_role" : "routing observation"
+         },
+         "evidence_path" : "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs",
+         "group" : "source",
+         "id" : "t3",
+         "layer" : "release",
+         "object" : "quality UNKNOWN",
+         "object_role" : "answer quality",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "reports",
+         "route" : "compatibility-claim",
+         "scope" : "compatibility-claim",
+         "subject" : "unverified replay",
+         "subject_role" : "routing observation"
+      }
+   ]
+}

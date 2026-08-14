@@ -678,3 +678,160 @@ fn exact_freeze_v8_separates_opportunity_identity_from_provenance() {
         bytes
     );
 }
+
+#[test]
+fn replay_v8_seal_cannot_relax_production_selection_authority() {
+    let topology = motif_topology(2, &[(0, 1)]);
+    let first_motif = exact_motif(&topology, 2, 1);
+    let second_motif = exact_motif(&topology, 1, 0);
+    let mut rows = (1..=8)
+        .map(|index| {
+            motif_evidence_row(
+                index,
+                &first_motif,
+                100,
+                if index <= 4 { 300 } else { 301 },
+                1_000 + index,
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.extend((11..=18).map(|index| {
+        motif_evidence_row(
+            index,
+            &second_motif,
+            101,
+            if index <= 14 { 302 } else { 303 },
+            1_000 + index,
+        )
+    }));
+    let catalog = motif_catalog(&rows, &[]);
+    let deficit = deficit(Vec::new());
+    let queue_v2 =
+        build_k1_natural_candidate_queue_v1(&catalog, &deficit, catalog_watermark(&catalog))
+            .expect("queue v2");
+    assert!(
+        queue_v2
+            .rows
+            .iter()
+            .filter(|row| row.score.readiness_rank == 1)
+            .count()
+            >= 2
+    );
+    let manifests = queue_v2
+        .rows
+        .iter()
+        .filter(|row| row.score.readiness_rank == 1)
+        .map(|row| {
+            let candidate = catalog
+                .candidates
+                .iter()
+                .find(|candidate| candidate.candidate_root_sha256 == row.candidate_root_sha256)
+                .expect("ready candidate");
+            (
+                row.candidate_root_sha256.clone(),
+                exact_manifest(
+                    candidate.candidate_structural_root_sha256.clone(),
+                    candidate.last_capture_sequence,
+                    root(89_030),
+                ),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let index = ExactAttemptIndexV1::empty(0).expect("exact index");
+    let queue_v4 = queue_v2
+        .bind_exact_opportunities_v4(&index, root(89_031), &manifests)
+        .expect("queue v4");
+    let selected = queue_v4.first_readiness_pass().expect("selected row");
+    let later = queue_v4
+        .rows
+        .iter()
+        .find(|row| row.score.readiness_rank == 1 && *row != selected)
+        .expect("later ready row");
+    let candidate = catalog
+        .candidates
+        .iter()
+        .find(|candidate| candidate.candidate_root_sha256 == later.candidate_root_sha256)
+        .expect("later candidate");
+    let manifest = manifests
+        .get(&candidate.candidate_root_sha256)
+        .expect("later manifest")
+        .clone();
+    let seal = |replay: bool| {
+        let arguments = (
+            587,
+            &catalog,
+            &deficit,
+            &queue_v4,
+            candidate,
+            later.score.clone(),
+            "nando.k1-operator-blind-scheduler.v4".to_owned(),
+            root(88_000),
+            K1GenerationBudgetV1 {
+                maximum_support_rows: 64,
+                maximum_probe_rounds: 4,
+                maximum_probe_cost_units: 100,
+                maximum_generation_seconds: 3_600,
+            },
+            candidate.last_capture_sequence,
+            candidate.last_capture_sequence,
+            1_700_000_000,
+            manifest.clone(),
+            root(89_031),
+            root(89_032),
+            index.index_root_sha256.clone(),
+            root(89_033),
+        );
+        if replay {
+            K1NaturalCandidateFreezeV1::seal_non_authoritative_exact_v8_for_replay(
+                arguments.0,
+                arguments.1,
+                arguments.2,
+                arguments.3,
+                arguments.4,
+                arguments.5,
+                arguments.6,
+                arguments.7,
+                arguments.8,
+                arguments.9,
+                arguments.10,
+                arguments.11,
+                arguments.12,
+                arguments.13,
+                arguments.14,
+                arguments.15,
+                arguments.16,
+            )
+        } else {
+            K1NaturalCandidateFreezeV1::seal_exact_v8(
+                arguments.0,
+                arguments.1,
+                arguments.2,
+                arguments.3,
+                arguments.4,
+                arguments.5,
+                arguments.6,
+                arguments.7,
+                arguments.8,
+                arguments.9,
+                arguments.10,
+                arguments.11,
+                arguments.12,
+                arguments.13,
+                arguments.14,
+                arguments.15,
+                arguments.16,
+            )
+        }
+    };
+
+    assert_eq!(seal(false), Err("k1_candidate_freeze_binding_invalid"));
+    let replay = seal(true).expect("non-authoritative replay seal");
+    replay.validate().expect("validate replay seal");
+    assert!(!replay.authority_ready);
+    assert!(!replay.phase_mutation_allowed);
+    assert_eq!(replay.candidate_root_sha256, later.candidate_root_sha256);
+    assert_eq!(
+        replay.candidate_queue_root_sha256,
+        queue_v4.queue_root_sha256
+    );
+}

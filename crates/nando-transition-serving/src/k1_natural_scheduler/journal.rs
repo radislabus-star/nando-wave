@@ -7,7 +7,7 @@ pub(super) fn restore_anchored_scheduler(
     restore_anchored_scheduler_for(config, K1SchedulerLaneV1::Mechanism)
 }
 
-pub(super) fn restore_anchored_scheduler_for(
+pub(crate) fn restore_anchored_scheduler_for(
     config: &CertificationAuthorityConfigV1,
     lane: K1SchedulerLaneV1,
 ) -> Result<K1SchedulerLedgerV1, String> {

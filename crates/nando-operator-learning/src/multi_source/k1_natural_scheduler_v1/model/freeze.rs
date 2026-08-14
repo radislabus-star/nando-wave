@@ -364,6 +364,7 @@ impl K1NaturalCandidateFreezeV1 {
             support_watermark,
             contract_watermark,
             selected_at_unix,
+            true,
         )
     }
 
@@ -386,6 +387,91 @@ impl K1NaturalCandidateFreezeV1 {
         identifier_artifact_archive_manifest_root_sha256: String,
         exact_attempt_index_root_sha256: String,
         authority_binding_manifest_root_sha256: String,
+    ) -> Result<Self, &'static str> {
+        Self::seal_exact_v8_with_selection(
+            generation_sequence,
+            catalog,
+            deficit,
+            queue,
+            candidate,
+            scoring_tuple,
+            scheduler_schema,
+            discovery_basis_root_sha256,
+            budget,
+            support_watermark,
+            contract_watermark,
+            selected_at_unix,
+            causal_manifest,
+            evidence_source_snapshot_root_sha256,
+            identifier_artifact_archive_manifest_root_sha256,
+            exact_attempt_index_root_sha256,
+            authority_binding_manifest_root_sha256,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal_non_authoritative_exact_v8_for_replay(
+        generation_sequence: u64,
+        catalog: &K1NaturalCohortCatalogV1,
+        deficit: &K1DeficitSnapshotV1,
+        queue: &K1NaturalCandidateQueueV1,
+        candidate: &K1NaturalCohortCandidateV1,
+        scoring_tuple: K1CandidateScoreV1,
+        scheduler_schema: String,
+        discovery_basis_root_sha256: String,
+        budget: K1GenerationBudgetV1,
+        support_watermark: u64,
+        contract_watermark: u64,
+        selected_at_unix: u64,
+        causal_manifest: IdentifierCausalInputManifestV1,
+        evidence_source_snapshot_root_sha256: String,
+        identifier_artifact_archive_manifest_root_sha256: String,
+        exact_attempt_index_root_sha256: String,
+        authority_binding_manifest_root_sha256: String,
+    ) -> Result<Self, &'static str> {
+        Self::seal_exact_v8_with_selection(
+            generation_sequence,
+            catalog,
+            deficit,
+            queue,
+            candidate,
+            scoring_tuple,
+            scheduler_schema,
+            discovery_basis_root_sha256,
+            budget,
+            support_watermark,
+            contract_watermark,
+            selected_at_unix,
+            causal_manifest,
+            evidence_source_snapshot_root_sha256,
+            identifier_artifact_archive_manifest_root_sha256,
+            exact_attempt_index_root_sha256,
+            authority_binding_manifest_root_sha256,
+            false,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn seal_exact_v8_with_selection(
+        generation_sequence: u64,
+        catalog: &K1NaturalCohortCatalogV1,
+        deficit: &K1DeficitSnapshotV1,
+        queue: &K1NaturalCandidateQueueV1,
+        candidate: &K1NaturalCohortCandidateV1,
+        scoring_tuple: K1CandidateScoreV1,
+        scheduler_schema: String,
+        discovery_basis_root_sha256: String,
+        budget: K1GenerationBudgetV1,
+        support_watermark: u64,
+        contract_watermark: u64,
+        selected_at_unix: u64,
+        causal_manifest: IdentifierCausalInputManifestV1,
+        evidence_source_snapshot_root_sha256: String,
+        identifier_artifact_archive_manifest_root_sha256: String,
+        exact_attempt_index_root_sha256: String,
+        authority_binding_manifest_root_sha256: String,
+        require_selected_candidate: bool,
     ) -> Result<Self, &'static str> {
         if queue.schema != K1_NATURAL_CANDIDATE_QUEUE_SCHEMA_V4 {
             return Err("k1_exact_candidate_queue_schema_invalid");
@@ -419,6 +505,7 @@ impl K1NaturalCandidateFreezeV1 {
             support_watermark,
             contract_watermark,
             selected_at_unix,
+            require_selected_candidate,
         )?;
         freeze.schema = K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8.to_owned();
         freeze.candidate_queue_root_sha256 = queue.queue_root_sha256.clone();
@@ -447,6 +534,7 @@ impl K1NaturalCandidateFreezeV1 {
         support_watermark: u64,
         contract_watermark: u64,
         selected_at_unix: u64,
+        require_selected_candidate: bool,
     ) -> Result<Self, &'static str> {
         deficit.validate()?;
         queue.validate()?;
@@ -466,7 +554,7 @@ impl K1NaturalCandidateFreezeV1 {
         )?;
         if deficit.k1_open
             || !freeze_ready
-            || queue.first_readiness_pass() != Some(queued)
+            || (require_selected_candidate && queue.first_readiness_pass() != Some(queued))
             || queued.readiness_receipt_root_sha256
                 != candidate.readiness.readiness_receipt_root_sha256
             || queued.score != scoring_tuple
@@ -955,6 +1043,7 @@ impl ValidatedK1NaturalCohortCatalogV1 {
             support_watermark,
             contract_watermark,
             selected_at_unix,
+            true,
         )
     }
 }

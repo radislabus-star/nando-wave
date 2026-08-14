@@ -1,0 +1,159 @@
+{
+   "candidate_answer" : "Observed release code binds V8 Raw Phase to OpportunityRoot and keeps receipt metadata outside that causal identity.",
+   "candidate_triads" : [
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:484",
+         "evidence_binding" : {
+            "artifact" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+            "artifact_sha256" : "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+            "extractor" : {
+               "config_sha256" : "4a415e081c00dbbfb1e3f4c55b173483a2ec66572182e967fe92a650a9e4a459",
+               "id" : "release-plan",
+               "version" : "1"
+            },
+            "object" : "OpportunityRoot as frozen causal domain",
+            "object_role" : "experiment identity",
+            "relation" : "uses",
+            "role_binding_sha256" : "676703144aeaef8b1ae7634b42901d6bd7b1b34949a2cea385ced47b73d2c7a9",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:484",
+            "span_sha256" : "136f1e77d3e86a3c2d75d96427eccf6cebe1234a0ca1c11e1f40416d7ac8e2b4",
+            "subject" : "V8 Raw Phase",
+            "subject_role" : "hypothesis evaluator"
+         },
+         "evidence_path" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+         "group" : "candidate",
+         "id" : "c1",
+         "layer" : "release",
+         "object" : "OpportunityRoot as frozen causal domain",
+         "object_role" : "experiment identity",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "uses",
+         "route" : "identity-raw-phase",
+         "scope" : "identity-raw-phase",
+         "subject" : "V8 Raw Phase",
+         "subject_role" : "hypothesis evaluator"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:486",
+         "evidence_binding" : {
+            "artifact" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+            "artifact_sha256" : "0b120cb26a0a377863fca69160567b564596c343e457e895f3a4eccdb5db0155",
+            "extractor" : {
+               "config_sha256" : "4a415e081c00dbbfb1e3f4c55b173483a2ec66572182e967fe92a650a9e4a459",
+               "id" : "release-plan",
+               "version" : "1"
+            },
+            "object" : "OpportunityRoot",
+            "object_role" : "experiment identity",
+            "relation" : "cannot_change",
+            "role_binding_sha256" : "acb4beebe3a5056e960c0cf530fd85f31bb316606934d6af516ab3cb9d993528",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md:486",
+            "span_sha256" : "06c0987a1eb1d595e6a02dc2dc527746df7f8ede3162771177358f633c242089",
+            "subject" : "receipt metadata",
+            "subject_role" : "noncausal receipt field"
+         },
+         "evidence_path" : "plans/effect-law-unification-v1/K1_EXACT_EXPERIMENT_OPPORTUNITY_EXECUTION_PLAN_V2.md",
+         "group" : "candidate",
+         "id" : "c2",
+         "layer" : "release",
+         "object" : "OpportunityRoot",
+         "object_role" : "experiment identity",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "cannot_change",
+         "route" : "identity-raw-phase",
+         "scope" : "identity-raw-phase",
+         "subject" : "receipt metadata",
+         "subject_role" : "noncausal receipt field"
+      }
+   ],
+   "domain" : "code",
+   "quality_contract" : {
+      "require_derived_claims" : false,
+      "require_evidence_bindings" : true,
+      "schema" : "nanda.quality-contract.v1"
+   },
+   "query" : "Does the observed release keep OpportunityRoot as the V8 Raw Phase causal identity and exclude receipt metadata?",
+   "task_id" : "k1-exact-opportunity-release-identity-raw-phase-v1",
+   "triads" : [
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs:619",
+         "evidence_binding" : {
+            "artifact" : "crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs",
+            "artifact_sha256" : "0725302408026c0bdb9b03416cc48dc13a69d79ce5b9bf6e18f2ad1b2c29f56a",
+            "extractor" : {
+               "config_sha256" : "d42adf671a42050711da388510589979fb3eae116793d79cadb1133611476925",
+               "id" : "release-source",
+               "version" : "1"
+            },
+            "object" : "OpportunityRoot as frozen causal domain",
+            "object_role" : "experiment identity",
+            "relation" : "uses",
+            "role_binding_sha256" : "676703144aeaef8b1ae7634b42901d6bd7b1b34949a2cea385ced47b73d2c7a9",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs:619",
+            "span_sha256" : "08c98bb7aeb9bbf29563d91726c5751c7ee52c77fb2adc364b0bdf123a142379",
+            "subject" : "V8 Raw Phase",
+            "subject_role" : "hypothesis evaluator"
+         },
+         "evidence_path" : "crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs",
+         "group" : "source",
+         "id" : "t1",
+         "layer" : "release",
+         "object" : "OpportunityRoot as frozen causal domain",
+         "object_role" : "experiment identity",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "uses",
+         "route" : "identity-raw-phase",
+         "scope" : "identity-raw-phase",
+         "subject" : "V8 Raw Phase",
+         "subject_role" : "hypothesis evaluator"
+      },
+      {
+         "confidence" : 1,
+         "entrypoint" : "P8",
+         "evidence" : "crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/opportunity.rs:494",
+         "evidence_binding" : {
+            "artifact" : "crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/opportunity.rs",
+            "artifact_sha256" : "25f71c2c8668e38a299a1952a42848c8b0583438f6787a781d4cbd3d5358e8b2",
+            "extractor" : {
+               "config_sha256" : "d42adf671a42050711da388510589979fb3eae116793d79cadb1133611476925",
+               "id" : "release-source",
+               "version" : "1"
+            },
+            "object" : "OpportunityRoot",
+            "object_role" : "experiment identity",
+            "relation" : "cannot_change",
+            "role_binding_sha256" : "acb4beebe3a5056e960c0cf530fd85f31bb316606934d6af516ab3cb9d993528",
+            "schema" : "nanda.evidence-binding.v1",
+            "span" : "crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/opportunity.rs:494",
+            "span_sha256" : "4720630019b9cc936ad8c11bd518f566ddff99533bffb41f23a7157300f6ee93",
+            "subject" : "receipt metadata",
+            "subject_role" : "noncausal receipt field"
+         },
+         "evidence_path" : "crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/opportunity.rs",
+         "group" : "source",
+         "id" : "t2",
+         "layer" : "release",
+         "object" : "OpportunityRoot",
+         "object_role" : "experiment identity",
+         "output" : "release authority packet",
+         "owner" : "K1 release",
+         "relation" : "cannot_change",
+         "route" : "identity-raw-phase",
+         "scope" : "identity-raw-phase",
+         "subject" : "receipt metadata",
+         "subject_role" : "noncausal receipt field"
+      }
+   ]
+}

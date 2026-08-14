@@ -1,0 +1,418 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k1-exact-experiment-opportunity-p7-v2",
+  "authority_bearing": false,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "exact-opportunity-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/exact_opportunity.rs",
+      "expect": {
+        "size_bytes": 48155,
+        "sha256": "0b9683f87511ff6c775a70b716d0809525a0e224c5f3512032614e889c4961ef",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "scheduler-model-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs",
+      "expect": {
+        "size_bytes": 31204,
+        "sha256": "c4b8e75b123fce1a7d2cc525a59741cc6b396eba501cb04013379d8493b622a0",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "scheduler-projection-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs",
+      "expect": {
+        "size_bytes": 20778,
+        "sha256": "46e26f1a8d3c924c5ca02ea939fb4185f4d5b5d735b00945778f10cd34d62fd6",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "scheduler-journal-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/journal.rs",
+      "expect": {
+        "size_bytes": 16974,
+        "sha256": "f58cfd0c66196ac01058d2dc80cfa7c24a322a4510b1643f36275eb9d1207006",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "certification-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/operator_certification.rs",
+      "expect": {
+        "size_bytes": 54616,
+        "sha256": "3b924ade81e0916fb489f4634b8edffc971d0726636525987ac399a3542cee8e",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "frozen-source-manifest",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P7/frozen-source-manifest.json",
+      "expect": {
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "p6-verification",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P6/implementation-verification-2026-08-14.md",
+      "expect": {
+        "size_bytes": 3379,
+        "sha256": "566e4d758337585e2aa744e8c8578761311869b79e1e38be1ef12578bc37003f",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "freeze-model-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/freeze.rs",
+      "expect": {
+        "size_bytes": 50379,
+        "sha256": "3799d020a90a90cac360d8b88d79ba9f5972db7c1686cc9719159d81a219c0cc",
+        "mode": "0664"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "read-frozen-production-prefix",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "write-isolated-replay-output",
+        "kind": "temporary_state_mutation"
+      },
+      {
+        "id": "publish-p7-receipt",
+        "kind": "repository_document_write"
+      },
+      {
+        "id": "remote-build-and-tests",
+        "kind": "isolated_build"
+      }
+    ],
+    "forbidden": [
+      "production_state_write",
+      "production_socket",
+      "private_key_read",
+      "generated_traffic",
+      "synthetic_fixture",
+      "law_promotion",
+      "phase_mutation",
+      "scheduler_event_append",
+      "artifact_archive_publish",
+      "deployment",
+      "dashboard_mutation",
+      "hot_restart",
+      "nginx_restart",
+      "connector_restart",
+      "authority_grant",
+      "filesystem_write",
+      "network"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "read-only-exact-evaluator",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/exact_opportunity.rs",
+      "sha256": "0b9683f87511ff6c775a70b716d0809525a0e224c5f3512032614e889c4961ef",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "production_state_write",
+          "regex": "/var/lib/nando-wave"
+        },
+        {
+          "effect": "production_socket",
+          "regex": "(TcpStream|UnixStream)::connect"
+        },
+        {
+          "effect": "private_key_read",
+          "regex": "read_signing_key\\s*\\("
+        },
+        {
+          "effect": "generated_traffic",
+          "regex": "generate_(synthetic|targeted)_traffic\\s*\\("
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "write_(synthetic|generated)_fixture\\s*\\("
+        },
+        {
+          "effect": "law_promotion",
+          "regex": "promote_law_2\\s*\\("
+        },
+        {
+          "effect": "phase_mutation",
+          "regex": "phase_mutation_allowed\\s*:\\s*true"
+        },
+        {
+          "effect": "scheduler_event_append",
+          "regex": "append_and_persist\\s*\\("
+        },
+        {
+          "effect": "artifact_archive_publish",
+          "regex": "publish_exact_artifacts\\s*\\("
+        },
+        {
+          "effect": "deployment",
+          "regex": "systemctl\\s+(restart|stop|start)"
+        },
+        {
+          "effect": "dashboard_mutation",
+          "regex": "nando-gateway-control"
+        },
+        {
+          "effect": "hot_restart",
+          "regex": "restart[^\\n]*transition-serving"
+        },
+        {
+          "effect": "nginx_restart",
+          "regex": "restart[^\\n]*nginx"
+        },
+        {
+          "effect": "connector_restart",
+          "regex": "restart[^\\n]*connector"
+        }
+      ]
+    },
+    {
+      "id": "non-authoritative-replay-seal",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/freeze.rs",
+      "sha256": "3799d020a90a90cac360d8b88d79ba9f5972db7c1686cc9719159d81a219c0cc",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "authority_grant",
+          "regex": "authority_ready\\s*:\\s*true"
+        },
+        {
+          "effect": "phase_mutation",
+          "regex": "phase_mutation_allowed\\s*:\\s*true"
+        },
+        {
+          "effect": "filesystem_write",
+          "regex": "(File|OpenOptions)::"
+        },
+        {
+          "effect": "network",
+          "regex": "(TcpStream|UnixStream)::connect"
+        }
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "P6_VERIFIED_WRITER_OFF",
+    "terminal_states": [
+      "P7_VALUE_GATE_PASS",
+      "P7_VALUE_GATE_VETO",
+      "P7_REPLAY_ERROR"
+    ],
+    "steps": [
+      {
+        "id": "restore-frozen-prefix",
+        "from": "P6_VERIFIED_WRITER_OFF",
+        "to": "FROZEN_PREFIX_RESTORED",
+        "mutates": false,
+        "failure_state": "P7_REPLAY_ERROR",
+        "cleanup": "retain source manifest and error; production untouched",
+        "preserves": [
+          "production-state",
+          "frozen-source-prefix"
+        ],
+        "test_id": "frozen-prefix-parity"
+      },
+      {
+        "id": "single-replay",
+        "from": "FROZEN_PREFIX_RESTORED",
+        "to": "SINGLE_REPLAY_COMPLETE",
+        "mutates": false,
+        "failure_state": "P7_REPLAY_ERROR",
+        "cleanup": "retain bounded diagnostic and no authority event",
+        "preserves": [
+          "production-state",
+          "frozen-source-prefix"
+        ],
+        "test_id": "single-replay"
+      },
+      {
+        "id": "ten-independent-replays",
+        "from": "SINGLE_REPLAY_COMPLETE",
+        "to": "TEN_REPLAYS_COMPLETE",
+        "mutates": false,
+        "failure_state": "P7_REPLAY_ERROR",
+        "cleanup": "retain completed run receipts and first divergence",
+        "preserves": [
+          "production-state",
+          "frozen-source-prefix"
+        ],
+        "test_id": "ten-replay-determinism"
+      },
+      {
+        "id": "value-gate",
+        "from": "TEN_REPLAYS_COMPLETE",
+        "to": "P7_VALUE_GATE_PASS",
+        "mutates": false,
+        "failure_state": "P7_VALUE_GATE_VETO",
+        "cleanup": "writer remains off; preserve VETO receipt",
+        "preserves": [
+          "production-state",
+          "frozen-source-prefix"
+        ],
+        "test_id": "p7-value-gate"
+      }
+    ]
+  },
+  "preserved_artifacts": [
+    {
+      "id": "production-state",
+      "path": "/var/lib/nando-wave/transition",
+      "policy": "read_never_write",
+      "rollback_policy": "not_applicable",
+      "cursor_policy": "production continues independently",
+      "baseline_check_id": "frozen-source-manifest"
+    },
+    {
+      "id": "frozen-source-prefix",
+      "path": "/home/e/nando-k1-exact-opportunity-v2/P7/frozen-20260814T012721Z",
+      "policy": "immutable_read_only",
+      "rollback_policy": "retain exact snapshot",
+      "cursor_policy": "ten replays use identical bytes",
+      "baseline_check_id": "frozen-source-manifest"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "source-manifest-identity",
+      "producer": "frozen production prefix manifest",
+      "consumer": "read-only replay loader",
+      "comparison": "component bytes roots counts and anchored ledger roots",
+      "test_id": "frozen-prefix-parity"
+    },
+    {
+      "id": "semantic-replay-identity",
+      "producer": "one exact opportunity replay",
+      "consumer": "nine independent repeats",
+      "comparison": "queue opportunity outcome blocker and aggregate receipt roots",
+      "test_id": "ten-replay-determinism"
+    },
+    {
+      "id": "claim-boundary",
+      "producer": "P7 value receipt",
+      "consumer": "deployment decision",
+      "comparison": "value result cannot change Law 2 K1 phase or production ledger",
+      "test_id": "claim-boundary"
+    },
+    {
+      "id": "replay-envelope-boundary",
+      "producer": "non-authoritative replay-only V8 seal",
+      "consumer": "read-only exact identifier census",
+      "comparison": "same causal candidate support artifact and queue roots while selection authority remains false",
+      "test_id": "replay-envelope-non-authority"
+    }
+  ],
+  "runtime_comparisons": [
+    {
+      "id": "one-to-ten",
+      "source": "one frozen denominator replay repeated ten times",
+      "comparison": "exact_stable_projection",
+      "stable_fields": [
+        "source_snapshot_root",
+        "queue_root",
+        "exact_attempt_index_root",
+        "outcome_root",
+        "blocker_histogram"
+      ],
+      "expected_to_change_fields": [
+        "wall_time_ns",
+        "cpu_time_ns",
+        "peak_rss_bytes"
+      ],
+      "observed_not_compared_fields": [
+        "process_id",
+        "temporary_output_path"
+      ],
+      "reason": "P7 measures repeatability and aggregate cost without duplicating source bytes",
+      "test_id": "ten-replay-determinism"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "read-only",
+      "statement": "replay receives no production socket private key mutable state path or event append route",
+      "test_id": "single-replay"
+    },
+    {
+      "id": "same-denominator",
+      "statement": "all ten runs consume the same immutable 1021651261-byte source manifest",
+      "test_id": "ten-replay-determinism"
+    },
+    {
+      "id": "bounded-output",
+      "statement": "receipt contains roots counts blocker codes and resource metrics but no request text or provider payload",
+      "test_id": "receipt-privacy"
+    },
+    {
+      "id": "hard-veto",
+      "statement": "any false accept parity failure unclassified dominance wire overflow or superlinear resource behavior vetoes deployment",
+      "test_id": "p7-value-gate"
+    },
+    {
+      "id": "no-scientific-promotion",
+      "statement": "P7 cannot prove Law 2 open K1 or manufacture independent future",
+      "test_id": "claim-boundary"
+    },
+    {
+      "id": "replay-envelope-no-authority",
+      "statement": "replay seal may evaluate a later readiness row but cannot set authority_ready phase_mutation_allowed or append an event",
+      "test_id": "replay-envelope-non-authority"
+    }
+  ],
+  "tests": [
+    {
+      "id": "frozen-prefix-parity",
+      "kind": "parity",
+      "expected": "signed certification and scheduler journals match their external anchors and frozen cache roots"
+    },
+    {
+      "id": "single-replay",
+      "kind": "integration",
+      "expected": "exact reader restores the denominator and emits bounded aggregate diagnostics without writes"
+    },
+    {
+      "id": "ten-replay-determinism",
+      "kind": "parity",
+      "expected": "ten independent outputs have identical semantic roots and no output divergence"
+    },
+    {
+      "id": "receipt-privacy",
+      "kind": "unit",
+      "expected": "serialized receipt contains no request text payload session id intent id or signing material"
+    },
+    {
+      "id": "p7-value-gate",
+      "kind": "model",
+      "expected": "frozen decision rule yields GO only for repeats or dominant classified bounded diagnostics with zero safety failures"
+    },
+    {
+      "id": "claim-boundary",
+      "kind": "parity",
+      "expected": "Law 2 remains not proved K1 remains 1 of 3 and no authority state changes"
+    },
+    {
+      "id": "replay-envelope-non-authority",
+      "kind": "parity",
+      "expected": "normal V8 seal rejects a non-selected row while replay-only seal validates it with authority and phase mutation false"
+    }
+  ]
+}

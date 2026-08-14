@@ -45,14 +45,14 @@ use crate::operator_certification::{
 use crate::write_bytes_atomic;
 
 mod authority;
-mod bounded_wire;
+pub(crate) mod bounded_wire;
 pub(crate) mod duplicate_cohorts;
 mod fork;
 mod future_authority;
-mod journal;
+pub(crate) mod journal;
 mod pre_action_evidence;
 mod pre_action_evidence_retention;
-mod projection;
+pub(crate) mod projection;
 mod selection_authority;
 
 use authority::send_authority_request;

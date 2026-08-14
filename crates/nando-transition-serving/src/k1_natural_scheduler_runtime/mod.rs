@@ -75,8 +75,9 @@ use advance::*;
 use evidence::*;
 pub(crate) use exact_opportunity::{
     ExactDurableSourceHeadsV1, build_exact_identifier_archive_v1,
-    evaluate_exact_initial_identifier_v1, restore_exact_durable_source_heads_v1,
-    restore_exact_identifier_inputs_v1, restore_exact_opportunity_v1,
+    evaluate_exact_initial_identifier_v1, replay_exact_opportunities_v1,
+    restore_exact_durable_source_heads_v1, restore_exact_identifier_inputs_v1,
+    restore_exact_opportunity_v1,
 };
 
 pub(crate) fn exact_generation_budget_v1() -> K1GenerationBudgetV1 {

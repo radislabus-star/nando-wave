@@ -177,6 +177,264 @@ pub(crate) fn restore_exact_opportunity_v1(
     })
 }
 
+pub(crate) fn replay_exact_opportunities_v1(
+    config: &CertificationAuthorityConfigV1,
+    deficit: &K1DeficitSnapshotV1,
+    exact_attempt_index: &ExactAttemptIndexV1,
+    active_protocols: &BTreeSet<String>,
+    scheduler_projection: &crate::k1_natural_scheduler::K1SchedulerProjectionV1,
+) -> Result<crate::k1_exact_opportunity_replay::K1ExactOpportunityReplayV1, String> {
+    let sources = config
+        .k1_exact_sources
+        .as_ref()
+        .ok_or_else(|| "k1_exact_authority_sources_not_configured".to_owned())?;
+    let topology = MultiSourceTopologyArchiveReadSnapshot::read(&sources.topology_archive_path)?;
+    let frames = MultiSourceFrameArchiveReadSnapshot::read(&sources.frame_archive_path)?;
+    let collection = OnlineCollectionMiner::open_read_only(&sources.collection_checkpoint_path)?;
+    let source_heads = ExactDurableSourceHeadsV1 {
+        topology_rows: u64::try_from(topology.len())
+            .map_err(|_| "k1_exact_topology_count".to_owned())?,
+        topology_root_sha256: topology.prefix_root_sha256().to_owned(),
+        frame_rows: u64::try_from(frames.len()).map_err(|_| "k1_exact_frame_count".to_owned())?,
+        frame_root_sha256: frames.prefix_root_sha256().to_owned(),
+        collection_checkpoint_root_sha256: collection.checkpoint_root_sha256()?.to_owned(),
+    };
+    let mut accumulator = super::EvidenceBindingAccumulator::new(true);
+    let join_report = nando_operator_learning::multi_source::stream_multi_source_joins_from_iter(
+        topology.rows().iter().map(|row| row.as_ref()),
+        frames.frames().iter().map(|frame| frame.as_ref()),
+        |joined| accumulator.push(joined),
+    )?;
+    let prepared = super::prepare_tick_context_from_bindings(
+        join_report,
+        accumulator.finish()?,
+        active_protocols,
+    )?;
+    let artifacts = collection.natural_t1_program_artifacts()?;
+    let projection = build_exact_opportunity_projection_v1(
+        &prepared,
+        deficit,
+        &artifacts,
+        exact_attempt_index,
+        &source_heads,
+    )?;
+    if restore_exact_durable_source_heads_v1(config)? != source_heads {
+        return Err("STALE_BEFORE_FREEZE".to_owned());
+    }
+
+    let queue_bytes = serde_json::to_vec(&projection.queue)
+        .map_err(|error| format!("k1_exact_replay_queue_encode:{error}"))?;
+    let mut outcomes = Vec::new();
+    let mut archive_object_bytes = 0_u64;
+    let mut wire_logical_bytes = 0_u64;
+    let mut wire_compressed_bytes = 0_u64;
+    let mut wire_outer_bytes = 0_u64;
+    let mut wire_measured = false;
+    let mut seen_opportunities = BTreeSet::new();
+    let replay_frames = frames
+        .frames()
+        .iter()
+        .map(|frame| frame.as_ref().clone())
+        .collect::<Vec<_>>();
+
+    for (ordinal, row) in projection
+        .queue
+        .rows
+        .iter()
+        .filter(|row| row.score.readiness_rank == 1)
+        .enumerate()
+    {
+        let candidate = prepared
+            .motif_catalog
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_root_sha256 == row.candidate_root_sha256)
+            .ok_or_else(|| "k1_exact_queue_candidate_missing".to_owned())?;
+        let support = projection
+            .support_manifests_by_candidate
+            .get(&candidate.candidate_root_sha256)
+            .ok_or_else(|| "k1_exact_support_manifest_missing".to_owned())?;
+        let relevant = projection
+            .artifact_projections_by_candidate
+            .get(&candidate.candidate_root_sha256)
+            .ok_or_else(|| "k1_exact_artifact_projection_missing".to_owned())?;
+        let causal = projection
+            .causal_manifests_by_candidate
+            .get(&candidate.candidate_root_sha256)
+            .cloned()
+            .ok_or_else(|| "k1_exact_causal_manifest_missing".to_owned())?;
+        if !seen_opportunities.insert(causal.opportunity_root_sha256.clone()) {
+            return Err("k1_exact_replay_opportunity_root_reused".to_owned());
+        }
+        if row.exact_attempt_state == "attempted_deterministic" {
+            continue;
+        }
+        if row.exact_attempt_state != "unseen" {
+            return Err("k1_exact_replay_attempt_state_invalid".to_owned());
+        }
+        let relevant_roots = relevant
+            .artifact_roots_sha256
+            .iter()
+            .collect::<BTreeSet<_>>();
+        let relevant_artifacts = artifacts
+            .iter()
+            .filter(|artifact| relevant_roots.contains(&artifact.artifact_root_sha256))
+            .cloned()
+            .collect::<Vec<_>>();
+        if relevant_artifacts.len() != relevant_roots.len() {
+            return Err("k1_exact_replay_relevant_artifact_set_invalid".to_owned());
+        }
+        let (archive_manifest, object_bytes) = build_exact_identifier_archive_v1(
+            projection.source_snapshot.clone(),
+            support.clone(),
+            relevant.clone(),
+            &artifacts,
+            causal.clone(),
+            active_protocols.clone(),
+        )?;
+        archive_object_bytes = archive_object_bytes.saturating_add(
+            u64::try_from(object_bytes.len())
+                .map_err(|_| "k1_exact_replay_archive_size".to_owned())?,
+        );
+        let authority_binding_manifest_root_sha256 =
+            nando_operator_kernel::canonical_json_sha256(&(
+                "nando.k1-exact-replay-authority-binding.v1",
+                scheduler_projection.ledger_revision,
+                scheduler_projection.ledger_root_sha256.as_str(),
+                deficit.snapshot_root_sha256.as_str(),
+                projection.queue.queue_root_sha256.as_str(),
+                candidate.candidate_root_sha256.as_str(),
+                projection.source_snapshot.snapshot_root_sha256.as_str(),
+            ))
+            .map_err(str::to_owned)?;
+        let freeze = K1NaturalCandidateFreezeV1::seal_non_authoritative_exact_v8_for_replay(
+            scheduler_projection
+                .next_generation_sequence
+                .saturating_add(u64::try_from(ordinal).unwrap_or(u64::MAX)),
+            prepared.motif_catalog.as_ref(),
+            deficit,
+            &projection.queue,
+            candidate,
+            row.score.clone(),
+            "nando.k1-operator-blind-scheduler.v4".to_owned(),
+            natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?,
+            super::exact_generation_budget_v1(),
+            candidate.last_capture_sequence,
+            prepared.contract_watermark,
+            1,
+            causal.clone(),
+            projection.source_snapshot.snapshot_root_sha256.clone(),
+            archive_manifest.manifest_root_sha256().to_owned(),
+            exact_attempt_index.index_root_sha256.clone(),
+            authority_binding_manifest_root_sha256,
+        )
+        .map_err(str::to_owned)?;
+
+        if !wire_measured {
+            let request = crate::k1_natural_scheduler::K1CandidateFreezeAuthorityRequestV1 {
+                schema:
+                    crate::k1_natural_scheduler::K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1
+                        .to_owned(),
+                lane: crate::k1_natural_scheduler::K1SchedulerLaneV1::Epistemic,
+                catalog: prepared.motif_catalog.as_ref().clone(),
+                deficit_snapshot: deficit.clone(),
+                queue: projection.queue.clone(),
+                candidate: candidate.clone(),
+                freeze: freeze.clone(),
+                active_protocol_mode_set_root_sha256: prepared
+                    .active_protocol_mode_set_root_sha256
+                    .clone(),
+            };
+            let wire = crate::k1_natural_scheduler::bounded_wire::encode_candidate_freeze_v2(
+                &request,
+                scheduler_projection,
+            )?;
+            wire_logical_bytes = wire.logical_bytes;
+            wire_compressed_bytes = wire.compressed_bytes;
+            wire_outer_bytes = u64::try_from(
+                serde_json::to_vec(&wire)
+                    .map_err(|error| format!("k1_exact_replay_wire_encode:{error}"))?
+                    .len(),
+            )
+            .map_err(|_| "k1_exact_replay_wire_size".to_owned())?;
+            wire_measured = true;
+        }
+
+        let evaluation = evaluate_exact_initial_identifier_parts_v1(
+            &prepared,
+            &replay_frames,
+            &relevant_artifacts,
+            active_protocols,
+            support,
+            relevant,
+            &causal,
+            &freeze,
+        );
+        let evaluation = match evaluation {
+            Ok(evaluation) => evaluation,
+            Err(error) => {
+                outcomes.push(
+                    crate::k1_exact_opportunity_replay::unclassified_replay_outcome(
+                        causal.opportunity_root_sha256,
+                        &error,
+                        u64::try_from(support.rows.len())
+                            .map_err(|_| "k1_exact_replay_support_count".to_owned())?,
+                    )?,
+                );
+                continue;
+            }
+        };
+        let blocker = evaluation
+            .report
+            .blocker
+            .clone()
+            .unwrap_or_else(|| "none".to_owned());
+        let outcome = crate::k1_exact_opportunity_replay::classify_replay_outcome(
+            evaluation.report.state,
+            &blocker,
+            evaluation
+                .dispositions
+                .rejection_histogram
+                .contains_key(
+                    &nando_operator_learning::multi_source::ProgramRejectionCodeV1::InternalUnclassified,
+                ),
+        );
+        outcomes.push(
+            crate::k1_exact_opportunity_replay::K1ExactOpportunityOutcomeV1 {
+                opportunity_root_sha256: causal.opportunity_root_sha256,
+                identifier_report_root_sha256: evaluation.report.report_root_sha256,
+                disposition_set_root_sha256: evaluation.dispositions.disposition_set_root_sha256,
+                outcome,
+                blocker,
+                support_rows: u64::try_from(support.rows.len())
+                    .map_err(|_| "k1_exact_replay_support_count".to_owned())?,
+                seed_programs: evaluation.dispositions.seed_count,
+                accepted_programs: evaluation.dispositions.accepted_count,
+                semantic_classes: u64::try_from(evaluation.report.semantic_classes_remaining)
+                    .map_err(|_| "k1_exact_replay_semantic_class_count".to_owned())?,
+            },
+        );
+    }
+
+    crate::k1_exact_opportunity_replay::K1ExactOpportunityReplayV1::seal(
+        scheduler_projection,
+        deficit,
+        &source_heads,
+        &projection.source_snapshot,
+        &projection.queue,
+        u64::try_from(prepared.motif_catalog.candidates.len())
+            .map_err(|_| "k1_exact_replay_catalog_count".to_owned())?,
+        u64::try_from(seen_opportunities.len())
+            .map_err(|_| "k1_exact_replay_opportunity_count".to_owned())?,
+        outcomes,
+        u64::try_from(queue_bytes.len()).map_err(|_| "k1_exact_replay_queue_size".to_owned())?,
+        wire_logical_bytes,
+        wire_compressed_bytes,
+        wire_outer_bytes,
+        archive_object_bytes,
+    )
+}
+
 struct ExactOpportunityProjectionV1 {
     source_snapshot: EvidenceSourceSnapshotV1,
     queue: K1NaturalCandidateQueueV1,
@@ -549,41 +807,71 @@ pub(crate) fn evaluate_exact_initial_identifier_v1(
     inputs: &RestoredExactIdentifierInputsV1,
     freeze: &K1NaturalCandidateFreezeV1,
 ) -> Result<ExactInitialIdentifierEvaluationV1, String> {
-    if inputs.causal.opportunity_root_sha256
+    evaluate_exact_initial_identifier_parts_v1(
+        &inputs.prepared,
+        &inputs.frames,
+        &inputs.artifacts,
+        &inputs.active_protocols,
+        &inputs.support,
+        &inputs.projection,
+        &inputs.causal,
+        freeze,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_exact_initial_identifier_parts_v1(
+    prepared: &PreparedK1TickContextV1,
+    frames: &[nando_operator_kernel::RelationFrame],
+    artifacts: &[NaturalT1ProgramArtifactV1],
+    active_protocols: &BTreeSet<String>,
+    support: &IdentifierSupportManifestV1,
+    projection: &RelevantIdentifierArtifactProjectionV1,
+    causal: &IdentifierCausalInputManifestV1,
+    freeze: &K1NaturalCandidateFreezeV1,
+) -> Result<ExactInitialIdentifierEvaluationV1, String> {
+    if causal.opportunity_root_sha256
         != freeze
             .identifier_causal_input_manifest
             .as_deref()
             .ok_or_else(|| "k1_exact_identifier_causal_manifest_missing".to_owned())?
             .opportunity_root_sha256
-        || inputs.support.support_watermark != freeze.support_watermark
-        || inputs.projection.projection_root_sha256
-            != inputs.causal.relevant_artifact_projection_root_sha256
+        || support.support_watermark != freeze.support_watermark
+        || projection.projection_root_sha256 != causal.relevant_artifact_projection_root_sha256
     {
         return Err("k1_exact_identifier_input_binding_invalid".to_owned());
     }
     let report = super::identify_frozen_candidate(
-        &inputs.prepared.bindings,
-        inputs.prepared.motif_archive.as_ref(),
-        &inputs.frames,
-        &inputs.active_protocols,
-        &inputs.artifacts,
+        &prepared.bindings,
+        prepared.motif_archive.as_ref(),
+        frames,
+        active_protocols,
+        artifacts,
         freeze,
         &BTreeSet::new(),
         &BTreeSet::new(),
     )?;
-    let dispositions = exact_seed_dispositions(inputs, freeze)?;
+    let dispositions = exact_seed_dispositions_parts(
+        prepared,
+        frames,
+        projection,
+        freeze,
+        report.blocker.as_deref(),
+    )?;
     Ok(ExactInitialIdentifierEvaluationV1 {
         report,
         dispositions,
     })
 }
 
-fn exact_seed_dispositions(
-    inputs: &RestoredExactIdentifierInputsV1,
+fn exact_seed_dispositions_parts(
+    prepared: &PreparedK1TickContextV1,
+    frames: &[nando_operator_kernel::RelationFrame],
+    projection: &RelevantIdentifierArtifactProjectionV1,
     freeze: &K1NaturalCandidateFreezeV1,
+    identifier_blocker: Option<&str>,
 ) -> Result<ProgramDispositionSetV1, String> {
-    let archive = inputs
-        .prepared
+    let archive = prepared
         .motif_archive
         .as_ref()
         .ok_or_else(|| "k1_exact_motif_archive_missing".to_owned())?;
@@ -609,10 +897,9 @@ fn exact_seed_dispositions(
                 ))
         })
         .ok_or_else(|| "k1_exact_identifier_support_missing".to_owned())?;
-    let exact = archive.exact_occurrence(&inputs.prepared.bindings, representative)?;
-    let joined = archive.joined_for(&inputs.prepared.bindings, representative)?;
-    let frame_by_root = inputs
-        .frames
+    let exact = archive.exact_occurrence(&prepared.bindings, representative)?;
+    let joined = archive.joined_for(&prepared.bindings, representative)?;
+    let frame_by_root = frames
         .iter()
         .filter_map(|frame| {
             nando_operator_kernel::canonical_json_sha256(frame)
@@ -626,15 +913,29 @@ fn exact_seed_dispositions(
     let effect =
         nando_operator_learning::multi_source::factor_multi_source_row_v1(joined).completed_effect;
     let programs = if effect == CompletedEffectFormV1::CollectionTransform {
-        inputs.projection.programs.clone()
+        projection.programs.clone()
     } else {
-        nando_operator_learning::multi_source::enumerate_source_neutral_t1_candidates(
-            joined, frame,
+        reconcile_reported_seed_generation(
+            nando_operator_learning::multi_source::enumerate_source_neutral_t1_candidates(
+                joined, frame,
+            ),
+            identifier_blocker,
         )?
     };
     evaluate_program_dispositions_v1(&programs, &joined.topology, &exact.motif)
         .map(|(dispositions, _)| dispositions)
         .map_err(str::to_owned)
+}
+
+fn reconcile_reported_seed_generation<T: Default>(
+    generated: Result<T, &'static str>,
+    identifier_blocker: Option<&str>,
+) -> Result<T, String> {
+    match generated {
+        Ok(programs) => Ok(programs),
+        Err(error) if identifier_blocker == Some(error) => Ok(T::default()),
+        Err(error) => Err(error.to_owned()),
+    }
 }
 
 fn validate_archive_object(object: &ExactIdentifierArchiveObjectV1) -> Result<(), String> {
@@ -774,6 +1075,24 @@ mod tests {
         )
         .expect("source");
         (source, support, projection, causal, active_protocols)
+    }
+
+    #[test]
+    fn diagnostic_seed_generation_accepts_only_the_same_reported_blocker() {
+        let matched = reconcile_reported_seed_generation::<BTreeMap<String, String>>(
+            Err("selected_role_witness_missing"),
+            Some("selected_role_witness_missing"),
+        )
+        .expect("matched identifier blocker");
+        assert!(matched.is_empty());
+
+        assert_eq!(
+            reconcile_reported_seed_generation::<BTreeMap<String, String>>(
+                Err("selected_role_witness_missing"),
+                Some("different_blocker"),
+            ),
+            Err("selected_role_witness_missing".to_owned())
+        );
     }
 
     #[test]

@@ -1,0 +1,24 @@
+{
+  "schema": "nando.k1-exact-opportunity-frozen-source-manifest.v1",
+  "snapshot_path": "/home/e/nando-k1-exact-opportunity-v2/P7/frozen-20260814T012721Z",
+  "frozen_at": "20260814T012721Z",
+  "build_commit": "0c06795",
+  "production_paused": false,
+  "production_mutated": false,
+  "logical_bytes": 1021651261,
+  "files": 1233,
+  "manifest_sha256": "363c52cd517f64bbfa16914cf15d790124b47dd0b0804898b5b5101c7d7c0683",
+  "components": [
+    {"name":"topology","path":"state/multi-source-live-v2/pre-action-topology-archive-v1","kind":"directory","files":15,"bytes":948776995,"sha256_tree":"2aff78a5aa280810021b4a4c3bfb764e7d4ea0f76f04210d8b20e89a74f3311a"},
+    {"name":"frames","path":"state/multi-source-live-v2/relation-frame-archive-v1","kind":"directory","files":1,"bytes":65443499,"sha256_tree":"90e010f90122ab034754728c1a35df4d76f7527a4e01a23bcc01fee0cfcf9440"},
+    {"name":"collection","path":"state/online-collection-program-pools-v37.checkpoint","kind":"file","files":1,"bytes":1598824,"sha256":"8ac071e36cbd5482d57717d0eb5be74f62aa7ac8486c0d9f2e820ff4702946c8"},
+    {"name":"registry","path":"state/response-registry.json","kind":"file","files":1,"bytes":595600,"sha256":"586eda6e03652ead22ac02873efcd4f8a4512416561595c7231da6eb6d4a8a7a"},
+    {"name":"certification_cache","path":"state/multi-source-live-v2/ms4-closed-loop-v1/operator-certification-ledger-v1.json","kind":"file","files":1,"bytes":11606,"sha256":"206e1d281f78d974423913a01a9adb70de51dd137982db3bd313fcf3a98e0076"},
+    {"name":"certification_journal","path":"state/multi-source-live-v2/ms4-closed-loop-v1/operator-certification-journal-v1","kind":"directory","files":4,"bytes":13878,"sha256_tree":"e1869b31d9f9512ef270a623db94c604eec6fa01deecedf235c8a58566d4ff98"},
+    {"name":"scheduler_cache","path":"state/multi-source-live-v2/ms4-closed-loop-v1/k1-epistemic-scheduler-ledger-v1.json","kind":"file","files":1,"bytes":2309429,"sha256":"6decc5777beaf4ca8930c64885c5c02a25f315d8dbf367aa62ee2b05335cd88f"},
+    {"name":"scheduler_journal","path":"state/multi-source-live-v2/ms4-closed-loop-v1/k1-epistemic-scheduler-journal-v1","kind":"directory","files":1206,"bytes":2900205,"sha256_tree":"14178242909a460d404b01664a81452150a7eca4ab714eb7ccaa7f25cb10bb38"},
+    {"name":"certification_anchor","path":"anchor/operator-certification-anchor-v1.json","kind":"file","files":1,"bytes":584,"sha256":"c288e325d32424da587d14649594fbe2bf4c698bc56e24984037b96a472e2027"},
+    {"name":"scheduler_anchor","path":"anchor/k1-epistemic-scheduler-anchor-v1.json","kind":"file","files":1,"bytes":577,"sha256":"7db0296124264142fba12fb121c4df1f390bf9c042cfca08b60f776c0640b57e"},
+    {"name":"authority_public_key","path":"etc/authority-ed25519.pub","kind":"file","files":1,"bytes":64,"sha256":"4084be75ecd6373368d01a756540e9ea82b7a338150aecbf13daccad515acfb9"}
+  ]
+}

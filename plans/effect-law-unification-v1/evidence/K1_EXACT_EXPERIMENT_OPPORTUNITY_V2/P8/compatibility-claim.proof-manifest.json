@@ -1,0 +1,13 @@
+{
+  "schema": "nanda.trusted-structural-proof-manifest.v1",
+  "task_id": "k1-exact-opportunity-release-compatibility-claim-v1",
+  "engine_core_version": "sparse-triad-v6.2-quality-gates",
+  "engine_id": "nanda-check sparse-triad-v6.2-rust",
+  "source_triads_sha256": "0141f3c1d834914c005ac8db98d8641714569d6b87d2ed105aca1a41a0720319",
+  "candidate_triads_sha256": "5c2f16a4800cc614b0e78e2dbff0fc88fceae5f347626602906a28d08dc1ab0b",
+  "candidate_answer_sha256": "b3e2321b3083a8c40ee63fc86dd2d72ad0eae847ccbfde99dc29d942868271d9",
+  "source_provenance_root_sha256": "9cff6608f1390cded8c2fbf388ab17e370d632937e01078314b42152b6ebfaf1",
+  "candidate_extraction_root_sha256": "797fd2d529e7804a9edeab9d046672e380f4b34ff114b015df93183654b80bbf",
+  "source_producer_root_sha256": "1c20bca9b78a95375818ac1dc4259a2ffd560f6ef93a036eed6aceabd6fb4789",
+  "candidate_producer_root_sha256": "9c13c9405c0d90fda1c65a575403d0817e2edfa87329fb975523b3418a199c59"
+}

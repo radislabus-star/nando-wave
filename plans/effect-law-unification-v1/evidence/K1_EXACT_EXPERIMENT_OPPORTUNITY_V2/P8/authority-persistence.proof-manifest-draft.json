@@ -1,0 +1,6 @@
+{
+  "manifest_file_sha256": "a0fd168885c4b27e3f4c489cd416af5bc2e79fe7d3317f48813434e21fa18313",
+  "manifest_path": "plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P8/authority-persistence.proof-manifest.json",
+  "schema": "nanda.proof-manifest-draft-report.v1",
+  "trust_state": "UNTRUSTED_DRAFT_REQUIRES_EXTERNAL_PIN"
+}

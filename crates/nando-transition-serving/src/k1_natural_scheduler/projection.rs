@@ -1,7 +1,7 @@
 use super::journal::scheduler_genesis_root;
 use super::*;
 
-pub(super) fn projection_for(
+pub(crate) fn projection_for(
     ledger: &K1SchedulerLedgerV1,
 ) -> Result<K1SchedulerProjectionV1, String> {
     ledger.validate().map_err(str::to_owned)?;
@@ -167,7 +167,7 @@ pub(super) fn projection_for(
     Ok(projection)
 }
 
-pub(super) fn exact_attempt_index_for(
+pub(crate) fn exact_attempt_index_for(
     ledger: &K1SchedulerLedgerV1,
 ) -> Result<ExactAttemptIndexV1, String> {
     ledger.validate().map_err(str::to_owned)?;

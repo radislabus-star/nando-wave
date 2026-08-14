@@ -15,13 +15,13 @@ const K1_CANDIDATE_FREEZE_WINDOW_LOG_MAX_V2: u32 = 24;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct K1CandidateFreezeAuthorityRequestV2 {
+pub(crate) struct K1CandidateFreezeAuthorityRequestV2 {
     pub schema: String,
     pub logical_schema: String,
     pub encoding: String,
-    pub logical_bytes: u64,
+    pub(crate) logical_bytes: u64,
     pub logical_sha256: String,
-    pub compressed_bytes: u64,
+    pub(crate) compressed_bytes: u64,
     pub payload_base64: String,
     pub scheduler_ledger_revision: u64,
     pub scheduler_ledger_root_sha256: String,
@@ -35,7 +35,7 @@ pub(super) struct K1SchedulerCasV2 {
     pub projection_root_sha256: String,
 }
 
-pub(super) fn encode_candidate_freeze_v2(
+pub(crate) fn encode_candidate_freeze_v2(
     request: &K1CandidateFreezeAuthorityRequestV1,
     projection: &K1SchedulerProjectionV1,
 ) -> Result<K1CandidateFreezeAuthorityRequestV2, String> {

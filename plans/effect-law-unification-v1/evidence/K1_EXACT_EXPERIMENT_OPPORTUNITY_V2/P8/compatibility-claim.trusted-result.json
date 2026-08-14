@@ -1,0 +1,290 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k1-exact-opportunity-release-compatibility-claim-v1",
+  "domain": "code",
+  "complexity_score": 14,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.3333,
+      "c2": 0.3333,
+      "c3": 0.3333
+    }
+  },
+  "trusted_proof": {
+    "mode": "TRUSTED_PROOF",
+    "verdict": "PASS",
+    "authority_ready": true,
+    "reason_codes": [],
+    "manifest_file_sha256": "3fd816f05564f0cfa5ca7038f575ac3c4ceec7a3b179cd7bf2bf06395df4cb89",
+    "trusted_manifest_root_sha256": "3fd816f05564f0cfa5ca7038f575ac3c4ceec7a3b179cd7bf2bf06395df4cb89",
+    "source_triads_sha256": "0141f3c1d834914c005ac8db98d8641714569d6b87d2ed105aca1a41a0720319",
+    "candidate_triads_sha256": "5c2f16a4800cc614b0e78e2dbff0fc88fceae5f347626602906a28d08dc1ab0b",
+    "candidate_answer_sha256": "b3e2321b3083a8c40ee63fc86dd2d72ad0eae847ccbfde99dc29d942868271d9",
+    "source_provenance_root_sha256": "9cff6608f1390cded8c2fbf388ab17e370d632937e01078314b42152b6ebfaf1",
+    "candidate_extraction_root_sha256": "797fd2d529e7804a9edeab9d046672e380f4b34ff114b015df93183654b80bbf",
+    "source_producer_root_sha256": "1c20bca9b78a95375818ac1dc4259a2ffd560f6ef93a036eed6aceabd6fb4789",
+    "candidate_producer_root_sha256": "9c13c9405c0d90fda1c65a575403d0817e2edfa87329fb975523b3418a199c59"
+  },
+  "authority_ready": true,
+  "quality_contract": {
+    "schema": "nanda.quality-contract.v1",
+    "require_evidence_bindings": true,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": true,
+    "verdict": "PASS",
+    "complete": true,
+    "checked": 6,
+    "total": 6,
+    "missing_triads": [],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": true,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.5863,
+      "c2": 0.5874,
+      "c3": 0.5718
+    },
+    "source_self_score": 0.5818,
+    "stable": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "candidate": "source"
+    },
+    "scores": {
+      "candidate": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "candidate": 3
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.5818,
+      "norm": 55.857,
+      "triads": 3
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "candidate": "source"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "candidate": {
+          "norm": 55.857,
+          "self_coherence": 0.5818,
+          "triads": 3
+        }
+      },
+      "source": {
+        "source": {
+          "norm": 55.857,
+          "self_coherence": 0.5818,
+          "triads": 3
+        }
+      }
+    },
+    "group_links": {
+      "candidate": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "source",
+        "exact_source_groups": [
+          "source"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "candidate": {
+        "source": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "candidate": {
+          "gravity": 1.0,
+          "owner": "k1 release",
+          "owners": {
+            "k1 release": 3
+          },
+          "support": 3,
+          "total": 3
+        },
+        "source": {
+          "gravity": 1.0,
+          "owner": "k1 release",
+          "owners": {
+            "k1 release": 3
+          },
+          "support": 3,
+          "total": 3
+        }
+      },
+      "route_centers": {
+        "compatibility-claim": {
+          "gravity": 1.0,
+          "owner": "k1 release",
+          "owners": {
+            "k1 release": 6
+          },
+          "support": 6,
+          "total": 6
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "compatibility-claim": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [
+            "p8"
+          ],
+          "evidence_paths": [
+            "crates/nando-transition-serving/src/k1_exact_opportunity_replay.rs",
+            "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+            "plans/effect-law-unification-v1/k1_exact_experiment_opportunity_execution_plan_v2.md"
+          ],
+          "layers": [
+            "release"
+          ],
+          "outputs": [
+            "release authority packet"
+          ],
+          "owners": [
+            "k1 release"
+          ],
+          "scopes": [
+            "compatibility-claim"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "compatibility-claim": {
+          "norm": 55.857,
+          "self_coherence": 0.5818,
+          "triads": 3
+        }
+      },
+      "interference_matrix": {
+        "compatibility-claim": {
+          "compatibility-claim": 1.0
+        }
+      },
+      "source": {
+        "compatibility-claim": {
+          "norm": 55.857,
+          "self_coherence": 0.5818,
+          "triads": 3
+        }
+      }
+    },
+    "source_group_sizes": {
+      "source": 3
+    },
+    "stable_groups": [
+      "source"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads."
+  ],
+  "repair_prompt": "No repair needed. Preserve the checked source/candidate bindings and trusted proof roots.",
+  "trace_path": "/tmp/nanda-structural-gate/k1-exact-opportunity-release-compatibility-claim-v1.trace.json"
+}
