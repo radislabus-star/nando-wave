@@ -82,6 +82,9 @@ pub(crate) const K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-exact-wake-authority-request.v1";
 pub(crate) const K1_EXACT_TERMINAL_AUTHORITY_REQUEST_SCHEMA_V1: &str =
     "nando.k1-exact-terminal-authority-request.v1";
+pub(crate) const K1_EXACT_WAKE_AUTHORITY_RESPONSE_SCHEMA_V1: &str =
+    "nando.k1-exact-wake-authority-response.v1";
+pub(crate) const K1_EXACT_WAKE_STATUS_SCHEMA_V1: &str = "nando.k1-exact-wake-status.v1";
 const K1_SCHEDULER_AUTHORITY_RESPONSE_SCHEMA_V1: &str = "nando.k1-scheduler-authority-response.v1";
 const K1_SCHEDULER_SIGNED_EVENT_SCHEMA_V1: &str = "nando.k1-scheduler-signed-event.v1";
 const K1_SCHEDULER_ANCHOR_SCHEMA_V1: &str = "nando.k1-scheduler-anchor.v1";
@@ -202,6 +205,120 @@ pub(crate) struct K1ExactTerminalAuthorityRequestV1 {
     pub schema: String,
     pub lane: K1SchedulerLaneV1,
     pub candidate_freeze_root_sha256: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum K1ExactWakeDecisionV1 {
+    WriterInactive,
+    ActiveGeneration,
+    WaitingForEvidence,
+    WaitingForNovelEvidence,
+    ResearchBudgetCooldown,
+    CandidateFrozen,
+    K1VocabularyOpen,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct K1ExactWakeStatusV1 {
+    pub schema: String,
+    pub status_root_sha256: String,
+    pub decision: K1ExactWakeDecisionV1,
+    pub blocker: String,
+    pub readiness_pass_rows: Option<u64>,
+    pub exact_unseen_opportunities: Option<u64>,
+    pub exact_attempted_deterministic_roots: Option<u64>,
+    pub legacy_unbound_terminals: Option<u64>,
+    pub trailing_24h_freezes: u64,
+    pub next_eligible_at_unix: Option<u64>,
+    pub authority_ready: bool,
+}
+
+impl K1ExactWakeStatusV1 {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn seal(
+        decision: K1ExactWakeDecisionV1,
+        blocker: impl Into<String>,
+        readiness_pass_rows: Option<u64>,
+        exact_unseen_opportunities: Option<u64>,
+        exact_attempted_deterministic_roots: Option<u64>,
+        legacy_unbound_terminals: Option<u64>,
+        trailing_24h_freezes: u64,
+        next_eligible_at_unix: Option<u64>,
+    ) -> Result<Self, String> {
+        let mut status = Self {
+            schema: K1_EXACT_WAKE_STATUS_SCHEMA_V1.to_owned(),
+            status_root_sha256: String::new(),
+            decision,
+            blocker: blocker.into(),
+            readiness_pass_rows,
+            exact_unseen_opportunities,
+            exact_attempted_deterministic_roots,
+            legacy_unbound_terminals,
+            trailing_24h_freezes,
+            next_eligible_at_unix,
+            authority_ready: false,
+        };
+        status.status_root_sha256 = status.expected_root()?;
+        status.validate()?;
+        Ok(status)
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        let exact_counts = [
+            self.readiness_pass_rows,
+            self.exact_unseen_opportunities,
+            self.exact_attempted_deterministic_roots,
+            self.legacy_unbound_terminals,
+        ];
+        let counts_known = exact_counts.iter().all(Option::is_some);
+        let counts_unknown = exact_counts.iter().all(Option::is_none);
+        let cooldown = self.decision == K1ExactWakeDecisionV1::ResearchBudgetCooldown;
+        let next_eligible_allowed = matches!(
+            self.decision,
+            K1ExactWakeDecisionV1::ResearchBudgetCooldown
+                | K1ExactWakeDecisionV1::WriterInactive
+                | K1ExactWakeDecisionV1::ActiveGeneration
+        );
+        if self.schema != K1_EXACT_WAKE_STATUS_SCHEMA_V1
+            || !valid_nonzero_sha256(&self.status_root_sha256)
+            || self.blocker.is_empty()
+            || (!counts_known && !counts_unknown)
+            || (cooldown && self.next_eligible_at_unix.is_none())
+            || (!next_eligible_allowed && self.next_eligible_at_unix.is_some())
+            || self.authority_ready
+            || self.status_root_sha256 != self.expected_root()?
+        {
+            return Err("k1_exact_wake_status_invalid".to_owned());
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> Result<String, String> {
+        canonical_json_sha256(&(
+            K1_EXACT_WAKE_STATUS_SCHEMA_V1,
+            self.decision,
+            self.blocker.as_str(),
+            self.readiness_pass_rows,
+            self.exact_unseen_opportunities,
+            self.exact_attempted_deterministic_roots,
+            self.legacy_unbound_terminals,
+            self.trailing_24h_freezes,
+            self.next_eligible_at_unix,
+            false,
+        ))
+        .map_err(str::to_owned)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct K1ExactWakeAuthorityResponseV1 {
+    schema: String,
+    status: Option<K1ExactWakeStatusV1>,
+    projection: Option<K1SchedulerProjectionV1>,
+    error: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -388,6 +505,18 @@ pub(crate) fn append_exact_terminal(
             candidate_freeze_root_sha256,
         },
     )
+}
+
+pub(crate) fn request_exact_wake(
+    config: &CertificationAuthorityConfigV1,
+) -> Result<(K1ExactWakeStatusV1, K1SchedulerProjectionV1), String> {
+    let request = K1ExactWakeAuthorityRequestV1 {
+        schema: K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+        lane: K1SchedulerLaneV1::Epistemic,
+    };
+    let bytes =
+        serde_json::to_vec(&request).map_err(|error| format!("k1_exact_wake_encode:{error}"))?;
+    authority::send_exact_wake_bytes(config, bytes)
 }
 
 pub(crate) fn append_transfer_settlement(

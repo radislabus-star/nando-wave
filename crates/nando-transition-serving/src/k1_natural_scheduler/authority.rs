@@ -8,6 +8,11 @@ use nando_operator_learning::multi_source::IdentifierResultV1;
 use std::path::Path;
 
 const K1_EXACT_SCHEDULER_POLICY_SCHEMA_V1: &str = "nando.k1-exact-scheduler-policy.v1";
+const K1_EXACT_MAX_NEW_FREEZES_PER_WAKE_V1: u64 = 1;
+const K1_EXACT_MIN_FREEZE_INTERVAL_SECONDS_V1: u64 = 300;
+const K1_EXACT_MAX_TRAILING_24H_FREEZES_V1: u64 = 48;
+const K1_EXACT_MAX_READINESS_ROWS_PER_WAKE_V1: u64 = 256;
+const K1_EXACT_TRAILING_WINDOW_SECONDS_V1: u64 = 86_400;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -19,6 +24,30 @@ pub(super) struct K1ExactSchedulerPolicyV1 {
     minimum_freeze_schema: String,
     minimum_wire_schema: String,
     scheduler_schema: String,
+    maximum_new_freezes_per_wake: u64,
+    minimum_freeze_interval_seconds: u64,
+    maximum_trailing_24h_freezes: u64,
+    maximum_readiness_rows_per_wake: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct K1ExactResearchBudgetStateV1 {
+    pub trailing_24h_freezes: u64,
+    pub next_eligible_at_unix: Option<u64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct K1ExactWakeAuthorityResultV1 {
+    pub(super) status: K1ExactWakeStatusV1,
+    pub(super) projection: K1SchedulerProjectionV1,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum K1ExactWakeSelectionV1 {
+    WaitingForEvidence,
+    WaitingForNovelEvidence,
+    ResearchBudgetCooldown(u64),
+    CandidateReady,
 }
 
 #[derive(Serialize)]
@@ -54,6 +83,26 @@ pub(crate) fn handle_authority_line(
         Err(_) => return None,
     };
     let schema = value.get("schema").and_then(Value::as_str)?;
+    if schema == K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1 {
+        let result = serde_json::from_value::<K1ExactWakeAuthorityRequestV1>(value)
+            .map_err(|error| format!("k1_exact_wake_request_decode:{error}"))
+            .and_then(|request| exact_wake_authoritative(config, signing_key, request));
+        let response = match result {
+            Ok(result) => K1ExactWakeAuthorityResponseV1 {
+                schema: K1_EXACT_WAKE_AUTHORITY_RESPONSE_SCHEMA_V1.to_owned(),
+                status: Some(result.status),
+                projection: Some(result.projection),
+                error: String::new(),
+            },
+            Err(error) => K1ExactWakeAuthorityResponseV1 {
+                schema: K1_EXACT_WAKE_AUTHORITY_RESPONSE_SCHEMA_V1.to_owned(),
+                status: None,
+                projection: None,
+                error,
+            },
+        };
+        return serde_json::to_string(&response).ok();
+    }
     let result = match schema {
         K1_CANDIDATE_FREEZE_AUTHORITY_REQUEST_SCHEMA_V1 => {
             serde_json::from_value::<K1CandidateFreezeAuthorityRequestV1>(value)
@@ -112,11 +161,6 @@ pub(crate) fn handle_authority_line(
         >(value)
         .map_err(|error| format!("k1_future_outcome_request_decode:{error}"))
         .and_then(|request| append_future_outcome_authoritative(config, signing_key, request)),
-        K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1 => {
-            serde_json::from_value::<K1ExactWakeAuthorityRequestV1>(value)
-                .map_err(|error| format!("k1_exact_wake_request_decode:{error}"))
-                .and_then(|request| exact_wake_authoritative(config, signing_key, request))
-        }
         K1_EXACT_TERMINAL_AUTHORITY_REQUEST_SCHEMA_V1 => {
             serde_json::from_value::<K1ExactTerminalAuthorityRequestV1>(value)
                 .map_err(|error| format!("k1_exact_terminal_request_decode:{error}"))
@@ -345,11 +389,11 @@ pub(super) fn complete_exact_terminal_transaction(
     )
 }
 
-fn exact_wake_authoritative(
+pub(super) fn exact_wake_authoritative(
     config: &CertificationAuthorityConfigV1,
     signing_key: &SigningKey,
     request: K1ExactWakeAuthorityRequestV1,
-) -> Result<K1SchedulerProjectionV1, String> {
+) -> Result<K1ExactWakeAuthorityResultV1, String> {
     if request.schema != K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1
         || request.lane != K1SchedulerLaneV1::Epistemic
     {
@@ -359,25 +403,94 @@ fn exact_wake_authoritative(
         .k1_exact_sources
         .as_ref()
         .ok_or_else(|| "k1_exact_authority_sources_not_configured".to_owned())?;
-    let policy = read_exact_scheduler_policy(&sources.scheduler_policy_path)?;
     let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
-    if scheduler.active_candidate_freeze().is_some() {
-        return projection_for(&scheduler);
+    let now_unix = crate::unix_now();
+    let policy = match read_exact_scheduler_policy(&sources.scheduler_policy_path) {
+        Ok(policy) => policy,
+        Err(error) if error == "k1_exact_writer_inactive" => {
+            let policy = read_exact_scheduler_policy_document(&sources.scheduler_policy_path)?;
+            let budget = exact_research_budget_state_v1(&scheduler, &policy, now_unix)?;
+            return exact_wake_result(
+                &scheduler,
+                K1ExactWakeDecisionV1::WriterInactive,
+                error,
+                None,
+                budget.trailing_24h_freezes,
+                budget.next_eligible_at_unix,
+            );
+        }
+        Err(error) => return Err(error),
+    };
+    let budget = exact_research_budget_state_v1(&scheduler, &policy, now_unix)?;
+    let scheduler_projection = projection_for(&scheduler)?;
+    if scheduler.active_candidate_freeze().is_some()
+        || scheduler_projection.pending_terminal_transfer.is_some()
+    {
+        let blocker = if scheduler_projection.pending_terminal_transfer.is_some() {
+            "terminal_transfer_pending"
+        } else {
+            "active_generation_immutable"
+        };
+        return exact_wake_result(
+            &scheduler,
+            K1ExactWakeDecisionV1::ActiveGeneration,
+            blocker,
+            None,
+            budget.trailing_24h_freezes,
+            None,
+        );
     }
     let registry = restore_anchored_ledger(config)?;
     let deficit = current_deficit_snapshot(config)?;
     validate_registry_cas(&registry, &deficit)?;
+    if deficit.k1_open {
+        return exact_wake_result(
+            &scheduler,
+            K1ExactWakeDecisionV1::K1VocabularyOpen,
+            "k1_vocabulary_open",
+            None,
+            budget.trailing_24h_freezes,
+            None,
+        );
+    }
     let active_protocols = crate::multi_source_live::known_epistemic_protocol_mode_roots(
         &config.response_registry_path,
         &registry,
     )?;
     let attempt_index = exact_attempt_index_for(&scheduler)?;
+    let source_heads =
+        crate::k1_natural_scheduler_runtime::restore_exact_durable_source_heads_v1(config)?;
+    if source_heads.topology_rows == 0 || source_heads.frame_rows == 0 {
+        return exact_wake_result(
+            &scheduler,
+            K1ExactWakeDecisionV1::WaitingForEvidence,
+            "no_durable_evidence_rows",
+            Some((0, 0, 0, attempt_index.legacy_unbound_terminals)),
+            budget.trailing_24h_freezes,
+            None,
+        );
+    }
     let exact = crate::k1_natural_scheduler_runtime::restore_exact_opportunity_v1(
         config,
         &deficit,
         &attempt_index,
         &active_protocols,
     )?;
+    let readiness_pass_rows = exact
+        .queue
+        .rows
+        .iter()
+        .filter(|row| row.score.readiness_rank == 1)
+        .count() as u64;
+    if readiness_pass_rows > policy.maximum_readiness_rows_per_wake {
+        return Err("k1_exact_readiness_budget_exceeded".to_owned());
+    }
+    let exact_counts = Some((
+        readiness_pass_rows,
+        exact.queue.exact_unseen_opportunities,
+        exact.queue.exact_attempted_deterministic_roots,
+        exact.queue.legacy_unbound_terminals,
+    ));
     if exact.active_protocol_mode_set_root_sha256
         != crate::k1_natural_scheduler::duplicate_cohorts::known_epistemic_protocol_mode_set_root(
             &active_protocols,
@@ -385,9 +498,48 @@ fn exact_wake_authoritative(
     {
         return Err("STALE_BEFORE_FREEZE".to_owned());
     }
-    let Some(queue_row) = exact.queue.first_readiness_pass() else {
-        return projection_for(&scheduler);
-    };
+    match exact_wake_selection_v1(
+        readiness_pass_rows,
+        exact.queue.exact_unseen_opportunities,
+        budget,
+    ) {
+        K1ExactWakeSelectionV1::WaitingForEvidence => {
+            return exact_wake_result(
+                &scheduler,
+                K1ExactWakeDecisionV1::WaitingForEvidence,
+                "no_readiness_pass_candidate",
+                exact_counts,
+                budget.trailing_24h_freezes,
+                None,
+            );
+        }
+        K1ExactWakeSelectionV1::WaitingForNovelEvidence => {
+            return exact_wake_result(
+                &scheduler,
+                K1ExactWakeDecisionV1::WaitingForNovelEvidence,
+                "all_readiness_pass_opportunities_attempted_deterministic",
+                exact_counts,
+                budget.trailing_24h_freezes,
+                None,
+            );
+        }
+        K1ExactWakeSelectionV1::ResearchBudgetCooldown(next_eligible_at_unix) => {
+            return exact_wake_result(
+                &scheduler,
+                K1ExactWakeDecisionV1::ResearchBudgetCooldown,
+                "research_budget_cooldown",
+                exact_counts,
+                budget.trailing_24h_freezes,
+                Some(next_eligible_at_unix),
+            );
+        }
+        K1ExactWakeSelectionV1::CandidateReady => {}
+    }
+    let queue_row = exact
+        .queue
+        .first_readiness_pass()
+        .ok_or_else(|| "k1_exact_ready_candidate_missing".to_owned())?;
+    let selected_at_unix = now_unix;
     let candidate = exact
         .catalog
         .candidates
@@ -425,7 +577,6 @@ fn exact_wake_authoritative(
         &policy,
         &exact.source_heads,
     )?;
-    let selected_at_unix = crate::unix_now();
     let authority_binding_manifest_root_sha256 =
         canonical_json_sha256(&AuthorityBindingManifestMaterialV1 {
             schema: "nando.k1-authority-binding-manifest.v1",
@@ -477,13 +628,111 @@ fn exact_wake_authoritative(
         &policy,
         &exact.source_heads,
     )?;
-    append_and_persist(
+    let projection = append_and_persist(
         config,
         request.lane,
         signing_key,
         &mut scheduler,
         K1SchedulerEventPayloadV1::CandidateFreeze(freeze),
-    )
+    )?;
+    let status = K1ExactWakeStatusV1::seal(
+        K1ExactWakeDecisionV1::CandidateFrozen,
+        "candidate_frozen",
+        exact_counts.map(|value| value.0),
+        exact_counts.map(|value| value.1),
+        exact_counts.map(|value| value.2),
+        exact_counts.map(|value| value.3),
+        budget.trailing_24h_freezes.saturating_add(1),
+        None,
+    )?;
+    Ok(K1ExactWakeAuthorityResultV1 { status, projection })
+}
+
+pub(super) fn exact_wake_selection_v1(
+    readiness_pass_rows: u64,
+    exact_unseen_opportunities: u64,
+    budget: K1ExactResearchBudgetStateV1,
+) -> K1ExactWakeSelectionV1 {
+    if readiness_pass_rows == 0 {
+        K1ExactWakeSelectionV1::WaitingForEvidence
+    } else if exact_unseen_opportunities == 0 {
+        K1ExactWakeSelectionV1::WaitingForNovelEvidence
+    } else if let Some(next_eligible_at_unix) = budget.next_eligible_at_unix {
+        K1ExactWakeSelectionV1::ResearchBudgetCooldown(next_eligible_at_unix)
+    } else {
+        K1ExactWakeSelectionV1::CandidateReady
+    }
+}
+
+fn exact_wake_result(
+    scheduler: &K1SchedulerLedgerV1,
+    decision: K1ExactWakeDecisionV1,
+    blocker: impl Into<String>,
+    exact_counts: Option<(u64, u64, u64, u64)>,
+    trailing_24h_freezes: u64,
+    next_eligible_at_unix: Option<u64>,
+) -> Result<K1ExactWakeAuthorityResultV1, String> {
+    let status = K1ExactWakeStatusV1::seal(
+        decision,
+        blocker,
+        exact_counts.map(|value| value.0),
+        exact_counts.map(|value| value.1),
+        exact_counts.map(|value| value.2),
+        exact_counts.map(|value| value.3),
+        trailing_24h_freezes,
+        next_eligible_at_unix,
+    )?;
+    Ok(K1ExactWakeAuthorityResultV1 {
+        status,
+        projection: projection_for(scheduler)?,
+    })
+}
+
+pub(super) fn exact_research_budget_state_v1(
+    scheduler: &K1SchedulerLedgerV1,
+    policy: &K1ExactSchedulerPolicyV1,
+    now_unix: u64,
+) -> Result<K1ExactResearchBudgetStateV1, String> {
+    scheduler.validate().map_err(str::to_owned)?;
+    if now_unix == 0 || policy.maximum_new_freezes_per_wake != 1 {
+        return Err("k1_exact_research_budget_input_invalid".to_owned());
+    }
+    let window_start = now_unix.saturating_sub(K1_EXACT_TRAILING_WINDOW_SECONDS_V1);
+    let mut freeze_times = scheduler
+        .events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            K1SchedulerEventPayloadV1::CandidateFreeze(freeze)
+                if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 =>
+            {
+                Some(freeze.selected_at_unix)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    freeze_times.sort_unstable();
+    let trailing = freeze_times
+        .iter()
+        .filter(|time| **time > window_start && **time <= now_unix)
+        .copied()
+        .collect::<Vec<_>>();
+    let interval_next = freeze_times
+        .last()
+        .copied()
+        .map(|last| last.saturating_add(policy.minimum_freeze_interval_seconds))
+        .filter(|next| *next > now_unix);
+    let daily_next = (trailing.len() as u64 >= policy.maximum_trailing_24h_freezes).then(|| {
+        trailing
+            .first()
+            .copied()
+            .unwrap_or(now_unix)
+            .saturating_add(K1_EXACT_TRAILING_WINDOW_SECONDS_V1)
+            .saturating_add(1)
+    });
+    Ok(K1ExactResearchBudgetStateV1 {
+        trailing_24h_freezes: trailing.len() as u64,
+        next_eligible_at_unix: interval_next.into_iter().chain(daily_next).max(),
+    })
 }
 
 pub(super) fn read_exact_scheduler_policy(path: &Path) -> Result<K1ExactSchedulerPolicyV1, String> {
@@ -505,6 +754,10 @@ fn read_exact_scheduler_policy_document(path: &Path) -> Result<K1ExactSchedulerP
         policy.minimum_freeze_schema.as_str(),
         policy.minimum_wire_schema.as_str(),
         policy.scheduler_schema.as_str(),
+        policy.maximum_new_freezes_per_wake,
+        policy.minimum_freeze_interval_seconds,
+        policy.maximum_trailing_24h_freezes,
+        policy.maximum_readiness_rows_per_wake,
     ))
     .map_err(str::to_owned)?;
     if policy.schema != K1_EXACT_SCHEDULER_POLICY_SCHEMA_V1
@@ -513,6 +766,12 @@ fn read_exact_scheduler_policy_document(path: &Path) -> Result<K1ExactSchedulerP
         || policy.minimum_freeze_schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
         || policy.minimum_wire_schema != K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1
         || policy.scheduler_schema != "nando.k1-operator-blind-scheduler.v4"
+        || policy.maximum_new_freezes_per_wake != K1_EXACT_MAX_NEW_FREEZES_PER_WAKE_V1
+        || policy.minimum_freeze_interval_seconds < K1_EXACT_MIN_FREEZE_INTERVAL_SECONDS_V1
+        || policy.maximum_trailing_24h_freezes == 0
+        || policy.maximum_trailing_24h_freezes > K1_EXACT_MAX_TRAILING_24H_FREEZES_V1
+        || policy.maximum_readiness_rows_per_wake == 0
+        || policy.maximum_readiness_rows_per_wake > K1_EXACT_MAX_READINESS_ROWS_PER_WAKE_V1
     {
         return Err("K1_AUTHORITY_SCHEMA_DOWNGRADE".to_owned());
     }
@@ -1015,6 +1274,57 @@ pub(super) fn send_authority_request<T: Serialize>(
             .map_err(|error| format!("k1_scheduler_authority_encode:{error}"))?;
         send_authority_bytes(config, bytes)
     }
+}
+
+#[cfg(unix)]
+pub(super) fn send_exact_wake_bytes(
+    config: &CertificationAuthorityConfigV1,
+    bytes: Vec<u8>,
+) -> Result<(K1ExactWakeStatusV1, K1SchedulerProjectionV1), String> {
+    if bytes.len() > K1_SCHEDULER_MAX_REQUEST_BYTES {
+        return Err("k1_scheduler_authority_request_budget".to_owned());
+    }
+    let mut stream = UnixStream::connect(&config.authority_socket_path)
+        .map_err(|error| format!("k1_scheduler_authority_connect:{error}"))?;
+    stream
+        .set_read_timeout(Some(K1_SCHEDULER_AUTHORITY_READ_TIMEOUT))
+        .map_err(|error| format!("k1_scheduler_authority_read_timeout:{error}"))?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .map_err(|error| format!("k1_scheduler_authority_write_timeout:{error}"))?;
+    stream
+        .write_all(&bytes)
+        .and_then(|_| stream.write_all(b"\n"))
+        .map_err(|error| format!("k1_scheduler_authority_write:{error}"))?;
+    stream
+        .shutdown(std::net::Shutdown::Write)
+        .map_err(|error| format!("k1_scheduler_authority_shutdown:{error}"))?;
+    let response: K1ExactWakeAuthorityResponseV1 = serde_json::from_reader(&mut stream)
+        .map_err(|error| format!("k1_exact_wake_decode:{error}"))?;
+    if response.schema != K1_EXACT_WAKE_AUTHORITY_RESPONSE_SCHEMA_V1 || !response.error.is_empty() {
+        return Err(if response.error.is_empty() {
+            "k1_exact_wake_response_invalid".to_owned()
+        } else {
+            response.error
+        });
+    }
+    let status = response
+        .status
+        .ok_or_else(|| "k1_exact_wake_status_missing".to_owned())?;
+    status.validate()?;
+    let projection = response
+        .projection
+        .ok_or_else(|| "k1_exact_wake_projection_missing".to_owned())?;
+    projection.validate()?;
+    Ok((status, projection))
+}
+
+#[cfg(not(unix))]
+pub(super) fn send_exact_wake_bytes(
+    _config: &CertificationAuthorityConfigV1,
+    _bytes: Vec<u8>,
+) -> Result<(K1ExactWakeStatusV1, K1SchedulerProjectionV1), String> {
+    Err("k1_scheduler_authority_requires_unix".to_owned())
 }
 
 #[cfg(unix)]

@@ -1,0 +1,96 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k1-exact-experiment-opportunity-p5-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"authority-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","expect":{"size_bytes":42894,"sha256":"3435c4473d90ab010e52deca8894e7e472eae6b8488b68e5f5eeb9bba2838e7f","mode":"0664"}},
+    {"id":"wire-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs","expect":{"size_bytes":26336,"sha256":"91b65fac459824262a70af43b940ebe5fc80dd5626f4f860b2bf90fc8e3f6cd9","mode":"0664"}},
+    {"id":"projection-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/projection.rs","expect":{"size_bytes":20778,"sha256":"05ead774cc16ffef17dff3a372ea20d6684b207e0b822611ab4a7775e7f87ce8","mode":"0664"}},
+    {"id":"service-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","expect":{"size_bytes":61709,"sha256":"03a62f0d45a6b8c49062b5ee7e1ac2161916e5e41362b49f228b81db960bb8c4","mode":"0664"}},
+    {"id":"runtime-model-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/mod.rs","expect":{"size_bytes":7545,"sha256":"f2b77ab6cb890a5f66b4a4699e579b2f696c4478714cbd679edf37332e91c8f5","mode":"0664"}},
+    {"id":"exact-builder-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/exact_opportunity.rs","expect":{"size_bytes":36787,"sha256":"6c3d6517ebd7dac24358473d4ce1bf22019c946bf5b4fb6b07e0ddb0efb0fb0d","mode":"0664"}},
+    {"id":"authority-test-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","expect":{"size_bytes":21744,"sha256":"3f7b881f4babfd3c3f96680e1651dcf02bee98ee1c3bf27fe9edab564f31b5b5","mode":"0664"}},
+    {"id":"p4-receipt","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P4/implementation-verification-2026-08-14.md","expect":{"size_bytes":3537,"sha256":"948f1c8064d2da58d02c736afbe6f5c54954cbe5fc9745c8e0322dfa3cd686af","mode":"0664"}},
+    {"id":"production-ledger-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-ledger-v1.json","expect":{"size_bytes":2246130,"sha256":"00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362","mode":"0640"}},
+    {"id":"production-anchor-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-anchor-v1.json","expect":{"size_bytes":576,"sha256":"882fb350544622c7f2e616eb5157e442379d7549bc286cbdf58c09fd55e4c197","mode":"0664"}}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"read-installed-policy","kind":"filesystem_read"},
+      {"id":"project-signed-budget","kind":"pure_bounded_projection"},
+      {"id":"send-exact-wake","kind":"local_authority_request"},
+      {"id":"return-no-event-state","kind":"structured_observation"},
+      {"id":"append-one-v8-freeze","kind":"signed_append_only_event"}
+    ],
+    "forbidden": [
+      "generated_traffic", "synthetic_fixture", "teacher_output",
+      "manual_program_family_mapping", "coarse_family_suppression",
+      "law_promotion", "phase_mutation", "hot_restart", "nginx_restart",
+      "connector_restart", "ledger_rewrite", "client_queue_authority",
+      "mutable_budget_counter", "second_freeze_same_wake", "production_deployment"
+    ]
+  },
+  "source_checks": [
+    {"id":"authority-guard","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","sha256":"3435c4473d90ab010e52deca8894e7e472eae6b8488b68e5f5eeb9bba2838e7f","forbidden_effect_patterns":[
+      {"effect":"law_promotion","regex":"promote_law_2"},
+      {"effect":"ledger_rewrite","regex":"rewrite_scheduler_ledger\\s*\\("},
+      {"effect":"client_queue_authority","regex":"trust_client_(queue|catalog|attempt_index)"},
+      {"effect":"mutable_budget_counter","regex":"write_(daily|research)_budget_counter"},
+      {"effect":"production_deployment","regex":"/var/lib/nando-wave/deployments"},
+      {"effect":"hot_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*transition-serving"},
+      {"effect":"nginx_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},
+      {"effect":"connector_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*connector"},
+      {"effect":"second_freeze_same_wake","regex":"append_second_exact_freeze_same_wake"}
+    ]},
+    {"id":"service-guard","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","sha256":"03a62f0d45a6b8c49062b5ee7e1ac2161916e5e41362b49f228b81db960bb8c4","forbidden_effect_patterns":[
+      {"effect":"generated_traffic","regex":"generate_(synthetic|targeted)_traffic\\s*\\("},
+      {"effect":"synthetic_fixture","regex":"write_(synthetic|generated)_fixture\\s*\\("},
+      {"effect":"teacher_output","regex":"teacher_(output|label)"},
+      {"effect":"manual_program_family_mapping","regex":"manual_(program_)?family_mapping\\s*\\("},
+      {"effect":"coarse_family_suppression","regex":"coarse_family_suppression\\s*:\\s*true"},
+      {"effect":"phase_mutation","regex":"phase_mutation_allowed\\s*:\\s*true"}
+    ]}
+  ],
+  "state_machine": {
+    "initial_state":"P4_IMPLEMENTED",
+    "terminal_states":["P5_IMPLEMENTATION_READY","P5_NO_EVENT","P5_LOCAL_FAILURE","P5_CAS_STALE"],
+    "steps":[
+      {"id":"policy-and-budget","from":"P4_IMPLEMENTED","to":"POLICY_BUDGET_PASS","mutates":false,"failure_state":"P5_LOCAL_FAILURE","cleanup":"retain scoped diagnostics; production untouched","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"policy-budget-boundary"},
+      {"id":"wake-decision","from":"POLICY_BUDGET_PASS","to":"WAKE_DECISION_PASS","mutates":false,"failure_state":"P5_NO_EVENT","cleanup":"return a typed no-event decision with unchanged revision and root","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"wake-state-matrix"},
+      {"id":"cold-learner-wire","from":"WAKE_DECISION_PASS","to":"P5_IMPLEMENTATION_READY","mutates":true,"failure_state":"P5_CAS_STALE","cleanup":"authority appends zero or one V8 freeze; stale inputs append nothing","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"one-freeze-per-wake"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id":"scheduler-ledger-prefix","path":"/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1/k1-epistemic-scheduler-ledger-v1.json","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"production-ledger-copy"},
+    {"id":"scheduler-anchor","path":"/var/lib/nando-wave/verification/20260810-motif-ordering/k1-epistemic-scheduler-anchor-v1.json","policy":"monotonic_external_anchor","rollback_policy":"never restore an older revision over a natural suffix","cursor_policy":"compare prefix then preserve current revision","baseline_check_id":"production-anchor-copy"}
+  ],
+  "identity_contracts": [
+    {"id":"budget-restart-parity","producer":"signed epistemic V8 freeze timestamps","consumer":"fresh authority replay","comparison":"exact trailing-day count last freeze and next eligible time","test_id":"budget-restart-parity"},
+    {"id":"wake-decision-parity","producer":"authority exact queue attempt index policy and signed history","consumer":"cold learner typed wake result","comparison":"exact decision state counts blocker next eligible time and projection root","test_id":"wake-wire-parity"},
+    {"id":"no-event-parity","producer":"scheduler ledger before no-event decision","consumer":"scheduler ledger after no-event decision","comparison":"exact revision ledger root event count and next generation","test_id":"no-event-byte-parity"}
+  ],
+  "runtime_comparisons": [
+    {"id":"isolated-scheduler-simulation","source":"temporary authority state and frozen production-copy input","comparison":"exact_stable_projection","stable_fields":["ledger_prefix","anchor_monotonic","one_freeze_per_wake","daily_limit_enforced","cooldown_no_event"],"expected_to_change_fields":["one_candidate_freeze","typed_wake_state"],"observed_not_compared_fields":["temporary_paths","wall_clock_duration"],"reason":"P5 remains off production","test_id":"bounded-scheduler-simulation"}
+  ],
+  "invariants": [
+    {"id":"ordered-decision","statement":"active generation then evidence then exact novelty then signed-history budget then one freeze are evaluated in that order","test_id":"wake-state-matrix"},
+    {"id":"one-freeze-per-wake","statement":"one exact wake request can append at most one CandidateFreeze and terminal completion cannot open another generation in the same wake","test_id":"one-freeze-per-wake"},
+    {"id":"preregistered-limits","statement":"minimum interval is at least 300 seconds trailing 24 hour freezes are at most 48 and readiness rows are at most 256","test_id":"policy-budget-boundary"},
+    {"id":"signed-budget-only","statement":"budget is reconstructed only from signed epistemic Freeze V8 events and never from mechanism history or a mutable counter","test_id":"budget-restart-parity"},
+    {"id":"no-event-states","statement":"no evidence exact repeats cooldown and active generation are distinct typed decisions and no-event decisions preserve journal and generation exactly","test_id":"no-event-byte-parity"},
+    {"id":"cold-learner-authority-boundary","statement":"cold learner sends only schema and epistemic lane and cannot provide queue attempt index policy timestamp blocker or freeze","test_id":"wake-wire-parity"},
+    {"id":"claim-boundary","statement":"P5 cannot deploy enable production writer update dashboard issue Law 2 or create evidence","test_id":"claim-boundary"}
+  ],
+  "tests": [
+    {"id":"policy-budget-boundary","kind":"unit","expected":"raising any preregistered limit or schema downgrade fails closed"},
+    {"id":"wake-state-matrix","kind":"unit","expected":"writer inactive active no evidence no novel cooldown and candidate frozen are distinct"},
+    {"id":"one-freeze-per-wake","kind":"fault_injection","expected":"one wake appends zero or one freeze and never advances a second generation"},
+    {"id":"budget-restart-parity","kind":"parity","expected":"restart derives identical trailing count and next eligible time from signed V8 history"},
+    {"id":"wake-wire-parity","kind":"parity","expected":"request has no scientific fields and response decision exactly matches authority state"},
+    {"id":"no-event-byte-parity","kind":"parity","expected":"all no-event states preserve revision ledger root event count and next generation"},
+    {"id":"bounded-scheduler-simulation","kind":"integration","expected":"simulation cannot exceed one freeze per wake 48 per trailing day or 256 readiness rows"},
+    {"id":"claim-boundary","kind":"unit","expected":"production and scientific state remain unchanged"}
+  ]
+}

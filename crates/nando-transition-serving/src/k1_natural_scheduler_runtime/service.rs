@@ -302,6 +302,26 @@ pub(crate) fn advance_state(
         )?;
         store_mechanism_report(state, mechanism)?;
     }
+    let (exact_wake_status, exact_wake_projection) =
+        crate::k1_natural_scheduler::request_exact_wake(&state.operator_certification_config)?;
+    let legacy_writer = exact_wake_status.decision
+        == crate::k1_natural_scheduler::K1ExactWakeDecisionV1::WriterInactive;
+    let exact_no_event = matches!(
+        exact_wake_status.decision,
+        crate::k1_natural_scheduler::K1ExactWakeDecisionV1::WaitingForEvidence
+            | crate::k1_natural_scheduler::K1ExactWakeDecisionV1::WaitingForNovelEvidence
+            | crate::k1_natural_scheduler::K1ExactWakeDecisionV1::ResearchBudgetCooldown
+            | crate::k1_natural_scheduler::K1ExactWakeDecisionV1::K1VocabularyOpen
+    );
+    if exact_wake_status.decision
+        == crate::k1_natural_scheduler::K1ExactWakeDecisionV1::CandidateFrozen
+    {
+        let freeze = exact_wake_projection
+            .active_candidate_freeze
+            .as_ref()
+            .ok_or_else(|| "k1_exact_wake_candidate_freeze_missing".to_owned())?;
+        frames = materialize_frozen_support_frames(state, prepared, freeze)?;
+    }
     let pending_request_ids = epistemic_projection
         .future_predictions
         .iter()
@@ -336,7 +356,7 @@ pub(crate) fn advance_state(
         let mut report = advance(
             &state.operator_certification_config,
             K1SchedulerLaneV1::Epistemic,
-            true,
+            legacy_writer,
             AdvanceInput {
                 prepared,
                 topologies: &topologies,
@@ -347,6 +367,11 @@ pub(crate) fn advance_state(
                 generated_at_unix: now,
             },
         )?;
+        report.attach_exact_wake_status(exact_wake_status.clone())?;
+        if exact_no_event {
+            store_report(state, prepared, report)?;
+            return Ok(());
+        }
         if report.state == RuntimeState::TerminalPass {
             trigger_candidate_publication(state);
             continue;
@@ -373,7 +398,7 @@ pub(crate) fn advance_state(
                     K1TransferLifecycleReportV1::pending(terminal, now, error)?
                 }
             };
-            if lifecycle.settled() {
+            if lifecycle.settled() && legacy_writer {
                 continue;
             }
             report.attach_transfer_lifecycle(lifecycle)?;
@@ -382,7 +407,10 @@ pub(crate) fn advance_state(
         }
         let stable = matches!(
             report.state,
-            RuntimeState::WaitingForEvidence
+            RuntimeState::WriterInactive
+                | RuntimeState::WaitingForEvidence
+                | RuntimeState::WaitingForNovelEvidence
+                | RuntimeState::ResearchBudgetCooldown
                 | RuntimeState::ProbePending
                 | RuntimeState::AwaitingIndependentFuture
                 | RuntimeState::TerminalAbstain
@@ -845,7 +873,11 @@ fn legacy_safety_payloads_required(
 }
 
 fn waiting_lanes_are_reusable(mechanism_terminal: bool, epistemic_state: RuntimeState) -> bool {
-    mechanism_terminal && epistemic_state == RuntimeState::WaitingForEvidence
+    mechanism_terminal
+        && matches!(
+            epistemic_state,
+            RuntimeState::WaitingForEvidence | RuntimeState::WaitingForNovelEvidence
+        )
 }
 
 fn waiting_delta_requires_rebuild<'a>(
@@ -1459,6 +1491,18 @@ mod tests {
         assert!(waiting_lanes_are_reusable(
             true,
             RuntimeState::WaitingForEvidence
+        ));
+        assert!(waiting_lanes_are_reusable(
+            true,
+            RuntimeState::WaitingForNovelEvidence
+        ));
+        assert!(!waiting_lanes_are_reusable(
+            true,
+            RuntimeState::ResearchBudgetCooldown
+        ));
+        assert!(!waiting_lanes_are_reusable(
+            true,
+            RuntimeState::WriterInactive
         ));
     }
 

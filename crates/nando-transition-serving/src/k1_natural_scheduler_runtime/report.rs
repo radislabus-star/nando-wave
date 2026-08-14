@@ -29,6 +29,7 @@ pub(super) fn runtime_report(
         transfer_lifecycle: None,
         frozen_evidence_rows,
         future_eligible_rows,
+        exact_wake_status: None,
         authority_ready: false,
         phase_mutation_allowed: false,
     };
@@ -59,6 +60,10 @@ impl K1NaturalSchedulerRuntimeReportV1 {
                 .map(|report| report.report_root_sha256.as_str()),
             frozen_evidence_rows: self.frozen_evidence_rows,
             future_eligible_rows: self.future_eligible_rows,
+            exact_wake_status_root_sha256: self
+                .exact_wake_status
+                .as_ref()
+                .map(|status| status.status_root_sha256.as_str()),
             authority_ready: false,
             phase_mutation_allowed: false,
         })
@@ -70,6 +75,10 @@ impl K1NaturalSchedulerRuntimeReportV1 {
             || self.generated_at_unix == 0
             || self.authority_ready
             || self.phase_mutation_allowed
+            || self
+                .exact_wake_status
+                .as_ref()
+                .is_some_and(|status| status.validate().is_err())
             || self
                 .identification
                 .as_ref()
@@ -91,6 +100,47 @@ impl K1NaturalSchedulerRuntimeReportV1 {
     ) -> Result<(), String> {
         self.blocker = lifecycle.blocker.clone();
         self.transfer_lifecycle = Some(lifecycle);
+        self.report_root_sha256 = self.expected_root()?;
+        self.validate()
+    }
+
+    pub(super) fn attach_exact_wake_status(
+        &mut self,
+        status: crate::k1_natural_scheduler::K1ExactWakeStatusV1,
+    ) -> Result<(), String> {
+        status.validate()?;
+        let replace_runtime_blocker = match status.decision {
+            crate::k1_natural_scheduler::K1ExactWakeDecisionV1::WriterInactive => {
+                if self.state == K1NaturalSchedulerRuntimeStateV1::WaitingForEvidence {
+                    self.state = K1NaturalSchedulerRuntimeStateV1::WriterInactive;
+                    true
+                } else {
+                    false
+                }
+            }
+            crate::k1_natural_scheduler::K1ExactWakeDecisionV1::WaitingForEvidence => {
+                self.state = K1NaturalSchedulerRuntimeStateV1::WaitingForEvidence;
+                true
+            }
+            crate::k1_natural_scheduler::K1ExactWakeDecisionV1::WaitingForNovelEvidence => {
+                self.state = K1NaturalSchedulerRuntimeStateV1::WaitingForNovelEvidence;
+                true
+            }
+            crate::k1_natural_scheduler::K1ExactWakeDecisionV1::ResearchBudgetCooldown => {
+                self.state = K1NaturalSchedulerRuntimeStateV1::ResearchBudgetCooldown;
+                true
+            }
+            crate::k1_natural_scheduler::K1ExactWakeDecisionV1::CandidateFrozen
+            | crate::k1_natural_scheduler::K1ExactWakeDecisionV1::ActiveGeneration => false,
+            crate::k1_natural_scheduler::K1ExactWakeDecisionV1::K1VocabularyOpen => {
+                self.state = K1NaturalSchedulerRuntimeStateV1::K1VocabularyOpen;
+                true
+            }
+        };
+        if replace_runtime_blocker {
+            self.blocker = status.blocker.clone();
+        }
+        self.exact_wake_status = Some(status);
         self.report_root_sha256 = self.expected_root()?;
         self.validate()
     }

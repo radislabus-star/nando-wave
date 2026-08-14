@@ -6,10 +6,11 @@ use nando_operator_admission::{
 
 use super::*;
 use crate::k1_natural_scheduler::authority::{
-    append_and_persist, append_payload_authoritative, certification_authorizes_settlement,
-    complete_exact_terminal_transaction, read_exact_scheduler_policy,
-    validate_active_protocol_mode_cas, validate_discovery_basis_cas, validate_exact_wake_cas,
-    validate_registry_cas,
+    K1ExactResearchBudgetStateV1, K1ExactWakeSelectionV1, append_and_persist,
+    append_payload_authoritative, certification_authorizes_settlement,
+    complete_exact_terminal_transaction, exact_research_budget_state_v1, exact_wake_authoritative,
+    exact_wake_selection_v1, read_exact_scheduler_policy, validate_active_protocol_mode_cas,
+    validate_discovery_basis_cas, validate_exact_wake_cas, validate_registry_cas,
 };
 use crate::k1_natural_scheduler::journal::{
     persist_scheduler_event_for, restore_anchored_scheduler_for,
@@ -27,6 +28,10 @@ fn write_exact_policy(path: &Path, writer_enabled: bool, queue: &str) {
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8,
         K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1,
         "nando.k1-operator-blind-scheduler.v4",
+        1_u64,
+        300_u64,
+        48_u64,
+        256_u64,
     ))
     .expect("policy root");
     fs::write(
@@ -39,6 +44,10 @@ fn write_exact_policy(path: &Path, writer_enabled: bool, queue: &str) {
             "minimum_freeze_schema": K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8,
             "minimum_wire_schema": K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1,
             "scheduler_schema": "nando.k1-operator-blind-scheduler.v4",
+            "maximum_new_freezes_per_wake": 1,
+            "minimum_freeze_interval_seconds": 300,
+            "maximum_trailing_24h_freezes": 48,
+            "maximum_readiness_rows_per_wake": 256,
         }))
         .expect("policy bytes"),
     )
@@ -69,6 +78,297 @@ fn exact_policy_distinguishes_disabled_writer_from_schema_downgrade() {
         Err("K1_AUTHORITY_SCHEMA_DOWNGRADE".to_owned())
     );
     std::fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn exact_policy_rejects_any_research_limit_increase() {
+    let (root_dir, _, _) = test_context();
+    let path = root_dir.join("policy.json");
+    write_exact_policy(&path, true, "nando.k1-natural-candidate-queue.v4");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).expect("policy bytes")).expect("policy json");
+    value["maximum_trailing_24h_freezes"] = serde_json::json!(49);
+    value["policy_root_sha256"] = serde_json::Value::String(
+        canonical_json_sha256(&(
+            "nando.k1-exact-scheduler-policy.v1",
+            true,
+            "nando.k1-natural-candidate-queue.v4",
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8,
+            K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1,
+            "nando.k1-operator-blind-scheduler.v4",
+            1_u64,
+            300_u64,
+            49_u64,
+            256_u64,
+        ))
+        .expect("raised policy root"),
+    );
+    fs::write(&path, serde_json::to_vec(&value).expect("policy encode")).expect("policy write");
+    assert_eq!(
+        read_exact_scheduler_policy(&path),
+        Err("K1_AUTHORITY_SCHEMA_DOWNGRADE".to_owned())
+    );
+    fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn signed_v8_history_reconstructs_interval_and_daily_budget_after_restart() {
+    let (root_dir, _, _) = test_context();
+    let path = root_dir.join("policy.json");
+    write_exact_policy(&path, true, "nando.k1-natural-candidate-queue.v4");
+    let policy = read_exact_scheduler_policy(&path).expect("policy");
+    let base = 1_800_000_000_u64;
+    let mut ledger = K1SchedulerLedgerV1::empty().expect("ledger");
+    for generation in 1..=48_u64 {
+        let selected_at = base.saturating_add(generation.saturating_mul(1_000));
+        let freeze = exact_candidate_freeze_at(generation, selected_at);
+        let diagnostic = exact_terminal_diagnostic(&freeze);
+        let verdict = K1GenerationTerminalVerdictV1::seal(
+            freeze.freeze_root_sha256.clone(),
+            None,
+            Vec::new(),
+            vec![
+                freeze.freeze_root_sha256.clone(),
+                diagnostic.identifier_report_root_sha256.clone(),
+                diagnostic.identifier_result_root_sha256.clone(),
+                diagnostic.terminal_diagnostic_root_sha256.clone(),
+            ],
+            K1GenerationVerdictClassV1::AcquisitionFail,
+            diagnostic.exact_result_blocker.clone(),
+            diagnostic.terminal_at_unix,
+            None,
+        )
+        .expect("verdict");
+        for payload in [
+            K1SchedulerEventPayloadV1::CandidateFreeze(freeze),
+            K1SchedulerEventPayloadV1::ExactTerminalDiagnostic(Box::new(diagnostic)),
+            K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(verdict)),
+        ] {
+            ledger.append(payload).expect("append history");
+        }
+    }
+    let now = base.saturating_add(48_100);
+    let budget = exact_research_budget_state_v1(&ledger, &policy, now).expect("daily budget");
+    assert_eq!(budget.trailing_24h_freezes, 48);
+    assert_eq!(
+        budget.next_eligible_at_unix,
+        Some(base + 1_000 + 86_400 + 1)
+    );
+
+    let encoded = serde_json::to_vec(&ledger).expect("ledger encode");
+    let restored: K1SchedulerLedgerV1 = serde_json::from_slice(&encoded).expect("ledger restart");
+    assert_eq!(
+        exact_research_budget_state_v1(&restored, &policy, now).expect("restart budget"),
+        budget
+    );
+
+    let interval_now = base.saturating_add(48_050);
+    let interval =
+        exact_research_budget_state_v1(&restored, &policy, interval_now).expect("interval budget");
+    assert_eq!(
+        interval.next_eligible_at_unix,
+        Some(base + 1_000 + 86_400 + 1)
+    );
+
+    let mut single = K1SchedulerLedgerV1::empty().expect("single ledger");
+    let freeze = exact_candidate_freeze_at(1, base + 48_000);
+    single
+        .append(K1SchedulerEventPayloadV1::CandidateFreeze(freeze))
+        .expect("single freeze");
+    let interval =
+        exact_research_budget_state_v1(&single, &policy, interval_now).expect("interval budget");
+    assert_eq!(interval.trailing_24h_freezes, 1);
+    assert_eq!(interval.next_eligible_at_unix, Some(base + 48_300));
+    fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn exact_wake_state_matrix_orders_evidence_novelty_budget_and_freeze() {
+    let open = K1ExactResearchBudgetStateV1 {
+        trailing_24h_freezes: 0,
+        next_eligible_at_unix: None,
+    };
+    let cooldown = K1ExactResearchBudgetStateV1 {
+        trailing_24h_freezes: 1,
+        next_eligible_at_unix: Some(1_800_000_300),
+    };
+    assert_eq!(
+        exact_wake_selection_v1(0, 0, cooldown),
+        K1ExactWakeSelectionV1::WaitingForEvidence
+    );
+    assert_eq!(
+        exact_wake_selection_v1(8, 0, cooldown),
+        K1ExactWakeSelectionV1::WaitingForNovelEvidence
+    );
+    assert_eq!(
+        exact_wake_selection_v1(8, 1, cooldown),
+        K1ExactWakeSelectionV1::ResearchBudgetCooldown(1_800_000_300)
+    );
+    assert_eq!(
+        exact_wake_selection_v1(8, 1, open),
+        K1ExactWakeSelectionV1::CandidateReady
+    );
+}
+
+#[test]
+fn exact_wake_status_allows_deadline_only_for_waiting_budget_states() {
+    let vocabulary_open = K1ExactWakeStatusV1::seal(
+        K1ExactWakeDecisionV1::K1VocabularyOpen,
+        "k1_vocabulary_open",
+        None,
+        None,
+        None,
+        None,
+        48,
+        None,
+    )
+    .expect("vocabulary-open status");
+    assert_eq!(vocabulary_open.next_eligible_at_unix, None);
+
+    assert_eq!(
+        K1ExactWakeStatusV1::seal(
+            K1ExactWakeDecisionV1::K1VocabularyOpen,
+            "k1_vocabulary_open",
+            None,
+            None,
+            None,
+            None,
+            48,
+            Some(1_800_000_300),
+        )
+        .expect_err("vocabulary-open deadline must be rejected"),
+        "k1_exact_wake_status_invalid"
+    );
+}
+
+fn exact_wake_request() -> K1ExactWakeAuthorityRequestV1 {
+    K1ExactWakeAuthorityRequestV1 {
+        schema: K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1.to_owned(),
+        lane: K1SchedulerLaneV1::Epistemic,
+    }
+}
+
+fn configure_empty_exact_sources(
+    root_dir: &Path,
+    config: &mut CertificationAuthorityConfigV1,
+    writer_enabled: bool,
+) {
+    let topology_path = root_dir.join("topology");
+    let frame_path = root_dir.join("frames");
+    let collection_path = root_dir.join("collection.cbor");
+    let artifact_path = root_dir.join("artifacts");
+    let policy_path = root_dir.join("policy.json");
+    fs::create_dir_all(&topology_path).expect("topology directory");
+    fs::create_dir_all(&frame_path).expect("frame directory");
+    let collection =
+        OnlineCollectionMiner::open(&collection_path, OnlineCollectionConfig::default())
+            .expect("empty collection");
+    collection.flush().expect("durable empty collection");
+    drop(collection);
+    fs::write(
+        &config.response_registry_path,
+        serde_json::to_vec(&serde_json::json!({
+            "schema": "nando.response-registry.v6",
+            "revision": 0,
+            "packages": []
+        }))
+        .expect("empty registry bytes"),
+    )
+    .expect("empty registry");
+    write_exact_policy(
+        &policy_path,
+        writer_enabled,
+        "nando.k1-natural-candidate-queue.v4",
+    );
+    config.k1_exact_sources = Some(K1ExactAuthoritySourceConfigV1 {
+        topology_archive_path: topology_path,
+        frame_archive_path: frame_path,
+        collection_checkpoint_path: collection_path,
+        artifact_archive_path: artifact_path,
+        scheduler_policy_path: policy_path,
+    });
+}
+
+#[test]
+fn writer_inactive_and_waiting_wakes_append_no_event() {
+    let (root_dir, mut config, signing_key) = test_context();
+    configure_empty_exact_sources(&root_dir, &mut config, false);
+    recover_authority(&config, &signing_key).expect("scheduler genesis");
+    let before = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("initial scheduler");
+
+    let inactive = exact_wake_authoritative(&config, &signing_key, exact_wake_request())
+        .expect("inactive wake");
+    assert_eq!(
+        inactive.status.decision,
+        K1ExactWakeDecisionV1::WriterInactive
+    );
+    assert_eq!(inactive.projection.ledger_revision, before.revision);
+    assert_eq!(
+        inactive.projection.ledger_root_sha256,
+        before.ledger_root_sha256
+    );
+
+    let policy_path = &config
+        .k1_exact_sources
+        .as_ref()
+        .expect("exact sources")
+        .scheduler_policy_path;
+    write_exact_policy(policy_path, true, "nando.k1-natural-candidate-queue.v4");
+    let waiting = exact_wake_authoritative(&config, &signing_key, exact_wake_request())
+        .expect("waiting wake");
+    assert_eq!(
+        waiting.status.decision,
+        K1ExactWakeDecisionV1::WaitingForEvidence
+    );
+    assert_eq!(waiting.status.readiness_pass_rows, Some(0));
+    assert_eq!(waiting.projection.ledger_revision, before.revision);
+    assert_eq!(
+        waiting.projection.ledger_root_sha256,
+        before.ledger_root_sha256
+    );
+    let after = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("unchanged scheduler");
+    assert_eq!(after, before);
+    fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn active_generation_wake_is_read_only_and_preserves_exact_freeze() {
+    let (root_dir, mut config, signing_key) = test_context();
+    configure_empty_exact_sources(&root_dir, &mut config, true);
+    recover_authority(&config, &signing_key).expect("scheduler genesis");
+    let mut scheduler = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("initial scheduler");
+    let freeze = exact_candidate_freeze(1);
+    append_and_persist(
+        &config,
+        K1SchedulerLaneV1::Epistemic,
+        &signing_key,
+        &mut scheduler,
+        K1SchedulerEventPayloadV1::CandidateFreeze(freeze.clone()),
+    )
+    .expect("active freeze");
+    let before = scheduler.clone();
+
+    let active =
+        exact_wake_authoritative(&config, &signing_key, exact_wake_request()).expect("active wake");
+    assert_eq!(
+        active.status.decision,
+        K1ExactWakeDecisionV1::ActiveGeneration
+    );
+    assert_eq!(
+        active
+            .projection
+            .active_candidate_freeze
+            .as_ref()
+            .map(|value| value.freeze_root_sha256.as_str()),
+        Some(freeze.freeze_root_sha256.as_str())
+    );
+    let after = restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+        .expect("unchanged active scheduler");
+    assert_eq!(after, before);
+    fs::remove_dir_all(root_dir).expect("cleanup");
 }
 
 #[test]

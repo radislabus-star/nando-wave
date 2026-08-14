@@ -1,0 +1,39 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "nodes": [
+    {"id":"runtime_wake","role":"orchestrator","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","line":203,"contains":"pub(crate) fn advance_state("}},
+    {"id":"wake_client","role":"interface","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs","line":510,"contains":"pub(crate) fn request_exact_wake("}},
+    {"id":"exact_restore","role":"producer","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":473,"contains":"restore_exact_opportunity_v1("}},
+    {"id":"exact_projection","role":"evidence_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":479,"contains":"let readiness_pass_rows = exact"}},
+    {"id":"wake_selector","role":"candidate_rank_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":501,"contains":"match exact_wake_selection_v1("}},
+    {"id":"wake_authority","role":"authorization_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":392,"contains":"pub(super) fn exact_wake_authoritative("}},
+    {"id":"signed_append","role":"mutation_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":636,"contains":"K1SchedulerEventPayloadV1::CandidateFreeze(freeze)"}},
+    {"id":"runtime_report_projection","role":"producer","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/report.rs","line":107,"contains":"pub(super) fn attach_exact_wake_status("}},
+    {"id":"runtime_report_observer","role":"observer","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","line":370,"contains":"report.attach_exact_wake_status(exact_wake_status.clone())"}},
+    {"id":"selection_projection","role":"producer","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":651,"contains":"pub(super) fn exact_wake_selection_v1("}},
+    {"id":"state_matrix_test","role":"proof_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","line":186,"contains":"fn exact_wake_state_matrix_orders_evidence_novelty_budget_and_freeze()"}},
+    {"id":"no_event_projection","role":"producer","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":507,"contains":"return exact_wake_result("}},
+    {"id":"no_event_test","role":"proof_owner","evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","line":291,"contains":"fn writer_inactive_and_waiting_wakes_append_no_event()"}}
+  ],
+  "edges": [
+    {"id":"exec-runtime-client","from":"runtime_wake","relation":"calls","to":"wake_client","events":["runtime_wake"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","line":306,"contains":"request_exact_wake(&state.operator_certification_config)"}},
+    {"id":"exec-authority-restore","from":"wake_authority","relation":"delegates","to":"exact_restore","events":["authority_wake"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":473,"contains":"restore_exact_opportunity_v1("}},
+    {"id":"auth-restore-project","from":"exact_restore","relation":"produces_for","to":"exact_projection","events":["authority_wake"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":479,"contains":"let readiness_pass_rows = exact"}},
+    {"id":"auth-project-select","from":"exact_projection","relation":"passes_to","to":"wake_selector","events":["authority_wake"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":501,"contains":"match exact_wake_selection_v1("}},
+    {"id":"auth-select-authority","from":"wake_selector","relation":"passes_to","to":"wake_authority","events":["authority_wake"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":536,"contains":"K1ExactWakeSelectionV1::CandidateReady => {}"}},
+    {"id":"auth-authority-append","from":"wake_authority","relation":"authorizes","to":"signed_append","events":["authority_wake"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","line":631,"contains":"let projection = append_and_persist("}},
+    {"id":"observe-runtime-report","from":"runtime_report_projection","relation":"observes","to":"runtime_report_observer","events":["scheduler_observation"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler_runtime/service.rs","line":370,"contains":"report.attach_exact_wake_status(exact_wake_status.clone())"}},
+    {"id":"proof-selector-matrix","from":"selection_projection","relation":"proves","to":"state_matrix_test","events":["selection_proof"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","line":196,"contains":"exact_wake_selection_v1(0, 0, cooldown)"}},
+    {"id":"proof-no-event","from":"no_event_projection","relation":"proves","to":"no_event_test","events":["no_event_proof"],"evidence":{"path":"crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs","line":299,"contains":"exact_wake_authoritative(&config, &signing_key, exact_wake_request())"}}
+  ],
+  "routes": [
+    {"id":"scheduler-runtime-execution","event":"runtime_wake","kind":"execution","entry":"runtime_wake","terminal":"wake_client","required_roles":["orchestrator","interface"],"path_cardinality":[{"from":"runtime_wake","to":"wake_client","min":1,"max":1}]},
+    {"id":"scheduler-authority-execution","event":"authority_wake","kind":"execution","entry":"wake_authority","terminal":"exact_restore","required_roles":["authorization_owner","producer"],"path_cardinality":[{"from":"wake_authority","to":"exact_restore","min":1,"max":1}]},
+    {"id":"scheduler-authority","event":"authority_wake","kind":"authority","entry":"exact_restore","terminal":"signed_append","required_roles":["producer","evidence_owner","candidate_rank_owner","authorization_owner","mutation_owner"],"path_cardinality":[{"from":"exact_restore","to":"signed_append","min":1,"max":1}]},
+    {"id":"scheduler-observation","event":"scheduler_observation","kind":"observation","entry":"runtime_report_projection","terminal":"runtime_report_observer","required_roles":["producer","observer"]},
+    {"id":"scheduler-selection-proof","event":"selection_proof","kind":"proof","entry":"selection_projection","terminal":"state_matrix_test","required_roles":["producer","proof_owner"]},
+    {"id":"scheduler-no-event-proof","event":"no_event_proof","kind":"proof","entry":"no_event_projection","terminal":"no_event_test","required_roles":["producer","proof_owner"]}
+  ]
+}

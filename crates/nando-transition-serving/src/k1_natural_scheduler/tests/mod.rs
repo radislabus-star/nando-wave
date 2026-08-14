@@ -198,6 +198,14 @@ fn candidate_freeze_material_with_deficit(
 }
 
 fn exact_candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV1 {
+    exact_candidate_freeze_at(generation_sequence, 1_700_000_000)
+}
+
+fn exact_candidate_freeze_at(
+    generation_sequence: u64,
+    selected_at_unix: u64,
+) -> K1NaturalCandidateFreezeV1 {
+    let generation_root_offset = generation_sequence.saturating_mul(100_000);
     let topology = PreActionMultiSourceTopologyV1 {
         extraction_status: MultiSourceExtractionStatusV1::Complete,
         grounded_output_count: 1,
@@ -234,7 +242,7 @@ fn exact_candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV
                 root(10_100),
                 motif.embeddings[0].ambient_topology_root_sha256.clone(),
                 &motif,
-                root(10_200),
+                root(10_200 + generation_root_offset),
                 root(if index <= 4 { 10_300 } else { 10_301 }),
                 K1ConsequenceTypeV1::Collection,
                 index,
@@ -263,7 +271,7 @@ fn exact_candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV
     let support = K1MotifCandidateSupportV1::seal(
         root(10_100),
         motif.motif_root_sha256.clone(),
-        root(10_200),
+        root(10_200 + generation_root_offset),
         K1ConsequenceTypeV1::Collection,
         8,
         retained_manifest_root_sha256.clone(),
@@ -402,7 +410,7 @@ fn exact_candidate_freeze(generation_sequence: u64) -> K1NaturalCandidateFreezeV
         },
         8,
         8,
-        1_700_000_000,
+        selected_at_unix,
         causal_manifest,
         root(10_405),
         root(10_406),
@@ -446,7 +454,7 @@ fn exact_terminal_diagnostic(freeze: &K1NaturalCandidateFreezeV1) -> TerminalDia
         &[],
         MultiSourceT1IdentificationStateV1::NoEligibleCohort,
         "motif_program_candidates_empty".to_owned(),
-        1_700_000_100,
+        freeze.selected_at_unix.saturating_add(100),
     )
     .expect("diagnostic")
 }

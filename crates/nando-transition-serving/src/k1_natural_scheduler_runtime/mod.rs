@@ -105,7 +105,10 @@ const K1_MAX_GENERATION_SECONDS_V1: u64 = 86_400;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum K1NaturalSchedulerRuntimeStateV1 {
+    WriterInactive,
     WaitingForEvidence,
+    WaitingForNovelEvidence,
+    ResearchBudgetCooldown,
     CandidateFrozen,
     IdentificationFrozen,
     FuturePredictionContractSealed,
@@ -142,6 +145,7 @@ pub(crate) struct K1NaturalSchedulerRuntimeReportV1 {
     pub transfer_lifecycle: Option<K1TransferLifecycleReportV1>,
     pub frozen_evidence_rows: u64,
     pub future_eligible_rows: u64,
+    pub exact_wake_status: Option<crate::k1_natural_scheduler::K1ExactWakeStatusV1>,
     pub authority_ready: bool,
     pub phase_mutation_allowed: bool,
 }
@@ -161,6 +165,7 @@ struct RuntimeReportDigestV1<'a> {
     transfer_lifecycle_root_sha256: Option<&'a str>,
     frozen_evidence_rows: u64,
     future_eligible_rows: u64,
+    exact_wake_status_root_sha256: Option<&'a str>,
     authority_ready: bool,
     phase_mutation_allowed: bool,
 }
