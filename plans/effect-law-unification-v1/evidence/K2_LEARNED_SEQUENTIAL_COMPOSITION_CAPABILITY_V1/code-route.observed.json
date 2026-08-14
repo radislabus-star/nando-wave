@@ -1,0 +1,785 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "nodes": [
+    {
+      "id": "experiment_driver",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 17,
+        "contains": "fn learned_effects_compose_into_unprovided_depth_three_program()"
+      }
+    },
+    {
+      "id": "support_observations",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 323,
+        "contains": "let observation = K2CompositionSupportObservationV1::seal("
+      }
+    },
+    {
+      "id": "support_evidence_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 344,
+        "contains": "let learning_request = K2CompositionLearningRequestV1::seal("
+      }
+    },
+    {
+      "id": "effect_learner_process",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/learner.rs",
+        "line": 148,
+        "contains": "pub fn run_composition_effect_learner_process_v1()"
+      }
+    },
+    {
+      "id": "learned_law_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/learner.rs",
+        "line": 160,
+        "contains": "let outcome = learn_composition_effects_v1(&request)?;"
+      }
+    },
+    {
+      "id": "planning_input_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 393,
+        "contains": "let planning_request = K2CompositionPlanningRequestV1::seal("
+      }
+    },
+    {
+      "id": "composition_planner_process",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/planner.rs",
+        "line": 311,
+        "contains": "pub fn run_composition_planner_process_v1()"
+      }
+    },
+    {
+      "id": "planner_output",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/planner.rs",
+        "line": 323,
+        "contains": "let outcome = plan_learned_composition_v1(&request)?;"
+      }
+    },
+    {
+      "id": "independent_plan_verifier",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs",
+        "line": 17,
+        "contains": "pub fn verify_composition_plan_v1("
+      }
+    },
+    {
+      "id": "verified_plan_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 434,
+        "contains": "let verification = verify_composition_plan_v1(&planning_request, &plan)"
+      }
+    },
+    {
+      "id": "verified_plan_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 438,
+        "contains": "K2CompositionJournalEventKindV1::IndependentPlanVerificationFrozen,"
+      }
+    },
+    {
+      "id": "private_mapping_resolver",
+      "role": "authorization_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+        "line": 79,
+        "contains": "pub fn reopen_private_mapping_artifact_v1("
+      }
+    },
+    {
+      "id": "sequential_sandbox_adapter",
+      "role": "orchestrator",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 72,
+        "contains": "pub fn execute("
+      }
+    },
+    {
+      "id": "sequential_worker",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 203,
+        "contains": "pub fn run_composition_sequential_worker_v1()"
+      }
+    },
+    {
+      "id": "worker_filesystem_state",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 245,
+        "contains": "let post_manifest = K2CompositionTreeManifestV1::scan(work_root)?;"
+      }
+    },
+    {
+      "id": "filesystem_observer",
+      "role": "observer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 101,
+        "contains": "let adapter_observed_post = K2CompositionTreeManifestV1::scan(workspace.work_root())?;"
+      }
+    },
+    {
+      "id": "adapter_terminal_manifest",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 129,
+        "contains": "Ok(K2CompositionSandboxExecutionV1 {"
+      }
+    },
+    {
+      "id": "exact_goal_oracle",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs",
+        "line": 317,
+        "contains": "pub fn evaluate_exact_composition_goal_v1("
+      }
+    },
+    {
+      "id": "journal_event_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+        "line": 438,
+        "contains": "let bytes ="
+      }
+    },
+    {
+      "id": "composition_journal",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+        "line": 412,
+        "contains": "pub fn append("
+      }
+    },
+    {
+      "id": "cleanup_owner",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 129,
+        "contains": "environment.cleanup();"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "exec-driver-learner",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "effect_learner_process",
+      "events": [
+        "learn_effects"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 351,
+        "contains": "run_isolated_protocol_v1(&binaries.learner, &learning_request);"
+      }
+    },
+    {
+      "id": "authority-support-store",
+      "from": "support_observations",
+      "relation": "produces_for",
+      "to": "support_evidence_store",
+      "events": [
+        "learn_effects"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 339,
+        "contains": "observations.push(observation);"
+      }
+    },
+    {
+      "id": "authority-store-learner",
+      "from": "support_evidence_store",
+      "relation": "passes_to",
+      "to": "effect_learner_process",
+      "events": [
+        "learn_effects"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 344,
+        "contains": "let learning_request = K2CompositionLearningRequestV1::seal("
+      }
+    },
+    {
+      "id": "exec-driver-planner",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "composition_planner_process",
+      "events": [
+        "plan_composition"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 412,
+        "contains": "run_isolated_protocol_v1(&binaries.planner, &planning_request);"
+      }
+    },
+    {
+      "id": "authority-laws-planning-store",
+      "from": "learned_law_bytes",
+      "relation": "produces_for",
+      "to": "planning_input_store",
+      "events": [
+        "plan_composition"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 396,
+        "contains": "law_set.clone(),"
+      }
+    },
+    {
+      "id": "authority-planning-store-planner",
+      "from": "planning_input_store",
+      "relation": "passes_to",
+      "to": "composition_planner_process",
+      "events": [
+        "plan_composition"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 393,
+        "contains": "let planning_request = K2CompositionPlanningRequestV1::seal("
+      }
+    },
+    {
+      "id": "exec-driver-plan-verifier",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "independent_plan_verifier",
+      "events": [
+        "verify_plan"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 434,
+        "contains": "let verification = verify_composition_plan_v1(&planning_request, &plan)"
+      }
+    },
+    {
+      "id": "proof-planner-verifier",
+      "from": "planner_output",
+      "relation": "proves",
+      "to": "independent_plan_verifier",
+      "events": [
+        "verify_plan"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs",
+        "line": 19,
+        "contains": "outcome: &K2CompositionPlannerOutcomeV1,"
+      }
+    },
+    {
+      "id": "exec-driver-resolver",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "private_mapping_resolver",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 447,
+        "contains": "let reopened_mapping = reopen_private_mapping_artifact_v1(&mapping_directory, &mapping_receipt)"
+      }
+    },
+    {
+      "id": "exec-resolver-adapter",
+      "from": "private_mapping_resolver",
+      "relation": "delegates",
+      "to": "sequential_sandbox_adapter",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 498,
+        "contains": ".execute(&target_request, &fixture.target_files)"
+      }
+    },
+    {
+      "id": "exec-adapter-worker",
+      "from": "sequential_sandbox_adapter",
+      "relation": "calls",
+      "to": "sequential_worker",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 93,
+        "contains": "let output = run_bounded_command_v1("
+      }
+    },
+    {
+      "id": "authority-plan-store",
+      "from": "verified_plan_bytes",
+      "relation": "produces_for",
+      "to": "verified_plan_store",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 438,
+        "contains": "K2CompositionJournalEventKindV1::IndependentPlanVerificationFrozen,"
+      }
+    },
+    {
+      "id": "authority-plan-resolver",
+      "from": "verified_plan_store",
+      "relation": "passes_to",
+      "to": "private_mapping_resolver",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 448,
+        "contains": ".expect(\"mapping reopen after plan\");"
+      }
+    },
+    {
+      "id": "authority-resolver-worker",
+      "from": "private_mapping_resolver",
+      "relation": "authorizes",
+      "to": "sequential_worker",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 466,
+        "contains": "let target_request = K2CompositionSandboxRequestV1::seal("
+      }
+    },
+    {
+      "id": "exec-adapter-observer",
+      "from": "sequential_sandbox_adapter",
+      "relation": "calls",
+      "to": "filesystem_observer",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 101,
+        "contains": "let adapter_observed_post = K2CompositionTreeManifestV1::scan(workspace.work_root())?;"
+      }
+    },
+    {
+      "id": "observe-worker-filesystem",
+      "from": "worker_filesystem_state",
+      "relation": "observes",
+      "to": "filesystem_observer",
+      "events": [
+        "execute_target"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+        "line": 102,
+        "contains": "if source_after != source_before || adapter_observed_post != outcome.post_manifest {"
+      }
+    },
+    {
+      "id": "exec-driver-oracle",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "exact_goal_oracle",
+      "events": [
+        "verify_goal"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 520,
+        "contains": "run_isolated_protocol_v1(&binaries.oracle, &oracle_request);"
+      }
+    },
+    {
+      "id": "proof-manifest-oracle",
+      "from": "adapter_terminal_manifest",
+      "relation": "proves",
+      "to": "exact_goal_oracle",
+      "events": [
+        "verify_goal"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 515,
+        "contains": "target_execution.adapter_observed_post.clone(),"
+      }
+    },
+    {
+      "id": "exec-driver-journal",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "composition_journal",
+      "events": [
+        "persist_event"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 273,
+        "contains": ".append("
+      }
+    },
+    {
+      "id": "authority-event-journal",
+      "from": "journal_event_bytes",
+      "relation": "produces_for",
+      "to": "composition_journal",
+      "events": [
+        "persist_event"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+        "line": 438,
+        "contains": "let bytes ="
+      }
+    },
+    {
+      "id": "exec-driver-cleanup",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "cleanup_owner",
+      "events": [
+        "cleanup_generated"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+        "line": 129,
+        "contains": "environment.cleanup();"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "learner-execution",
+      "event": "learn_effects",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "effect_learner_process",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "effect_learner_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "learner-authority",
+      "event": "learn_effects",
+      "kind": "authority",
+      "entry": "support_observations",
+      "terminal": "effect_learner_process",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "support_observations",
+          "to": "effect_learner_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "planner-execution",
+      "event": "plan_composition",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "composition_planner_process",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "composition_planner_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "planner-authority",
+      "event": "plan_composition",
+      "kind": "authority",
+      "entry": "learned_law_bytes",
+      "terminal": "composition_planner_process",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "learned_law_bytes",
+          "to": "composition_planner_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "plan-verifier-execution",
+      "event": "verify_plan",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "independent_plan_verifier",
+      "required_roles": [
+        "interface",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "independent_plan_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "plan-proof",
+      "event": "verify_plan",
+      "kind": "proof",
+      "entry": "planner_output",
+      "terminal": "independent_plan_verifier",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "planner_output",
+          "to": "independent_plan_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "target-execution",
+      "event": "execute_target",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "sequential_worker",
+      "required_roles": [
+        "interface",
+        "authorization_owner",
+        "orchestrator",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "sequential_worker",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "target-authority",
+      "event": "execute_target",
+      "kind": "authority",
+      "entry": "verified_plan_bytes",
+      "terminal": "sequential_worker",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "authorization_owner",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "verified_plan_bytes",
+          "to": "sequential_worker",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "target-observer-execution",
+      "event": "execute_target",
+      "kind": "execution",
+      "entry": "sequential_sandbox_adapter",
+      "terminal": "filesystem_observer",
+      "required_roles": [
+        "orchestrator",
+        "observer"
+      ],
+      "path_cardinality": [
+        {
+          "from": "sequential_sandbox_adapter",
+          "to": "filesystem_observer",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "target-observation",
+      "event": "execute_target",
+      "kind": "observation",
+      "entry": "worker_filesystem_state",
+      "terminal": "filesystem_observer",
+      "required_roles": [
+        "producer",
+        "observer"
+      ],
+      "path_cardinality": [
+        {
+          "from": "worker_filesystem_state",
+          "to": "filesystem_observer",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "oracle-execution",
+      "event": "verify_goal",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "exact_goal_oracle",
+      "required_roles": [
+        "interface",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "exact_goal_oracle",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "oracle-proof",
+      "event": "verify_goal",
+      "kind": "proof",
+      "entry": "adapter_terminal_manifest",
+      "terminal": "exact_goal_oracle",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "adapter_terminal_manifest",
+          "to": "exact_goal_oracle",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "journal-execution",
+      "event": "persist_event",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "composition_journal",
+      "required_roles": [
+        "interface",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "composition_journal",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "journal-authority",
+      "event": "persist_event",
+      "kind": "authority",
+      "entry": "journal_event_bytes",
+      "terminal": "composition_journal",
+      "required_roles": [
+        "producer",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "journal_event_bytes",
+          "to": "composition_journal",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "cleanup-execution",
+      "event": "cleanup_generated",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "cleanup_owner",
+      "required_roles": [
+        "interface",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "cleanup_owner",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    }
+  ],
+  "source_root": "."
+}

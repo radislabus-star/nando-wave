@@ -1,0 +1,94 @@
+{
+  "schema": "nando.k2-learned-sequential-composition-capability-receipt.v1",
+  "recorded_at_utc": "2026-08-14T23:53:48Z",
+  "source_parent_commit": "e062f5c8bf1ef98f6de5ce8fc6c81b7d64a762da",
+  "source_branch": "k1-topology-quotient-v2-20260810",
+  "build_host": "e-MEGA-MINI-M1-13th",
+  "claim": "K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PASS",
+  "verdict": "PASS",
+  "scope": "bounded_generated_filesystem_environment",
+  "authority": {
+    "natural_k2": false,
+    "production_execution": false,
+    "law_certificate": false,
+    "k1_registry_mutation": false,
+    "phase_memory_mutation": false,
+    "deployment": false
+  },
+  "denominators": {
+    "fixture_routes": 2,
+    "opaque_actions": 6,
+    "support_executions": 18,
+    "learned_laws": 6,
+    "candidate_programs": 30,
+    "independently_verified_candidates": 30,
+    "positive_target_executions": 2,
+    "negative_target_executions": 1,
+    "exact_oracle_processes": 3,
+    "negative_controls_passed": 18,
+    "negative_controls_total": 18,
+    "journal_events_per_route": 29,
+    "journal_prefixes_reopened_per_route": 29,
+    "residual_generated_paths": 0
+  },
+  "planner_denominators": {
+    "main_valid": 8,
+    "main_inapplicable": 7,
+    "main_semantic_classes": 5,
+    "main_satisfying_class_members": 3,
+    "topology_valid": 3,
+    "topology_inapplicable": 12,
+    "topology_semantic_classes": 3,
+    "topology_satisfying_class_members": 1,
+    "minimum_satisfying_depth": 3,
+    "satisfying_strict_prefixes": 0
+  },
+  "release_outcome_roots": {
+    "capability": "a3e4526dd300a8ccbbe3fa3ed533e3dc49b6f3b18f00ee6c5538f76172685857",
+    "main_plan": "5ae9f483520be581ba31759112dfa4a640d0ecd4c94536a5f816088f8f4ba2af",
+    "topology_plan": "98d5a2040624e1c1f4f713ce3c51e7aee343119b2bc07578d1b00f53b7cc195d",
+    "main_terminal_journal": "72bc17fcaca57c6744b118f655f2891ec8482964cf01df79bcdbc371d0fb57be",
+    "topology_terminal_journal": "8318264d4416d1224f691f2041c2982fe6eb120421a4485953722a9913b72e5d",
+    "ablation": "f75a063a17266e62ecccdc0a99573d13494c70d71556a91659079fd1a172f84f"
+  },
+  "release_executables": {
+    "effect_learner_sha256": "a11bfbe334096359ecc67b88e7d8f07c17816169cd787e8907931da3b1059441",
+    "planner_sha256": "d14533031e819437b7d990383a3b4d971a1756e0b559c24c3960035c1eb1e81d",
+    "sequential_worker_sha256": "6dde0f6d26b01245ab265cf5b071c2d1872ea3105dc667d9b61f7a62ceec6782",
+    "exact_oracle_sha256": "d4f7ce5d55a2356542dcd0d763d19dd7ee70ef7595c6b91529045e63920b6602"
+  },
+  "source_budgets": {
+    "model_lines": 1413,
+    "learner_lines": 165,
+    "planner_lines": 328,
+    "verifier_lines": 370,
+    "sandbox_lines": 536,
+    "journal_lines": 532,
+    "module_lines": 19,
+    "production_module_total_lines": 3363,
+    "integration_test_lines": 1394,
+    "all_limits_passed": true
+  },
+  "verification": {
+    "implementation_preflight": "READY_TO_IMPLEMENT",
+    "implementation_preflight_manifest_sha256": "7f24096797d7e526dda573060e8d8067f398e961984fc62eee8063214574188a",
+    "frozen_baselines": "17_PASS_1_ALLOWED_ADDITIVE_MODULE_REGISTRATION",
+    "cargo_check_all_targets": "PASS",
+    "cargo_fmt_check": "PASS",
+    "cargo_clippy_all_targets_deny_warnings": "PASS",
+    "nonignored_package_tests": "449_PASS",
+    "ignored_real_process_regressions": "6_PASS",
+    "release_decisive_test": "1_PASS",
+    "nanda_structural_packets": "4_PASS_AUTHORITY_FALSE",
+    "observed_source_code_route": "PASS_42_OF_42",
+    "planner_verifier_source_separation": "PASS",
+    "journal_fault_points": "2_OF_2_PASS",
+    "published_dispatch_retry": "FORBIDDEN_AFTER_RESTART"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "bubblewrap": "bubblewrap 0.6.1",
+    "build_jobs": 20
+  }
+}

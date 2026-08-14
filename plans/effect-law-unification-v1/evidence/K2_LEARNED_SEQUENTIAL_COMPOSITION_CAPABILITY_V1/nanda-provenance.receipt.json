@@ -1,0 +1,815 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k2-learned-composition-provenance-v1",
+  "domain": "general",
+  "complexity_score": 40,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1429,
+      "c2": 0.1429,
+      "c3": 0.1429,
+      "c4": 0.1429,
+      "c5": 0.1429,
+      "c6": 0.1429,
+      "c7": 0.1429
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 14,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3852,
+      "c2": 0.3991,
+      "c3": 0.3793,
+      "c4": 0.3793,
+      "c5": 0.372,
+      "c6": 0.364,
+      "c7": 0.3932
+    },
+    "source_self_score": 0.3817,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "all-false": "all-false",
+      "dynamic-identity": "dynamic-identity",
+      "learner-boundary": "learner-boundary",
+      "mapping-artifact": "mapping-artifact",
+      "support-completeness": "support-completeness",
+      "target-independence": "target-independence",
+      "topology-control": "topology-control"
+    },
+    "scores": {
+      "all-false": 1,
+      "dynamic-identity": 1,
+      "learner-boundary": 1,
+      "mapping-artifact": 1,
+      "support-completeness": 1,
+      "target-independence": 1,
+      "topology-control": 1
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "all-false": 1,
+      "dynamic-identity": 1,
+      "learner-boundary": 1,
+      "mapping-artifact": 1,
+      "support-completeness": 1,
+      "target-independence": 1,
+      "topology-control": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3817,
+      "norm": 85.5102,
+      "triads": 7
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "all-false": "all-false",
+      "dynamic-identity": "dynamic-identity",
+      "learner-boundary": "learner-boundary",
+      "mapping-artifact": "mapping-artifact",
+      "support-completeness": "support-completeness",
+      "target-independence": "target-independence",
+      "topology-control": "topology-control"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "all-false": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "dynamic-identity": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "learner-boundary": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "mapping-artifact": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "support-completeness": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "target-independence": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "topology-control": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        }
+      },
+      "source": {
+        "all-false": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "dynamic-identity": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "learner-boundary": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "mapping-artifact": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "support-completeness": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "target-independence": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "topology-control": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "all-false": {
+        "dominant_score": 1,
+        "dominant_source_group": "all-false",
+        "exact_source_groups": [
+          "all-false"
+        ]
+      },
+      "dynamic-identity": {
+        "dominant_score": 1,
+        "dominant_source_group": "dynamic-identity",
+        "exact_source_groups": [
+          "dynamic-identity"
+        ]
+      },
+      "learner-boundary": {
+        "dominant_score": 1,
+        "dominant_source_group": "learner-boundary",
+        "exact_source_groups": [
+          "learner-boundary"
+        ]
+      },
+      "mapping-artifact": {
+        "dominant_score": 1,
+        "dominant_source_group": "mapping-artifact",
+        "exact_source_groups": [
+          "mapping-artifact"
+        ]
+      },
+      "support-completeness": {
+        "dominant_score": 1,
+        "dominant_source_group": "support-completeness",
+        "exact_source_groups": [
+          "support-completeness"
+        ]
+      },
+      "target-independence": {
+        "dominant_score": 1,
+        "dominant_source_group": "target-independence",
+        "exact_source_groups": [
+          "target-independence"
+        ]
+      },
+      "topology-control": {
+        "dominant_score": 1,
+        "dominant_source_group": "topology-control",
+        "exact_source_groups": [
+          "topology-control"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "all-false": {
+        "all-false": 1,
+        "dynamic-identity": -0.002,
+        "learner-boundary": 0.0156,
+        "mapping-artifact": 0.0215,
+        "support-completeness": 0.0293,
+        "target-independence": 0.0215,
+        "topology-control": -0.0352
+      },
+      "dynamic-identity": {
+        "all-false": -0.002,
+        "dynamic-identity": 1,
+        "learner-boundary": -0.0059,
+        "mapping-artifact": -0.0156,
+        "support-completeness": 0.0352,
+        "target-independence": 0.0195,
+        "topology-control": -0.002
+      },
+      "learner-boundary": {
+        "all-false": 0.0156,
+        "dynamic-identity": -0.0059,
+        "learner-boundary": 1,
+        "mapping-artifact": 0.041,
+        "support-completeness": 0.0137,
+        "target-independence": 0.0137,
+        "topology-control": -0.0117
+      },
+      "mapping-artifact": {
+        "all-false": 0.0215,
+        "dynamic-identity": -0.0156,
+        "learner-boundary": 0.041,
+        "mapping-artifact": 1,
+        "support-completeness": -0.0469,
+        "target-independence": 0.0039,
+        "topology-control": 0.0098
+      },
+      "support-completeness": {
+        "all-false": 0.0293,
+        "dynamic-identity": 0.0352,
+        "learner-boundary": 0.0137,
+        "mapping-artifact": -0.0469,
+        "support-completeness": 1,
+        "target-independence": -0.0469,
+        "topology-control": 0.0293
+      },
+      "target-independence": {
+        "all-false": 0.0215,
+        "dynamic-identity": 0.0195,
+        "learner-boundary": 0.0137,
+        "mapping-artifact": 0.0039,
+        "support-completeness": -0.0469,
+        "target-independence": 1,
+        "topology-control": -0.0176
+      },
+      "topology-control": {
+        "all-false": -0.0352,
+        "dynamic-identity": -0.002,
+        "learner-boundary": -0.0117,
+        "mapping-artifact": 0.0098,
+        "support-completeness": 0.0293,
+        "target-independence": -0.0176,
+        "topology-control": 1
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "all-false": {
+          "gravity": 1,
+          "owner": "all-false",
+          "owners": {
+            "all-false": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "dynamic-identity": {
+          "gravity": 1,
+          "owner": "dynamic fixture commitments",
+          "owners": {
+            "dynamic fixture commitments": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "learner-boundary": {
+          "gravity": 1,
+          "owner": "learner protocol",
+          "owners": {
+            "learner protocol": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "mapping-artifact": {
+          "gravity": 1,
+          "owner": "private mapping artifact",
+          "owners": {
+            "private mapping artifact": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "support-completeness": {
+          "gravity": 1,
+          "owner": "support denominator",
+          "owners": {
+            "support denominator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "target-independence": {
+          "gravity": 1,
+          "owner": "target-independence",
+          "owners": {
+            "target-independence": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "topology-control": {
+          "gravity": 1,
+          "owner": "topology-control",
+          "owners": {
+            "topology-control": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "ablation": {
+          "gravity": 1,
+          "owner": "topology-control",
+          "owners": {
+            "topology-control": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "authority": {
+          "gravity": 1,
+          "owner": "all-false",
+          "owners": {
+            "all-false": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "evidence": {
+          "gravity": 1,
+          "owner": "support denominator",
+          "owners": {
+            "support denominator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "holdout": {
+          "gravity": 1,
+          "owner": "target-independence",
+          "owners": {
+            "target-independence": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "persistence": {
+          "gravity": 1,
+          "owner": "private mapping artifact",
+          "owners": {
+            "private mapping artifact": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "provenance": {
+          "gravity": 0.5,
+          "owner": "dynamic fixture commitments",
+          "owners": {
+            "dynamic fixture commitments": 2,
+            "learner protocol": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "ablation": {
+          "avg_confidence": 1,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:48-72",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:154-168"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "topology-control"
+          ],
+          "scopes": [
+            "ablation"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "authority": {
+          "avg_confidence": 1,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:74-98",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:7-30"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "all-false"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "evidence": {
+          "avg_confidence": 1,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:37",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:113-134"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "support denominator"
+          ],
+          "scopes": [
+            "evidence"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "holdout": {
+          "avg_confidence": 1,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:40",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:199-204"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "target-independence"
+          ],
+          "scopes": [
+            "holdout"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "persistence": {
+          "avg_confidence": 1,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:41",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:190-198"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "private mapping artifact"
+          ],
+          "scopes": [
+            "persistence"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "provenance": {
+          "avg_confidence": 1,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:33",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:35",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:170-205",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:82-98"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "dynamic fixture commitments",
+            "learner protocol"
+          ],
+          "scopes": [
+            "provenance"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "ablation": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "evidence": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "holdout": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "persistence": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "provenance": {
+          "norm": 45.1221,
+          "self_coherence": 0.705,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "ablation": {
+          "ablation": 1,
+          "authority": -0.0352,
+          "evidence": 0.0293,
+          "holdout": -0.0176,
+          "persistence": 0.0098,
+          "provenance": -0.0097
+        },
+        "authority": {
+          "ablation": -0.0352,
+          "authority": 1,
+          "evidence": 0.0293,
+          "holdout": 0.0215,
+          "persistence": 0.0215,
+          "provenance": 0.0097
+        },
+        "evidence": {
+          "ablation": 0.0293,
+          "authority": 0.0293,
+          "evidence": 1,
+          "holdout": -0.0469,
+          "persistence": -0.0469,
+          "provenance": 0.0346
+        },
+        "holdout": {
+          "ablation": -0.0176,
+          "authority": 0.0215,
+          "evidence": -0.0469,
+          "holdout": 1,
+          "persistence": 0.0039,
+          "provenance": 0.0235
+        },
+        "persistence": {
+          "ablation": 0.0098,
+          "authority": 0.0215,
+          "evidence": -0.0469,
+          "holdout": 0.0039,
+          "persistence": 1,
+          "provenance": 0.018
+        },
+        "provenance": {
+          "ablation": -0.0097,
+          "authority": 0.0097,
+          "evidence": 0.0346,
+          "holdout": 0.0235,
+          "persistence": 0.018,
+          "provenance": 1
+        }
+      },
+      "source": {
+        "ablation": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "evidence": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "holdout": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "persistence": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "provenance": {
+          "norm": 45.1221,
+          "self_coherence": 0.705,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "all-false": 1,
+      "dynamic-identity": 1,
+      "learner-boundary": 1,
+      "mapping-artifact": 1,
+      "support-completeness": 1,
+      "target-independence": 1,
+      "topology-control": 1
+    },
+    "stable_groups": [
+      "all-false",
+      "dynamic-identity",
+      "learner-boundary",
+      "mapping-artifact",
+      "support-completeness",
+      "target-independence",
+      "topology-control"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k2-learned-composition-provenance-v1.trace.json"
+}

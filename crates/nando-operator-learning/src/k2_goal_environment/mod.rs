@@ -5,11 +5,13 @@
 
 mod journal;
 pub mod learned_capability;
+pub mod learned_composition;
 pub mod learned_journal;
 mod model;
 
 pub use journal::*;
 pub use learned_capability::*;
+pub use learned_composition::*;
 pub use learned_journal::*;
 pub use model::*;
 

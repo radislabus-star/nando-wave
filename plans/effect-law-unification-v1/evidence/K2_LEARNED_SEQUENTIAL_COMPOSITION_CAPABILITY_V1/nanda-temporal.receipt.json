@@ -1,0 +1,779 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k2-learned-composition-temporal-v1",
+  "domain": "general",
+  "complexity_score": 42,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1364,
+      "c2": 0.1364,
+      "c3": 0.1364,
+      "c4": 0.1364,
+      "c5": 0.1364,
+      "c6": 0.1364,
+      "c7": 0.1364,
+      "c8": 0.1364
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 16,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3483,
+      "c2": 0.3774,
+      "c3": 0.3898,
+      "c4": 0.3067,
+      "c5": 0.3704,
+      "c6": 0.3469,
+      "c7": 0.3552,
+      "c8": 0.3261
+    },
+    "source_self_score": 0.3526,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "dispatch-order": "dispatch-order",
+      "goal-before-plan": "goal-before-plan",
+      "laws-before-target": "laws-before-target",
+      "mapping-before-freeze": "mapping-before-freeze",
+      "no-rerun": "no-rerun",
+      "plan-before-mapping": "plan-before-mapping",
+      "restart-parity": "restart-parity",
+      "terminal-seal": "terminal-seal"
+    },
+    "scores": {
+      "dispatch-order": 1,
+      "goal-before-plan": 1,
+      "laws-before-target": 1,
+      "mapping-before-freeze": 1,
+      "no-rerun": 1,
+      "plan-before-mapping": 1,
+      "restart-parity": 1,
+      "terminal-seal": 1
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "dispatch-order": 1,
+      "goal-before-plan": 1,
+      "laws-before-target": 1,
+      "mapping-before-freeze": 1,
+      "no-rerun": 1,
+      "plan-before-mapping": 1,
+      "restart-parity": 1,
+      "terminal-seal": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3526,
+      "norm": 90.2663,
+      "triads": 8
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "dispatch-order": "dispatch-order",
+      "goal-before-plan": "goal-before-plan",
+      "laws-before-target": "laws-before-target",
+      "mapping-before-freeze": "mapping-before-freeze",
+      "no-rerun": "no-rerun",
+      "plan-before-mapping": "plan-before-mapping",
+      "restart-parity": "restart-parity",
+      "terminal-seal": "terminal-seal"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "dispatch-order": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "goal-before-plan": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "laws-before-target": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "mapping-before-freeze": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "no-rerun": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "plan-before-mapping": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "restart-parity": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "terminal-seal": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        }
+      },
+      "source": {
+        "dispatch-order": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "goal-before-plan": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "laws-before-target": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "mapping-before-freeze": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "no-rerun": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "plan-before-mapping": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "restart-parity": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "terminal-seal": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "dispatch-order": {
+        "dominant_score": 1,
+        "dominant_source_group": "dispatch-order",
+        "exact_source_groups": [
+          "dispatch-order"
+        ]
+      },
+      "goal-before-plan": {
+        "dominant_score": 1,
+        "dominant_source_group": "goal-before-plan",
+        "exact_source_groups": [
+          "goal-before-plan"
+        ]
+      },
+      "laws-before-target": {
+        "dominant_score": 1,
+        "dominant_source_group": "laws-before-target",
+        "exact_source_groups": [
+          "laws-before-target"
+        ]
+      },
+      "mapping-before-freeze": {
+        "dominant_score": 1,
+        "dominant_source_group": "mapping-before-freeze",
+        "exact_source_groups": [
+          "mapping-before-freeze"
+        ]
+      },
+      "no-rerun": {
+        "dominant_score": 1,
+        "dominant_source_group": "no-rerun",
+        "exact_source_groups": [
+          "no-rerun"
+        ]
+      },
+      "plan-before-mapping": {
+        "dominant_score": 1,
+        "dominant_source_group": "plan-before-mapping",
+        "exact_source_groups": [
+          "plan-before-mapping"
+        ]
+      },
+      "restart-parity": {
+        "dominant_score": 1,
+        "dominant_source_group": "restart-parity",
+        "exact_source_groups": [
+          "restart-parity"
+        ]
+      },
+      "terminal-seal": {
+        "dominant_score": 1,
+        "dominant_source_group": "terminal-seal",
+        "exact_source_groups": [
+          "terminal-seal"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "dispatch-order": {
+        "dispatch-order": 1,
+        "goal-before-plan": 0.0176,
+        "laws-before-target": 0.0098,
+        "mapping-before-freeze": 0.0039,
+        "no-rerun": -0.0234,
+        "plan-before-mapping": -0.0156,
+        "restart-parity": 0.0273,
+        "terminal-seal": 0.0254
+      },
+      "goal-before-plan": {
+        "dispatch-order": 0.0176,
+        "goal-before-plan": 1,
+        "laws-before-target": -0.0039,
+        "mapping-before-freeze": 0.0605,
+        "no-rerun": 0.002,
+        "plan-before-mapping": 0.0176,
+        "restart-parity": 0.0215,
+        "terminal-seal": -0.0156
+      },
+      "laws-before-target": {
+        "dispatch-order": 0.0098,
+        "goal-before-plan": -0.0039,
+        "laws-before-target": 1,
+        "mapping-before-freeze": 0.0098,
+        "no-rerun": 0.0254,
+        "plan-before-mapping": 0.0605,
+        "restart-parity": -0.0293,
+        "terminal-seal": -0.0078
+      },
+      "mapping-before-freeze": {
+        "dispatch-order": 0.0039,
+        "goal-before-plan": 0.0605,
+        "laws-before-target": 0.0098,
+        "mapping-before-freeze": 1,
+        "no-rerun": -0.0195,
+        "plan-before-mapping": -0.0195,
+        "restart-parity": -0.0195,
+        "terminal-seal": -0.0332
+      },
+      "no-rerun": {
+        "dispatch-order": -0.0234,
+        "goal-before-plan": 0.002,
+        "laws-before-target": 0.0254,
+        "mapping-before-freeze": -0.0195,
+        "no-rerun": 1,
+        "plan-before-mapping": -0.0313,
+        "restart-parity": 0.0234,
+        "terminal-seal": 0.002
+      },
+      "plan-before-mapping": {
+        "dispatch-order": -0.0156,
+        "goal-before-plan": 0.0176,
+        "laws-before-target": 0.0605,
+        "mapping-before-freeze": -0.0195,
+        "no-rerun": -0.0313,
+        "plan-before-mapping": 1,
+        "restart-parity": -0.0586,
+        "terminal-seal": -0.0879
+      },
+      "restart-parity": {
+        "dispatch-order": 0.0273,
+        "goal-before-plan": 0.0215,
+        "laws-before-target": -0.0293,
+        "mapping-before-freeze": -0.0195,
+        "no-rerun": 0.0234,
+        "plan-before-mapping": -0.0586,
+        "restart-parity": 1,
+        "terminal-seal": 0.0371
+      },
+      "terminal-seal": {
+        "dispatch-order": 0.0254,
+        "goal-before-plan": -0.0156,
+        "laws-before-target": -0.0078,
+        "mapping-before-freeze": -0.0332,
+        "no-rerun": 0.002,
+        "plan-before-mapping": -0.0879,
+        "restart-parity": 0.0371,
+        "terminal-seal": 1
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "dispatch-order": {
+          "gravity": 1,
+          "owner": "execution dispatch",
+          "owners": {
+            "execution dispatch": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "goal-before-plan": {
+          "gravity": 1,
+          "owner": "target and goal",
+          "owners": {
+            "target and goal": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "laws-before-target": {
+          "gravity": 1,
+          "owner": "learned laws",
+          "owners": {
+            "learned laws": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "mapping-before-freeze": {
+          "gravity": 1,
+          "owner": "private mapping artifact",
+          "owners": {
+            "private mapping artifact": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "no-rerun": {
+          "gravity": 1,
+          "owner": "unobserved published dispatch",
+          "owners": {
+            "unobserved published dispatch": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "plan-before-mapping": {
+          "gravity": 1,
+          "owner": "verified plan",
+          "owners": {
+            "verified plan": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "restart-parity": {
+          "gravity": 1,
+          "owner": "deterministic projector",
+          "owners": {
+            "deterministic projector": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "terminal-seal": {
+          "gravity": 1,
+          "owner": "terminal outcome",
+          "owners": {
+            "terminal outcome": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "crash": {
+          "gravity": 1,
+          "owner": "unobserved published dispatch",
+          "owners": {
+            "unobserved published dispatch": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "persistence": {
+          "gravity": 0.5,
+          "owner": "deterministic projector",
+          "owners": {
+            "deterministic projector": 2,
+            "execution dispatch": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "proof": {
+          "gravity": 1,
+          "owner": "terminal outcome",
+          "owners": {
+            "terminal outcome": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "temporal": {
+          "gravity": 0.25,
+          "owner": "learned laws",
+          "owners": {
+            "learned laws": 2,
+            "private mapping artifact": 2,
+            "target and goal": 2,
+            "verified plan": 2
+          },
+          "support": 2,
+          "total": 8
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "crash": {
+          "avg_confidence": 1,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:154",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:357-365"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "unobserved published dispatch"
+          ],
+          "scopes": [
+            "crash"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "persistence": {
+          "avg_confidence": 1,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:153",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:155",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:339-365",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:339-367"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "deterministic projector",
+            "execution dispatch"
+          ],
+          "scopes": [
+            "persistence"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "proof": {
+          "avg_confidence": 1,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:156",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:341-357"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "terminal outcome"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "temporal": {
+          "avg_confidence": 1,
+          "candidate_triads": 4,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:150",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:151",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:152",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_critique_v1.md:41",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:136-152",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:185-204",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:190-198",
+            "plans/effect-law-unification-v1/k2_learned_sequential_composition_capability_preregistration_v1.md:339-367"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "learned laws",
+            "private mapping artifact",
+            "target and goal",
+            "verified plan"
+          ],
+          "scopes": [
+            "temporal"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "crash": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "persistence": {
+          "norm": 45.8694,
+          "self_coherence": 0.7167,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "temporal": {
+          "norm": 65.9697,
+          "self_coherence": 0.5154,
+          "triads": 4
+        }
+      },
+      "interference_matrix": {
+        "crash": {
+          "crash": 1,
+          "persistence": 0,
+          "proof": 0.002,
+          "temporal": -0.0114
+        },
+        "persistence": {
+          "crash": 0,
+          "persistence": 1,
+          "proof": 0.0436,
+          "temporal": -0.0238
+        },
+        "proof": {
+          "crash": 0.002,
+          "persistence": 0.0436,
+          "proof": 1,
+          "temporal": -0.0701
+        },
+        "temporal": {
+          "crash": -0.0114,
+          "persistence": -0.0238,
+          "proof": -0.0701,
+          "temporal": 1
+        }
+      },
+      "source": {
+        "crash": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "persistence": {
+          "norm": 45.8694,
+          "self_coherence": 0.7167,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 32,
+          "self_coherence": 1,
+          "triads": 1
+        },
+        "temporal": {
+          "norm": 65.9697,
+          "self_coherence": 0.5154,
+          "triads": 4
+        }
+      }
+    },
+    "source_group_sizes": {
+      "dispatch-order": 1,
+      "goal-before-plan": 1,
+      "laws-before-target": 1,
+      "mapping-before-freeze": 1,
+      "no-rerun": 1,
+      "plan-before-mapping": 1,
+      "restart-parity": 1,
+      "terminal-seal": 1
+    },
+    "stable_groups": [
+      "dispatch-order",
+      "goal-before-plan",
+      "laws-before-target",
+      "mapping-before-freeze",
+      "no-rerun",
+      "plan-before-mapping",
+      "restart-parity",
+      "terminal-seal"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k2-learned-composition-temporal-v1.trace.json"
+}

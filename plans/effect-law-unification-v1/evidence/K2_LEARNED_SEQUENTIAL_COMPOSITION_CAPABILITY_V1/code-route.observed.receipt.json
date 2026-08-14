@@ -1,0 +1,742 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_V1/code-route.observed.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "node_count": 21,
+  "edge_count": 21,
+  "routes": [
+    {
+      "id": "learner-execution",
+      "event": "learn_effects",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "effect_learner_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "effect_learner_process"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "effect_learner_process"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "effect_learner_process",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "effect_learner_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "learner-authority",
+      "event": "learn_effects",
+      "kind": "authority",
+      "entry": "support_observations",
+      "via": [],
+      "terminal": "effect_learner_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "support_observations",
+          "support_evidence_store",
+          "effect_learner_process"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "effect_learner_process"
+        ],
+        "evidence_owner": [
+          "support_evidence_store"
+        ],
+        "producer": [
+          "support_observations"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "support_observations",
+          "to": "effect_learner_process",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "support_observations",
+              "support_evidence_store",
+              "effect_learner_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "planner-execution",
+      "event": "plan_composition",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "composition_planner_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "composition_planner_process"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "composition_planner_process"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "composition_planner_process",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "composition_planner_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "planner-authority",
+      "event": "plan_composition",
+      "kind": "authority",
+      "entry": "learned_law_bytes",
+      "via": [],
+      "terminal": "composition_planner_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "learned_law_bytes",
+          "planning_input_store",
+          "composition_planner_process"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "composition_planner_process"
+        ],
+        "producer": [
+          "learned_law_bytes"
+        ],
+        "evidence_owner": [
+          "planning_input_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "learned_law_bytes",
+          "to": "composition_planner_process",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "learned_law_bytes",
+              "planning_input_store",
+              "composition_planner_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plan-verifier-execution",
+      "event": "verify_plan",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "independent_plan_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "independent_plan_verifier"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "proof_owner": [
+          "independent_plan_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "independent_plan_verifier",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "independent_plan_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plan-proof",
+      "event": "verify_plan",
+      "kind": "proof",
+      "entry": "planner_output",
+      "via": [],
+      "terminal": "independent_plan_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "planner_output",
+          "independent_plan_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "independent_plan_verifier"
+        ],
+        "producer": [
+          "planner_output"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "planner_output",
+          "to": "independent_plan_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "planner_output",
+              "independent_plan_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "target-execution",
+      "event": "execute_target",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "sequential_worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "private_mapping_resolver",
+          "sequential_sandbox_adapter",
+          "sequential_worker"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "authorization_owner": [
+          "private_mapping_resolver"
+        ],
+        "orchestrator": [
+          "sequential_sandbox_adapter"
+        ],
+        "mutation_owner": [
+          "sequential_worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "sequential_worker",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "private_mapping_resolver",
+              "sequential_sandbox_adapter",
+              "sequential_worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "target-authority",
+      "event": "execute_target",
+      "kind": "authority",
+      "entry": "verified_plan_bytes",
+      "via": [],
+      "terminal": "sequential_worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "verified_plan_bytes",
+          "verified_plan_store",
+          "private_mapping_resolver",
+          "sequential_worker"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "private_mapping_resolver"
+        ],
+        "mutation_owner": [
+          "sequential_worker"
+        ],
+        "producer": [
+          "verified_plan_bytes"
+        ],
+        "evidence_owner": [
+          "verified_plan_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "verified_plan_bytes",
+          "to": "sequential_worker",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "verified_plan_bytes",
+              "verified_plan_store",
+              "private_mapping_resolver",
+              "sequential_worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "target-observer-execution",
+      "event": "execute_target",
+      "kind": "execution",
+      "entry": "sequential_sandbox_adapter",
+      "via": [],
+      "terminal": "filesystem_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "sequential_sandbox_adapter",
+          "filesystem_observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "filesystem_observer"
+        ],
+        "orchestrator": [
+          "sequential_sandbox_adapter"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "sequential_sandbox_adapter",
+          "to": "filesystem_observer",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "sequential_sandbox_adapter",
+              "filesystem_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "target-observation",
+      "event": "execute_target",
+      "kind": "observation",
+      "entry": "worker_filesystem_state",
+      "via": [],
+      "terminal": "filesystem_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "worker_filesystem_state",
+          "filesystem_observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "filesystem_observer"
+        ],
+        "producer": [
+          "worker_filesystem_state"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "worker_filesystem_state",
+          "to": "filesystem_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "worker_filesystem_state",
+              "filesystem_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oracle-execution",
+      "event": "verify_goal",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "exact_goal_oracle",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "exact_goal_oracle"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "exact_goal_oracle"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "exact_goal_oracle",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "exact_goal_oracle"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oracle-proof",
+      "event": "verify_goal",
+      "kind": "proof",
+      "entry": "adapter_terminal_manifest",
+      "via": [],
+      "terminal": "exact_goal_oracle",
+      "path_count": 1,
+      "paths": [
+        [
+          "adapter_terminal_manifest",
+          "exact_goal_oracle"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "adapter_terminal_manifest"
+        ],
+        "proof_owner": [
+          "exact_goal_oracle"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "adapter_terminal_manifest",
+          "to": "exact_goal_oracle",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "adapter_terminal_manifest",
+              "exact_goal_oracle"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journal-execution",
+      "event": "persist_event",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "composition_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "composition_journal"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "composition_journal"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "composition_journal",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "composition_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journal-authority",
+      "event": "persist_event",
+      "kind": "authority",
+      "entry": "journal_event_bytes",
+      "via": [],
+      "terminal": "composition_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "journal_event_bytes",
+          "composition_journal"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "composition_journal"
+        ],
+        "producer": [
+          "journal_event_bytes"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "journal_event_bytes",
+          "to": "composition_journal",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "journal_event_bytes",
+              "composition_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup-execution",
+      "event": "cleanup_generated",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "cleanup_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "cleanup_owner"
+        ]
+      ],
+      "role_owners": {
+        "mutation_owner": [
+          "cleanup_owner"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "cleanup_owner",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "cleanup_owner"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "learn_effects": {
+      "evidence_owner": [
+        "support_evidence_store"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "candidate_rank_owner": [
+        "effect_learner_process"
+      ],
+      "mutation_owner": []
+    },
+    "plan_composition": {
+      "evidence_owner": [
+        "planning_input_store"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "candidate_rank_owner": [
+        "composition_planner_process"
+      ],
+      "mutation_owner": []
+    },
+    "execute_target": {
+      "evidence_owner": [
+        "verified_plan_store"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "private_mapping_resolver"
+      ],
+      "candidate_rank_owner": [],
+      "mutation_owner": [
+        "sequential_worker"
+      ]
+    },
+    "persist_event": {
+      "evidence_owner": [
+        "composition_journal"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 42,
+    "verified": 42,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}
