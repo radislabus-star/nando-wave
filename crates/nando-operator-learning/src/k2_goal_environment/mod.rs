@@ -4,9 +4,13 @@
 //! evidence, K1 membership, admission, economics, or phase memory.
 
 mod journal;
+pub mod learned_capability;
+pub mod learned_journal;
 mod model;
 
 pub use journal::*;
+pub use learned_capability::*;
+pub use learned_journal::*;
 pub use model::*;
 
 #[cfg(test)]

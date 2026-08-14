@@ -1,0 +1,213 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "law-lab-contract-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_contract.rs",
+      "sha256": "aa81a4642dc5ed1de664165f8f4355e7a8101cb9d91076a2843cf5ef369b50fc",
+      "size_bytes": 21530
+    },
+    {
+      "exists": true,
+      "id": "law-lab-model-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/model.rs",
+      "sha256": "fb79ff1faa19bd6bf8fbc42f0268953df8df2d01201b8f5a17b3f6b5bd8cd98f",
+      "size_bytes": 41559
+    },
+    {
+      "exists": true,
+      "id": "law-lab-adapter-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs",
+      "sha256": "27d239929a1978ae6a243311a7f14cd0540c359bda2e7a1d98192064d4524563",
+      "size_bytes": 35625
+    },
+    {
+      "exists": true,
+      "id": "law-lab-worker-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs",
+      "sha256": "68191481c0eaf7e8f35c1bb93846378e1808c8e47d9b845c5b546f2df52c6251",
+      "size_bytes": 16894
+    },
+    {
+      "exists": true,
+      "id": "law-lab-manifest-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/manifest.rs",
+      "sha256": "ed8c0addab192268b5dd6f3bd17a113cee5f70b8db1ca22e8dc643416a113bd8",
+      "size_bytes": 19322
+    },
+    {
+      "exists": true,
+      "id": "operator-learning-cargo-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/Cargo.toml",
+      "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+      "size_bytes": 663
+    },
+    {
+      "exists": true,
+      "id": "k2-v1-paper-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_PREREGISTRATION_V1.md",
+      "sha256": "d7c47125e63e350b47bbe83d753867de6dde4c6ba48b7fda8e1939387ce61912",
+      "size_bytes": 21200
+    },
+    {
+      "exists": true,
+      "id": "k2-v1-model-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/model.rs",
+      "sha256": "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da",
+      "size_bytes": 87648
+    },
+    {
+      "exists": true,
+      "id": "k2-v1-journal-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/journal.rs",
+      "sha256": "545a02b8c8a8a1840291cad4df1110a4e87433285774eceae0df8162ab768cb4",
+      "size_bytes": 35436
+    },
+    {
+      "exists": true,
+      "id": "k2-v1-oracle-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/bin/nando-k2-exact-goal-oracle.rs",
+      "sha256": "2af5167d94072a0b4bf529aa67a917c5052ce71f1ed3d31f9fb6638d427918e4",
+      "size_bytes": 716
+    },
+    {
+      "exists": true,
+      "id": "k2-v1-integration-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/tests/k2_goal_environment_v1.rs",
+      "sha256": "9c08072cfb55331750fe045825501063d638bcd6f35987356920bdb02b33db48",
+      "size_bytes": 16948
+    },
+    {
+      "exists": true,
+      "id": "learned-paper-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_LEARNED_CAPABILITY_PREREGISTRATION_V1.md",
+      "sha256": "3c6e95c6172729239d432422d75634d7ecc28548f82e1da4df25ddf8ceaccc2b",
+      "size_bytes": 39961
+    },
+    {
+      "exists": true,
+      "id": "s1c-evidence-directory-baseline",
+      "kind": "directory",
+      "mode": "0775",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3C_CAPTURE_INSTALLATION_ATTEMPT_V1"
+    },
+    {
+      "exists": true,
+      "id": "graphify-directory-baseline",
+      "kind": "directory",
+      "mode": "0775",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/graphify-out"
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 14,
+    "forbidden_side_effect_kinds": [
+      "dashboard_change",
+      "deployment",
+      "generated_natural_traffic",
+      "k1_registry_mutation",
+      "natural_evidence_write",
+      "network_access",
+      "package_activation",
+      "phase_memory_mutation",
+      "production_state_mount",
+      "production_write",
+      "secret_mount",
+      "service_control"
+    ],
+    "identity_contracts": 9,
+    "invariants": 13,
+    "planned_side_effect_kinds": [
+      "filesystem_read",
+      "isolated_test_process_spawn",
+      "source_file_create",
+      "source_file_modify",
+      "test_fixture_cleanup",
+      "test_fixture_write",
+      "test_lab_journal_write",
+      "test_private_artifact_write"
+    ],
+    "preserved_artifacts": 14,
+    "runtime_comparisons": 0,
+    "source_checks": 5,
+    "tests": 32
+  },
+  "manifest_sha256": "5d2bd0442018ca5a67d6d4d80c33caedb2075268b5196ff4233f8f722a6f364e",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "law-lab-adapter-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs",
+      "sha256": "27d239929a1978ae6a243311a7f14cd0540c359bda2e7a1d98192064d4524563",
+      "size_bytes": 35625
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "k2-v1-model-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/model.rs",
+      "sha256": "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da",
+      "size_bytes": 87648
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "k2-v1-journal-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/journal.rs",
+      "sha256": "545a02b8c8a8a1840291cad4df1110a4e87433285774eceae0df8162ab768cb4",
+      "size_bytes": 35436
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "law-lab-worker-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs",
+      "sha256": "68191481c0eaf7e8f35c1bb93846378e1808c8e47d9b845c5b546f2df52c6251",
+      "size_bytes": 16894
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "operator-learning-cargo-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/Cargo.toml",
+      "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+      "size_bytes": 663
+    }
+  ],
+  "task_id": "k2-goal-environment-learned-capability-source-v1",
+  "verdict": "READY_TO_IMPLEMENT"
+}

@@ -1,0 +1,352 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-goal-environment-learned-capability-source-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": false,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "law-lab-contract-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_contract.rs",
+      "expect": { "size_bytes": 21530, "sha256": "aa81a4642dc5ed1de664165f8f4355e7a8101cb9d91076a2843cf5ef369b50fc", "mode": "0664" }
+    },
+    {
+      "id": "law-lab-model-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/model.rs",
+      "expect": { "size_bytes": 41559, "sha256": "fb79ff1faa19bd6bf8fbc42f0268953df8df2d01201b8f5a17b3f6b5bd8cd98f", "mode": "0664" }
+    },
+    {
+      "id": "law-lab-adapter-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs",
+      "expect": { "size_bytes": 35625, "sha256": "27d239929a1978ae6a243311a7f14cd0540c359bda2e7a1d98192064d4524563", "mode": "0664" }
+    },
+    {
+      "id": "law-lab-worker-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs",
+      "expect": { "size_bytes": 16894, "sha256": "68191481c0eaf7e8f35c1bb93846378e1808c8e47d9b845c5b546f2df52c6251", "mode": "0664" }
+    },
+    {
+      "id": "law-lab-manifest-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/manifest.rs",
+      "expect": { "size_bytes": 19322, "sha256": "ed8c0addab192268b5dd6f3bd17a113cee5f70b8db1ca22e8dc643416a113bd8", "mode": "0664" }
+    },
+    {
+      "id": "operator-learning-cargo-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/Cargo.toml",
+      "expect": { "size_bytes": 663, "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9", "mode": "0664" }
+    },
+    {
+      "id": "k2-v1-paper-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_PREREGISTRATION_V1.md",
+      "expect": { "size_bytes": 21200, "sha256": "d7c47125e63e350b47bbe83d753867de6dde4c6ba48b7fda8e1939387ce61912", "mode": "0664" }
+    },
+    {
+      "id": "k2-v1-model-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/model.rs",
+      "expect": { "size_bytes": 87648, "sha256": "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da", "mode": "0664" }
+    },
+    {
+      "id": "k2-v1-journal-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/journal.rs",
+      "expect": { "size_bytes": 35436, "sha256": "545a02b8c8a8a1840291cad4df1110a4e87433285774eceae0df8162ab768cb4", "mode": "0664" }
+    },
+    {
+      "id": "k2-v1-oracle-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/bin/nando-k2-exact-goal-oracle.rs",
+      "expect": { "size_bytes": 716, "sha256": "2af5167d94072a0b4bf529aa67a917c5052ce71f1ed3d31f9fb6638d427918e4", "mode": "0664" }
+    },
+    {
+      "id": "k2-v1-integration-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/tests/k2_goal_environment_v1.rs",
+      "expect": { "size_bytes": 16948, "sha256": "9c08072cfb55331750fe045825501063d638bcd6f35987356920bdb02b33db48", "mode": "0664" }
+    },
+    {
+      "id": "learned-paper-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_LEARNED_CAPABILITY_PREREGISTRATION_V1.md",
+      "expect": { "size_bytes": 39961, "sha256": "3c6e95c6172729239d432422d75634d7ecc28548f82e1da4df25ddf8ceaccc2b", "mode": "0664" }
+    },
+    {
+      "id": "s1c-evidence-directory-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3C_CAPTURE_INSTALLATION_ATTEMPT_V1",
+      "expect": { "mode": "0775" }
+    },
+    {
+      "id": "graphify-directory-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/graphify-out",
+      "expect": { "mode": "0775" }
+    }
+  ],
+  "preserved_artifacts": [
+    { "id": "law-lab-contract", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_contract.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "law-lab-contract-baseline" },
+    { "id": "law-lab-model", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/model.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "law-lab-model-baseline" },
+    { "id": "law-lab-adapter", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "law-lab-adapter-baseline" },
+    { "id": "law-lab-worker", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "law-lab-worker-baseline" },
+    { "id": "law-lab-manifest", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/manifest.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "law-lab-manifest-baseline" },
+    { "id": "operator-learning-cargo", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/Cargo.toml", "policy": "no_dependency_change", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "operator-learning-cargo-baseline" },
+    { "id": "k2-v1-paper", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_PREREGISTRATION_V1.md", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "k2-v1-paper-baseline" },
+    { "id": "k2-v1-model", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/model.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "k2-v1-model-baseline" },
+    { "id": "k2-v1-journal", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/journal.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "k2-v1-journal-baseline" },
+    { "id": "k2-v1-oracle", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/bin/nando-k2-exact-goal-oracle.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "k2-v1-oracle-baseline" },
+    { "id": "k2-v1-integration", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/tests/k2_goal_environment_v1.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "k2-v1-integration-baseline" },
+    { "id": "learned-paper", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_LEARNED_CAPABILITY_PREREGISTRATION_V1.md", "policy": "frozen_before_implementation", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "learned-paper-baseline" },
+    { "id": "s1c-user-evidence", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3C_CAPTURE_INSTALLATION_ATTEMPT_V1", "policy": "user_owned_read_only", "rollback_policy": "leave_untouched", "baseline_check_id": "s1c-evidence-directory-baseline" },
+    { "id": "graphify-output", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/graphify-out", "policy": "generated_user_owned_read_only", "rollback_policy": "leave_untouched", "baseline_check_id": "graphify-directory-baseline" }
+  ],
+  "invariants": [
+    { "id": "public-private-input-separation", "statement": "learner stdin contains only the public context support observations learned laws and target pre-manifest at their legal phases", "test_id": "public-private-input-fence" },
+    { "id": "dynamic-action-identity", "statement": "action IDs depend on harness commitment and not on hidden operation or fixed learner bytes", "test_id": "dynamic-id-control" },
+    { "id": "support-provenance-exact", "statement": "every learner observation is redacted only after exact Law Lab source pre-work post-work request and receipt validation", "test_id": "support-provenance-parity" },
+    { "id": "complete-version-space", "statement": "learner enumerates the complete bounded effect grammar and PASS requires exactly one survivor per action", "test_id": "version-space-completeness" },
+    { "id": "independent-verification", "statement": "verifier checks all laws and predictions without learner inference calls", "test_id": "independent-verifier-parity" },
+    { "id": "holdout-before-prediction", "statement": "typed target independence is durable before target prediction and target is absent from learning stdin", "test_id": "target-holdout-parity" },
+    { "id": "prediction-before-selection", "statement": "both target predictions are durable before V1 goal adapter or target dispatch", "test_id": "temporal-order-unit" },
+    { "id": "dispatched-not-retried", "statement": "a durable support or target dispatch without exact outcome is ineligible for same-identity retry", "test_id": "dispatch-crash-unit" },
+    { "id": "authority-denied", "statement": "every learned capability receipt keeps all K1 K2 product phase and deployment authority flags false", "test_id": "authority-boundary-unit" },
+    { "id": "v1-preserved", "statement": "V1 schemas model journal oracle integration and seven original baselines remain byte-identical", "test_id": "v1-byte-baseline" },
+    { "id": "production-untouched", "statement": "changes remain inside the frozen learned-capability source test paper and NANDA paths", "test_id": "path-fence-parity" },
+    { "id": "terminal-root-acyclic", "statement": "terminal outcome precedes a derived seal and no journal payload depends on the seal", "test_id": "terminal-root-parity" },
+    { "id": "disposable-storage-clean", "statement": "all fixture journals stores and workspaces are absent after test cleanup", "test_id": "cleanup-parity" }
+  ],
+  "identity_contracts": [
+    { "id": "private-contract-restart", "producer": "immutable private contract artifact writer", "consumer": "restart validator and hidden executor adapter", "comparison": "canonical byte and root identity", "test_id": "private-contract-restart-parity" },
+    { "id": "support-redaction-identity", "producer": "validated Law Lab request receipt and worker outcome", "consumer": "K2SupportObservationV1 redactor", "comparison": "source pre-work post-work and receipt root parity", "test_id": "support-provenance-parity" },
+    { "id": "learner-process-identity", "producer": "frozen learner executable and canonical request", "consumer": "external learner outcome validator", "comparison": "executable SHA request root canonical stdout and schema parity", "test_id": "learner-process-parity" },
+    { "id": "learned-law-identity", "producer": "external learner law set", "consumer": "independent exhaustive effect verifier", "comparison": "complete candidate and survivor parity", "test_id": "independent-verifier-parity" },
+    { "id": "target-prediction-identity", "producer": "external learner target predictions", "consumer": "independent complete-manifest transformer", "comparison": "entry vector total bytes tree root and unaffected entry parity", "test_id": "independent-verifier-parity" },
+    { "id": "learned-to-v1-identity", "producer": "learned target prediction set and private mapping", "consumer": "unchanged V1 fixture action and prepared selector route", "comparison": "opaque action operation plan and predicted consequence root parity", "test_id": "learned-to-v1-parity" },
+    { "id": "learned-journal-identity", "producer": "immutable ordinal event writer", "consumer": "deterministic restart projector", "comparison": "canonical event bytes hash chain state and cross-event root parity", "test_id": "journal-restart-parity" },
+    { "id": "v1-episode-identity", "producer": "unchanged V1 terminal outcome and episode seal", "consumer": "learned capability terminal validator", "comparison": "V1 journal replay outcome seal and learned binding parity", "test_id": "v1-episode-parity" },
+    { "id": "goal-oracle-identity", "producer": "preregistered V1 goal envelope", "consumer": "separate exact goal oracle", "comparison": "exact terminal tree equality", "test_id": "goal-oracle-parity" }
+  ],
+  "side_effects": {
+    "planned": [
+      { "id": "read-frozen-sources", "kind": "filesystem_read" },
+      { "id": "create-learned-capability-module", "kind": "source_file_create" },
+      { "id": "create-learned-journal-module", "kind": "source_file_create" },
+      { "id": "create-effect-learner-binary", "kind": "source_file_create" },
+      { "id": "export-learned-modules", "kind": "source_file_modify" },
+      { "id": "create-learned-integration-test", "kind": "source_file_create" },
+      { "id": "create-disposable-support-target-fixtures", "kind": "test_fixture_write" },
+      { "id": "publish-private-test-contract", "kind": "test_private_artifact_write" },
+      { "id": "write-immutable-learning-journal", "kind": "test_lab_journal_write" },
+      { "id": "spawn-bounded-learner", "kind": "isolated_test_process_spawn" },
+      { "id": "spawn-existing-law-lab-worker", "kind": "isolated_test_process_spawn" },
+      { "id": "spawn-existing-exact-oracle", "kind": "isolated_test_process_spawn" },
+      { "id": "remove-disposable-test-artifacts", "kind": "test_fixture_cleanup" }
+    ],
+    "forbidden": [
+      "network_access",
+      "production_state_mount",
+      "production_write",
+      "secret_mount",
+      "generated_natural_traffic",
+      "natural_evidence_write",
+      "k1_registry_mutation",
+      "phase_memory_mutation",
+      "package_activation",
+      "service_control",
+      "dashboard_change",
+      "deployment"
+    ]
+  },
+  "state_machine": {
+    "initial_state": "EMPTY",
+    "terminal_states": [
+      "PASS",
+      "PRIVATE_CONTRACT_PUBLISH_FAILED",
+      "FREEZE_PUBLISH_FAILED",
+      "SUPPORT_DISPATCH_PUBLISH_FAILED",
+      "INDETERMINATE_AFTER_SUPPORT_DISPATCH",
+      "SUPPORT_EVIDENCE_PUBLISH_FAILED",
+      "LEARNED_LAW_PUBLISH_FAILED",
+      "HOLDOUT_PUBLISH_FAILED",
+      "PREDICTION_PUBLISH_FAILED",
+      "VERIFICATION_PUBLISH_FAILED",
+      "V1_BINDING_PUBLISH_FAILED",
+      "V1_EPISODE_RECORD_FAILED",
+      "ABLATION_PUBLISH_FAILED",
+      "TERMINAL_RECORD_FAILED"
+    ],
+    "steps": [
+      {
+        "id": "publish-private-contract", "from": "EMPTY", "to": "PRIVATE_CONTRACT_DURABLE", "mutates": true,
+        "failure_state": "PRIVATE_CONTRACT_PUBLISH_FAILED", "cleanup": "remove unpublished temp file and preserve every baseline",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-private-contract-publish"
+      },
+      {
+        "id": "publish-experiment-freeze", "from": "PRIVATE_CONTRACT_DURABLE", "to": "FROZEN", "mutates": true,
+        "failure_state": "FREEZE_PUBLISH_FAILED", "cleanup": "remove unpublished freeze temp and preserve exact private contract",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-freeze-publish"
+      },
+      {
+        "id": "publish-support-dispatches", "from": "FROZEN", "to": "SUPPORT_RUNNING", "mutates": true,
+        "failure_state": "SUPPORT_DISPATCH_PUBLISH_FAILED", "cleanup": "remove unpublished dispatch temp and create no process before durable dispatch",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-support-dispatch-publish"
+      },
+      {
+        "id": "record-support-observations", "from": "SUPPORT_RUNNING", "to": "SUPPORT_COMPLETE", "mutates": true,
+        "failure_state": "INDETERMINATE_AFTER_SUPPORT_DISPATCH", "cleanup": "preserve dispatched prefix clean sandbox workspace and forbid same-identity rerun",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-support-observation-record"
+      },
+      {
+        "id": "publish-support-evidence", "from": "SUPPORT_COMPLETE", "to": "SUPPORT_EVIDENCE_FROZEN", "mutates": true,
+        "failure_state": "SUPPORT_EVIDENCE_PUBLISH_FAILED", "cleanup": "remove unpublished evidence temp and invoke no learner",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-support-evidence-publish"
+      },
+      {
+        "id": "publish-learned-laws", "from": "SUPPORT_EVIDENCE_FROZEN", "to": "LAWS_FROZEN", "mutates": true,
+        "failure_state": "LEARNED_LAW_PUBLISH_FAILED", "cleanup": "remove unpublished law temp and expose no target manifest to predictor",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-learned-law-publish"
+      },
+      {
+        "id": "publish-holdout-receipt", "from": "LAWS_FROZEN", "to": "HOLDOUT_VERIFIED", "mutates": true,
+        "failure_state": "HOLDOUT_PUBLISH_FAILED", "cleanup": "remove unpublished receipt temp and emit no target prediction",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-holdout-publish"
+      },
+      {
+        "id": "publish-target-predictions", "from": "HOLDOUT_VERIFIED", "to": "TARGET_PREDICTIONS_FROZEN", "mutates": true,
+        "failure_state": "PREDICTION_PUBLISH_FAILED", "cleanup": "remove unpublished prediction temp and do not invoke V1 goal adapter",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-target-prediction-publish"
+      },
+      {
+        "id": "publish-independent-verification", "from": "TARGET_PREDICTIONS_FROZEN", "to": "PREDICTIONS_VERIFIED", "mutates": true,
+        "failure_state": "VERIFICATION_PUBLISH_FAILED", "cleanup": "remove unpublished verifier temp and do not convert to V1",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-verification-publish"
+      },
+      {
+        "id": "publish-v1-binding", "from": "PREDICTIONS_VERIFIED", "to": "V1_BOUND", "mutates": true,
+        "failure_state": "V1_BINDING_PUBLISH_FAILED", "cleanup": "remove unpublished binding temp and do not dispatch target",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-v1-binding-publish"
+      },
+      {
+        "id": "record-v1-episode", "from": "V1_BOUND", "to": "TARGET_EPISODE_COMPLETE", "mutates": true,
+        "failure_state": "V1_EPISODE_RECORD_FAILED", "cleanup": "preserve exact V1 journal prefix apply existing no-rerun rule and emit no learned PASS",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-v1-episode-record"
+      },
+      {
+        "id": "publish-ablation-receipt", "from": "TARGET_EPISODE_COMPLETE", "to": "ABLATIONS_COMPLETE", "mutates": true,
+        "failure_state": "ABLATION_PUBLISH_FAILED", "cleanup": "remove unpublished ablation temp clean disposable control stores and emit no learned PASS",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-ablation-publish"
+      },
+      {
+        "id": "record-terminal", "from": "ABLATIONS_COMPLETE", "to": "PASS", "mutates": true,
+        "failure_state": "TERMINAL_RECORD_FAILED", "cleanup": "preserve validated prefix derive no seal and print no learned capability PASS",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "k2-v1-paper", "k2-v1-model", "k2-v1-journal", "k2-v1-oracle", "k2-v1-integration", "learned-paper", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-terminal-record"
+      }
+    ]
+  },
+  "runtime_comparisons": [],
+  "source_checks": [
+    {
+      "id": "law-lab-adapter-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs",
+      "sha256": "27d239929a1978ae6a243311a7f14cd0540c359bda2e7a1d98192064d4524563",
+      "forbidden_effect_patterns": [
+        { "effect": "production_state_mount", "regex": "(--bind|--dev-bind)\\s+(/var/lib/nando-wave|/home/)" },
+        { "effect": "secret_mount", "regex": "(--bind|--ro-bind)\\s+(/run/secrets|\\S*/\\.ssh)" },
+        { "effect": "generated_natural_traffic", "regex": "(/v1/responses|/v2/responses|chat/completions)" },
+        { "effect": "service_control", "regex": "(systemctl|service\\s+(start|stop|restart))" },
+        { "effect": "deployment", "regex": "(ops/remote-backend|deployment-receipt|deploy-remote)" }
+      ]
+    },
+    {
+      "id": "k2-v1-model-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/model.rs",
+      "sha256": "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da",
+      "forbidden_effect_patterns": [
+        { "effect": "k1_registry_mutation", "regex": "k1_registry_mutated\\s*:\\s*true" },
+        { "effect": "phase_memory_mutation", "regex": "phase_memory_mutated\\s*:\\s*true" },
+        { "effect": "package_activation", "regex": "execution_authority_granted\\s*:\\s*true" },
+        { "effect": "network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)" }
+      ]
+    },
+    {
+      "id": "k2-v1-journal-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/journal.rs",
+      "sha256": "545a02b8c8a8a1840291cad4df1110a4e87433285774eceae0df8162ab768cb4",
+      "forbidden_effect_patterns": [
+        { "effect": "production_write", "regex": "(/var/lib/nando-wave|grounded-decision|k1-natural)" },
+        { "effect": "natural_evidence_write", "regex": "(natural|future|certification)[_-](ledger|journal)" },
+        { "effect": "dashboard_change", "regex": "(live_dashboard|control_page|dashboard_html)" },
+        { "effect": "service_control", "regex": "(systemctl|service\\s+(start|stop|restart))" }
+      ]
+    },
+    {
+      "id": "law-lab-worker-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs",
+      "sha256": "68191481c0eaf7e8f35c1bb93846378e1808c8e47d9b845c5b546f2df52c6251",
+      "forbidden_effect_patterns": [
+        { "effect": "production_write", "regex": "(/var/lib/nando-wave|grounded-decision|k1-natural)" }
+      ]
+    },
+    {
+      "id": "operator-learning-cargo-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/Cargo.toml",
+      "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+      "forbidden_effect_patterns": [
+        { "effect": "deployment", "regex": "this-pattern-must-not-match" }
+      ]
+    }
+  ],
+  "tests": [
+    { "id": "fault-private-contract-publish", "kind": "fault_injection", "expected": "no private artifact or journal ordinal publishes and all baselines remain exact" },
+    { "id": "fault-freeze-publish", "kind": "fault_injection", "expected": "private contract remains valid and no support process starts" },
+    { "id": "fault-support-dispatch-publish", "kind": "fault_injection", "expected": "no support process starts without durable exact dispatch" },
+    { "id": "fault-support-observation-record", "kind": "fault_injection", "expected": "dispatched probe remains ineligible for same-identity retry and no law is emitted" },
+    { "id": "fault-support-evidence-publish", "kind": "fault_injection", "expected": "support prefix remains valid and learner is not invoked" },
+    { "id": "fault-learned-law-publish", "kind": "fault_injection", "expected": "learner outcome grants no durable law and target stays withheld" },
+    { "id": "fault-holdout-publish", "kind": "fault_injection", "expected": "no target prediction starts without durable independence receipt" },
+    { "id": "fault-target-prediction-publish", "kind": "fault_injection", "expected": "no V1 goal selection or target execution starts" },
+    { "id": "fault-verification-publish", "kind": "fault_injection", "expected": "unverified learner output cannot convert to V1" },
+    { "id": "fault-v1-binding-publish", "kind": "fault_injection", "expected": "target process remains forbidden" },
+    { "id": "fault-v1-episode-record", "kind": "fault_injection", "expected": "existing V1 crash rule forbids rerun and learned PASS remains absent" },
+    { "id": "fault-ablation-publish", "kind": "fault_injection", "expected": "no learned PASS and disposable controls are cleaned" },
+    { "id": "fault-terminal-record", "kind": "fault_injection", "expected": "validated prefix remains but no terminal PASS or seal exists" },
+    { "id": "public-private-input-fence", "kind": "unit", "expected": "strict learner protocol rejects every private goal mapping holdout selector or expected-output field" },
+    { "id": "dynamic-id-control", "kind": "unit", "expected": "second harness commitment yields different IDs and the same two learned effects while pre-equals-post yields no law" },
+    { "id": "support-provenance-parity", "kind": "parity", "expected": "redaction accepts only exact source pre-work post-work request and receipt tuple" },
+    { "id": "version-space-completeness", "kind": "unit", "expected": "candidate and rejection counts reconcile and exactly one survivor exists per action" },
+    { "id": "independent-verifier-parity", "kind": "parity", "expected": "separate verifier independently reproduces two laws and two complete target manifests" },
+    { "id": "target-holdout-parity", "kind": "parity", "expected": "all target novelty fields are true and target is absent from exact learning stdin" },
+    { "id": "temporal-order-unit", "kind": "unit", "expected": "projector rejects target prediction selection binding or execution before required durable predecessors" },
+    { "id": "dispatch-crash-unit", "kind": "unit", "expected": "restart projects dispatched without observation as ineligible for execution" },
+    { "id": "authority-boundary-unit", "kind": "unit", "expected": "all authority fields are constant false and tampering is rejected" },
+    { "id": "v1-byte-baseline", "kind": "parity", "expected": "seven original baselines plus V1 model journal oracle and integration bytes remain exact" },
+    { "id": "path-fence-parity", "kind": "parity", "expected": "git diff contains only frozen learned capability paths and one module export" },
+    { "id": "terminal-root-parity", "kind": "parity", "expected": "outcome terminal event projection and post-event seal roots are stable and acyclic" },
+    { "id": "cleanup-parity", "kind": "parity", "expected": "all temporary fixture private journal workspace and ablation paths are absent" },
+    { "id": "private-contract-restart-parity", "kind": "parity", "expected": "private artifact canonical bytes and root reopen identically" },
+    { "id": "learner-process-parity", "kind": "parity", "expected": "frozen learner SHA request root canonical output and resource receipt match" },
+    { "id": "learned-to-v1-parity", "kind": "parity", "expected": "every learned prediction exactly binds one unchanged V1 fixture action consequence" },
+    { "id": "journal-restart-parity", "kind": "parity", "expected": "fresh and restarted projections have identical roots states and cross-event identities" },
+    { "id": "v1-episode-parity", "kind": "parity", "expected": "reopened V1 journal outcome and seal bind exactly into learned terminal evidence" },
+    { "id": "goal-oracle-parity", "kind": "parity", "expected": "separate exact oracle accepts selected target and rejects wrong-action target" }
+  ]
+}
