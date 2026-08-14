@@ -56,7 +56,7 @@ pub(crate) mod projection;
 mod selection_authority;
 
 use authority::send_authority_request;
-pub(crate) use authority::{handle_authority_line, recover_authority};
+pub(crate) use authority::{exact_writer_policy_health, handle_authority_line, recover_authority};
 use journal::restore_anchored_scheduler_for;
 use projection::projection_for;
 

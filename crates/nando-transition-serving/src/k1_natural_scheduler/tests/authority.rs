@@ -9,9 +9,9 @@ use crate::k1_natural_scheduler::authority::{
     K1ExactResearchBudgetStateV1, K1ExactWakeSelectionV1, append_and_persist,
     append_payload_authoritative, certification_authorizes_settlement,
     complete_exact_terminal_transaction, exact_research_budget_state_v1, exact_wake_authoritative,
-    exact_wake_selection_v1, read_exact_scheduler_policy, validate_active_protocol_mode_cas,
-    validate_discovery_basis_cas, validate_exact_wake_cas, validate_registry_cas,
-    validate_rollback_reader_schema,
+    exact_wake_selection_v1, exact_writer_policy_health, read_exact_scheduler_policy,
+    validate_active_protocol_mode_cas, validate_discovery_basis_cas, validate_exact_wake_cas,
+    validate_registry_cas, validate_rollback_reader_schema,
 };
 use crate::k1_natural_scheduler::journal::{
     persist_scheduler_event_for, restore_anchored_scheduler_for,
@@ -160,6 +160,35 @@ fn exact_policy_distinguishes_disabled_writer_from_schema_downgrade() {
         Err("K1_AUTHORITY_SCHEMA_DOWNGRADE".to_owned())
     );
     std::fs::remove_dir_all(root_dir).expect("cleanup");
+}
+
+#[test]
+fn exact_policy_health_distinguishes_installation_writer_state_and_invalid_bytes() {
+    let (root_dir, _, _) = test_context();
+    let path = root_dir.join("policy.json");
+    assert_eq!(exact_writer_policy_health(&path).state, "NOT_INSTALLED");
+
+    write_exact_policy(&path, false, "nando.k1-natural-candidate-queue.v4");
+    let off = exact_writer_policy_health(&path);
+    assert_eq!(off.state, "OFF");
+    assert!(off.policy_root_sha256.is_some());
+    assert_eq!(
+        off.minimum_queue_schema.as_deref(),
+        Some("nando.k1-natural-candidate-queue.v4")
+    );
+    assert_eq!(
+        off.minimum_freeze_schema.as_deref(),
+        Some(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8)
+    );
+
+    write_exact_policy(&path, true, "nando.k1-natural-candidate-queue.v4");
+    assert_eq!(exact_writer_policy_health(&path).state, "ON");
+
+    fs::write(&path, b"not-json").expect("invalid policy write");
+    let invalid = exact_writer_policy_health(&path);
+    assert_eq!(invalid.state, "INVALID");
+    assert!(invalid.policy_root_sha256.is_none());
+    fs::remove_dir_all(root_dir).expect("cleanup");
 }
 
 #[test]

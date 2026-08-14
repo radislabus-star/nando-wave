@@ -30,6 +30,14 @@ pub(super) struct K1ExactSchedulerPolicyV1 {
     maximum_readiness_rows_per_wake: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct K1ExactWriterPolicyHealthV1 {
+    pub(crate) state: &'static str,
+    pub(crate) policy_root_sha256: Option<String>,
+    pub(crate) minimum_queue_schema: Option<String>,
+    pub(crate) minimum_freeze_schema: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct K1ExactResearchBudgetStateV1 {
     pub trailing_24h_freezes: u64,
@@ -745,6 +753,37 @@ pub(super) fn read_exact_scheduler_policy(path: &Path) -> Result<K1ExactSchedule
         return Err("k1_exact_writer_inactive".to_owned());
     }
     Ok(policy)
+}
+
+pub(crate) fn exact_writer_policy_health(path: &Path) -> K1ExactWriterPolicyHealthV1 {
+    match fs::metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => K1ExactWriterPolicyHealthV1 {
+            state: "NOT_INSTALLED",
+            policy_root_sha256: None,
+            minimum_queue_schema: None,
+            minimum_freeze_schema: None,
+        },
+        Err(_) => K1ExactWriterPolicyHealthV1 {
+            state: "INVALID",
+            policy_root_sha256: None,
+            minimum_queue_schema: None,
+            minimum_freeze_schema: None,
+        },
+        Ok(_) => match read_exact_scheduler_policy_document(path) {
+            Ok(policy) => K1ExactWriterPolicyHealthV1 {
+                state: if policy.writer_enabled { "ON" } else { "OFF" },
+                policy_root_sha256: Some(policy.policy_root_sha256),
+                minimum_queue_schema: Some(policy.minimum_queue_schema),
+                minimum_freeze_schema: Some(policy.minimum_freeze_schema),
+            },
+            Err(_) => K1ExactWriterPolicyHealthV1 {
+                state: "INVALID",
+                policy_root_sha256: None,
+                minimum_queue_schema: None,
+                minimum_freeze_schema: None,
+            },
+        },
+    }
 }
 
 fn read_exact_scheduler_policy_document(path: &Path) -> Result<K1ExactSchedulerPolicyV1, String> {

@@ -1,0 +1,119 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "nodes": [
+    {
+      "id": "policy_reader",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs",
+        "line": 758,
+        "contains": "pub(crate) fn exact_writer_policy_health("
+      }
+    },
+    {
+      "id": "health_projection",
+      "role": "observer",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 1607,
+        "contains": "async fn health("
+      }
+    },
+    {
+      "id": "policy_health_test",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/k1_natural_scheduler/tests/authority.rs",
+        "line": 166,
+        "contains": "fn exact_policy_health_distinguishes_installation_writer_state_and_invalid_bytes()"
+      }
+    },
+    {
+      "id": "frozen_support_reader",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/identification.rs",
+        "line": 74,
+        "contains": "fn frozen_motif_support_count("
+      }
+    },
+    {
+      "id": "post_freeze_test",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/motif.rs",
+        "line": 1420,
+        "contains": "fn frozen_support_survives_a_growing_post_freeze_disposition_summary()"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "observe-policy",
+      "from": "policy_reader",
+      "relation": "observes",
+      "to": "health_projection",
+      "events": ["policy_health"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 1609,
+        "contains": "let k1_exact_writer = k1_natural_scheduler::exact_writer_policy_health("
+      }
+    },
+    {
+      "id": "prove-policy-health",
+      "from": "health_projection",
+      "relation": "proves",
+      "to": "policy_health_test",
+      "events": ["policy_health_proof"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/lib.rs",
+        "line": 9899,
+        "contains": "assert_eq!(health[\"k1_exact_writer_state\"], \"NOT_INSTALLED\")"
+      }
+    },
+    {
+      "id": "prove-frozen-prefix",
+      "from": "frozen_support_reader",
+      "relation": "proves",
+      "to": "post_freeze_test",
+      "events": ["post_freeze_replay"],
+      "evidence": {
+        "path": "crates/nando-transition-serving/src/k1_natural_scheduler_runtime/evidence/motif.rs",
+        "line": 1482,
+        "contains": "super::super::identification::frozen_support_count(&arena, Some(&grown), &freeze,)"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "policy-health-observation",
+      "event": "policy_health",
+      "kind": "observation",
+      "entry": "policy_reader",
+      "terminal": "health_projection",
+      "required_roles": ["producer", "observer"],
+      "path_cardinality": [
+        {"from": "policy_reader", "to": "health_projection", "min": 1, "max": 1}
+      ]
+    },
+    {
+      "id": "policy-health-proof",
+      "event": "policy_health_proof",
+      "kind": "proof",
+      "entry": "health_projection",
+      "terminal": "policy_health_test",
+      "required_roles": ["observer", "proof_owner"]
+    },
+    {
+      "id": "post-freeze-proof",
+      "event": "post_freeze_replay",
+      "kind": "proof",
+      "entry": "frozen_support_reader",
+      "terminal": "post_freeze_test",
+      "required_roles": ["evidence_owner", "proof_owner"]
+    }
+  ]
+}

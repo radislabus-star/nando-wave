@@ -1417,6 +1417,79 @@ mod tests {
     }
 
     #[test]
+    fn frozen_support_survives_a_growing_post_freeze_disposition_summary() {
+        let arena = (1..=65)
+            .map(|sequence| arena_binding(joined(sequence, if sequence <= 63 { 1 } else { 2 })))
+            .collect::<Vec<_>>();
+        let mut initial = MotifEvidenceAccumulator::new();
+        for (index, binding) in arena.iter().take(64).enumerate() {
+            initial
+                .push_natural(index, binding.joined())
+                .expect("initial observation");
+        }
+        let initial = initial.finish(&arena).expect("initial archive");
+        let mut freeze = freeze_for_support(&initial, 64);
+        let mut frozen_rows = initial
+            .occurrences
+            .iter()
+            .filter(|binding| {
+                binding.row.capture_generation_root_sha256 == freeze.capture_generation_root_sha256
+                    && binding.row.motif_root_sha256 == freeze.candidate_structural_root_sha256
+                    && binding.row.semantic_novelty_signature_root_sha256
+                        == freeze.semantic_novelty_signature_root_sha256
+                    && binding.row.consequence_type == freeze.consequence_type
+                    && binding.row.capture_sequence <= freeze.support_watermark
+            })
+            .map(|binding| binding.row.clone())
+            .collect::<Vec<_>>();
+        frozen_rows.sort_by(|left, right| {
+            left.capture_sequence
+                .cmp(&right.capture_sequence)
+                .then_with(|| left.row_root_sha256.cmp(&right.row_root_sha256))
+        });
+        freeze.complete_topology_manifest_root_sha256 = canonical_json_sha256(&(
+            "nando.k1-motif-complete-topology-manifest.v1",
+            frozen_rows
+                .iter()
+                .map(|row| row.complete_topology_root_sha256.as_str())
+                .collect::<Vec<_>>(),
+        ))
+        .expect("complete topology manifest");
+        freeze.motif_embedding_manifest_root_sha256 = canonical_json_sha256(&(
+            "nando.k1-motif-candidate-embedding-manifest.v1",
+            frozen_rows
+                .iter()
+                .map(|row| row.motif_embedding_manifest_root_sha256.as_str())
+                .collect::<Vec<_>>(),
+        ))
+        .expect("embedding manifest");
+        let frozen_disposition_root = initial.disposition.summary_root_sha256.clone();
+        let frozen_overflow_root = initial.candidate_supports[0]
+            .overflow_manifest_root_sha256
+            .clone();
+
+        let mut resumed = MotifEvidenceAccumulator::resume(initial, &arena).expect("resume");
+        resumed
+            .push_natural(64, arena[64].joined())
+            .expect("post-freeze observation");
+        let grown = resumed.finish(&arena).expect("grown archive");
+
+        assert_ne!(
+            grown.disposition.summary_root_sha256,
+            frozen_disposition_root
+        );
+        assert_ne!(
+            grown.candidate_supports[0].overflow_manifest_root_sha256,
+            frozen_overflow_root
+        );
+        assert_eq!(
+            super::super::identification::frozen_support_count(&arena, Some(&grown), &freeze,)
+                .expect("frozen support remains replayable"),
+            64
+        );
+    }
+
+    #[test]
     fn source_and_occurrence_denominators_and_censors_are_disjoint() {
         let mut empty = joined(4, 4);
         empty.topology.roles.clear();

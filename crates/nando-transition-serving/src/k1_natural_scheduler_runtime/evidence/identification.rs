@@ -78,9 +78,8 @@ fn frozen_motif_support_count(
 ) -> Result<u64, String> {
     let archive = motif_archive.ok_or_else(|| "k1_motif_archive_missing".to_owned())?;
     archive.validate(bindings)?;
-    if archive.disposition.summary_root_sha256 != freeze.motif_disposition_summary_root_sha256
-        || archive.disposition.enumeration_config_root_sha256
-            != freeze.motif_enumeration_config_root_sha256
+    if archive.disposition.enumeration_config_root_sha256
+        != freeze.motif_enumeration_config_root_sha256
     {
         return Err("k1_runtime_frozen_motif_disposition_mismatch".to_owned());
     }
@@ -123,7 +122,7 @@ fn frozen_motif_support_count(
             .collect::<Vec<_>>(),
     ))
     .map_err(str::to_owned)?;
-    let support_receipt = archive
+    archive
         .candidate_supports
         .iter()
         .find(|receipt| {
@@ -136,21 +135,17 @@ fn frozen_motif_support_count(
         .ok_or_else(|| "k1_runtime_frozen_motif_support_receipt_missing".to_owned())?;
     if support.is_empty()
         || support.len() > K1_MAX_SUPPORT_ROWS_V1
-        || support_receipt.retained_rows != u64::try_from(support.len()).unwrap_or(u64::MAX)
-        || support_receipt.retained_manifest_root_sha256 != manifest
-        || support_receipt.overflow_occurrences != freeze.motif_support_overflow_occurrences
-        || support_receipt.overflow_manifest_root_sha256
-            != freeze.motif_support_overflow_manifest_root_sha256
         || manifest != freeze.evidence_manifest_root_sha256
         || complete_topology_manifest != freeze.complete_topology_manifest_root_sha256
         || embedding_manifest != freeze.motif_embedding_manifest_root_sha256
     {
         return Err("k1_runtime_frozen_motif_support_manifest_mismatch".to_owned());
     }
+    let support_count = support.len();
     for binding in support {
         archive.exact_occurrence(bindings, binding)?;
     }
-    Ok(support_receipt.retained_rows)
+    u64::try_from(support_count).map_err(|_| "k1_runtime_frozen_motif_support_count".to_owned())
 }
 
 pub(in crate::k1_natural_scheduler_runtime) fn binding_matches_freeze(

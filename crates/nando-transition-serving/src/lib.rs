@@ -1606,6 +1606,9 @@ fn legacy_ms3_learning_blocker(
 
 async fn health(State(state): State<AppState>) -> Response {
     let policy = policy_status(&state.config);
+    let k1_exact_writer = k1_natural_scheduler::exact_writer_policy_health(
+        &state.config.k1_exact_scheduler_policy_path,
+    );
     let (cache_ready, revision, active_profiles, cache_error) = cache_status(&state);
     let (response_ready, response_revision, response_profiles, response_error) =
         response_cache_status(&state);
@@ -1858,6 +1861,28 @@ async fn health(State(state): State<AppState>) -> Response {
         object.insert(
             "k1_natural_scheduler_enabled".to_owned(),
             Value::Bool(state.config.k1_natural_scheduler_enabled),
+        );
+        object.insert(
+            "k1_exact_writer_state".to_owned(),
+            Value::from(k1_exact_writer.state),
+        );
+        object.insert(
+            "k1_exact_policy_root".to_owned(),
+            k1_exact_writer
+                .policy_root_sha256
+                .map_or(Value::Null, Value::from),
+        );
+        object.insert(
+            "k1_exact_minimum_queue_schema".to_owned(),
+            k1_exact_writer
+                .minimum_queue_schema
+                .map_or(Value::Null, Value::from),
+        );
+        object.insert(
+            "k1_exact_minimum_freeze_schema".to_owned(),
+            k1_exact_writer
+                .minimum_freeze_schema
+                .map_or(Value::Null, Value::from),
         );
         object.insert(
             "remote_evidence".to_owned(),
@@ -9871,6 +9896,10 @@ mod tests {
         assert_eq!(health["learning_health"]["legacy_route"], true);
         assert_eq!(health["learning_health"]["route_enabled"], false);
         assert_eq!(health["k1_natural_scheduler_enabled"], false);
+        assert_eq!(health["k1_exact_writer_state"], "NOT_INSTALLED");
+        assert!(health["k1_exact_policy_root"].is_null());
+        assert!(health["k1_exact_minimum_queue_schema"].is_null());
+        assert!(health["k1_exact_minimum_freeze_schema"].is_null());
         assert_eq!(health["online_collection_miner"]["ready"], false);
 
         for _ in 0..100 {
