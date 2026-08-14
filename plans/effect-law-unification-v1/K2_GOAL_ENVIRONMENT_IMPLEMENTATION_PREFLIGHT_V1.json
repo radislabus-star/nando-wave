@@ -1,0 +1,453 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-goal-environment-source-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": false,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "law-lab-contract-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_contract.rs",
+      "expect": {
+        "size_bytes": 21530,
+        "sha256": "aa81a4642dc5ed1de664165f8f4355e7a8101cb9d91076a2843cf5ef369b50fc",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "law-lab-model-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/model.rs",
+      "expect": {
+        "size_bytes": 41559,
+        "sha256": "fb79ff1faa19bd6bf8fbc42f0268953df8df2d01201b8f5a17b3f6b5bd8cd98f",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "law-lab-adapter-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs",
+      "expect": {
+        "size_bytes": 35625,
+        "sha256": "27d239929a1978ae6a243311a7f14cd0540c359bda2e7a1d98192064d4524563",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "law-lab-worker-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs",
+      "expect": {
+        "size_bytes": 16894,
+        "sha256": "68191481c0eaf7e8f35c1bb93846378e1808c8e47d9b845c5b546f2df52c6251",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "law-lab-manifest-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/manifest.rs",
+      "expect": {
+        "size_bytes": 19322,
+        "sha256": "ed8c0addab192268b5dd6f3bd17a113cee5f70b8db1ca22e8dc643416a113bd8",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "operator-learning-cargo-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/Cargo.toml",
+      "expect": {
+        "size_bytes": 663,
+        "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "s1c-evidence-directory-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3C_CAPTURE_INSTALLATION_ATTEMPT_V1",
+      "expect": {
+        "mode": "0775"
+      }
+    },
+    {
+      "id": "graphify-directory-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/graphify-out",
+      "expect": {
+        "mode": "0775"
+      }
+    },
+    {
+      "id": "paper-contract-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_PREREGISTRATION_V1.md",
+      "expect": {
+        "size_bytes": 21200,
+        "sha256": "d7c47125e63e350b47bbe83d753867de6dde4c6ba48b7fda8e1939387ce61912",
+        "mode": "0664"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "read-frozen-sources",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "create-k2-source-module",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "create-isolated-exact-oracle-binary",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "export-k2-source-module",
+        "kind": "source_file_modify"
+      },
+      {
+        "id": "create-disposable-test-fixtures",
+        "kind": "test_fixture_write"
+      },
+      {
+        "id": "write-test-only-episode-journal",
+        "kind": "test_lab_journal_write"
+      },
+      {
+        "id": "run-existing-sandbox-in-integration-test",
+        "kind": "isolated_test_process_spawn"
+      }
+    ],
+    "forbidden": [
+      "network_access",
+      "production_state_mount",
+      "production_write",
+      "secret_mount",
+      "generated_natural_traffic",
+      "natural_evidence_write",
+      "k1_registry_mutation",
+      "phase_memory_mutation",
+      "package_activation",
+      "service_control",
+      "deployment"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "law-lab-contract-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_contract.rs",
+      "sha256": "aa81a4642dc5ed1de664165f8f4355e7a8101cb9d91076a2843cf5ef369b50fc",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        }
+      ]
+    },
+    {
+      "id": "law-lab-model-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/model.rs",
+      "sha256": "fb79ff1faa19bd6bf8fbc42f0268953df8df2d01201b8f5a17b3f6b5bd8cd98f",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "k1_registry_mutation",
+          "regex": "k1_registry_mutated\\s*:\\s*true"
+        },
+        {
+          "effect": "phase_memory_mutation",
+          "regex": "phase_memory_mutated\\s*:\\s*true"
+        },
+        {
+          "effect": "package_activation",
+          "regex": "package_activated\\s*:\\s*true"
+        }
+      ]
+    },
+    {
+      "id": "law-lab-adapter-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs",
+      "sha256": "27d239929a1978ae6a243311a7f14cd0540c359bda2e7a1d98192064d4524563",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "production_state_mount",
+          "regex": "(--bind|--dev-bind)\\s+(/var/lib/nando-wave|/home/)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(File::create|OpenOptions::new)[^\\n]{0,120}(/var/lib/nando-wave|grounded-decision|k1-natural)"
+        },
+        {
+          "effect": "secret_mount",
+          "regex": "(--bind|--ro-bind)\\s+(/run/secrets|\\S*/\\.ssh)"
+        },
+        {
+          "effect": "generated_natural_traffic",
+          "regex": "(/v1/responses|/v2/responses|chat/completions)"
+        },
+        {
+          "effect": "natural_evidence_write",
+          "regex": "(OpenOptions::new|File::create)[^\\n]{0,120}(future|natural|certification)[_-](ledger|journal)"
+        },
+        {
+          "effect": "service_control",
+          "regex": "(systemctl|service\\s+(start|stop|restart))"
+        },
+        {
+          "effect": "deployment",
+          "regex": "(ops/remote-backend|deployment-receipt|deploy-remote)"
+        }
+      ]
+    },
+    {
+      "id": "law-lab-worker-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs",
+      "sha256": "68191481c0eaf7e8f35c1bb93846378e1808c8e47d9b845c5b546f2df52c6251",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|grounded-decision|k1-natural)[^\\n]{0,120}(File::create|OpenOptions::new)"
+        }
+      ]
+    },
+    {
+      "id": "law-lab-manifest-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/manifest.rs",
+      "sha256": "ed8c0addab192268b5dd6f3bd17a113cee5f70b8db1ca22e8dc643416a113bd8",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "secret_mount",
+          "regex": "(/run/secrets|/home/[^/]+/\\.ssh)"
+        }
+      ]
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "id": "law-lab-contract",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_contract.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "law-lab-contract-baseline"
+    },
+    {
+      "id": "law-lab-model",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/model.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "law-lab-model-baseline"
+    },
+    {
+      "id": "law-lab-adapter",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/adapter.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "law-lab-adapter-baseline"
+    },
+    {
+      "id": "law-lab-worker",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/worker.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "law-lab-worker-baseline"
+    },
+    {
+      "id": "law-lab-manifest",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/law_lab_sandbox/manifest.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "law-lab-manifest-baseline"
+    },
+    {
+      "id": "operator-learning-cargo",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/Cargo.toml",
+      "policy": "no_dependency_change",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "operator-learning-cargo-baseline"
+    },
+    {
+      "id": "s1c-user-evidence",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/S1C3C_CAPTURE_INSTALLATION_ATTEMPT_V1",
+      "policy": "user_owned_read_only",
+      "rollback_policy": "leave_untouched",
+      "baseline_check_id": "s1c-evidence-directory-baseline"
+    },
+    {
+      "id": "graphify-output",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/graphify-out",
+      "policy": "generated_user_owned_read_only",
+      "rollback_policy": "leave_untouched",
+      "baseline_check_id": "graphify-directory-baseline"
+    },
+    {
+      "id": "paper-contract",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_PREREGISTRATION_V1.md",
+      "policy": "frozen_before_implementation",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "paper-contract-baseline"
+    }
+  ],
+  "state_machine": {
+    "initial_state": "EMPTY",
+    "terminal_states": [
+      "PASS",
+      "CONTRACT_PUBLISH_FAILED",
+      "PREDICTION_PUBLISH_FAILED",
+      "PLAN_PUBLISH_FAILED",
+      "DISPATCH_PUBLISH_FAILED",
+      "EXECUTION_RECORD_FAILED",
+      "ORACLE_RECORD_FAILED",
+      "TERMINAL_RECORD_FAILED"
+    ],
+    "steps": [
+      {
+        "id": "publish-contract",
+        "from": "EMPTY",
+        "to": "CONTRACT_FROZEN",
+        "mutates": true,
+        "failure_state": "CONTRACT_PUBLISH_FAILED",
+        "cleanup": "remove unpublished temp file; preserve published prefix",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-contract-publish"
+      },
+      {
+        "id": "publish-predictions",
+        "from": "CONTRACT_FROZEN",
+        "to": "PREDICTIONS_PRECOMMITTED",
+        "mutates": true,
+        "failure_state": "PREDICTION_PUBLISH_FAILED",
+        "cleanup": "remove unpublished temp file; preserve contract event",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-prediction-publish"
+      },
+      {
+        "id": "publish-probe-plan",
+        "from": "PREDICTIONS_PRECOMMITTED",
+        "to": "PROBE_PLANNED",
+        "mutates": true,
+        "failure_state": "PLAN_PUBLISH_FAILED",
+        "cleanup": "remove unpublished temp file; execute nothing",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-plan-publish"
+      },
+      {
+        "id": "publish-dispatch",
+        "from": "PROBE_PLANNED",
+        "to": "PROBE_DISPATCHED",
+        "mutates": true,
+        "failure_state": "DISPATCH_PUBLISH_FAILED",
+        "cleanup": "remove unpublished temp file; process creation remains forbidden",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-dispatch-publish"
+      },
+      {
+        "id": "record-execution",
+        "from": "PROBE_DISPATCHED",
+        "to": "PROBE_EXECUTED",
+        "mutates": true,
+        "failure_state": "EXECUTION_RECORD_FAILED",
+        "cleanup": "preserve dispatched prefix and terminalize ineligible for rerun",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-execution-record"
+      },
+      {
+        "id": "record-oracle",
+        "from": "PROBE_EXECUTED",
+        "to": "OUTCOME_VERIFIED",
+        "mutates": true,
+        "failure_state": "ORACLE_RECORD_FAILED",
+        "cleanup": "preserve exact execution receipt and emit no success claim",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-oracle-record"
+      },
+      {
+        "id": "record-terminal",
+        "from": "OUTCOME_VERIFIED",
+        "to": "PASS",
+        "mutates": true,
+        "failure_state": "TERMINAL_RECORD_FAILED",
+        "cleanup": "preserve verified prefix and emit no terminal PASS projection",
+        "preserves": ["law-lab-contract", "law-lab-model", "law-lab-adapter", "law-lab-worker", "law-lab-manifest", "operator-learning-cargo", "s1c-user-evidence", "graphify-output"],
+        "test_id": "fault-terminal-record"
+      }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "pre-action-order",
+      "statement": "goal decision and predictions are durable before probe dispatch",
+      "test_id": "temporal-order-unit"
+    },
+    {
+      "id": "authority-denied",
+      "statement": "every capability receipt keeps all scientific product and runtime authority flags false",
+      "test_id": "authority-boundary-unit"
+    },
+    {
+      "id": "production-untouched",
+      "statement": "the implementation changes only the new K2 module one isolated oracle binary tests documentation and one lib export",
+      "test_id": "path-fence-parity"
+    },
+    {
+      "id": "dispatched-not-retried",
+      "statement": "a durable dispatched episode without exact receipt cannot execute again",
+      "test_id": "dispatch-crash-unit"
+    },
+    {
+      "id": "fixture-not-science",
+      "statement": "generated capability provenance cannot decode or project as certificate-bound or natural evidence",
+      "test_id": "provenance-negative-unit"
+    },
+    {
+      "id": "terminal-root-acyclic",
+      "statement": "terminal outcome enters the journal before the derived episode seal and neither root depends backward on the seal",
+      "test_id": "terminal-root-parity"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "k2-sandbox-binding-identity",
+      "producer": "K2LawLabBindingV1 canonical digest",
+      "consumer": "sandbox receipt adapter exact request validation",
+      "comparison": "canonical root and request identity parity",
+      "test_id": "sandbox-binding-parity"
+    },
+    {
+      "id": "journal-projection-identity",
+      "producer": "immutable ordinal event writer",
+      "consumer": "deterministic restart projector",
+      "comparison": "canonical event bytes hash chain and state parity",
+      "test_id": "journal-restart-parity"
+    },
+    {
+      "id": "goal-oracle-identity",
+      "producer": "K2GoalEnvelopeV1 expected terminal tree root",
+      "consumer": "K2ExactGoalReceiptV1 terminal tree comparator",
+      "comparison": "exact goal predicate root parity",
+      "test_id": "goal-oracle-parity"
+    }
+  ],
+  "runtime_comparisons": [],
+  "tests": [
+    {"id": "fault-contract-publish", "kind": "fault_injection", "expected": "no ordinal is published and no existing artifact changes"},
+    {"id": "fault-prediction-publish", "kind": "fault_injection", "expected": "contract prefix remains valid and no prediction or probe executes"},
+    {"id": "fault-plan-publish", "kind": "fault_injection", "expected": "prediction prefix remains valid and no probe executes"},
+    {"id": "fault-dispatch-publish", "kind": "fault_injection", "expected": "no process starts without a durable dispatch event"},
+    {"id": "fault-execution-record", "kind": "fault_injection", "expected": "dispatched episode is ineligible for same-identity rerun"},
+    {"id": "fault-oracle-record", "kind": "fault_injection", "expected": "execution receipt remains but no goal or capability PASS is emitted"},
+    {"id": "fault-terminal-record", "kind": "fault_injection", "expected": "verified prefix remains and terminal PASS stays absent"},
+    {"id": "temporal-order-unit", "kind": "unit", "expected": "projector rejects prediction plan or dispatch before required durable predecessor"},
+    {"id": "authority-boundary-unit", "kind": "unit", "expected": "all authority fields are constant false and tampering is rejected"},
+    {"id": "path-fence-parity", "kind": "parity", "expected": "git diff contains no production scheduler serving sandbox or user evidence path"},
+    {"id": "dispatch-crash-unit", "kind": "unit", "expected": "restart projects dispatched without receipt as ineligible for execution"},
+    {"id": "provenance-negative-unit", "kind": "unit", "expected": "fixture and certificate-bound modes cannot cross-validate or cross-promote"},
+    {"id": "sandbox-binding-parity", "kind": "parity", "expected": "adapter accepts only the exact K2-bound Law Lab request and receipt"},
+    {"id": "journal-restart-parity", "kind": "parity", "expected": "fresh and restarted projections have identical roots and states"},
+    {"id": "goal-oracle-parity", "kind": "parity", "expected": "oracle evaluates only exact equality with the frozen expected terminal tree root"},
+    {"id": "terminal-root-parity", "kind": "parity", "expected": "outcome root terminal event root and derived seal root are stable and acyclic"}
+  ]
+}
