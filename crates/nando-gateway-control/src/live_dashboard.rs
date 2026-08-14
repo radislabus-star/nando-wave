@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.08.13-control-v22";
+const DASHBOARD_BUILD: &str = "2026.08.14-control-v23";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -350,8 +350,12 @@ mod tests {
         assert!(html.contains("upstream-вызовов предотвращено"));
         assert!(html.contains("С открытия страницы"));
         assert!(html.contains("Исследовательский статус"));
+        assert!(html.contains("id=\"exact-writer-state\""));
+        assert!(html.contains("id=\"exact-writer-detail\""));
         assert!(html.contains("id=\"k1-transport-state\""));
-        assert!(html.contains("id=\"k1-transport-detail\""));
+        assert!(html.contains("exactWake.exact_unseen_opportunities"));
+        assert!(html.contains("k1.law_2_status"));
+        assert!(!html.contains("laws !== null && laws >= 2"));
         assert!(html.contains("id=\"k1-progress\""));
         assert!(html.contains("id=\"law2-state\""));
         assert!(html.contains("id=\"k1-blocker\""));

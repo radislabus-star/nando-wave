@@ -129,7 +129,7 @@
     <section class="status-section" aria-labelledby="research-title">
       <div class="section-head"><h2 id="research-title">Исследовательский статус</h2><p>Коротко: что доказано и что блокирует следующий переход.</p></div>
       <div class="status-lines">
-        <div class="status-line"><strong>K1 transport</strong><span id="k1-transport-state" class="status-state">—</span><div class="status-copy" id="k1-transport-detail">Проверка bounded authority wire.</div></div>
+        <div class="status-line"><strong>Exact writer</strong><span id="exact-writer-state" class="status-state">—</span><div class="status-copy"><span id="exact-writer-detail">Policy, runtime и immutable generation загружаются.</span> · authority wire <b id="k1-transport-state">—</b></div></div>
         <div class="status-line"><strong>K1 laws</strong><span id="k1-progress" class="status-state">—</span><div class="status-copy">Law #2 <b id="law2-state">—</b> · последний исход <b id="k1-state">—</b>: <span id="k1-blocker">—</span> · готово сейчас <b id="k1-ready">—</b> · следующая generation <b id="k1-next">—</b></div></div>
         <div class="status-line"><strong>S1C-4</strong><span id="s1c4-state" class="status-state">—</span><div class="status-copy"><b id="s1c4-window">—</b> classified · goals before action <b id="s1c4-goals">—</b> · verdict <b id="s1c4-verdict">—</b>. Ожидание не изменит это закрытое окно.</div></div>
         <div class="status-line"><strong>K2 meaning</strong><span id="k2-progress" class="status-state">CLOSED</span><div class="status-copy" id="k2-next">Следующий честный маршрут: отдельная preregistered среда с machine-readable goal до действия.</div></div>
@@ -147,9 +147,22 @@
   const node = id => document.getElementById(id);
   const text = (id, value) => { const target = node(id); if (target) target.textContent = value; };
   const percent = (part, total) => total > 0 ? `${(part * 100 / total).toFixed(2).replace(".", ",")}%` : "0,00%";
+  const exactCount = value => Number.isFinite(value) ? number.format(value) : "—";
+  const schemaVersion = value => {
+    const match = String(value || "").match(/\.v(\d+)$/);
+    return match ? `V${match[1]}` : "—";
+  };
   const localTime = unix => unix > 0 ? new Date(unix * 1000).toLocaleString("ru-RU", {dateStyle:"short",timeStyle:"medium"}) : "watermark unknown";
   const readable = value => ({
     waiting_for_evidence:"ждёт evidence",
+    waiting_for_novel_evidence:"ждёт новое evidence",
+    research_budget_cooldown:"research cooldown",
+    active_generation:"активная generation",
+    active_generation_immutable:"active generation неизменяема",
+    candidate_frozen:"candidate frozen",
+    writer_inactive:"writer выключен",
+    awaiting_independent_future:"ждёт independent future",
+    independent_post_identification_future_pending:"нужен обычный post-freeze outcome",
     no_readiness_pass_candidate:"нет readiness-PASS кандидата",
     acquisition_fail:"acquisition fail",
     selected_role_witness_missing:"capture не сохранил типизированную роль",
@@ -179,6 +192,7 @@
     const s1c = snapshot.s1c4_natural_census || {};
     const k1 = snapshot.k1 || {};
     const k1Transport = snapshot.k1_transport || {};
+    const k1Exact = snapshot.k1_exact || {};
     const discovery = snapshot.discovery || {};
     const safety = snapshot.safety || {};
     sourceGeneratedAt = snapshot.generated_at_unix || 0;
@@ -207,13 +221,24 @@
     const laws = Number.isFinite(k1.law_certificates) ? k1.law_certificates : null;
     const minimum = k1.min_law_certificates || 3;
     const transportPass = k1Transport.bounded_authority_wire === "pass";
+    const exactWake = k1Exact.exact_wake_status || {};
+    const activeGeneration = k1Exact.active_generation || {};
+    const writerState = ["ON", "OFF"].includes(k1Exact.writer_state) ? k1Exact.writer_state : "UNKNOWN";
+    const exactAvailable = k1Exact.available === true;
+    const activeGenerationText = activeGeneration.active === true
+      ? `generation ${exactCount(activeGeneration.generation_sequence)} · ${schemaVersion(activeGeneration.schema)} immutable`
+      : "active generation нет";
+    const exactDetail = exactAvailable
+      ? `policy ${writerState} · ${readable(exactWake.decision)}: ${readable(exactWake.blocker)} · ${activeGenerationText} · новые freeze минимум ${schemaVersion(k1Exact.minimum_freeze_schema)} · exact opportunities ${exactCount(exactWake.exact_unseen_opportunities)} / attempted roots ${exactCount(exactWake.exact_attempted_deterministic_roots)} / legacy unbound ${exactCount(exactWake.legacy_unbound_terminals)}`
+      : `policy ${writerState} · factual runtime projection недоступна`;
+    text("exact-writer-state", writerState);
+    text("exact-writer-detail", exactDetail);
+    node("exact-writer-state")?.classList.toggle("good", writerState === "ON" && exactAvailable);
+    node("exact-writer-state")?.classList.toggle("bad", writerState === "OFF");
     text("k1-transport-state", transportPass ? "PASS" : "PENDING");
     node("k1-transport-state")?.classList.toggle("good", transportPass);
-    text("k1-transport-detail", transportPass
-      ? `generation ${number.format(k1Transport.recovery_generation || 556)} прошла freeze → authority → identifier. Это исправление транспорта, не Law #2.`
-      : "Bounded authority wire ещё не подтверждён завершённой generation.");
     text("k1-progress", laws === null ? "UNKNOWN" : `${number.format(laws)} / ${number.format(minimum)}`);
-    text("law2-state", laws !== null && laws >= 2 ? "PASS" : "НЕ ДОКАЗАН");
+    text("law2-state", k1.law_2_status === "pass" ? "PASS" : k1.law_2_status === "not_proved" ? "НЕ ДОКАЗАН" : "UNKNOWN");
     text("k1-state", readable(discovery.state));
     text("k1-blocker", readable(discovery.blocker));
     text("k1-ready", number.format(discovery.ready_now || 0));

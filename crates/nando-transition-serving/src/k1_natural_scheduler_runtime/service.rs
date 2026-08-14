@@ -88,10 +88,30 @@ fn summary_response(
                     report.queue.rows.iter().map(|row| row.score.readiness_rank),
                 );
                 let latest = report.projection.latest_terminal_verdict.as_ref();
+                let active_generation =
+                    report
+                        .projection
+                        .active_candidate_freeze
+                        .as_ref()
+                        .map(|freeze| {
+                            json!({
+                                "active": true,
+                                "schema": freeze.schema,
+                                "freeze_root_sha256": freeze.freeze_root_sha256,
+                                "generation_sequence": freeze.generation_sequence,
+                                "consequence_type": freeze.consequence_type,
+                                "generator_schema": freeze.generator_schema,
+                                "scheduler_schema": freeze.scheduler_schema,
+                                "future_min_sequence": freeze.future_min_sequence,
+                                "selected_at_unix": freeze.selected_at_unix,
+                                "authority_ready": freeze.authority_ready,
+                                "phase_mutation_allowed": freeze.phase_mutation_allowed,
+                            })
+                        });
                 json_response(
                     StatusCode::OK,
                     json!({
-                        "schema": "nando.k1-natural-scheduler-summary.v1",
+                        "schema": "nando.k1-natural-scheduler-summary.v2",
                         "report_schema": report.schema,
                         "report_root_sha256": report.report_root_sha256,
                         "generated_at_unix": report.generated_at_unix,
@@ -106,6 +126,8 @@ fn summary_response(
                         "active_candidate": report.projection.active_candidate_freeze.is_some(),
                         "latest_verdict": latest.map(|verdict| verdict.verdict),
                         "latest_verdict_blocker": latest.map(|verdict| verdict.blocker.as_str()),
+                        "exact_wake_status": report.exact_wake_status.as_ref(),
+                        "active_generation": active_generation,
                         "authority_ready": report.authority_ready,
                         "phase_mutation_allowed": report.phase_mutation_allowed,
                     }),

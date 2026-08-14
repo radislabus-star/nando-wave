@@ -33,6 +33,7 @@ const LIVE_MINER_REPORT_URL: &str = "http://127.0.0.1:18789/v2/miner/report";
 const HOT_SERVING_HEALTH_URL: &str = "http://127.0.0.1:18789/health/bridge";
 const HOT_SERVING_RUNTIME_HEALTH_URL: &str = "http://127.0.0.1:18789/health";
 const COLD_LEARNING_HEALTH_URL: &str = "http://127.0.0.1:18790/health/bridge";
+const COLD_LEARNING_RUNTIME_HEALTH_URL: &str = "http://127.0.0.1:18790/health";
 const COLD_MS3_FUTURE_APPLICABILITY_URL: &str =
     "http://127.0.0.1:18790/v2/multi-source/ms3-future-applicability";
 const COLD_MS3_GENERATION_REGISTRY_URL: &str =
@@ -1578,10 +1579,11 @@ async fn control_dashboard_snapshot(
     } else {
         read_json(std::path::Path::new(NATURAL_VOCABULARY_CENSUS_PATH))
     };
-    let (live, hot_health, cold_health, ms4_closed_loop, k1_scheduler) = tokio::join!(
+    let (live, hot_health, cold_health, cold_runtime_health, ms4_closed_loop, k1_scheduler) = tokio::join!(
         read_live_miner_report(),
         read_live_json(HOT_SERVING_HEALTH_URL),
         read_live_json(COLD_LEARNING_HEALTH_URL),
+        read_live_json(COLD_LEARNING_RUNTIME_HEALTH_URL),
         read_live_json(COLD_MS4_CLOSED_LOOP_URL),
         read_live_json(COLD_K1_NATURAL_SCHEDULER_SUMMARY_URL),
     );
@@ -1608,8 +1610,10 @@ async fn control_dashboard_snapshot(
         .unwrap_or(&[]);
     let operator_certificates =
         build_operator_certificate_matrix(response_packages, &ms4_closed_loop);
-    let scheduler_summary_available = k1_scheduler.get("schema").and_then(Value::as_str)
-        == Some("nando.k1-natural-scheduler-summary.v1");
+    let scheduler_summary_available = matches!(
+        k1_scheduler.get("schema").and_then(Value::as_str),
+        Some("nando.k1-natural-scheduler-summary.v1" | "nando.k1-natural-scheduler-summary.v2")
+    );
     let catalog_cohorts = if scheduler_summary_available {
         metric_u64(&k1_scheduler, "catalog_cohorts")
     } else {
@@ -1619,6 +1623,7 @@ async fn control_dashboard_snapshot(
     let completed_generations = metric_u64(&k1_scheduler, "completed_generations");
     let bounded_wire_recovered = scheduler_summary_available && completed_generations >= 556;
     let k1_gate = k1_gate_snapshot(&ms4_closed_loop);
+    let k1_exact = k1_exact_snapshot(&cold_runtime_health, &k1_scheduler);
     let economics_false_accepts = metric_u64(economics, "false_accepts");
     let economics_parity = metric_u64(economics, "runtime_parity_mismatches");
     let admission = admission_status(&state.config);
@@ -1720,6 +1725,7 @@ async fn control_dashboard_snapshot(
                 "recovery_generation_completed": bounded_wire_recovered,
                 "scientific_authority": false,
             },
+            "k1_exact": k1_exact,
             "packages": {
                 "active": active_response_package_count(&response_registry),
                 "certificates": operator_certificates,
@@ -2229,6 +2235,7 @@ fn k1_gate_snapshot_from_values(ms4: &Value, durable: Value) -> Value {
         "source": "unavailable",
         "law_certificates": null,
         "min_law_certificates": 3,
+        "law_2_status": "unknown",
         "open": false,
     })
 }
@@ -2236,10 +2243,88 @@ fn k1_gate_snapshot_from_values(ms4: &Value, durable: Value) -> Value {
 fn sourced_k1_gate(gate: K1VocabularyGateV1, source: &str) -> Value {
     let mut value = serde_json::to_value(gate).unwrap_or_else(|_| json!({}));
     if let Some(object) = value.as_object_mut() {
+        let law_2_status = object
+            .get("law_certificates")
+            .and_then(Value::as_u64)
+            .map_or(
+                "unknown",
+                |count| {
+                    if count >= 2 { "pass" } else { "not_proved" }
+                },
+            );
         object.insert("available".to_owned(), Value::Bool(true));
         object.insert("source".to_owned(), Value::String(source.to_owned()));
+        object.insert(
+            "law_2_status".to_owned(),
+            Value::String(law_2_status.to_owned()),
+        );
     }
     value
+}
+
+fn k1_exact_snapshot(cold_health: &Value, scheduler: &Value) -> Value {
+    let writer_state = cold_health
+        .get("k1_exact_writer_state")
+        .and_then(Value::as_str)
+        .filter(|state| matches!(*state, "ON" | "OFF"));
+    let policy_root_sha256 = cold_health
+        .get("k1_exact_policy_root")
+        .and_then(Value::as_str)
+        .filter(|root| valid_dashboard_sha256(root));
+    let summary_v2 = scheduler.get("schema").and_then(Value::as_str)
+        == Some("nando.k1-natural-scheduler-summary.v2");
+    let exact_wake_status = scheduler
+        .get("exact_wake_status")
+        .filter(|status| {
+            status.get("schema").and_then(Value::as_str) == Some("nando.k1-exact-wake-status.v1")
+                && status
+                    .get("status_root_sha256")
+                    .and_then(Value::as_str)
+                    .is_some_and(valid_dashboard_sha256)
+        })
+        .cloned();
+    let active_generation = scheduler
+        .get("active_generation")
+        .filter(|generation| {
+            generation.get("active").and_then(Value::as_bool) == Some(true)
+                && generation
+                    .get("generation_sequence")
+                    .and_then(Value::as_u64)
+                    .is_some_and(|sequence| sequence > 0)
+                && generation
+                    .get("freeze_root_sha256")
+                    .and_then(Value::as_str)
+                    .is_some_and(valid_dashboard_sha256)
+        })
+        .cloned();
+    let available = cold_health.get("ok").and_then(Value::as_bool) == Some(true)
+        && writer_state.is_some()
+        && policy_root_sha256.is_some()
+        && summary_v2
+        && exact_wake_status.is_some();
+
+    json!({
+        "available": available,
+        "writer_state": writer_state.unwrap_or("UNKNOWN"),
+        "policy_root_sha256": policy_root_sha256.unwrap_or(""),
+        "minimum_queue_schema": cold_health
+            .get("k1_exact_minimum_queue_schema")
+            .and_then(Value::as_str),
+        "minimum_freeze_schema": cold_health
+            .get("k1_exact_minimum_freeze_schema")
+            .and_then(Value::as_str),
+        "summary_generated_at_unix": scheduler
+            .get("generated_at_unix")
+            .and_then(Value::as_u64),
+        "exact_wake_status": exact_wake_status,
+        "active_generation": active_generation,
+    })
+}
+
+fn valid_dashboard_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && value.bytes().any(|byte| byte != b'0')
 }
 
 fn active_response_package_count(registry: &Value) -> u64 {
@@ -2800,6 +2885,7 @@ mod tests {
         assert_eq!(snapshot["available"], true);
         assert_eq!(snapshot["source"], "durable_operator_certification_ledger");
         assert_eq!(snapshot["law_certificates"], 0);
+        assert_eq!(snapshot["law_2_status"], "not_proved");
 
         let gate = ledger.k1_vocabulary_gate().expect("empty gate");
         let live = k1_gate_snapshot_from_values(&json!({"k1_vocabulary_gate": gate}), Value::Null);
@@ -2810,6 +2896,62 @@ mod tests {
             k1_gate_snapshot_from_values(&json!({"k1_vocabulary_gate": null}), Value::Null);
         assert_eq!(unavailable["available"], false);
         assert!(unavailable["law_certificates"].is_null());
+        assert_eq!(unavailable["law_2_status"], "unknown");
+    }
+
+    #[test]
+    fn dashboard_exact_projection_keeps_runtime_and_proof_authority_separate() {
+        let cold_health = json!({
+            "ok": true,
+            "k1_exact_writer_state": "ON",
+            "k1_exact_policy_root": "1111111111111111111111111111111111111111111111111111111111111111",
+            "k1_exact_minimum_queue_schema": "nando.k1-natural-candidate-queue.v4",
+            "k1_exact_minimum_freeze_schema": "nando.k1-natural-candidate-freeze.v8",
+        });
+        let scheduler = json!({
+            "schema": "nando.k1-natural-scheduler-summary.v2",
+            "generated_at_unix": 1_786_690_000,
+            "exact_wake_status": {
+                "schema": "nando.k1-exact-wake-status.v1",
+                "status_root_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "decision": "active_generation",
+                "blocker": "active_generation_immutable",
+                "readiness_pass_rows": null,
+                "exact_unseen_opportunities": null,
+                "exact_attempted_deterministic_roots": null,
+                "legacy_unbound_terminals": null,
+                "trailing_24h_freezes": 0,
+                "next_eligible_at_unix": null,
+                "authority_ready": false,
+            },
+            "active_generation": {
+                "active": true,
+                "schema": "nando.k1-natural-candidate-freeze.v6",
+                "freeze_root_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+                "generation_sequence": 606,
+                "consequence_type": "scalar",
+            },
+        });
+
+        let snapshot = k1_exact_snapshot(&cold_health, &scheduler);
+        assert_eq!(snapshot["available"], true);
+        assert_eq!(snapshot["writer_state"], "ON");
+        assert_eq!(
+            snapshot["exact_wake_status"]["decision"],
+            "active_generation"
+        );
+        assert_eq!(snapshot["active_generation"]["generation_sequence"], 606);
+        assert_eq!(
+            snapshot["active_generation"]["schema"],
+            "nando.k1-natural-candidate-freeze.v6"
+        );
+        assert!(snapshot.get("law_2_status").is_none());
+
+        let stale = k1_exact_snapshot(
+            &cold_health,
+            &json!({"schema":"nando.k1-natural-scheduler-summary.v1"}),
+        );
+        assert_eq!(stale["available"], false);
     }
 
     #[test]
