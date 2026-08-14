@@ -1,0 +1,91 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k1-exact-experiment-opportunity-p6-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"scheduler-wire-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs","expect":{"size_bytes":31094,"sha256":"c510dc7afcf45853856e79d13f0705c8cefd87999dcb6dda3a738d6119a2bbc7","mode":"0664"}},
+    {"id":"scheduler-journal-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/journal.rs","expect":{"size_bytes":16974,"sha256":"8bfbe5a41c5e97b69356be0facd50bd354c9847acf88914c34bfd03fa4b5b001","mode":"0664"}},
+    {"id":"scheduler-authority-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/authority.rs","expect":{"size_bytes":54641,"sha256":"98b3cfd1dc60f70b838134ddcb9b3aec4a6cb082323b3d8d53aad07a37a8d647","mode":"0664"}},
+    {"id":"freeze-model-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/freeze.rs","expect":{"size_bytes":50379,"sha256":"3799d020a90a90cac360d8b88d79ba9f5972db7c1686cc9719159d81a219c0cc","mode":"0664"}},
+    {"id":"queue-model-source","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/multi_source/k1_natural_scheduler_v1/model/queue.rs","expect":{"size_bytes":23044,"sha256":"3bc155effc4ffd08f580a75f72f2f67cae8eed1c8fdc41e9ae93061dc2d74447","mode":"0664"}},
+    {"id":"production-ledger-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-ledger-v1.json","expect":{"size_bytes":2246130,"sha256":"00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362","mode":"0640"}},
+    {"id":"production-anchor-copy","kind":"file","path":"/tmp/k1-terminal-failure-quotient-v1-baseline-B2zz2fwF/k1-epistemic-scheduler-anchor-v1.json","expect":{"size_bytes":576,"sha256":"882fb350544622c7f2e616eb5157e442379d7549bc286cbdf58c09fd55e4c197","mode":"0664"}},
+    {"id":"p5-verification","kind":"file","path":"/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P5/implementation-verification-2026-08-14.md","expect":{"size_bytes":3737,"sha256":"e8a82b4420c33b4bf339edeb916e031b6b84ba7f98a4bf55425f025add7882b9","mode":"0664"}}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"read-historical-production-copy","kind":"filesystem_read"},
+      {"id":"write-test-byte-fixtures","kind":"repository_test_fixture"},
+      {"id":"run-isolated-restart-matrix","kind":"temporary_state_mutation"},
+      {"id":"publish-test-only-compatibility-receipt","kind":"repository_document_write"}
+    ],
+    "forbidden": [
+      "production_deployment", "production_state_write", "generated_traffic", "synthetic_fixture",
+      "test_fixture_as_scientific_evidence", "law_promotion", "phase_mutation",
+      "ledger_rewrite", "legacy_terminal_backfill", "pre_phase_a_rollback_after_v8",
+      "hot_restart", "nginx_restart", "connector_restart"
+    ]
+  },
+  "source_checks": [
+    {"id":"reader-guard","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/mod.rs","sha256":"c510dc7afcf45853856e79d13f0705c8cefd87999dcb6dda3a738d6119a2bbc7","forbidden_effect_patterns":[
+      {"effect":"law_promotion","regex":"promote_law_2"},
+      {"effect":"phase_mutation","regex":"phase_mutation_allowed\\s*:\\s*true"},
+      {"effect":"legacy_terminal_backfill","regex":"backfill_legacy_terminal\\s*\\("},
+      {"effect":"production_deployment","regex":"/var/lib/nando-wave/deployments"},
+      {"effect":"generated_traffic","regex":"generate_(synthetic|targeted)_traffic\\s*\\("},
+      {"effect":"synthetic_fixture","regex":"write_(synthetic|generated)_fixture\\s*\\("},
+      {"effect":"test_fixture_as_scientific_evidence","regex":"fixture_(law|evidence)_authority\\s*:\\s*true"},
+      {"effect":"hot_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*transition-serving"},
+      {"effect":"nginx_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*nginx"},
+      {"effect":"connector_restart","regex":"systemctl[^\\n]*(restart|stop)[^\\n]*connector"}
+    ]},
+    {"id":"journal-guard","path":"/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-transition-serving/src/k1_natural_scheduler/journal.rs","sha256":"8bfbe5a41c5e97b69356be0facd50bd354c9847acf88914c34bfd03fa4b5b001","forbidden_effect_patterns":[
+      {"effect":"ledger_rewrite","regex":"rewrite_scheduler_ledger\\s*\\("},
+      {"effect":"production_state_write","regex":"/var/lib/nando-wave"},
+      {"effect":"pre_phase_a_rollback_after_v8","regex":"rollback_to_pre_v8\\s*\\("}
+    ]}
+  ],
+  "state_machine": {
+    "initial_state":"P5_IMPLEMENTED",
+    "terminal_states":["P6_IMPLEMENTATION_READY","P6_COMPATIBILITY_VETO","P6_CRASH_RECOVERED","P6_ROLLBACK_VETO"],
+    "steps":[
+      {"id":"legacy-byte-matrix","from":"P5_IMPLEMENTED","to":"LEGACY_BYTES_PASS","mutates":false,"failure_state":"P6_COMPATIBILITY_VETO","cleanup":"preserve failing fixture and exact byte diff; production untouched","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"legacy-byte-matrix"},
+      {"id":"phase-a-reader","from":"LEGACY_BYTES_PASS","to":"PHASE_A_READER_PASS","mutates":false,"failure_state":"P6_COMPATIBILITY_VETO","cleanup":"writer remains off and isolated fixture remains diagnostic only","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"phase-a-v8-reader"},
+      {"id":"fault-matrix","from":"PHASE_A_READER_PASS","to":"CRASH_MATRIX_PASS","mutates":true,"failure_state":"P6_CRASH_RECOVERED","cleanup":"restore only old valid or new complete temporary prefix and preserve diagnostic","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"fault-matrix"},
+      {"id":"rollback-fence","from":"CRASH_MATRIX_PASS","to":"P6_IMPLEMENTATION_READY","mutates":false,"failure_state":"P6_ROLLBACK_VETO","cleanup":"reject rollback target and preserve V8 suffix and newest anchor","preserves":["scheduler-ledger-prefix","scheduler-anchor"],"test_id":"rollback-fence"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id":"scheduler-ledger-prefix","path":"/var/lib/nando-wave/transition/multi-source-live-v2/ms4-closed-loop-v1/k1-epistemic-scheduler-ledger-v1.json","policy":"append_only_suffix","rollback_policy":"preserve_existing_and_natural_suffix","cursor_policy":"freeze_existing_records_only","baseline_check_id":"production-ledger-copy"},
+    {"id":"scheduler-anchor","path":"/var/lib/nando-wave/verification/20260810-motif-ordering/k1-epistemic-scheduler-anchor-v1.json","policy":"monotonic_external_anchor","rollback_policy":"never restore an older revision over a V8 suffix","cursor_policy":"read frozen production copy only","baseline_check_id":"production-anchor-copy"}
+  ],
+  "identity_contracts": [
+    {"id":"legacy-byte-identity","producer":"frozen Queue V1-V3 and Freeze V1-V7 fixture bytes","consumer":"Phase A reader decode validate re-encode","comparison":"exact bytes schema roots and projection","test_id":"legacy-byte-matrix"},
+    {"id":"v8-reader-identity","producer":"isolated Queue V4 Freeze V8 signed suffix","consumer":"Phase A writer-off reader and runtime binding","comparison":"exact freeze root topology root binding root ledger root and zero new events","test_id":"phase-a-v8-reader"},
+    {"id":"crash-prefix-identity","producer":"temporary signed prefix before each fault point","consumer":"fresh recovery after fault","comparison":"old valid prefix or new complete valid prefix only","test_id":"crash-prefix-parity"},
+    {"id":"rollback-target-identity","producer":"first durable V8 suffix and anchor","consumer":"rollback selector","comparison":"Phase A commit allowed pre-Phase-A commit rejected suffix and anchor unchanged","test_id":"rollback-fence"}
+  ],
+  "runtime_comparisons": [
+    {"id":"production-copy-reader","source":"frozen production ledger copy with 586 natural generations and Freeze V1-V6","comparison":"exact_stable_projection","stable_fields":["input_bytes","revision","ledger_root","event_roots","freeze_roots","legacy_attempt_count"],"expected_to_change_fields":[],"observed_not_compared_fields":["temporary_paths","test_duration"],"reason":"P6 proves reader compatibility without production access","test_id":"production-copy-byte-parity"}
+  ],
+  "invariants": [
+    {"id":"all-reader-versions","statement":"Queue V1 through V3 and Freeze V1 through V7 remain byte exact while Queue V4 Freeze V8 are readable with writer off","test_id":"legacy-byte-matrix"},
+    {"id":"v8-runtime-binding","statement":"Freeze V8 uses the same exact motif topology and program binding domain as Freeze V6 and V7","test_id":"phase-a-v8-reader"},
+    {"id":"active-legacy-completion","statement":"an active legacy generation completes without rewrite conversion or V8 backfill","test_id":"active-legacy-generation"},
+    {"id":"crash-atomic-prefix","statement":"every tested publication fault restores old valid or new complete valid prefix and never a mixed prefix","test_id":"fault-matrix"},
+    {"id":"post-v8-rollback","statement":"after first V8 append the only valid rollback target is a recorded Phase A compatible reader","test_id":"rollback-fence"},
+    {"id":"fixture-boundary","statement":"compatibility fixtures cannot enter discovery evidence readiness LawCertificate or K1 counts","test_id":"claim-boundary"}
+  ],
+  "tests": [
+    {"id":"legacy-byte-matrix","kind":"parity","expected":"Queue V1-V3 Freeze V1-V7 decode validate and re-encode byte exactly"},
+    {"id":"production-copy-byte-parity","kind":"parity","expected":"frozen 2.2 MB production ledger decodes and re-encodes exactly with the same roots and revision"},
+    {"id":"phase-a-v8-reader","kind":"parity","expected":"writer-off reader consumes V8 signed suffix and runtime derives exact motif binding without append"},
+    {"id":"active-legacy-generation","kind":"parity","expected":"active legacy freeze completes unchanged and contributes only a legacy-unbound terminal"},
+    {"id":"fault-matrix","kind":"fault_injection","expected":"object manifest journal fsync directory fsync anchor diagnostic verdict and cache boundaries recover to one complete prefix"},
+    {"id":"crash-prefix-parity","kind":"parity","expected":"fresh restore after every injected fault equals the old valid or new complete signed prefix exactly"},
+    {"id":"rollback-fence","kind":"parity","expected":"pre-Phase-A target is rejected after V8 while Phase A target is accepted"},
+    {"id":"claim-boundary","kind":"unit","expected":"production Law 2 K1 phase and natural evidence remain unchanged"}
+  ]
+}

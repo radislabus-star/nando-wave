@@ -406,9 +406,13 @@ pub(super) fn exact_wake_authoritative(
     let mut scheduler = restore_anchored_scheduler_for(config, request.lane)?;
     let now_unix = crate::unix_now();
     let policy = match read_exact_scheduler_policy(&sources.scheduler_policy_path) {
-        Ok(policy) => policy,
+        Ok(policy) => {
+            validate_rollback_reader_schema(&scheduler, &policy.minimum_freeze_schema)?;
+            policy
+        }
         Err(error) if error == "k1_exact_writer_inactive" => {
             let policy = read_exact_scheduler_policy_document(&sources.scheduler_policy_path)?;
+            validate_rollback_reader_schema(&scheduler, &policy.minimum_freeze_schema)?;
             let budget = exact_research_budget_state_v1(&scheduler, &policy, now_unix)?;
             return exact_wake_result(
                 &scheduler,
@@ -1031,7 +1035,9 @@ pub(super) fn validate_discovery_basis_cas(
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             natural_t1_discovery_basis_root_v3().map_err(str::to_owned)?
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7 => {
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 => {
             natural_t1_discovery_basis_root_v4().map_err(str::to_owned)?
         }
         _ => return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned()),
@@ -1040,6 +1046,24 @@ pub(super) fn validate_discovery_basis_cas(
         return Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned());
     }
     Ok(current)
+}
+
+pub(super) fn validate_rollback_reader_schema(
+    ledger: &K1SchedulerLedgerV1,
+    minimum_freeze_schema: &str,
+) -> Result<(), String> {
+    ledger.validate().map_err(str::to_owned)?;
+    let v8_suffix_exists = ledger.events.iter().any(|event| {
+        matches!(
+            &event.payload,
+            K1SchedulerEventPayloadV1::CandidateFreeze(freeze)
+                if freeze.schema == K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
+        )
+    });
+    if v8_suffix_exists && minimum_freeze_schema != K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 {
+        return Err("k1_post_v8_rollback_reader_forbidden".to_owned());
+    }
+    Ok(())
 }
 
 pub(super) fn validate_active_protocol_mode_cas(

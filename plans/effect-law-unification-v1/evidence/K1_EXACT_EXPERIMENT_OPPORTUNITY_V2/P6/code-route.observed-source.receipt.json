@@ -1,0 +1,228 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K1_EXACT_EXPERIMENT_OPPORTUNITY_V2/P6/code-route.observed-source.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "node_count": 10,
+  "edge_count": 6,
+  "routes": [
+    {
+      "id": "compatibility-execution",
+      "event": "authority_wake",
+      "kind": "execution",
+      "entry": "wake_authority",
+      "via": [],
+      "terminal": "rollback_fence",
+      "path_count": 1,
+      "paths": [
+        [
+          "wake_authority",
+          "rollback_fence"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "rollback_fence"
+        ],
+        "authorization_owner": [
+          "wake_authority"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "wake_authority",
+          "to": "rollback_fence",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "wake_authority",
+              "rollback_fence"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reader-authority",
+      "event": "reader_authority",
+      "kind": "authority",
+      "entry": "policy_reader",
+      "via": [],
+      "terminal": "rollback_fence",
+      "path_count": 1,
+      "paths": [
+        [
+          "policy_reader",
+          "rollback_fence"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "policy_reader"
+        ],
+        "evidence_owner": [
+          "rollback_fence"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "policy_reader",
+          "to": "rollback_fence",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "policy_reader",
+              "rollback_fence"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legacy-proof",
+      "event": "legacy_compatibility",
+      "kind": "proof",
+      "entry": "topology_reader",
+      "via": [],
+      "terminal": "production_copy_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "topology_reader",
+          "production_copy_test"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "production_copy_test"
+        ],
+        "producer": [
+          "topology_reader"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "v8-proof",
+      "event": "v8_binding",
+      "kind": "proof",
+      "entry": "binding_reader",
+      "via": [],
+      "terminal": "v8_parity_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "binding_reader",
+          "v8_parity_test"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "binding_reader"
+        ],
+        "proof_owner": [
+          "v8_parity_test"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "rollback-proof",
+      "event": "rollback_authority",
+      "kind": "proof",
+      "entry": "rollback_fence",
+      "via": [],
+      "terminal": "rollback_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "rollback_fence",
+          "rollback_test"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "rollback_fence"
+        ],
+        "proof_owner": [
+          "rollback_test"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "archive-proof",
+      "event": "archive_recovery",
+      "kind": "proof",
+      "entry": "archive_reader",
+      "via": [],
+      "terminal": "archive_fault_test",
+      "path_count": 1,
+      "paths": [
+        [
+          "archive_reader",
+          "archive_fault_test"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "archive_fault_test"
+        ],
+        "evidence_owner": [
+          "archive_reader"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "reader_authority": {
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "rollback_fence"
+      ],
+      "authorization_owner": [],
+      "render_owner": [],
+      "mutation_owner": [],
+      "candidate_rank_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 16,
+    "verified": 16,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

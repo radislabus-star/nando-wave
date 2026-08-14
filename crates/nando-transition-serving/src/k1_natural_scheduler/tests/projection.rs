@@ -1,7 +1,12 @@
 use super::*;
 use crate::k1_natural_scheduler::authority::append_and_persist;
-use crate::k1_natural_scheduler::journal::restore_anchored_scheduler_for;
+use crate::k1_natural_scheduler::journal::{encode_hex, restore_anchored_scheduler_for};
 use crate::k1_natural_scheduler::projection::exact_attempt_index_for;
+use sha2::{Digest, Sha256};
+
+const P6_PRODUCTION_LEDGER_SHA256: &str =
+    "00e44ee2c9127c71231bb2b413500fbe1a4693e1c834c5cf061f60c8df8cd362";
+const P6_PRODUCTION_LEDGER_BYTES: usize = 2_246_130;
 
 fn acquisition_fail(
     freeze: &K1NaturalCandidateFreezeV1,
@@ -52,6 +57,93 @@ fn legacy_terminal_is_counted_but_never_becomes_an_exact_attempt() {
     let index = exact_attempt_index_for(&ledger).expect("index");
     assert!(index.deterministic_attempts.is_empty());
     assert_eq!(index.legacy_unbound_terminals, 1);
+}
+
+#[test]
+fn frozen_production_copy_is_byte_exact_and_preserves_active_legacy_generation() {
+    let Some(path) = std::env::var_os("NANDO_K1_P6_PRODUCTION_LEDGER_COPY") else {
+        return;
+    };
+    let bytes = fs::read(path).expect("frozen production ledger copy");
+    assert_eq!(bytes.len(), P6_PRODUCTION_LEDGER_BYTES);
+    assert_eq!(
+        encode_hex(&Sha256::digest(&bytes)),
+        P6_PRODUCTION_LEDGER_SHA256
+    );
+
+    let ledger: K1SchedulerLedgerV1 =
+        serde_json::from_slice(&bytes).expect("decode production ledger copy");
+    ledger.validate().expect("validate production ledger copy");
+    assert_eq!(
+        serde_json::to_vec(&ledger).expect("re-encode ledger"),
+        bytes
+    );
+    assert_eq!(ledger.revision, 1_174);
+
+    let freeze_counts = ledger
+        .events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            K1SchedulerEventPayloadV1::CandidateFreeze(freeze) => Some(freeze.schema.as_str()),
+            _ => None,
+        })
+        .fold(std::collections::BTreeMap::new(), |mut counts, schema| {
+            *counts.entry(schema.to_owned()).or_insert(0_u64) += 1;
+            counts
+        });
+    assert_eq!(
+        freeze_counts,
+        std::collections::BTreeMap::from([
+            (K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V1.to_owned(), 40),
+            (K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V2.to_owned(), 37),
+            (K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V3.to_owned(), 8),
+            (K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4.to_owned(), 37),
+            (K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5.to_owned(), 32),
+            (K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6.to_owned(), 432),
+        ])
+    );
+    let active = ledger
+        .active_candidate_freeze()
+        .expect("active legacy generation");
+    assert_eq!(active.schema, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6);
+    assert_eq!(active.generation_sequence, 586);
+    assert_eq!(
+        active.freeze_root_sha256,
+        "685ead18cde7fa40330a743e474758b5ee0436115730418903d7c6fde94afadd"
+    );
+    let index = exact_attempt_index_for(&ledger).expect("legacy exact index");
+    assert!(index.deterministic_attempts.is_empty());
+    assert_eq!(index.legacy_unbound_terminals, 585);
+
+    let prefix = ledger.events.clone();
+    let mut completed = ledger;
+    let active = completed
+        .active_candidate_freeze()
+        .expect("active generation")
+        .clone();
+    completed
+        .append(K1SchedulerEventPayloadV1::TerminalVerdict(Box::new(
+            K1GenerationTerminalVerdictV1::seal(
+                active.freeze_root_sha256.clone(),
+                None,
+                Vec::new(),
+                vec![active.freeze_root_sha256],
+                K1GenerationVerdictClassV1::AcquisitionFail,
+                "bounded_acquisition_failed".to_owned(),
+                active.selected_at_unix.saturating_add(1),
+                None,
+            )
+            .expect("legacy terminal"),
+        )))
+        .expect("complete active legacy generation");
+    assert_eq!(&completed.events[..prefix.len()], prefix.as_slice());
+    assert!(completed.active_candidate_freeze().is_none());
+    assert_eq!(
+        exact_attempt_index_for(&completed)
+            .expect("completed legacy index")
+            .legacy_unbound_terminals,
+        586
+    );
 }
 
 #[test]

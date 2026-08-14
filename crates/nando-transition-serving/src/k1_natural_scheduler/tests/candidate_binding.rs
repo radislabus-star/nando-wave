@@ -6,7 +6,8 @@ use nando_operator_kernel::{
     ResponseProgram, ResponseValueSelector, ValueProjectionFormat, canonical_json_sha256,
 };
 use nando_operator_learning::multi_source::{
-    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6, pre_action_t1_binding_root,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7,
+    K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8, pre_action_t1_binding_root,
     source_neutral_topology_motifs_v1,
 };
 
@@ -122,12 +123,19 @@ fn collection_program() -> ResponseProgram {
     )
 }
 
-fn freeze_for_motif(motif_root_sha256: String) -> K1NaturalCandidateFreezeV1 {
+fn freeze_for_motif_with_schema(
+    schema: &str,
+    motif_root_sha256: String,
+) -> K1NaturalCandidateFreezeV1 {
     let mut freeze = candidate_freeze();
-    freeze.schema = K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6.to_owned();
+    freeze.schema = schema.to_owned();
     freeze.candidate_structural_root_sha256 = motif_root_sha256.clone();
     freeze.source_neutral_topology_root_sha256 = motif_root_sha256;
     freeze
+}
+
+fn freeze_for_motif(motif_root_sha256: String) -> K1NaturalCandidateFreezeV1 {
+    freeze_for_motif_with_schema(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6, motif_root_sha256)
 }
 
 #[test]
@@ -180,4 +188,38 @@ fn v6_candidate_binding_seals_the_exact_embedding_when_all_roles_fit() {
         binding,
         pre_action_t1_binding_root(&program, &topology).expect("ambient binding")
     );
+}
+
+#[test]
+fn v8_candidate_binding_is_exactly_the_v6_v7_motif_domain() {
+    let topology = ambient_topology();
+    let motif = source_neutral_topology_motifs_v1(&topology)
+        .expect("motif enumeration")
+        .into_iter()
+        .find(|motif| {
+            motif
+                .embeddings
+                .iter()
+                .any(|embedding| embedding.local_role_ids == vec![1, 2, 3])
+        })
+        .expect("full connected motif");
+    let program = collection_program();
+
+    let roots = [
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7,
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8,
+    ]
+    .map(|schema| {
+        let freeze = freeze_for_motif_with_schema(schema, motif.motif_root_sha256.clone());
+        assert_eq!(
+            candidate_topology_root(&freeze, &topology).expect("candidate topology"),
+            motif.motif_root_sha256
+        );
+        candidate_program_binding_root(&freeze, &program, &topology)
+            .expect("candidate motif binding")
+    });
+
+    assert_eq!(roots[0], roots[1]);
+    assert_eq!(roots[1], roots[2]);
 }

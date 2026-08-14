@@ -640,14 +640,14 @@ pub(crate) fn candidate_topology_root(
         K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V4 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V5 => {
             source_neutral_topology_quotient_root_v2(topology).map_err(str::to_owned)
         }
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7 => {
-            source_neutral_topology_motifs_v1(topology)
-                .map_err(str::to_owned)?
-                .into_iter()
-                .find(|motif| motif.motif_root_sha256 == freeze.source_neutral_topology_root_sha256)
-                .map(|motif| motif.motif_root_sha256)
-                .ok_or_else(|| "k1_candidate_motif_topology_mismatch".to_owned())
-        }
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+        | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8 => source_neutral_topology_motifs_v1(topology)
+            .map_err(str::to_owned)?
+            .into_iter()
+            .find(|motif| motif.motif_root_sha256 == freeze.source_neutral_topology_root_sha256)
+            .map(|motif| motif.motif_root_sha256)
+            .ok_or_else(|| "k1_candidate_motif_topology_mismatch".to_owned()),
         _ => Err("k1_candidate_topology_schema_unsupported".to_owned()),
     }
 }
@@ -659,7 +659,9 @@ pub(crate) fn candidate_program_binding_root(
 ) -> Result<String, String> {
     if matches!(
         freeze.schema.as_str(),
-        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6 | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+        K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V6
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7
+            | K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8
     ) {
         if freeze.candidate_structural_root_sha256 != freeze.source_neutral_topology_root_sha256 {
             return Err("k1_candidate_motif_identity_mismatch".to_owned());

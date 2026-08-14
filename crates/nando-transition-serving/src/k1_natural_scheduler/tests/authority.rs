@@ -11,6 +11,7 @@ use crate::k1_natural_scheduler::authority::{
     complete_exact_terminal_transaction, exact_research_budget_state_v1, exact_wake_authoritative,
     exact_wake_selection_v1, read_exact_scheduler_policy, validate_active_protocol_mode_cas,
     validate_discovery_basis_cas, validate_exact_wake_cas, validate_registry_cas,
+    validate_rollback_reader_schema,
 };
 use crate::k1_natural_scheduler::journal::{
     persist_scheduler_event_for, restore_anchored_scheduler_for,
@@ -57,10 +58,91 @@ fn write_exact_policy(path: &Path, writer_enabled: bool, queue: &str) {
 #[test]
 fn authority_rejects_a_valid_freeze_bound_to_an_uninstalled_discovery_basis() {
     validate_discovery_basis_cas(&candidate_freeze()).expect("installed discovery basis");
+    validate_discovery_basis_cas(&exact_candidate_freeze(1)).expect("installed V8 discovery basis");
     assert_eq!(
         validate_discovery_basis_cas(&candidate_freeze_with_basis(root(999))),
         Err("k1_candidate_freeze_discovery_basis_cas_failed".to_owned())
     );
+}
+
+#[test]
+fn first_v8_suffix_permanently_fences_pre_phase_a_readers() {
+    let mut ledger = K1SchedulerLedgerV1::empty().expect("ledger");
+    validate_rollback_reader_schema(&ledger, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7)
+        .expect("legacy-only prefix accepts legacy reader");
+
+    ledger
+        .append(K1SchedulerEventPayloadV1::CandidateFreeze(
+            exact_candidate_freeze(1),
+        ))
+        .expect("V8 suffix");
+    assert_eq!(
+        validate_rollback_reader_schema(&ledger, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7),
+        Err("k1_post_v8_rollback_reader_forbidden".to_owned())
+    );
+    validate_rollback_reader_schema(&ledger, K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V8)
+        .expect("Phase A reader remains valid");
+}
+
+#[test]
+fn writer_off_wake_still_enforces_the_v8_reader_fence() {
+    let (root_dir, mut config, signing_key) = test_context();
+    let policy_path = root_dir.join("policy.json");
+    write_exact_policy(&policy_path, false, "nando.k1-natural-candidate-queue.v4");
+    config.k1_exact_sources = Some(K1ExactAuthoritySourceConfigV1 {
+        topology_archive_path: root_dir.join("topology.cbor"),
+        frame_archive_path: root_dir.join("frames.cbor"),
+        collection_checkpoint_path: root_dir.join("collection.cbor"),
+        artifact_archive_path: root_dir.join("artifacts"),
+        scheduler_policy_path: policy_path.clone(),
+    });
+    recover_authority(&config, &signing_key).expect("genesis");
+    let mut scheduler = K1SchedulerLedgerV1::empty().expect("scheduler");
+    append_and_persist(
+        &config,
+        K1SchedulerLaneV1::Epistemic,
+        &signing_key,
+        &mut scheduler,
+        K1SchedulerEventPayloadV1::CandidateFreeze(exact_candidate_freeze(1)),
+    )
+    .expect("V8 suffix");
+
+    let mut policy: serde_json::Value =
+        serde_json::from_slice(&fs::read(&policy_path).expect("policy bytes"))
+            .expect("policy json");
+    policy["minimum_freeze_schema"] =
+        serde_json::Value::String(K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7.to_owned());
+    policy["policy_root_sha256"] = serde_json::Value::String(
+        canonical_json_sha256(&(
+            "nando.k1-exact-scheduler-policy.v1",
+            false,
+            "nando.k1-natural-candidate-queue.v4",
+            K1_NATURAL_CANDIDATE_FREEZE_SCHEMA_V7,
+            K1_EXACT_WAKE_AUTHORITY_REQUEST_SCHEMA_V1,
+            "nando.k1-operator-blind-scheduler.v4",
+            1_u64,
+            300_u64,
+            48_u64,
+            256_u64,
+        ))
+        .expect("downgrade policy root"),
+    );
+    fs::write(
+        &policy_path,
+        serde_json::to_vec(&policy).expect("policy encode"),
+    )
+    .expect("policy write");
+
+    assert_eq!(
+        exact_wake_authoritative(&config, &signing_key, exact_wake_request()),
+        Err("K1_AUTHORITY_SCHEMA_DOWNGRADE".to_owned())
+    );
+    assert_eq!(
+        restore_anchored_scheduler_for(&config, K1SchedulerLaneV1::Epistemic)
+            .expect("preserved scheduler"),
+        scheduler
+    );
+    fs::remove_dir_all(root_dir).expect("cleanup");
 }
 
 #[test]
