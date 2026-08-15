@@ -11,6 +11,7 @@ mod learner;
 mod model;
 mod planner;
 mod sandbox;
+mod self_formed_uncertainty;
 mod verifier;
 
 pub use active_inquiry::*;
@@ -20,4 +21,5 @@ pub use learner::*;
 pub use model::*;
 pub use planner::*;
 pub use sandbox::*;
+pub use self_formed_uncertainty::*;
 pub use verifier::*;
