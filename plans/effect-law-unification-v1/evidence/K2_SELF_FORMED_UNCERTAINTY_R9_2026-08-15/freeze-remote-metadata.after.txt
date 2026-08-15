@@ -1,0 +1,3 @@
+inode=31897780 mode=600 size=3304 mtime_ns=1786827022.2026-08-15 23:50:22.178989018 +0300
+ce27020be831f21a42d3e7c54545c2323764746ca4e44a55e99213764bbf16f4  /home/e/build/k2-r9-development-freeze-8e416d1d/development-freeze.json
+development-freeze.json

@@ -1,0 +1,76 @@
+{
+  "schema": "nando.k2-self-formed-r9-freeze-result.v1",
+  "status": "R9_COMPLETE_R10_STOP",
+  "frozen_implementation_commit_sha1": "8e416d1d3ac2b569dc5dae6a6d3c7882dc88e720",
+  "development_freeze_root_sha256": "7f6a37936bbb043b8feb6422df1b07ff15216b6fa638b80d9d15cfeebcc26221",
+  "development_freeze_file_sha256": "ce27020be831f21a42d3e7c54545c2323764746ca4e44a55e99213764bbf16f4",
+  "development_freeze_input_sha256": "89f53ef2c4821eb092c04a8de33c2f2a28329512e7a7a60c3ade01d36e3367fd",
+  "confirm_read_capability_root_sha256": "cac3c543480a4c1458401eec4a4a620fe3f16519d1a52174b1a9e78712c219b2",
+  "remote_freeze_path": "/home/e/build/k2-r9-development-freeze-8e416d1d/development-freeze.json",
+  "remote_file_mode": "0600",
+  "manifests": {
+    "contract": {
+      "entries": 17,
+      "sha256": "0ebf19348db39bae04b003e45947af950ffee5cda875e424bfcffcba831392fe"
+    },
+    "source": {
+      "entries": 242,
+      "sha256": "38615aab2701a52a804269fb6a947bad51d375ff5a9624d1a8db15a58674d0d2"
+    },
+    "executable": {
+      "entries": 13,
+      "unique_roots": 13,
+      "sha256": "27e7960467d7d00ba43c019d8eacfd5c115ac8e5424ce10aa29afa0302bfca59"
+    },
+    "test_gate": {
+      "entries": 17,
+      "sha256": "871d7da3b7f1d41bfe50a23a9fb6ff099be49dc20d465909c3d6a0455131312d"
+    }
+  },
+  "development_result": {
+    "package_tests_passed": 468,
+    "package_tests_failed": 0,
+    "package_tests_ignored": 8,
+    "development_cases_passed": 16,
+    "development_cases_total": 16,
+    "one_probe_cases": 8,
+    "two_probe_cases": 8,
+    "independent_final_verifications_passed": 16,
+    "independent_final_verifications_total": 16,
+    "legacy_controls_passed": 32,
+    "v3_controls_passed": 4,
+    "v4_controls_passed": 16,
+    "false_accepts": 0,
+    "maximum_final_request_bytes": 913356,
+    "maximum_protocol_bytes": 1048576,
+    "release_process_duration_ms": 157890,
+    "sealed_batch_limit_ms": 1200000
+  },
+  "verification": {
+    "strict_clippy": "PASS",
+    "cargo_fmt_check": "PASS",
+    "git_diff_check": "PASS",
+    "structural_gate": "PASS",
+    "structural_repair_queue": 0,
+    "nanda_self_check": "PASS",
+    "nanda_doctor": "PASS",
+    "manifest_content_parity": "PASS",
+    "atomic_before_rename_cleanup": "PASS",
+    "after_rename_recovery": "PASS",
+    "idempotent_publication": "PASS",
+    "remote_local_receipt_parity": "PASS"
+  },
+  "confirm_interactions": 0,
+  "sealed_attempts": 0,
+  "production_effects": 0,
+  "authority": {
+    "natural_k2_authority": false,
+    "k1_registry_mutated": false,
+    "product_authority": false,
+    "phase_memory_mutated": false,
+    "law_certificate_issued": false,
+    "package_activated": false,
+    "deployment_authority": false
+  },
+  "next_transition": "R10_EXPLICIT_AUTHORIZATION_REQUIRED"
+}

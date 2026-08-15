@@ -1,0 +1,9 @@
+From https://github.com/radislabus-star/nando-wave
+ * branch            research/k2-self-formed-uncertainty-v1-20260815 -> FETCH_HEAD
+   4bf1d7f..8e416d1  research/k2-self-formed-uncertainty-v1-20260815 -> origin/research/k2-self-formed-uncertainty-v1-20260815
+Updating 4bf1d7f..8e416d1
+Fast-forward
+ .../self_formed_uncertainty/development_freeze/tests.rs                 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+    Checking nando-operator-learning v0.1.0 (/home/e/build/nando-wave-k2-self-formed-r2/crates/nando-operator-learning)
+    Finished `dev` profile [unoptimized] target(s) in 25.39s
