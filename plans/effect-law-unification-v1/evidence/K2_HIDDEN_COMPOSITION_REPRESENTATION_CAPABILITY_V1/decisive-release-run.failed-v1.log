@@ -1,0 +1,56 @@
+   Compiling version_check v0.9.5
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling libc v0.2.186
+   Compiling quote v1.0.46
+   Compiling serde_core v1.0.228
+   Compiling typenum v1.20.1
+   Compiling zmij v1.0.21
+   Compiling serde v1.0.228
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling pkg-config v0.3.33
+   Compiling cfg-if v1.0.4
+   Compiling cpufeatures v0.2.17
+   Compiling serde_json v1.0.150
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.2
+   Compiling zstd-safe v7.2.4
+   Compiling half v1.8.3
+   Compiling generic-array v0.14.7
+   Compiling syn v2.0.118
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling jobserver v0.1.35
+   Compiling digest v0.10.7
+   Compiling cc v1.2.67
+   Compiling sha2 v0.10.9
+   Compiling nando-core v0.1.0 (/home/e/projects/nando-wave-k2-hidden-representation-20260815/crates/nando-core)
+   Compiling serde_bytes v0.11.19
+   Compiling serde_derive v1.0.228
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling nando-operator-kernel v0.1.0 (/home/e/projects/nando-wave-k2-hidden-representation-20260815/crates/nando-operator-kernel)
+   Compiling serde_cbor v0.11.2
+   Compiling nando-client-evidence v0.1.0 (/home/e/projects/nando-wave-k2-hidden-representation-20260815/crates/nando-client-evidence)
+   Compiling nando-operator-proof v0.1.0 (/home/e/projects/nando-wave-k2-hidden-representation-20260815/crates/nando-operator-proof)
+   Compiling nando-operator-runtime v0.1.0 (/home/e/projects/nando-wave-k2-hidden-representation-20260815/crates/nando-operator-runtime)
+   Compiling zstd v0.13.3
+   Compiling nando-operator-learning v0.1.0 (/home/e/projects/nando-wave-k2-hidden-representation-20260815/crates/nando-operator-learning)
+    Finished `release` profile [optimized] target(s) in 1m 05s
+     Running tests/k2_hidden_composition_representation_v1.rs (/home/e/.cache/nando-wave-k2-hidden-representation-target/release/deps/k2_hidden_composition_representation_v1-cfd37999732d1753)
+
+running 1 test
+test learned_hidden_representation_transfers_under_frozen_search_budget ... 
+thread 'learned_hidden_representation_transfers_under_frozen_search_budget' (2213686) panicked at crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs:195:13:
+assertion failed: outcome.exact_goal_satisfied
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    learned_hidden_representation_transfers_under_frozen_search_budget
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+error: test failed, to rerun pass `-p nando-operator-learning --test k2_hidden_composition_representation_v1`

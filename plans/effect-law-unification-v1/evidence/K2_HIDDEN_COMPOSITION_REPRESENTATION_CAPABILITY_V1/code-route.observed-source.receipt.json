@@ -1,0 +1,1038 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_V1/code-route.observed-source.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k1-transport-fix",
+  "node_count": 29,
+  "edge_count": 29,
+  "routes": [
+    {
+      "id": "train-baseline-execution",
+      "event": "build_train_corpus",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "train_baseline",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "train_baseline"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "candidate_rank_owner": [
+          "train_baseline"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "train_baseline",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "train_baseline"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "train-baseline-authority",
+      "event": "build_train_corpus",
+      "kind": "authority",
+      "entry": "train_task_bytes",
+      "via": [],
+      "terminal": "train_baseline",
+      "path_count": 1,
+      "paths": [
+        [
+          "train_task_bytes",
+          "train_task_store",
+          "train_baseline"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "train_baseline"
+        ],
+        "producer": [
+          "train_task_bytes"
+        ],
+        "evidence_owner": [
+          "train_task_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "train_task_bytes",
+          "to": "train_baseline",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "train_task_bytes",
+              "train_task_store",
+              "train_baseline"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trainer-execution",
+      "event": "train_model",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "trainer_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "trainer_process"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "candidate_rank_owner": [
+          "trainer_process"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "trainer_process",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "trainer_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trainer-authority",
+      "event": "train_model",
+      "kind": "authority",
+      "entry": "train_feature_rows",
+      "via": [],
+      "terminal": "trainer_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "train_feature_rows",
+          "train_corpus_store",
+          "trainer_process"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "train_corpus_store"
+        ],
+        "producer": [
+          "train_feature_rows"
+        ],
+        "candidate_rank_owner": [
+          "trainer_process"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "train_feature_rows",
+          "to": "trainer_process",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "train_feature_rows",
+              "train_corpus_store",
+              "trainer_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "model-publish-authority",
+      "event": "publish_model",
+      "kind": "authority",
+      "entry": "model_bytes",
+      "via": [],
+      "terminal": "model_store",
+      "path_count": 1,
+      "paths": [
+        [
+          "model_bytes",
+          "model_store"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "model_bytes"
+        ],
+        "evidence_owner": [
+          "model_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "model_bytes",
+          "to": "model_store",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "model_bytes",
+              "model_store"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "confirm-baseline-execution",
+      "event": "confirm_baseline",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "confirm_baseline",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "confirm_baseline"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "confirm_baseline"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "confirm_baseline",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "confirm_baseline"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "confirm-baseline-authority",
+      "event": "confirm_baseline",
+      "kind": "authority",
+      "entry": "confirm_task_bytes",
+      "via": [],
+      "terminal": "confirm_baseline",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_task_bytes",
+          "confirm_task_store",
+          "confirm_baseline"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "confirm_baseline"
+        ],
+        "producer": [
+          "confirm_task_bytes"
+        ],
+        "evidence_owner": [
+          "confirm_task_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_task_bytes",
+          "to": "confirm_baseline",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_task_bytes",
+              "confirm_task_store",
+              "confirm_baseline"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "policy-execution",
+      "event": "run_policy",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "hidden_policy",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "hidden_policy"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "candidate_rank_owner": [
+          "hidden_policy"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "hidden_policy",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "hidden_policy"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "policy-authority",
+      "event": "run_policy",
+      "kind": "authority",
+      "entry": "model_bytes",
+      "via": [],
+      "terminal": "hidden_policy",
+      "path_count": 1,
+      "paths": [
+        [
+          "model_bytes",
+          "policy_input_store",
+          "hidden_policy"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "hidden_policy"
+        ],
+        "producer": [
+          "model_bytes"
+        ],
+        "evidence_owner": [
+          "policy_input_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "model_bytes",
+          "to": "hidden_policy",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "model_bytes",
+              "policy_input_store",
+              "hidden_policy"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verifier-execution",
+      "event": "verify_policy",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "independent_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "independent_verifier"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "proof_owner": [
+          "independent_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "independent_verifier",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "independent_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "policy-proof",
+      "event": "verify_policy",
+      "kind": "proof",
+      "entry": "policy_output",
+      "via": [],
+      "terminal": "independent_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "policy_output",
+          "independent_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "independent_verifier"
+        ],
+        "producer": [
+          "policy_output"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "policy_output",
+          "to": "independent_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "policy_output",
+              "independent_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "baseline-proof",
+      "event": "verify_policy",
+      "kind": "proof",
+      "entry": "confirm_baseline_output",
+      "via": [],
+      "terminal": "independent_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_baseline_output",
+          "independent_verifier"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "confirm_baseline_output"
+        ],
+        "proof_owner": [
+          "independent_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_baseline_output",
+          "to": "independent_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_baseline_output",
+              "independent_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "confirm-execution",
+      "event": "execute_confirm",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "sandbox_worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "execution_dispatch",
+          "sandbox_adapter",
+          "sandbox_worker"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "execution_dispatch"
+        ],
+        "interface": [
+          "experiment_driver"
+        ],
+        "orchestrator": [
+          "sandbox_adapter"
+        ],
+        "mutation_owner": [
+          "sandbox_worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "sandbox_worker",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "execution_dispatch",
+              "sandbox_adapter",
+              "sandbox_worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "confirm-authority",
+      "event": "execute_confirm",
+      "kind": "authority",
+      "entry": "verified_policy_bytes",
+      "via": [],
+      "terminal": "sandbox_worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "verified_policy_bytes",
+          "verified_policy_store",
+          "execution_dispatch",
+          "sandbox_worker"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "execution_dispatch"
+        ],
+        "mutation_owner": [
+          "sandbox_worker"
+        ],
+        "producer": [
+          "verified_policy_bytes"
+        ],
+        "evidence_owner": [
+          "verified_policy_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "verified_policy_bytes",
+          "to": "sandbox_worker",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "verified_policy_bytes",
+              "verified_policy_store",
+              "execution_dispatch",
+              "sandbox_worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "observer-execution",
+      "event": "observe_confirm",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "filesystem_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "filesystem_observer"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "observer": [
+          "filesystem_observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "filesystem_observer",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "filesystem_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "confirm-observation",
+      "event": "observe_confirm",
+      "kind": "observation",
+      "entry": "worker_filesystem_state",
+      "via": [],
+      "terminal": "filesystem_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "worker_filesystem_state",
+          "filesystem_observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "filesystem_observer"
+        ],
+        "producer": [
+          "worker_filesystem_state"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "worker_filesystem_state",
+          "to": "filesystem_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "worker_filesystem_state",
+              "filesystem_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oracle-execution",
+      "event": "verify_goal",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "exact_oracle",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "exact_oracle"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "exact_oracle"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "exact_oracle",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "exact_oracle"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oracle-proof",
+      "event": "verify_goal",
+      "kind": "proof",
+      "entry": "adapter_manifest",
+      "via": [],
+      "terminal": "exact_oracle",
+      "path_count": 1,
+      "paths": [
+        [
+          "adapter_manifest",
+          "exact_oracle"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "adapter_manifest"
+        ],
+        "proof_owner": [
+          "exact_oracle"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "adapter_manifest",
+          "to": "exact_oracle",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "adapter_manifest",
+              "exact_oracle"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journal-execution",
+      "event": "persist_event",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "representation_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "representation_journal"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "evidence_owner": [
+          "representation_journal"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "representation_journal",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "representation_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journal-authority",
+      "event": "persist_event",
+      "kind": "authority",
+      "entry": "journal_event_bytes",
+      "via": [],
+      "terminal": "representation_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "journal_event_bytes",
+          "representation_journal"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "journal_event_bytes"
+        ],
+        "evidence_owner": [
+          "representation_journal"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "journal_event_bytes",
+          "to": "representation_journal",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "journal_event_bytes",
+              "representation_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup-execution",
+      "event": "cleanup_generated",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "cleanup_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "cleanup_owner"
+        ]
+      ],
+      "role_owners": {
+        "mutation_owner": [
+          "cleanup_owner"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "cleanup_owner",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "cleanup_owner"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "build_train_corpus": {
+      "evidence_owner": [
+        "train_task_store"
+      ],
+      "authorization_owner": [],
+      "candidate_rank_owner": [
+        "train_baseline"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "render_owner": []
+    },
+    "train_model": {
+      "evidence_owner": [
+        "train_corpus_store"
+      ],
+      "authorization_owner": [],
+      "candidate_rank_owner": [
+        "trainer_process"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "render_owner": []
+    },
+    "publish_model": {
+      "evidence_owner": [
+        "model_store"
+      ],
+      "authorization_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "render_owner": []
+    },
+    "confirm_baseline": {
+      "evidence_owner": [
+        "confirm_task_store"
+      ],
+      "authorization_owner": [],
+      "candidate_rank_owner": [
+        "confirm_baseline"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "render_owner": []
+    },
+    "run_policy": {
+      "evidence_owner": [
+        "policy_input_store"
+      ],
+      "authorization_owner": [],
+      "candidate_rank_owner": [
+        "hidden_policy"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "render_owner": []
+    },
+    "execute_confirm": {
+      "evidence_owner": [
+        "verified_policy_store"
+      ],
+      "authorization_owner": [
+        "execution_dispatch"
+      ],
+      "candidate_rank_owner": [],
+      "mutation_owner": [
+        "sandbox_worker"
+      ],
+      "display_rank_owner": [],
+      "render_owner": []
+    },
+    "persist_event": {
+      "evidence_owner": [
+        "representation_journal"
+      ],
+      "authorization_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "render_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 58,
+    "verified": 58,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

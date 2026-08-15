@@ -1,0 +1,1085 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "nodes": [
+    {
+      "id": "experiment_driver",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "fn learned_hidden_representation_transfers_under_frozen_search_budget() {",
+        "line": 45
+      }
+    },
+    {
+      "id": "train_task_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let train = train_fixtures_v1();",
+        "line": 65
+      }
+    },
+    {
+      "id": "train_task_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::TrainSplitFrozen,",
+        "line": 75
+      }
+    },
+    {
+      "id": "train_baseline",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/baseline.rs",
+        "contains": "pub fn run_representation_baseline_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 171
+      }
+    },
+    {
+      "id": "train_feature_rows",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/baseline.rs",
+        "contains": "pub fn project_representation_training_corpus_v1(",
+        "line": 106
+      }
+    },
+    {
+      "id": "train_corpus_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::TrainCorpusFrozen,",
+        "line": 111
+      }
+    },
+    {
+      "id": "trainer_process",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/trainer.rs",
+        "contains": "pub fn run_representation_trainer_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 143
+      }
+    },
+    {
+      "id": "model_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let model: K2MeaningPolicySnapshotV1 =",
+        "line": 125
+      }
+    },
+    {
+      "id": "model_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::ModelFrozen,",
+        "line": 135
+      }
+    },
+    {
+      "id": "confirm_task_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let confirm = confirm_fixtures_v1();",
+        "line": 146
+      }
+    },
+    {
+      "id": "confirm_task_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::ConfirmSplitFrozen,",
+        "line": 169
+      }
+    },
+    {
+      "id": "confirm_baseline",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/baseline.rs",
+        "contains": "pub fn complete_representation_baseline_v1(",
+        "line": 18
+      }
+    },
+    {
+      "id": "confirm_baseline_output",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let confirm_baselines = confirm",
+        "line": 173
+      }
+    },
+    {
+      "id": "policy_input_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::PoliciesDispatched,",
+        "line": 211
+      }
+    },
+    {
+      "id": "hidden_policy",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/policy.rs",
+        "contains": "pub fn run_hidden_representation_policy_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 172
+      }
+    },
+    {
+      "id": "policy_output",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let policies = policy_requests",
+        "line": 219
+      }
+    },
+    {
+      "id": "independent_verifier",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/verifier.rs",
+        "contains": "pub fn run_hidden_representation_verifier_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 98
+      }
+    },
+    {
+      "id": "verified_policy_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let verifications = verifier_requests",
+        "line": 275
+      }
+    },
+    {
+      "id": "verified_policy_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::IndependentVerificationsFrozen,",
+        "line": 289
+      }
+    },
+    {
+      "id": "execution_dispatch",
+      "role": "authorization_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::Execution1Dispatched",
+        "line": 335
+      }
+    },
+    {
+      "id": "sandbox_adapter",
+      "role": "orchestrator",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "pub fn execute(",
+        "line": 171
+      }
+    },
+    {
+      "id": "sandbox_worker",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "pub fn run_representation_sandbox_worker_v1() -> K2CompositionResultV1<()> {",
+        "line": 240
+      }
+    },
+    {
+      "id": "worker_filesystem_state",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "let post_manifest = K2CompositionTreeManifestV1::scan(work_root)?;",
+        "line": 284
+      }
+    },
+    {
+      "id": "filesystem_observer",
+      "role": "observer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "let adapter_observed_post = K2CompositionTreeManifestV1::scan(&work_root)?;",
+        "line": 205
+      }
+    },
+    {
+      "id": "adapter_manifest",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "Ok(K2RepresentationSandboxExecutionV1 {",
+        "line": 230
+      }
+    },
+    {
+      "id": "exact_oracle",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs",
+        "contains": "pub fn run_composition_exact_oracle_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 358
+      }
+    },
+    {
+      "id": "journal_event_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/journal.rs",
+        "contains": "let event = K2RepresentationJournalEventV1 {",
+        "line": 167
+      }
+    },
+    {
+      "id": "representation_journal",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/journal.rs",
+        "contains": "pub fn append(",
+        "line": 130
+      }
+    },
+    {
+      "id": "cleanup_owner",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "environment.cleanup();",
+        "line": 478
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "exec-driver-train-baseline",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "train_baseline",
+      "events": [
+        "build_train_corpus"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "run_baseline_process_v1(&binaries, &fixture.task)",
+        "line": 81
+      }
+    },
+    {
+      "id": "authority-train-task-store",
+      "from": "train_task_bytes",
+      "relation": "produces_for",
+      "to": "train_task_store",
+      "events": [
+        "build_train_corpus"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::TrainSplitFrozen,",
+        "line": 75
+      }
+    },
+    {
+      "id": "authority-train-store-baseline",
+      "from": "train_task_store",
+      "relation": "passes_to",
+      "to": "train_baseline",
+      "events": [
+        "build_train_corpus"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "run_baseline_process_v1(&binaries, &fixture.task)",
+        "line": 81
+      }
+    },
+    {
+      "id": "exec-driver-trainer",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "trainer_process",
+      "events": [
+        "train_model"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.trainer, &trainer_request);",
+        "line": 126
+      }
+    },
+    {
+      "id": "authority-feature-corpus",
+      "from": "train_feature_rows",
+      "relation": "produces_for",
+      "to": "train_corpus_store",
+      "events": [
+        "train_model"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let corpus = project_representation_training_corpus_v1",
+        "line": 105
+      }
+    },
+    {
+      "id": "authority-corpus-trainer",
+      "from": "train_corpus_store",
+      "relation": "passes_to",
+      "to": "trainer_process",
+      "events": [
+        "train_model"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationTrainerRequestV1::seal(binaries.trainer_sha256.clone(), corpus.clone())",
+        "line": 115
+      }
+    },
+    {
+      "id": "authority-model-store",
+      "from": "model_bytes",
+      "relation": "produces_for",
+      "to": "model_store",
+      "events": [
+        "publish_model"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::ModelFrozen,",
+        "line": 135
+      }
+    },
+    {
+      "id": "exec-driver-confirm-baseline",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "confirm_baseline",
+      "events": [
+        "confirm_baseline"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let confirm_baselines = confirm",
+        "line": 173
+      }
+    },
+    {
+      "id": "authority-confirm-task-store",
+      "from": "confirm_task_bytes",
+      "relation": "produces_for",
+      "to": "confirm_task_store",
+      "events": [
+        "confirm_baseline"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::ConfirmSplitFrozen,",
+        "line": 169
+      }
+    },
+    {
+      "id": "authority-confirm-store-baseline",
+      "from": "confirm_task_store",
+      "relation": "passes_to",
+      "to": "confirm_baseline",
+      "events": [
+        "confirm_baseline"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let confirm_baselines = confirm",
+        "line": 173
+      }
+    },
+    {
+      "id": "exec-driver-policy",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "hidden_policy",
+      "events": [
+        "run_policy"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.policy, request);",
+        "line": 224
+      }
+    },
+    {
+      "id": "authority-model-policy-store",
+      "from": "model_bytes",
+      "relation": "produces_for",
+      "to": "policy_input_store",
+      "events": [
+        "run_policy"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationPolicyRequestV1::seal(",
+        "line": 199
+      }
+    },
+    {
+      "id": "authority-policy-store-policy",
+      "from": "policy_input_store",
+      "relation": "passes_to",
+      "to": "hidden_policy",
+      "events": [
+        "run_policy"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::PoliciesDispatched,",
+        "line": 211
+      }
+    },
+    {
+      "id": "exec-driver-verifier",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "independent_verifier",
+      "events": [
+        "verify_policy"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.verifier, request);",
+        "line": 279
+      }
+    },
+    {
+      "id": "proof-policy-verifier",
+      "from": "policy_output",
+      "relation": "proves",
+      "to": "independent_verifier",
+      "events": [
+        "verify_policy"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "policies[index].clone(),",
+        "line": 269
+      }
+    },
+    {
+      "id": "proof-baseline-verifier",
+      "from": "confirm_baseline_output",
+      "relation": "proves",
+      "to": "independent_verifier",
+      "events": [
+        "verify_policy"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "confirm_baselines[index].clone(),",
+        "line": 270
+      }
+    },
+    {
+      "id": "exec-driver-dispatch",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "execution_dispatch",
+      "events": [
+        "execute_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "let request = K2RepresentationSandboxRequestV1::seal(",
+        "line": 323
+      }
+    },
+    {
+      "id": "exec-dispatch-adapter",
+      "from": "execution_dispatch",
+      "relation": "delegates",
+      "to": "sandbox_adapter",
+      "events": [
+        "execute_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": ".execute(&request, &confirm[index].initial_files)",
+        "line": 342
+      }
+    },
+    {
+      "id": "exec-adapter-worker",
+      "from": "sandbox_adapter",
+      "relation": "calls",
+      "to": "sandbox_worker",
+      "events": [
+        "execute_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "let output = run_worker_v1(",
+        "line": 196
+      }
+    },
+    {
+      "id": "authority-verified-store",
+      "from": "verified_policy_bytes",
+      "relation": "produces_for",
+      "to": "verified_policy_store",
+      "events": [
+        "execute_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "K2RepresentationJournalEventKindV1::IndependentVerificationsFrozen,",
+        "line": 289
+      }
+    },
+    {
+      "id": "authority-store-dispatch",
+      "from": "verified_policy_store",
+      "relation": "passes_to",
+      "to": "execution_dispatch",
+      "events": [
+        "execute_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "assert!(receipt.selected_is_minimum_satisfying);",
+        "line": 280
+      }
+    },
+    {
+      "id": "authority-dispatch-worker",
+      "from": "execution_dispatch",
+      "relation": "authorizes",
+      "to": "sandbox_worker",
+      "events": [
+        "execute_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": ".execute(&request, &confirm[index].initial_files)",
+        "line": 342
+      }
+    },
+    {
+      "id": "exec-driver-observer",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "filesystem_observer",
+      "events": [
+        "observe_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "let adapter_observed_post = K2CompositionTreeManifestV1::scan(&work_root)?;",
+        "line": 205
+      }
+    },
+    {
+      "id": "observe-worker-state",
+      "from": "worker_filesystem_state",
+      "relation": "observes",
+      "to": "filesystem_observer",
+      "events": [
+        "observe_confirm"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+        "contains": "if source_before != source_after || adapter_observed_post != outcome.post_manifest {",
+        "line": 206
+      }
+    },
+    {
+      "id": "exec-driver-oracle",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "exact_oracle",
+      "events": [
+        "verify_goal"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.oracle, &oracle_request);",
+        "line": 369
+      }
+    },
+    {
+      "id": "proof-manifest-oracle",
+      "from": "adapter_manifest",
+      "relation": "proves",
+      "to": "exact_oracle",
+      "events": [
+        "verify_goal"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "execution.adapter_observed_post.clone(),",
+        "line": 364
+      }
+    },
+    {
+      "id": "exec-driver-journal",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "representation_journal",
+      "events": [
+        "persist_event"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "journal.append(kind, payload_root).expect(\"journal append\");",
+        "line": 1222
+      }
+    },
+    {
+      "id": "authority-event-journal",
+      "from": "journal_event_bytes",
+      "relation": "produces_for",
+      "to": "representation_journal",
+      "events": [
+        "persist_event"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/journal.rs",
+        "contains": "atomic_write_v1(",
+        "line": 104
+      }
+    },
+    {
+      "id": "exec-driver-cleanup",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "cleanup_owner",
+      "events": [
+        "cleanup_generated"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+        "contains": "environment.cleanup();",
+        "line": 478
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "train-baseline-execution",
+      "event": "build_train_corpus",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "train_baseline",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "train_baseline",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "train-baseline-authority",
+      "event": "build_train_corpus",
+      "kind": "authority",
+      "entry": "train_task_bytes",
+      "terminal": "train_baseline",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "train_task_bytes",
+          "to": "train_baseline",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "trainer-execution",
+      "event": "train_model",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "trainer_process",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "trainer_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "trainer-authority",
+      "event": "train_model",
+      "kind": "authority",
+      "entry": "train_feature_rows",
+      "terminal": "trainer_process",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "train_feature_rows",
+          "to": "trainer_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "model-publish-authority",
+      "event": "publish_model",
+      "kind": "authority",
+      "entry": "model_bytes",
+      "terminal": "model_store",
+      "required_roles": [
+        "producer",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "model_bytes",
+          "to": "model_store",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "confirm-baseline-execution",
+      "event": "confirm_baseline",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "confirm_baseline",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "confirm_baseline",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "confirm-baseline-authority",
+      "event": "confirm_baseline",
+      "kind": "authority",
+      "entry": "confirm_task_bytes",
+      "terminal": "confirm_baseline",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "confirm_task_bytes",
+          "to": "confirm_baseline",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "policy-execution",
+      "event": "run_policy",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "hidden_policy",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "hidden_policy",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "policy-authority",
+      "event": "run_policy",
+      "kind": "authority",
+      "entry": "model_bytes",
+      "terminal": "hidden_policy",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "model_bytes",
+          "to": "hidden_policy",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "verifier-execution",
+      "event": "verify_policy",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "independent_verifier",
+      "required_roles": [
+        "interface",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "independent_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "policy-proof",
+      "event": "verify_policy",
+      "kind": "proof",
+      "entry": "policy_output",
+      "terminal": "independent_verifier",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "policy_output",
+          "to": "independent_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "baseline-proof",
+      "event": "verify_policy",
+      "kind": "proof",
+      "entry": "confirm_baseline_output",
+      "terminal": "independent_verifier",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "confirm_baseline_output",
+          "to": "independent_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "confirm-execution",
+      "event": "execute_confirm",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "sandbox_worker",
+      "required_roles": [
+        "interface",
+        "authorization_owner",
+        "orchestrator",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "sandbox_worker",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "confirm-authority",
+      "event": "execute_confirm",
+      "kind": "authority",
+      "entry": "verified_policy_bytes",
+      "terminal": "sandbox_worker",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "authorization_owner",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "verified_policy_bytes",
+          "to": "sandbox_worker",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "observer-execution",
+      "event": "observe_confirm",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "filesystem_observer",
+      "required_roles": [
+        "interface",
+        "observer"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "filesystem_observer",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "confirm-observation",
+      "event": "observe_confirm",
+      "kind": "observation",
+      "entry": "worker_filesystem_state",
+      "terminal": "filesystem_observer",
+      "required_roles": [
+        "producer",
+        "observer"
+      ],
+      "path_cardinality": [
+        {
+          "from": "worker_filesystem_state",
+          "to": "filesystem_observer",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "oracle-execution",
+      "event": "verify_goal",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "exact_oracle",
+      "required_roles": [
+        "interface",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "exact_oracle",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "oracle-proof",
+      "event": "verify_goal",
+      "kind": "proof",
+      "entry": "adapter_manifest",
+      "terminal": "exact_oracle",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "adapter_manifest",
+          "to": "exact_oracle",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "journal-execution",
+      "event": "persist_event",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "representation_journal",
+      "required_roles": [
+        "interface",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "representation_journal",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "journal-authority",
+      "event": "persist_event",
+      "kind": "authority",
+      "entry": "journal_event_bytes",
+      "terminal": "representation_journal",
+      "required_roles": [
+        "producer",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "journal_event_bytes",
+          "to": "representation_journal",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "cleanup-execution",
+      "event": "cleanup_generated",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "cleanup_owner",
+      "required_roles": [
+        "interface",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "cleanup_owner",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    }
+  ],
+  "source_root": "."
+}

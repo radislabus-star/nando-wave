@@ -1,0 +1,126 @@
+{
+  "schema": "nando.k2-hidden-composition-representation-capability-receipt.v1",
+  "recorded_at_utc": "2026-08-15T08:17:50Z",
+  "source_parent_commit": "eca60f7ad4d24881a12c92fd815c4f852def8b31",
+  "source_branch": "k1-topology-quotient-v2-20260810",
+  "build_host": "e-MEGA-MINI-M1-13th",
+  "claim": "K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_PASS",
+  "verdict": "PASS",
+  "scope": "bounded_generated_filesystem_environment",
+  "authority": {
+    "natural_k2": false,
+    "production_execution": false,
+    "law_certificate": false,
+    "k1_registry_mutation": false,
+    "phase_memory_mutation": false,
+    "deployment": false
+  },
+  "denominators": {
+    "train_tasks": 6,
+    "train_complete_programs_each": 8659,
+    "training_pairs": 216,
+    "correctly_ranked_pairs": 216,
+    "nonzero_learned_parameters": 30,
+    "confirm_tasks": 2,
+    "confirm_exact_goals": 2,
+    "confirm_complete_programs_each": 8659,
+    "policy_action_evaluations_each": [
+      61,
+      61
+    ],
+    "policy_action_evaluation_limit_each": 67,
+    "search_ratio_each": 0.007044693383,
+    "minimum_satisfying_depth_each": 6,
+    "independent_policy_verifications": 2,
+    "sandbox_executions": 2,
+    "exact_oracle_processes": 2,
+    "negative_controls_passed": 18,
+    "negative_controls_total": 18,
+    "confirm_root_intersections": 0,
+    "confirm_trainer_byte_leaks": 0,
+    "residual_generated_paths": 0
+  },
+  "outcome_roots": {
+    "model": "4410b40c63ede8a37e4aeaf0bdcbfa90fe4f7f1d0e2a3cdb0d5e8a57b1fc526d",
+    "confirm_seal": "6148aef1cc56fe727119ed13cdda292abe89b44a79cfdb62752ccf755e66718d",
+    "ablation": "22f480f65a3e1b942225b8a4870c217ec3149373393ab3a1467c3b60f9f33b9c",
+    "terminal": "d06d83309dd05f154db1da19ee0468aee3b31b38b309e7ce5109f2680ce3f2df",
+    "journal_terminal": "ee6c79f4f1af7b733b6980443057268233b97870d67563d0f2d2fe4762f46115"
+  },
+  "release_executables": {
+    "baseline_sha256": "c6f9c9c7218d46429622af6787be31d1299f2ac8c6dfcd135ed0ec8541d2f6e6",
+    "trainer_sha256": "cfa3a7ff466630110dac5e20add0113f9753a55dfb9405f5161640e765ff6ecf",
+    "policy_sha256": "d61c65b9d2d7165a032654112acad9636a6e5462835cd8b27934a82b8476f114",
+    "verifier_sha256": "4767ab9321818902f9827a89b97bf393053ad93d89536feb8f335060949b9769",
+    "sandbox_worker_sha256": "96a16a4f9e46c8a92678c82d468761abacad308006947f902865d800629d0f18",
+    "exact_oracle_sha256": "88c5964b4984964f0c869bd25d135a7b3bb287b9c65ab6b5d6990da685ee555e"
+  },
+  "source_budgets": {
+    "production_modules": 8,
+    "production_module_lines": {
+      "baseline": 281,
+      "journal": 330,
+      "module": 21,
+      "model": 1177,
+      "policy": 195,
+      "sandbox": 556,
+      "trainer": 240,
+      "verifier": 565
+    },
+    "production_module_total_lines": 3365,
+    "integration_test_files": 1,
+    "integration_test_lines": 1480,
+    "generated_only_binary_wrappers": 5,
+    "generated_only_binary_wrapper_lines": 40,
+    "source_manifest_sha256": "668a0cb98dac45014bdbcbbba1314aa1c6b595bcb9cdc1a98cccc063ace57123",
+    "source_manifest_method": "sha256 of sorted sha256sum records for 8 modules, 5 wrappers, and 1 integration test",
+    "all_preregistration_limits_passed": true
+  },
+  "verification": {
+    "implementation_preflight": "READY_TO_IMPLEMENT",
+    "implementation_preflight_manifest_sha256": "27f41695640f477ee7fcd62fff68adafa2e6a9f0fa178e25b265fbf8dae18d14",
+    "implementation_preflight_receipt_sha256": "0842cbace46a0bbf43b00087d1c585f95b2881c56cafe5c8e9cc4151d995250b",
+    "frozen_file_baselines": "14_PASS_1_ALLOWED_ADDITIVE_MODULE_REGISTRATION",
+    "frozen_directory_modes": "2_PASS",
+    "cargo_check_all_targets": "PASS",
+    "cargo_fmt_check": "PASS",
+    "cargo_clippy_all_targets_deny_warnings": "PASS",
+    "nonignored_package_tests": "450_PASS",
+    "ignored_real_process_regressions": "7_PASS",
+    "release_decisive_test": "1_PASS",
+    "release_decisive_log_sha256": "352b5c7f2af55146570621734e206cc4693ad906b814f73f0015d9712c57d89f",
+    "nanda_structural_packets": "5_PASS_AUTHORITY_FALSE",
+    "observed_source_code_route": "PASS_29_NODES_29_EDGES_21_ROUTES_58_OF_58",
+    "observed_source_receipt_sha256": "801f9a6a99e65c5b8b0553408cb756eff7728c7e056bf20e40a363fcd0f46ef4",
+    "restart_parity": "PASS_EVERY_PREFIX",
+    "production_services_changed": false
+  },
+  "invalid_attempts_preserved": [
+    {
+      "attempt": 1,
+      "log": "decisive-release-run.failed-v1.log",
+      "log_sha256": "a15aaa3af84f4a7310977ac4e045ed02efa6f95dacc90e758f6d94be0959e22f",
+      "failure": "write_value_matches_goal compared complete file entries and therefore treated identical values at different paths as unequal",
+      "repair": "file value equality is content_sha256 plus byte_len; path identity is excluded"
+    },
+    {
+      "attempt": 2,
+      "log": "decisive-release-run.invalid-control-v2.log",
+      "log_sha256": "a17a1b4a322dc18f346dd4eb8bd57c35b897a1972f32b9f853cba685987418c3",
+      "failure": "state_feature_mask omitted feature column 5 and was not a complete current-state ablation",
+      "repair": "state ablation masks columns 1, 5, 6, and 8"
+    }
+  ],
+  "preflight_accounting_note": {
+    "finding": "the frozen implementation preflight labels the planned addition as four generated-only process binaries, while five distinct new wrappers were required and added",
+    "impact": "documentation inventory mismatch; the preregistered cap of six passed and all five roles have distinct executable roots",
+    "scientific_verdict_changed": false,
+    "authority_changed": false
+  },
+  "toolchain": {
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "bubblewrap": "bubblewrap 0.6.1",
+    "build_jobs": 20
+  }
+}

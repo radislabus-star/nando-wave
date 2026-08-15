@@ -1,0 +1,300 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-hidden-composition-representation-capability-source-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": false,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "architecture-canon-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/ARCHITECTURE_CANON.md",
+      "expect": {"size_bytes": 93192, "sha256": "8c44515cc368ee5cabf19d04ea8443c0a3f919527707f7899666f2c01e7bc0a0", "mode": "0664"}
+    },
+    {
+      "id": "k2-module-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/mod.rs",
+      "expect": {"size_bytes": 488, "sha256": "389120a9c97e2adca3cb6458384cfdaf280a2ca20ef54857941c5acd1dfea434", "mode": "0664"}
+    },
+    {
+      "id": "composition-module-registration-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/mod.rs",
+      "expect": {"size_bytes": 434, "sha256": "c647acda55adca3cb0b6e2aef1ed24a471a591fa010e9ea920e8a7379a85bd0a", "mode": "0664"}
+    },
+    {
+      "id": "composition-model-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs",
+      "expect": {"size_bytes": 49583, "sha256": "87d2724781803a7540e974d4f209da0085f5213c6660e36cd24ef01860814b8d", "mode": "0664"}
+    },
+    {
+      "id": "composition-learner-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/learner.rs",
+      "expect": {"size_bytes": 6261, "sha256": "ce1e7a635e4e3ef0c8c6c0baa6aa46430575e15808abce05e256ce1031a718bd", "mode": "0664"}
+    },
+    {
+      "id": "composition-planner-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/planner.rs",
+      "expect": {"size_bytes": 12040, "sha256": "01f2b605b20f741745ed2e4fa2bc1ed219deb4621b4f874e3eee517a63fb2411", "mode": "0664"}
+    },
+    {
+      "id": "composition-verifier-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs",
+      "expect": {"size_bytes": 14020, "sha256": "8e16630539f3bd9ecd23d35cf40bba4071e7021d98f4011d5cd66e6bfc61e29e", "mode": "0664"}
+    },
+    {
+      "id": "composition-sandbox-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+      "expect": {"size_bytes": 19420, "sha256": "ed61fd6205f8f2d5a80bfe6e36d7c05dfe28105248816bde7b435f9b2824640f", "mode": "0664"}
+    },
+    {
+      "id": "composition-journal-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+      "expect": {"size_bytes": 20664, "sha256": "a3b118074e39b7f32a573dd6ce6d65d2ceb1fd57966cd7198e2049ea0a8d414f", "mode": "0664"}
+    },
+    {
+      "id": "composition-test-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs",
+      "expect": {"size_bytes": 48758, "sha256": "6710e25b952b706bb4c0aa872ad867fe0e201f75a1082223858adbd3f5faa2da", "mode": "0664"}
+    },
+    {
+      "id": "composition-paper-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PREREGISTRATION_V1.md",
+      "expect": {"size_bytes": 20558, "sha256": "a23b9bc276b1dd246bd082e0e483bcbd21632fe6104f645458d85458d1d3fb6c", "mode": "0664"}
+    },
+    {
+      "id": "composition-result-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_RESULT_2026-08-15.md",
+      "expect": {"size_bytes": 7599, "sha256": "918718c74ea503f1962ef0e281040ba81eaa9f47c49dac180de0b921bd961147", "mode": "0664"}
+    },
+    {
+      "id": "representation-paper-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_PREREGISTRATION_V1.md",
+      "expect": {"size_bytes": 18555, "sha256": "b89e6113f5562b14e358b6f2a406a62b2da86f9020cd962bcebdcf8873d6da89", "mode": "0664"}
+    },
+    {
+      "id": "representation-critique-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_CRITIQUE_V1.md",
+      "expect": {"size_bytes": 9930, "sha256": "9534fd00ffd1fbc4c885edad4cfcad60e4b6503040ecc8651961a810dddba481", "mode": "0664"}
+    },
+    {
+      "id": "code-route-design-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_V1/code-route.design.json",
+      "expect": {"size_bytes": 12412, "sha256": "a2a2cb3a6d6e940367d78d27de71d83873c5f54774219675f95f00ea26bd32f1", "mode": "0664"}
+    },
+    {
+      "id": "composition-proof-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_V1",
+      "expect": {"mode": "0775"}
+    },
+    {
+      "id": "graphify-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/graphify-out",
+      "expect": {"mode": "0775"}
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {"id": "read-frozen-sources", "kind": "filesystem_read"},
+      {"id": "add-hidden-representation-sibling", "kind": "source_file_create"},
+      {"id": "register-hidden-representation-sibling", "kind": "source_file_modify"},
+      {"id": "add-four-generated-only-process-binaries", "kind": "source_file_create"},
+      {"id": "add-representation-integration-test", "kind": "source_file_create"},
+      {"id": "write-test-journal", "kind": "test_lab_journal_write"},
+      {"id": "create-disposable-generated-fixtures", "kind": "test_fixture_write"},
+      {"id": "spawn-isolated-generated-processes", "kind": "isolated_test_process_spawn"},
+      {"id": "remove-disposable-generated-fixtures", "kind": "test_fixture_cleanup"}
+    ],
+    "forbidden": [
+      "network_access",
+      "production_state_mount",
+      "production_write",
+      "secret_mount",
+      "generated_natural_traffic",
+      "natural_evidence_write",
+      "k1_registry_mutation",
+      "phase_memory_mutation",
+      "package_activation",
+      "law_certificate_issue",
+      "service_control",
+      "dashboard_change",
+      "deployment"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "composition-model-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs",
+      "sha256": "87d2724781803a7540e974d4f209da0085f5213c6660e36cd24ef01860814b8d",
+      "forbidden_effect_patterns": [
+        {"effect": "network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "generated_natural_traffic", "regex": "(/v1/responses|/v2/responses|chat/completions)"},
+        {"effect": "law_certificate_issue", "regex": "(issue_law_certificate|law_certificate_issued\\s*:\\s*true)"},
+        {"effect": "deployment", "regex": "(deploy_remote|deployment_started\\s*:\\s*true)"},
+        {"effect": "k1_registry_mutation", "regex": "k1_registry_mutated\\s*:\\s*true"},
+        {"effect": "package_activation", "regex": "package_activated\\s*:\\s*true"},
+        {"effect": "phase_memory_mutation", "regex": "phase_memory_mutated\\s*:\\s*true"}
+      ]
+    },
+    {
+      "id": "composition-sandbox-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+      "sha256": "ed61fd6205f8f2d5a80bfe6e36d7c05dfe28105248816bde7b435f9b2824640f",
+      "forbidden_effect_patterns": [
+        {"effect": "production_state_mount", "regex": "(/var/lib/nando-wave|/etc/nando-wave|/run/secrets|/\\.ssh)"},
+        {"effect": "secret_mount", "regex": "(--bind|--ro-bind).*(/run/secrets|/\\.ssh)"},
+        {"effect": "generated_natural_traffic", "regex": "(/v1/responses|/v2/responses|chat/completions)"},
+        {"effect": "service_control", "regex": "(systemctl|service\\s+(start|stop|restart))"}
+      ]
+    },
+    {
+      "id": "composition-journal-source",
+      "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+      "sha256": "a3b118074e39b7f32a573dd6ce6d65d2ceb1fd57966cd7198e2049ea0a8d414f",
+      "forbidden_effect_patterns": [
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "natural_evidence_write", "regex": "(natural|future|certification)[_-](ledger|journal)"},
+        {"effect": "dashboard_change", "regex": "(live_dashboard|control_page|dashboard_html)"},
+        {"effect": "service_control", "regex": "(systemctl|service\\s+(start|stop|restart))"}
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "EMPTY",
+    "terminal_states": [
+      "PASS",
+      "TRAIN_FREEZE_FAILED",
+      "TRAIN_BASELINE_FAILED",
+      "TRAIN_CORPUS_FAILED",
+      "MODEL_DISPATCH_FAILED",
+      "INDETERMINATE_AFTER_MODEL_DISPATCH",
+      "MODEL_FREEZE_FAILED",
+      "TEMPORAL_LEAK_FAIL",
+      "CONFIRM_BASELINE_FAILED",
+      "POLICY_DISPATCH_FAILED",
+      "INDETERMINATE_AFTER_POLICY_DISPATCH",
+      "POLICY_VERIFICATION_FAILED",
+      "EXECUTION_DISPATCH_FAILED",
+      "INDETERMINATE_AFTER_EXECUTION_DISPATCH",
+      "ORACLE_FAILED",
+      "CONTROL_FAILED",
+      "TERMINAL_PUBLISH_FAILED",
+      "CLEANUP_FAILED"
+    ],
+    "steps": [
+      {"id": "freeze-train-split", "from": "EMPTY", "to": "TRAIN_FROZEN", "mutates": true, "failure_state": "TRAIN_FREEZE_FAILED", "cleanup": "remove unpublished temp and preserve paper plus prior proofs", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-train-freeze"},
+      {"id": "publish-train-baselines", "from": "TRAIN_FROZEN", "to": "TRAIN_BASELINES_FROZEN", "mutates": true, "failure_state": "TRAIN_BASELINE_FAILED", "cleanup": "preserve complete prior prefix and remove disposable baseline workspace", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-train-baseline"},
+      {"id": "publish-train-corpus", "from": "TRAIN_BASELINES_FROZEN", "to": "TRAIN_CORPUS_FROZEN", "mutates": true, "failure_state": "TRAIN_CORPUS_FAILED", "cleanup": "remove unpublished corpus and preserve baseline roots", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-train-corpus"},
+      {"id": "dispatch-model-training", "from": "TRAIN_CORPUS_FROZEN", "to": "MODEL_TRAINING_RUNNING", "mutates": true, "failure_state": "MODEL_DISPATCH_FAILED", "cleanup": "remove unpublished dispatch and spawn no trainer", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-model-dispatch"},
+      {"id": "publish-model", "from": "MODEL_TRAINING_RUNNING", "to": "MODEL_FROZEN", "mutates": true, "failure_state": "INDETERMINATE_AFTER_MODEL_DISPATCH", "cleanup": "preserve dispatch and forbid same-identity trainer rerun", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-model-publish"},
+      {"id": "open-confirm-seal", "from": "MODEL_FROZEN", "to": "CONFIRM_FROZEN", "mutates": true, "failure_state": "TEMPORAL_LEAK_FAIL", "cleanup": "preserve model and reject any pre-model confirm-derived bytes", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-confirm-seal"},
+      {"id": "publish-confirm-baselines", "from": "CONFIRM_FROZEN", "to": "CONFIRM_BASELINES_FROZEN", "mutates": true, "failure_state": "CONFIRM_BASELINE_FAILED", "cleanup": "preserve confirm roots and remove unpublished denominator", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-confirm-baseline"},
+      {"id": "dispatch-policies", "from": "CONFIRM_BASELINES_FROZEN", "to": "POLICIES_RUNNING", "mutates": true, "failure_state": "POLICY_DISPATCH_FAILED", "cleanup": "remove unpublished dispatch and spawn no policy", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-policy-dispatch"},
+      {"id": "publish-policies", "from": "POLICIES_RUNNING", "to": "POLICIES_FROZEN", "mutates": true, "failure_state": "INDETERMINATE_AFTER_POLICY_DISPATCH", "cleanup": "preserve dispatch and forbid same-identity policy rerun", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-policy-publish"},
+      {"id": "publish-policy-verification", "from": "POLICIES_FROZEN", "to": "POLICIES_VERIFIED", "mutates": true, "failure_state": "POLICY_VERIFICATION_FAILED", "cleanup": "preserve policy output and dispatch no worker", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-policy-verification"},
+      {"id": "dispatch-confirm-executions", "from": "POLICIES_VERIFIED", "to": "EXECUTIONS_RUNNING", "mutates": true, "failure_state": "EXECUTION_DISPATCH_FAILED", "cleanup": "remove unpublished dispatch and spawn no worker", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-execution-dispatch"},
+      {"id": "publish-execution-observations", "from": "EXECUTIONS_RUNNING", "to": "EXECUTIONS_OBSERVED", "mutates": true, "failure_state": "INDETERMINATE_AFTER_EXECUTION_DISPATCH", "cleanup": "preserve dispatch remove workspace and forbid same-identity rerun", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-execution-observation"},
+      {"id": "publish-oracles", "from": "EXECUTIONS_OBSERVED", "to": "ORACLES_FROZEN", "mutates": true, "failure_state": "ORACLE_FAILED", "cleanup": "preserve adapter observations and remove unpublished oracle bytes", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-oracle"},
+      {"id": "publish-controls", "from": "ORACLES_FROZEN", "to": "CONTROLS_FROZEN", "mutates": true, "failure_state": "CONTROL_FAILED", "cleanup": "preserve positive evidence and every completed control", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-controls"},
+      {"id": "publish-terminal", "from": "CONTROLS_FROZEN", "to": "PASS", "mutates": true, "failure_state": "TERMINAL_PUBLISH_FAILED", "cleanup": "remove unpublished terminal and preserve acyclic prefix", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-terminal"},
+      {"id": "cleanup-generated", "from": "PASS", "to": "PASS", "mutates": true, "failure_state": "CLEANUP_FAILED", "cleanup": "report every retained path and preserve evidence roots", "preserves": ["representation-paper", "composition-proof", "graphify-output"], "test_id": "fault-cleanup"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id": "architecture-canon", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/ARCHITECTURE_CANON.md", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "architecture-canon-baseline"},
+    {"id": "k2-module", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/mod.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "k2-module-baseline"},
+    {"id": "composition-module-registration", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/mod.rs", "policy": "additive_hidden_representation_sibling_only", "rollback_policy": "restore_exact_baseline_on_failure", "baseline_check_id": "composition-module-registration-baseline"},
+    {"id": "composition-model", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-model-baseline"},
+    {"id": "composition-learner", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/learner.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-learner-baseline"},
+    {"id": "composition-planner", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/planner.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-planner-baseline"},
+    {"id": "composition-verifier", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-verifier-baseline"},
+    {"id": "composition-sandbox", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-sandbox-baseline"},
+    {"id": "composition-journal", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-journal-baseline"},
+    {"id": "composition-test", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/crates/nando-operator-learning/tests/k2_learned_sequential_composition_v1.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-test-baseline"},
+    {"id": "composition-paper", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PREREGISTRATION_V1.md", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-paper-baseline"},
+    {"id": "composition-result", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_RESULT_2026-08-15.md", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-result-baseline"},
+    {"id": "representation-paper", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_PREREGISTRATION_V1.md", "policy": "frozen_before_implementation", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "representation-paper-baseline"},
+    {"id": "representation-critique", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_CRITIQUE_V1.md", "policy": "frozen_before_implementation", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "representation-critique-baseline"},
+    {"id": "code-route-design", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_V1/code-route.design.json", "policy": "frozen_before_implementation", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "code-route-design-baseline"},
+    {"id": "graphify-output", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/graphify-out", "policy": "untracked_preserve_recursive", "rollback_policy": "never_modify_or_delete", "baseline_check_id": "graphify-baseline"},
+    {"id": "composition-proof", "path": "/home/ubu/projects/nando-wave-k1-transport-fix/plans/effect-law-unification-v1/evidence/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_V1", "policy": "immutable_recursive", "rollback_policy": "preserve_all_existing_bytes", "baseline_check_id": "composition-proof-baseline"}
+  ],
+  "identity_contracts": [
+    {"id": "train-baseline-to-corpus", "producer": "external complete train baseline", "consumer": "source-neutral example projector", "comparison": "all satisfying prefixes labels and decision roots", "test_id": "train-corpus-parity"},
+    {"id": "corpus-to-trainer", "producer": "canonical feature corpus", "consumer": "external trainer", "comparison": "feature schema rows labels corpus root and executable identity", "test_id": "trainer-input-parity"},
+    {"id": "model-to-policy", "producer": "frozen trainer model snapshot", "consumer": "external hidden policy", "comparison": "canonical weights model root feature root and beam contract", "test_id": "model-policy-parity"},
+    {"id": "confirm-to-baseline", "producer": "sealed confirm tasks", "consumer": "external complete baseline", "comparison": "law set target goal depth and exact 8659 denominator", "test_id": "confirm-baseline-parity"},
+    {"id": "policy-to-verifier", "producer": "external hidden policy trace", "consumer": "independent verifier", "comparison": "features scores beam prefixes counts selected plan and roots", "test_id": "independent-policy-verifier-parity"},
+    {"id": "verifier-to-worker", "producer": "durable independently verified program", "consumer": "generated-only sequential worker", "comparison": "effect order request root and executable identity", "test_id": "worker-request-parity"},
+    {"id": "worker-to-adapter", "producer": "worker outcome plus real current-work filesystem", "consumer": "adapter observer", "comparison": "per-step result unaffected entries and terminal manifest", "test_id": "adapter-observation-parity"},
+    {"id": "adapter-to-oracle", "producer": "adapter-observed terminal manifest", "consumer": "separate exact oracle", "comparison": "canonical manifest tree root and frozen goal root", "test_id": "oracle-parity"},
+    {"id": "journal-restart", "producer": "crash-atomic ordinal event writer", "consumer": "deterministic restart projector", "comparison": "event bytes hash chain legal state and every cross-event root", "test_id": "journal-restart-parity"},
+    {"id": "executable-separation", "producer": "trainer baseline policy verifier worker and oracle executables", "consumer": "driver identity validator", "comparison": "pairwise distinct SHA-256 and role-specific schemas", "test_id": "executable-identity-parity"}
+  ],
+  "runtime_comparisons": [],
+  "invariants": [
+    {"id": "model-before-confirm", "statement": "model root is durable before any confirm-derived byte is created or revealed", "test_id": "confirm-temporal-seal"},
+    {"id": "identity-free-trainer", "statement": "trainer bytes contain only source-neutral features labels and decision roots", "test_id": "trainer-input-parity"},
+    {"id": "complete-baseline", "statement": "each confirm baseline dispositions exactly 8659 no-repetition programs", "test_id": "confirm-baseline-parity"},
+    {"id": "bounded-policy", "statement": "each hidden policy evaluates at most 67 action extensions with beam width three", "test_id": "policy-budget-parity"},
+    {"id": "parameter-causality", "statement": "zero and destructive model controls fail under the unchanged policy budget", "test_id": "parameter-ablation-parity"},
+    {"id": "source-neutral-transfer", "statement": "action ID permutation and path bijection preserve both exact confirm outcomes", "test_id": "renaming-transfer-parity"},
+    {"id": "independent-verification", "statement": "verifier reconstructs features scores beam and denominator without policy or baseline calls", "test_id": "independent-policy-verifier-parity"},
+    {"id": "adapter-owned-observation", "statement": "adapter scans the real disposable filesystem after worker exit", "test_id": "adapter-observation-parity"},
+    {"id": "oracle-separation", "statement": "exact oracle sees only frozen goal and adapter-observed terminal manifest", "test_id": "oracle-parity"},
+    {"id": "authority-denied", "statement": "natural K2 K1 product phase certification and deployment authority remain false", "test_id": "authority-boundary-parity"},
+    {"id": "prior-proof-preserved", "statement": "all predecessor composition proof and paper bytes retain exact SHA-256", "test_id": "frozen-baseline-parity"},
+    {"id": "zero-generated-residue", "statement": "all disposable train confirm journal and workspace paths are removed", "test_id": "cleanup-parity"}
+  ],
+  "tests": [
+    {"id": "train-corpus-parity", "kind": "parity", "expected": "six train baselines produce complete verified decision labels"},
+    {"id": "trainer-input-parity", "kind": "parity", "expected": "trainer request excludes IDs paths contents confirm roots and programs"},
+    {"id": "model-policy-parity", "kind": "parity", "expected": "frozen model bytes and policy input root match"},
+    {"id": "confirm-baseline-parity", "kind": "parity", "expected": "both confirm tasks account for 8659 programs and exact minimum depth six"},
+    {"id": "policy-budget-parity", "kind": "parity", "expected": "beam width three and no more than 67 evaluations per confirm task"},
+    {"id": "parameter-ablation-parity", "kind": "parity", "expected": "zero model is 0 of 2 and every destructive model control is at most 1 of 2"},
+    {"id": "renaming-transfer-parity", "kind": "parity", "expected": "ID permutation and path bijection each preserve 2 of 2"},
+    {"id": "independent-policy-verifier-parity", "kind": "parity", "expected": "independent trace and full denominator reconstruction match"},
+    {"id": "worker-request-parity", "kind": "parity", "expected": "verified selected effect order and sandbox request root match"},
+    {"id": "adapter-observation-parity", "kind": "parity", "expected": "worker report filesystem scan and predicted terminal agree"},
+    {"id": "oracle-parity", "kind": "parity", "expected": "separate oracle accepts both exact goals and rejects wrong terminal"},
+    {"id": "journal-restart-parity", "kind": "parity", "expected": "every legal journal prefix projects identically after restart"},
+    {"id": "executable-identity-parity", "kind": "parity", "expected": "all role binaries and driver have pairwise distinct SHA-256"},
+    {"id": "confirm-temporal-seal", "kind": "parity", "expected": "no confirm-derived token exists in trainer bytes before model freeze"},
+    {"id": "authority-boundary-parity", "kind": "parity", "expected": "every authority flag remains false"},
+    {"id": "frozen-baseline-parity", "kind": "parity", "expected": "all preflight-frozen predecessor files retain exact SHA-256"},
+    {"id": "cleanup-parity", "kind": "parity", "expected": "no generated fixture journal or workspace remains"},
+    {"id": "fault-train-freeze", "kind": "fault_injection", "expected": "TRAIN_FREEZE_FAILED with no unpublished bytes"},
+    {"id": "fault-train-baseline", "kind": "fault_injection", "expected": "TRAIN_BASELINE_FAILED with prior prefix preserved"},
+    {"id": "fault-train-corpus", "kind": "fault_injection", "expected": "TRAIN_CORPUS_FAILED with baselines preserved"},
+    {"id": "fault-model-dispatch", "kind": "fault_injection", "expected": "MODEL_DISPATCH_FAILED before trainer spawn"},
+    {"id": "fault-model-publish", "kind": "fault_injection", "expected": "indeterminate model dispatch is preserved and not retried"},
+    {"id": "fault-confirm-seal", "kind": "fault_injection", "expected": "TEMPORAL_LEAK_FAIL preserves model and publishes no confirm bytes"},
+    {"id": "fault-confirm-baseline", "kind": "fault_injection", "expected": "CONFIRM_BASELINE_FAILED with model and confirm roots preserved"},
+    {"id": "fault-policy-dispatch", "kind": "fault_injection", "expected": "POLICY_DISPATCH_FAILED before policy spawn"},
+    {"id": "fault-policy-publish", "kind": "fault_injection", "expected": "indeterminate policy dispatch is preserved and not retried"},
+    {"id": "fault-policy-verification", "kind": "fault_injection", "expected": "POLICY_VERIFICATION_FAILED before worker dispatch"},
+    {"id": "fault-execution-dispatch", "kind": "fault_injection", "expected": "EXECUTION_DISPATCH_FAILED before worker spawn"},
+    {"id": "fault-execution-observation", "kind": "fault_injection", "expected": "indeterminate execution is preserved and not retried"},
+    {"id": "fault-oracle", "kind": "fault_injection", "expected": "ORACLE_FAILED with adapter observations preserved"},
+    {"id": "fault-controls", "kind": "fault_injection", "expected": "CONTROL_FAILED preserves positives and completed controls"},
+    {"id": "fault-terminal", "kind": "fault_injection", "expected": "TERMINAL_PUBLISH_FAILED preserves acyclic prefix"},
+    {"id": "fault-cleanup", "kind": "fault_injection", "expected": "CLEANUP_FAILED reports every retained generated path"}
+  ]
+}

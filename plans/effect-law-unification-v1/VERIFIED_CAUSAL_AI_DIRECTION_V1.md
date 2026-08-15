@@ -45,6 +45,20 @@ answer table for the frozen experiment. It does not prove that the learner
 invented the state ontology, learned from natural traffic, or used the Wave
 phase mechanism to form a complete operator circuit.
 
+Two preregistered successors have now also passed:
+
+```text
+K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PASS
+  learned hidden effects -> unprovided depth-three program -> exact execution
+
+K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_PASS
+  complete-search train decisions -> compact hidden policy
+  -> 2 / 2 sealed exact goals with 61 / 8,659 search accounting per task
+```
+
+The second result is generated-only denominator compression. It is not matched
+compute speedup, a self-created ontology, natural K2, or production authority.
+
 ## 3. The Intended Intelligence Stack
 
 ```text
@@ -82,30 +96,32 @@ Admission             grants any later runtime authority; every prior stage is f
 An LLM may translate language, propose hypotheses, or explain a result. It may
 not certify a law, select hidden answers, or replace exact outcome verification.
 
-## 5. Immediate Decisive Test
+## 5. Current Frontier
 
-The next finite claim is:
-
-```text
-K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PASS
-```
-
-The learner must induce six hidden effects across two disjoint fixtures. An
-external planner must then enumerate the complete bounded program denominator
-and discover a previously unprovided depth-three satisfying semantic class.
-No prepared DAG, private mapping, expected sequence, or in-process plan is
-available to it. The selected program must execute in a separate sandbox and
-reach the exact goal under an independent oracle.
-
-Passing this test would establish the first explicit learned-world-model agent
-baseline:
+The explicit learned-world-model baseline is complete:
 
 ```text
-learn effects -> compose effects -> act -> attain exact goal
+hidden effects -> learned laws -> explicit composition -> exact action
 ```
 
-It would not yet establish hidden representation, automatic language growth,
-natural K2, open-ended planning, or production authority.
+The hidden-representation successor is also complete inside a bounded generated
+environment:
+
+```text
+complete-search train decisions -> learned hidden ranking
+-> sealed compositions -> bounded search -> exact action
+```
+
+The next finite question is self-chosen safe inquiry. Given several frozen
+world models that fit current evidence, can Nanda choose one allowlisted,
+reversible probe that maximally distinguishes them under exact cost and risk
+budgets, precommit its predictions, execute in isolation, and update only from
+an independently observed outcome? Passive waiting, stable probe order,
+cheapest-first, and an oracle upper bound must be frozen baselines.
+
+Passing that test would establish bounded active causal inquiry. It would still
+not establish automatic language growth, natural K2, open-ended planning, or
+production authority.
 
 ## 6. Best First Environment
 
@@ -138,9 +154,10 @@ false abstraction            renamed fixtures can masquerade as new semantics
 authority leakage             a proposer can accidentally become its own verifier
 ```
 
-The next architecture must attack these risks in that order: composition first,
-then heldout transfer, then bounded active inquiry, then learned representation.
-Natural and production authority remain downstream of independent evidence.
+Composition and generated heldout representation transfer are now proved in
+their bounded scopes. The next architecture must attack active inquiry, then
+partial observability and learned state language. Natural and production
+authority remain downstream of independent natural evidence.
 
 ## 8. Product Shape
 
@@ -164,8 +181,9 @@ Use these exact boundaries:
 
 ```text
 bounded hidden-effect induction                         PROVED
-learned sequential composition                          UNDER TEST
-self-chosen causal inquiry                              NOT PROVED
+learned sequential composition                          PROVED
+hidden representation transfer                          PROVED IN BOUNDED GENERATED ENVIRONMENT
+self-chosen safe causal inquiry                          NEXT / NOT PROVED
 self-created state language                             NOT PROVED
 natural K2                                              NOT PROVED
 general intelligence                                    NOT CLAIMED

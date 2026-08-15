@@ -5,6 +5,7 @@
 //! modules.
 
 mod journal;
+mod hidden_representation;
 mod learner;
 mod model;
 mod planner;
@@ -12,6 +13,7 @@ mod sandbox;
 mod verifier;
 
 pub use journal::*;
+pub use hidden_representation::*;
 pub use learner::*;
 pub use model::*;
 pub use planner::*;
