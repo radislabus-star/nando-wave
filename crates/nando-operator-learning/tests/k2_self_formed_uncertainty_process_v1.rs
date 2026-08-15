@@ -434,7 +434,13 @@ fn execute_precommitted_case(
         )
         .expect("workspace identity parity");
         assert_eq!(item.workspace_identity, expected_identity);
-        assert!(workspace.ends_with(&item.workspace_identity.identity_root_sha256));
+        assert_eq!(
+            workspace,
+            &environment.root.join(format!(
+                "sandbox-work-{}",
+                item.workspace_identity.identity_root_sha256
+            ))
+        );
     }
     let case_journal_root = environment
         .root
