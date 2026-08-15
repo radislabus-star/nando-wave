@@ -16,18 +16,27 @@ pub fn run() {
         representatives.clone(),
     ))
     .expect("actual closure census");
-    assert_eq!(
-        actual.candidate_count,
+    let expected_candidates = if actual.completion_required {
         actual.representative_count.saturating_sub(1)
-    );
-    assert_eq!(
-        actual.disposition,
-        K2UncertaintyClosureDispositionV1::TwoProbe
-    );
-    assert_eq!(
-        actual.selected_joint_partition_sizes,
-        Some(vec![1, 1, 1, 1])
-    );
+    } else {
+        0
+    };
+    assert_eq!(actual.candidate_count, expected_candidates);
+    match actual.disposition {
+        K2UncertaintyClosureDispositionV1::SingleProbe => {
+            assert_eq!(actual.first_partition_sizes, [1, 1, 1, 1]);
+            assert!(actual.selected_second_probe_root_sha256.is_none());
+        }
+        K2UncertaintyClosureDispositionV1::TwoProbe => {
+            assert_eq!(
+                actual.selected_joint_partition_sizes,
+                Some(vec![1, 1, 1, 1])
+            );
+        }
+        K2UncertaintyClosureDispositionV1::ClosureUnavailable => {
+            panic!("development case has no bounded closure")
+        }
+    }
 
     let manifests = distinct_manifests(&representatives);
     verify_single_probe(&fixture, &representatives, &manifests);
