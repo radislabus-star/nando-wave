@@ -1,16 +1,19 @@
+use std::io::{Read, Write};
+
 use serde::{Deserialize, Serialize};
 
 use super::super::{
     K2CompositionAuthorityBoundaryV1, K2CompositionErrorV1, K2CompositionLearnedEffectV1,
     K2CompositionResultV1, K2InquiryObservationModeV1, K2InquiryProbeV1,
-    require_composition_root_v1,
+    composition_sha256_file_v1, require_composition_root_v1,
 };
 use super::{
-    K2_UNCERTAINTY_MAX_COST_UNITS_V1, K2_UNCERTAINTY_MAX_RISK_UNITS_V1,
-    K2_UNCERTAINTY_RISK_COST_SCHEMA_V1, K2_UNCERTAINTY_SAFETY_RECEIPT_SCHEMA_V1,
-    K2_UNCERTAINTY_SAFETY_REQUEST_SCHEMA_V1, K2UncertaintyDomainVocabularyV1,
-    K2UncertaintyEffectCandidateV1, K2UncertaintyRiskCostV1, denied_authority_v1,
-    require_denied_authority_v1, uncertainty_root_v1,
+    K2_UNCERTAINTY_MAX_COST_UNITS_V1, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+    K2_UNCERTAINTY_MAX_RISK_UNITS_V1, K2_UNCERTAINTY_RISK_COST_SCHEMA_V1,
+    K2_UNCERTAINTY_SAFETY_RECEIPT_SCHEMA_V1, K2_UNCERTAINTY_SAFETY_REQUEST_SCHEMA_V1,
+    K2UncertaintyDomainVocabularyV1, K2UncertaintyEffectCandidateV1, K2UncertaintyRiskCostV1,
+    denied_authority_v1, require_denied_authority_v1, uncertainty_bytes_v1, uncertainty_decode_v1,
+    uncertainty_root_v1,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -237,6 +240,26 @@ pub fn verify_self_formed_private_safety_v1(
     };
     receipt.validate()?;
     Ok(receipt)
+}
+
+pub fn run_self_formed_safety_process_v1() -> K2CompositionResultV1<()> {
+    let mut input = Vec::new();
+    std::io::stdin()
+        .take((K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 + 1) as u64)
+        .read_to_end(&mut input)
+        .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_safety_stdin"))?;
+    let request: K2UncertaintySafetyRequestV1 = uncertainty_decode_v1(&input)?;
+    let executable = std::env::current_exe()
+        .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_safety"))?;
+    if composition_sha256_file_v1(&executable)? != request.safety_executable_sha256 {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_safety_executable_mismatch",
+        ));
+    }
+    let receipt = verify_self_formed_private_safety_v1(&request)?;
+    std::io::stdout()
+        .write_all(&uncertainty_bytes_v1(&receipt)?)
+        .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_safety_stdout"))
 }
 
 pub fn self_formed_grammar_root_v1(

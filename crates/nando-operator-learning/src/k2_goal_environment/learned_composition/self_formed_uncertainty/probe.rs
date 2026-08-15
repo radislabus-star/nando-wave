@@ -1,29 +1,33 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::{Read, Write};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use super::super::{
     K2CompositionAuthorityBoundaryV1, K2CompositionErrorV1, K2CompositionFileEntryV1,
     K2CompositionLearnedEffectV1, K2CompositionResultV1, K2CompositionTreeManifestV1,
-    K2InquiryObservationModeV1, K2InquiryProbeV1, inquiry_generated_probe_provenance_root_v1,
-    inquiry_observable_outcome_root_v1, require_composition_root_v1,
+    K2InquiryObservationModeV1, K2InquiryProbeV1, composition_sha256_file_v1,
+    inquiry_generated_probe_provenance_root_v1, inquiry_observable_outcome_root_v1,
+    require_composition_root_v1,
 };
 use super::{
     K2_UNCERTAINTY_EFFECT_ACCOUNTING_SCHEMA_V1, K2_UNCERTAINTY_EFFECTS_PER_ACTION_V1,
     K2_UNCERTAINTY_FRONTIER_PAGE_PROBES_V1, K2_UNCERTAINTY_FRONTIER_PAGE_SCHEMA_V1,
-    K2_UNCERTAINTY_FRONTIER_SCHEMA_V1, K2_UNCERTAINTY_PREDICTION_WITNESS_SCHEMA_V1,
-    K2_UNCERTAINTY_PROBE_CLASS_SCHEMA_V1, K2_UNCERTAINTY_PROBE_OUTPUT_SCHEMA_V1,
-    K2_UNCERTAINTY_PROBE_REQUEST_SCHEMA_V1, K2_UNCERTAINTY_RAW_PREDICTIONS_V1,
-    K2_UNCERTAINTY_RAW_PROBE_SCHEMA_V1, K2_UNCERTAINTY_RAW_PROBES_V1,
-    K2_UNCERTAINTY_RISK_COST_SCHEMA_V1, K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1,
-    K2UncertaintyDomainVocabularyV1, K2UncertaintyEffectAccountingV1,
-    K2UncertaintyEffectCandidateV1, K2UncertaintyEligibilityDispositionV1,
-    K2UncertaintyFrontierPageV1, K2UncertaintyFrontierV1, K2UncertaintyLearnerResponseV1,
-    K2UncertaintyPredictionWitnessV1, K2UncertaintyProbeClassV1,
+    K2_UNCERTAINTY_FRONTIER_SCHEMA_V1, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+    K2_UNCERTAINTY_PREDICTION_WITNESS_SCHEMA_V1, K2_UNCERTAINTY_PROBE_CLASS_SCHEMA_V1,
+    K2_UNCERTAINTY_PROBE_OUTPUT_SCHEMA_V1, K2_UNCERTAINTY_PROBE_REQUEST_SCHEMA_V1,
+    K2_UNCERTAINTY_RAW_PREDICTIONS_V1, K2_UNCERTAINTY_RAW_PROBE_SCHEMA_V1,
+    K2_UNCERTAINTY_RAW_PROBES_V1, K2_UNCERTAINTY_RISK_COST_SCHEMA_V1,
+    K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1, K2UncertaintyDomainVocabularyV1,
+    K2UncertaintyEffectAccountingV1, K2UncertaintyEffectCandidateV1,
+    K2UncertaintyEligibilityDispositionV1, K2UncertaintyFrontierPageV1, K2UncertaintyFrontierV1,
+    K2UncertaintyLearnerResponseV1, K2UncertaintyPredictionWitnessV1, K2UncertaintyProbeClassV1,
     K2UncertaintyProbeEquivalenceKeyV1, K2UncertaintyPublicCaseV1,
     K2UncertaintyRawProbeDispositionV1, K2UncertaintyRiskCostV1, K2UncertaintyRobustAccountingV1,
     K2UncertaintySafetyDispositionV1, K2UncertaintyStateUniverseV1, denied_authority_v1,
-    require_denied_authority_v1, require_exact_len_v1, uncertainty_root_v1,
+    publish_self_formed_probe_output_v1, require_denied_authority_v1, require_exact_len_v1,
+    uncertainty_bytes_v1, uncertainty_decode_v1, uncertainty_root_v1,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -324,6 +328,27 @@ pub fn enumerate_self_formed_probe_frontier_v1(
     };
     output.reseal()?;
     Ok(output)
+}
+
+pub fn run_self_formed_probe_process_v1() -> K2CompositionResultV1<()> {
+    let mut input = Vec::new();
+    std::io::stdin()
+        .take((K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 + 1) as u64)
+        .read_to_end(&mut input)
+        .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_probe_stdin"))?;
+    let request: K2UncertaintyProbeRequestV1 = uncertainty_decode_v1(&input)?;
+    let executable = std::env::current_exe()
+        .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_probe"))?;
+    if composition_sha256_file_v1(&executable)? != request.probe_executable_sha256 {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_probe_executable_mismatch",
+        ));
+    }
+    let output = enumerate_self_formed_probe_frontier_v1(&request)?;
+    let receipt = publish_self_formed_probe_output_v1(Path::new("/out"), &output)?;
+    std::io::stdout()
+        .write_all(&uncertainty_bytes_v1(&receipt)?)
+        .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_probe_stdout"))
 }
 
 fn build_probe_disposition_v1(

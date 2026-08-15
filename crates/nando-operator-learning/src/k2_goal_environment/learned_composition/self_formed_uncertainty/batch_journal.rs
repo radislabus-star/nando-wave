@@ -85,10 +85,13 @@ pub enum K2UncertaintyBatchJournalFaultV1 {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct K2UncertaintyBatchJournalProjectionV1 {
+    pub experiment_id_sha256: String,
+    pub execution_order_case_roots_sha256: Vec<String>,
     pub event_count: u64,
     pub last_kind: Option<K2UncertaintyBatchJournalEventKindV1>,
     pub last_event_root_sha256: Option<String>,
     pub all_cases_precommitted: bool,
+    pub all_cases_precommitted_payload_root_sha256: Option<String>,
     pub completed_cases: u64,
     pub indeterminate_dispatch_case_id_sha256: Option<String>,
     pub terminal: bool,
@@ -260,6 +263,8 @@ impl K2UncertaintyBatchJournalV1 {
                 .flatten()
         });
         K2UncertaintyBatchJournalProjectionV1 {
+            experiment_id_sha256: self.file.experiment_id_sha256.clone(),
+            execution_order_case_roots_sha256: self.file.execution_order_case_roots_sha256.clone(),
             event_count: count as u64,
             last_kind: self.file.events.last().map(|event| event.kind),
             last_event_root_sha256: self
@@ -268,6 +273,14 @@ impl K2UncertaintyBatchJournalV1 {
                 .last()
                 .map(|event| event.event_root_sha256.clone()),
             all_cases_precommitted: count >= 6,
+            all_cases_precommitted_payload_root_sha256: self
+                .file
+                .events
+                .get(5)
+                .filter(|event| {
+                    event.kind == K2UncertaintyBatchJournalEventKindV1::AllCasesPrecommitted
+                })
+                .map(|event| event.payload_root_sha256.clone()),
             completed_cases: completed_cases as u64,
             indeterminate_dispatch_case_id_sha256,
             terminal: count >= K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1 - 1,

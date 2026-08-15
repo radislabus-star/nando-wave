@@ -26,6 +26,8 @@ pub const K2_UNCERTAINTY_SELECTOR_PROBES_V1: usize = 8;
 pub const K2_UNCERTAINTY_MAX_SELECTOR_REQUESTS_V1: usize = 256;
 pub const K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1: &str =
     "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390";
+pub const K2_UNCERTAINTY_BASELINE_SOURCE_SHA256_V1: &str =
+    "febf3c09ae22de3bcf0989ce6aeb569925124a2c1b32277b1f5cb3083736974b";
 pub const K2_UNCERTAINTY_MAX_CONTENT_BYTES_V1: usize = 4_096;
 pub const K2_UNCERTAINTY_MAX_MANIFEST_ENTRIES_V1: usize = 4;
 pub const K2_UNCERTAINTY_MAX_MANIFEST_BYTES_V1: u64 = 16_384;
@@ -96,6 +98,18 @@ pub const K2_UNCERTAINTY_PROBE_ARTIFACTS_SCHEMA_V1: &str =
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENT_SCHEMA_V1: &str =
     "nando.k2-self-formed-batch-journal-event.v1";
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_SCHEMA_V1: &str = "nando.k2-self-formed-batch-journal.v1";
+pub const K2_UNCERTAINTY_BASELINE_SUMMARY_SCHEMA_V1: &str =
+    "nando.k2-self-formed-baseline-summary.v1";
+pub const K2_UNCERTAINTY_CASE_PREVERIFICATION_SCHEMA_V1: &str =
+    "nando.k2-self-formed-case-preverification.v1";
+pub const K2_UNCERTAINTY_BATCH_PRECOMMIT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-batch-precommit.v1";
+pub const K2_UNCERTAINTY_DISPATCH_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-dispatch-receipt.v1";
+pub const K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-final-verifier-request.v1";
+pub const K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V1: &str =
+    "nando.k2-self-formed-case-verification.v1";
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
     6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 

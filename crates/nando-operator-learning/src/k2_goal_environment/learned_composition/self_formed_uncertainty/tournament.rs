@@ -5,8 +5,8 @@ use super::super::{
     K2_INQUIRY_MAX_COST_UNITS_V1, K2_INQUIRY_MAX_RISK_UNITS_V1, K2CompositionErrorV1,
     K2CompositionResultV1, K2InquiryBaselineKindV1, K2InquiryBaselineRequestV1,
     K2InquiryBaselinesV1, K2InquiryObservationModeV1, K2InquiryProbeV1, K2InquiryPublicCaseV1,
-    K2InquirySelectorRequestV1, evaluate_inquiry_baselines_v1, require_composition_root_v1,
-    select_model_guided_probe_v1,
+    K2InquirySelectionPrecommitV1, K2InquirySelectorRequestV1, evaluate_inquiry_baselines_v1,
+    require_composition_root_v1, select_model_guided_probe_v1,
 };
 use super::{
     K2_UNCERTAINTY_DIRECT_SCORE_SCHEMA_V1, K2_UNCERTAINTY_DIRECT_WINNER_SCHEMA_V1,
@@ -44,6 +44,35 @@ pub fn run_self_formed_tournament_v1(
     selector_executable_sha256: &str,
     baseline_executable_sha256: &str,
 ) -> K2CompositionResultV1<K2UncertaintyTournamentArtifactsV1> {
+    run_self_formed_tournament_with_owners_v1(
+        public_case,
+        learner_response,
+        probe_output,
+        split_commitment_root_sha256,
+        selector_source_sha256,
+        selector_executable_sha256,
+        baseline_executable_sha256,
+        &mut select_model_guided_probe_v1,
+        &mut evaluate_inquiry_baselines_v1,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_self_formed_tournament_with_owners_v1<S, B>(
+    public_case: &K2UncertaintyPublicCaseV1,
+    learner_response: &K2UncertaintyLearnerResponseV1,
+    probe_output: &K2UncertaintyProbeOutputV1,
+    split_commitment_root_sha256: &str,
+    selector_source_sha256: &str,
+    selector_executable_sha256: &str,
+    baseline_executable_sha256: &str,
+    selector_owner: &mut S,
+    baseline_owner: &mut B,
+) -> K2CompositionResultV1<K2UncertaintyTournamentArtifactsV1>
+where
+    S: FnMut(&K2InquirySelectorRequestV1) -> K2CompositionResultV1<K2InquirySelectionPrecommitV1>,
+    B: FnMut(&K2InquiryBaselineRequestV1) -> K2CompositionResultV1<K2InquiryBaselinesV1>,
+{
     public_case.validate()?;
     learner_response.validate()?;
     probe_output.validate()?;
@@ -83,6 +112,7 @@ pub fn run_self_formed_tournament_v1(
         selector_executable_sha256,
         &probe_output.frontier.frontier_root_sha256,
         &probes,
+        selector_owner,
     )?;
     if tournament_winner_probe_root_sha256 != direct_winner.selected_probe_root_sha256 {
         return Err(K2CompositionErrorV1::Invalid(
@@ -116,6 +146,7 @@ pub fn run_self_formed_tournament_v1(
         split_commitment_root_sha256,
         baseline_executable_sha256,
         &probes,
+        baseline_owner,
     )?];
     for kind in [
         K2InquiryBaselineKindV1::StableHash,
@@ -129,6 +160,7 @@ pub fn run_self_formed_tournament_v1(
             split_commitment_root_sha256,
             baseline_executable_sha256,
             &probes,
+            baseline_owner,
         )?);
     }
     baselines.sort_by_key(|baseline| baseline.kind);
@@ -277,14 +309,18 @@ fn compare_scores_v1(
         .then_with(|| left.probe_root_sha256.cmp(&right.probe_root_sha256))
 }
 
-fn selector_tournament_v1(
+fn selector_tournament_v1<S>(
     public_case: &K2UncertaintyPublicCaseV1,
     learner_response: &K2UncertaintyLearnerResponseV1,
     split_commitment_root_sha256: &str,
     selector_executable_sha256: &str,
     frontier_root_sha256: &str,
     probes: &BTreeMap<String, K2InquiryProbeV1>,
-) -> K2CompositionResultV1<(Vec<K2UncertaintyTournamentStepV1>, String)> {
+    selector_owner: &mut S,
+) -> K2CompositionResultV1<(Vec<K2UncertaintyTournamentStepV1>, String)>
+where
+    S: FnMut(&K2InquirySelectorRequestV1) -> K2CompositionResultV1<K2InquirySelectionPrecommitV1>,
+{
     let mut active = probes.keys().cloned().collect::<Vec<_>>();
     let mut eliminated = Vec::new();
     let mut steps = Vec::new();
@@ -298,7 +334,7 @@ fn selector_tournament_v1(
             probes,
             &submitted,
         )?;
-        let precommit = select_model_guided_probe_v1(&request)?;
+        let precommit = selector_owner(&request)?;
         let retained = precommit.selected_probe_root_sha256.clone();
         let removed = submitted
             .iter()
@@ -347,7 +383,7 @@ fn selector_tournament_v1(
         probes,
         &final_roots,
     )?;
-    let precommit = select_model_guided_probe_v1(&request)?;
+    let precommit = selector_owner(&request)?;
     let winner = precommit.selected_probe_root_sha256.clone();
     if !active.contains(&winner) {
         return Err(K2CompositionErrorV1::Invalid(
@@ -422,13 +458,17 @@ fn adapted_public_case_v1(
     )
 }
 
-fn passive_baseline_v1(
+fn passive_baseline_v1<B>(
     public_case: &K2UncertaintyPublicCaseV1,
     learner_response: &K2UncertaintyLearnerResponseV1,
     split_commitment_root_sha256: &str,
     baseline_executable_sha256: &str,
     probes: &BTreeMap<String, K2InquiryProbeV1>,
-) -> K2CompositionResultV1<K2UncertaintyBaselineTournamentV1> {
+    baseline_owner: &mut B,
+) -> K2CompositionResultV1<K2UncertaintyBaselineTournamentV1>
+where
+    B: FnMut(&K2InquiryBaselineRequestV1) -> K2CompositionResultV1<K2InquiryBaselinesV1>,
+{
     let roots = probes
         .keys()
         .take(K2_UNCERTAINTY_SELECTOR_PROBES_V1)
@@ -442,7 +482,7 @@ fn passive_baseline_v1(
         probes,
         &roots,
     )?;
-    let outcome = evaluate_inquiry_baselines_v1(&request)?;
+    let outcome = baseline_owner(&request)?;
     Ok(K2UncertaintyBaselineTournamentV1 {
         kind: K2InquiryBaselineKindV1::Passive,
         requests: vec![request],
@@ -451,14 +491,18 @@ fn passive_baseline_v1(
     })
 }
 
-fn baseline_tournament_v1(
+fn baseline_tournament_v1<B>(
     kind: K2InquiryBaselineKindV1,
     public_case: &K2UncertaintyPublicCaseV1,
     learner_response: &K2UncertaintyLearnerResponseV1,
     split_commitment_root_sha256: &str,
     baseline_executable_sha256: &str,
     probes: &BTreeMap<String, K2InquiryProbeV1>,
-) -> K2CompositionResultV1<K2UncertaintyBaselineTournamentV1> {
+    baseline_owner: &mut B,
+) -> K2CompositionResultV1<K2UncertaintyBaselineTournamentV1>
+where
+    B: FnMut(&K2InquiryBaselineRequestV1) -> K2CompositionResultV1<K2InquiryBaselinesV1>,
+{
     let mut active = probes.keys().cloned().collect::<Vec<_>>();
     let mut eliminated = Vec::new();
     let mut requests = Vec::new();
@@ -473,7 +517,7 @@ fn baseline_tournament_v1(
             probes,
             &submitted,
         )?;
-        let outcome = evaluate_inquiry_baselines_v1(&request)?;
+        let outcome = baseline_owner(&request)?;
         let retained = baseline_selected_v1(&outcome, kind)?;
         eliminated.extend(submitted.iter().filter(|root| *root != &retained).cloned());
         active.drain(..K2_UNCERTAINTY_SELECTOR_PROBES_V1);
@@ -503,7 +547,7 @@ fn baseline_tournament_v1(
         probes,
         &final_roots,
     )?;
-    let outcome = evaluate_inquiry_baselines_v1(&request)?;
+    let outcome = baseline_owner(&request)?;
     let selected = baseline_selected_v1(&outcome, kind)?;
     if !active.contains(&selected) {
         return Err(K2CompositionErrorV1::Invalid(

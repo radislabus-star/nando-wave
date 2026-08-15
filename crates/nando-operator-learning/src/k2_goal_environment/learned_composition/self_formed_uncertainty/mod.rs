@@ -5,9 +5,16 @@
 
 mod artifact_store;
 mod batch_journal;
+mod final_verifier;
+mod final_verifier_frontier;
+mod final_verifier_induction;
+mod final_verifier_model;
+mod final_verifier_selection;
 mod frontier_model;
 mod generator;
 mod generator_model;
+mod integration;
+mod integration_model;
 mod learner;
 mod limits;
 mod model_set;
@@ -20,9 +27,13 @@ mod vocabulary;
 
 pub use artifact_store::*;
 pub use batch_journal::*;
+pub use final_verifier::*;
+pub use final_verifier_model::*;
 pub use frontier_model::*;
 pub use generator::*;
 pub use generator_model::*;
+pub use integration::*;
+pub use integration_model::*;
 pub use learner::*;
 pub use limits::*;
 pub use model_set::*;
