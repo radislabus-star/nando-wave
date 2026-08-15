@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized] target(s) in 0.03s
+     Running tests/k2_self_chosen_safe_inquiry_v1.rs (/home/e/.cache/nando-wave-k2-active-inquiry-target/debug/deps/k2_self_chosen_safe_inquiry_v1-5b29ecc4b9d938b2)
+
+running 1 test
+NANDO_K2_INQUIRY_SEALED_RESULT={"authority":{"deployment_authority":false,"k1_registry_mutated":false,"law_certificate_issued":false,"natural_k2_authority":false,"package_activated":false,"phase_memory_mutated":false,"product_authority":false},"baseline_executable_sha256":"49e88988c043681db664f1e9c5275aad0f4fb43aff692f8f681b41117cbf0a5a","cases":8,"confirm_commitment_sha256":"0a48670dbb2035c0502f064ee10c41c20b5c6391743641b814af98892efba6f4","disposition":"K2_MODEL_GUIDED_ACTIVE_INQUIRY_PASS","forbidden_probe_executions":0,"generator_schema_sha256":"ad591e3c1a7826295ea93056049dd3759f37c6502b86a542e27dd67fb68a0286","negative_controls_passed":18,"observer_executable_sha256":"a94a312e0e2e66a018434f0e5fc11eb20c04a4c7515d4861d17b9ade2e4a5740","receipt_root_sha256":"739fe66b11e8035815db08e4bec136857851df41cceee6dd24445995eb64f578","schema":"nando.k2-self-chosen-safe-inquiry-receipt.v1","selector_executable_sha256":"1665d2820395d3193512c70b5983be4d00272a5c041fdddba8a011d7ff43b4be","terminal_event_root_sha256":"c5f25afa92e8a3313743ec2c464610899f505388a1c5697e41727123118a3441","totals":{"cheapest_first_survivors":32,"complete_predictions":256,"exact_best_ties":8,"explicit_heuristic_survivors":16,"model_guided_survivors":8,"oracle_matches":8,"oracle_survivors":8,"passive_survivors":32,"stable_hash_survivors":16},"verifier_executable_sha256":"df6d34dba8e966e427eb5c14d8cb1395ffe332ca67ed141486cf2bcd5c398366","worker_executable_sha256":"bd6848b86e6de3eefc56588877315c48bb6a407d3adb0d5457726acecacd2747"}
+test sealed_model_guided_active_inquiry_uses_one_safe_probe_per_case ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 7.40s
+

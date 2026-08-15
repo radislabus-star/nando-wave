@@ -45,7 +45,7 @@ answer table for the frozen experiment. It does not prove that the learner
 invented the state ontology, learned from natural traffic, or used the Wave
 phase mechanism to form a complete operator circuit.
 
-Two preregistered successors have now also passed:
+Three preregistered successors have now also passed:
 
 ```text
 K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PASS
@@ -54,10 +54,16 @@ K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PASS
 K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_PASS
   complete-search train decisions -> compact hidden policy
   -> 2 / 2 sealed exact goals with 61 / 8,659 search accounting per task
+
+K2_MODEL_GUIDED_ACTIVE_INQUIRY_PASS
+  four competing causal models -> one safe self-chosen generated probe
+  -> 8 / 8 singleton model updates under independent verification
 ```
 
-The second result is generated-only denominator compression. It is not matched
-compute speedup, a self-created ontology, natural K2, or production authority.
+The latter two results remain generated-only. They are not matched compute
+speedup, a self-created ontology, natural K2, or production authority. The
+active-inquiry scorer is fixed K0 logic; a learned general strategy remains
+unproved.
 
 ## 3. The Intended Intelligence Stack
 
@@ -112,16 +118,25 @@ complete-search train decisions -> learned hidden ranking
 -> sealed compositions -> bounded search -> exact action
 ```
 
-The next finite question is self-chosen safe inquiry. Given several frozen
-world models that fit current evidence, can Nanda choose one allowlisted,
-reversible probe that maximally distinguishes them under exact cost and risk
-budgets, precommit its predictions, execute in isolation, and update only from
-an independently observed outcome? Passive waiting, stable probe order,
-cheapest-first, and an oracle upper bound must be frozen baselines.
+Bounded model-guided active inquiry is now complete inside the same generated
+filesystem environment:
 
-Passing that test would establish bounded active causal inquiry. It would still
-not establish automatic language growth, natural K2, open-ended planning, or
-production authority.
+```text
+four supplied answer-blind world models
+-> complete predicted consequence partitions
+-> one safe reversible probe
+-> independent observation
+-> one surviving model in 8 / 8 sealed cases
+```
+
+The next finite question is uncertainty-set formation. From incomplete support
+transitions, can Nanda induce several competing models, mechanically enumerate
+allowlisted probes, and use the already proved scorer to close that uncertainty
+with one independently observed intervention? Keeping the scorer fixed makes
+model induction the only new mechanism.
+
+Passing that successor still would not establish automatic language growth,
+natural K2, open-ended planning, or production authority.
 
 ## 6. Best First Environment
 
@@ -154,10 +169,11 @@ false abstraction            renamed fixtures can masquerade as new semantics
 authority leakage             a proposer can accidentally become its own verifier
 ```
 
-Composition and generated heldout representation transfer are now proved in
-their bounded scopes. The next architecture must attack active inquiry, then
-partial observability and learned state language. Natural and production
-authority remain downstream of independent natural evidence.
+Composition, generated heldout representation transfer, and model-guided active
+inquiry are now proved in their bounded scopes. The next architecture must form
+its own competing uncertainty set, then attack partial observability and
+learned state language. Natural and production authority remain downstream of
+independent natural evidence.
 
 ## 8. Product Shape
 
@@ -183,7 +199,9 @@ Use these exact boundaries:
 bounded hidden-effect induction                         PROVED
 learned sequential composition                          PROVED
 hidden representation transfer                          PROVED IN BOUNDED GENERATED ENVIRONMENT
-self-chosen safe causal inquiry                          NEXT / NOT PROVED
+model-guided safe causal inquiry                         PROVED IN BOUNDED GENERATED ENVIRONMENT
+learned general inquiry strategy                         NOT PROVED
+self-formed competing world models                       NOT PROVED
 self-created state language                             NOT PROVED
 natural K2                                              NOT PROVED
 general intelligence                                    NOT CLAIMED

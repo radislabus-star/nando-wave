@@ -1,0 +1,809 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "nodes": [
+    {
+      "id": "experiment_driver",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "fn sealed_model_guided_active_inquiry_uses_one_safe_probe_per_case() {",
+        "line": 37
+      }
+    },
+    {
+      "id": "public_case_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "let fixtures = (0..K2_INQUIRY_CONFIRM_CASES_V1)",
+        "line": 41
+      }
+    },
+    {
+      "id": "public_case_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "K2InquiryJournalEventKindV1::ExperimentFrozen,",
+        "line": 62
+      }
+    },
+    {
+      "id": "baseline_process",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/baseline.rs",
+        "contains": "pub fn run_inquiry_baseline_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 72
+      }
+    },
+    {
+      "id": "selector_process",
+      "role": "candidate_rank_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+        "contains": "pub fn run_inquiry_selector_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 74
+      }
+    },
+    {
+      "id": "selection_precommit",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "let precommits = selector_requests",
+        "line": 125
+      }
+    },
+    {
+      "id": "preexecution_verifier",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/verifier.rs",
+        "contains": "pub fn verify_inquiry_selection_v1(",
+        "line": 26
+      }
+    },
+    {
+      "id": "verified_selection_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "K2InquiryJournalEventKindV1::SelectionVerified,",
+        "line": 163
+      }
+    },
+    {
+      "id": "dispatch_owner",
+      "role": "authorization_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "let worker_requests = fixtures",
+        "line": 172
+      }
+    },
+    {
+      "id": "sandbox_adapter",
+      "role": "orchestrator",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "pub fn execute(",
+        "line": 73
+      }
+    },
+    {
+      "id": "sandbox_worker",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "pub fn run_inquiry_worker_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 165
+      }
+    },
+    {
+      "id": "workspace_state",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "let post_manifest = K2CompositionTreeManifestV1::scan(work_root)?;",
+        "line": 189
+      }
+    },
+    {
+      "id": "observer_process",
+      "role": "observer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "pub fn run_inquiry_observer_process_v1() -> K2CompositionResultV1<()> {",
+        "line": 208
+      }
+    },
+    {
+      "id": "observation_receipt",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "let mut receipt = K2InquiryObservationReceiptV1 {",
+        "line": 224
+      }
+    },
+    {
+      "id": "elimination_verifier",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/verifier.rs",
+        "contains": "pub fn verify_inquiry_outcome_v1(",
+        "line": 58
+      }
+    },
+    {
+      "id": "journal_event_bytes",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/journal.rs",
+        "contains": "let event = K2InquiryJournalEventV1 {",
+        "line": 151
+      }
+    },
+    {
+      "id": "inquiry_journal",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/journal.rs",
+        "contains": "pub struct K2InquiryJournalV1 {",
+        "line": 71
+      }
+    },
+    {
+      "id": "cleanup_owner",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/journal.rs",
+        "contains": "pub fn cleanup(self) -> K2CompositionResultV1<()> {",
+        "line": 199
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "exec-driver-baseline",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "baseline_process",
+      "events": [
+        "evaluate_baselines"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.baseline, request)",
+        "line": 83
+      }
+    },
+    {
+      "id": "authority-case-store-baseline",
+      "from": "public_case_bytes",
+      "relation": "produces_for",
+      "to": "public_case_store",
+      "events": [
+        "evaluate_baselines"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "K2InquiryJournalEventKindV1::ExperimentFrozen,",
+        "line": 62
+      }
+    },
+    {
+      "id": "authority-store-baseline",
+      "from": "public_case_store",
+      "relation": "passes_to",
+      "to": "baseline_process",
+      "events": [
+        "evaluate_baselines"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.baseline, request)",
+        "line": 83
+      }
+    },
+    {
+      "id": "exec-driver-selector",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "selector_process",
+      "events": [
+        "select_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.selector, request)",
+        "line": 127
+      }
+    },
+    {
+      "id": "authority-case-store-selector",
+      "from": "public_case_bytes",
+      "relation": "produces_for",
+      "to": "public_case_store",
+      "events": [
+        "select_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "K2InquiryJournalEventKindV1::ExperimentFrozen,",
+        "line": 62
+      }
+    },
+    {
+      "id": "authority-store-selector",
+      "from": "public_case_store",
+      "relation": "passes_to",
+      "to": "selector_process",
+      "events": [
+        "select_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.selector, request)",
+        "line": 127
+      }
+    },
+    {
+      "id": "exec-driver-preverify",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "preexecution_verifier",
+      "events": [
+        "verify_selection"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.verifier, &command)",
+        "line": 151
+      }
+    },
+    {
+      "id": "proof-precommit-preverify",
+      "from": "selection_precommit",
+      "relation": "proves",
+      "to": "preexecution_verifier",
+      "events": [
+        "verify_selection"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "precommit: Box::new(precommit.clone()),",
+        "line": 149
+      }
+    },
+    {
+      "id": "authority-verified-selection",
+      "from": "selection_precommit",
+      "relation": "produces_for",
+      "to": "verified_selection_store",
+      "events": [
+        "publish_verified_selection"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "K2InquiryJournalEventKindV1::SelectionVerified,",
+        "line": 163
+      }
+    },
+    {
+      "id": "exec-driver-dispatch",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "dispatch_owner",
+      "events": [
+        "execute_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "let worker_requests = fixtures",
+        "line": 172
+      }
+    },
+    {
+      "id": "exec-dispatch-adapter",
+      "from": "dispatch_owner",
+      "relation": "delegates",
+      "to": "sandbox_adapter",
+      "events": [
+        "execute_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": ".execute(worker_request, observer_request, &fixture.initial_files)",
+        "line": 240
+      }
+    },
+    {
+      "id": "exec-adapter-worker",
+      "from": "sandbox_adapter",
+      "relation": "calls",
+      "to": "sandbox_worker",
+      "events": [
+        "execute_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "let worker_bytes = run_isolated_v1(",
+        "line": 113
+      }
+    },
+    {
+      "id": "authority-store-dispatch",
+      "from": "verified_selection_store",
+      "relation": "passes_to",
+      "to": "dispatch_owner",
+      "events": [
+        "execute_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "selection.receipt_root_sha256.clone(),",
+        "line": 191
+      }
+    },
+    {
+      "id": "authority-dispatch-worker",
+      "from": "dispatch_owner",
+      "relation": "authorizes",
+      "to": "sandbox_worker",
+      "events": [
+        "execute_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "let worker_bytes = run_isolated_v1(",
+        "line": 113
+      }
+    },
+    {
+      "id": "exec-driver-observer",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "observer_process",
+      "events": [
+        "observe_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "let observer_bytes = run_isolated_v1(",
+        "line": 124
+      }
+    },
+    {
+      "id": "observe-workspace-observer",
+      "from": "workspace_state",
+      "relation": "observes",
+      "to": "observer_process",
+      "events": [
+        "observe_probe"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+        "contains": "let observer_bytes = run_isolated_v1(",
+        "line": 124
+      }
+    },
+    {
+      "id": "exec-driver-elimination",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "elimination_verifier",
+      "events": [
+        "eliminate_models"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "run_isolated_protocol_v1(&binaries.verifier, &command)",
+        "line": 284
+      }
+    },
+    {
+      "id": "proof-precommit-elimination",
+      "from": "selection_precommit",
+      "relation": "proves",
+      "to": "elimination_verifier",
+      "events": [
+        "eliminate_models"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "precommits[index].clone(),",
+        "line": 268
+      }
+    },
+    {
+      "id": "proof-observation-elimination",
+      "from": "observation_receipt",
+      "relation": "proves",
+      "to": "elimination_verifier",
+      "events": [
+        "eliminate_models"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "executions[index].observation.clone(),",
+        "line": 272
+      }
+    },
+    {
+      "id": "exec-driver-journal",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "inquiry_journal",
+      "events": [
+        "persist_event"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": ".append(kind, payload_root_sha256)",
+        "line": 1534
+      }
+    },
+    {
+      "id": "authority-event-journal",
+      "from": "journal_event_bytes",
+      "relation": "produces_for",
+      "to": "inquiry_journal",
+      "events": [
+        "persist_event"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/journal.rs",
+        "contains": "let event = K2InquiryJournalEventV1 {",
+        "line": 151
+      }
+    },
+    {
+      "id": "exec-driver-cleanup",
+      "from": "experiment_driver",
+      "relation": "calls",
+      "to": "cleanup_owner",
+      "events": [
+        "cleanup_generated"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+        "contains": "journal.cleanup().expect(\"cleanup sealed journal\")",
+        "line": 382
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "baseline-execution",
+      "event": "evaluate_baselines",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "baseline_process",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "baseline_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "baseline-authority",
+      "event": "evaluate_baselines",
+      "kind": "authority",
+      "entry": "public_case_bytes",
+      "terminal": "baseline_process",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "public_case_bytes",
+          "to": "baseline_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "selector-execution",
+      "event": "select_probe",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "selector_process",
+      "required_roles": [
+        "interface",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "selector_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "selector-authority",
+      "event": "select_probe",
+      "kind": "authority",
+      "entry": "public_case_bytes",
+      "terminal": "selector_process",
+      "required_roles": [
+        "producer",
+        "evidence_owner",
+        "candidate_rank_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "public_case_bytes",
+          "to": "selector_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "preverify-execution",
+      "event": "verify_selection",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "preexecution_verifier",
+      "required_roles": [
+        "interface",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "preexecution_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "selection-proof",
+      "event": "verify_selection",
+      "kind": "proof",
+      "entry": "selection_precommit",
+      "terminal": "preexecution_verifier",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "selection_precommit",
+          "to": "preexecution_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "selection-authority",
+      "event": "publish_verified_selection",
+      "kind": "authority",
+      "entry": "selection_precommit",
+      "terminal": "verified_selection_store",
+      "required_roles": [
+        "producer",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "selection_precommit",
+          "to": "verified_selection_store",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "probe-execution",
+      "event": "execute_probe",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "sandbox_worker",
+      "required_roles": [
+        "interface",
+        "authorization_owner",
+        "orchestrator",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "sandbox_worker",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "probe-authority",
+      "event": "execute_probe",
+      "kind": "authority",
+      "entry": "verified_selection_store",
+      "terminal": "sandbox_worker",
+      "required_roles": [
+        "evidence_owner",
+        "authorization_owner",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "verified_selection_store",
+          "to": "sandbox_worker",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "observer-execution",
+      "event": "observe_probe",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "observer_process",
+      "required_roles": [
+        "interface",
+        "observer"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "observer_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "probe-observation",
+      "event": "observe_probe",
+      "kind": "observation",
+      "entry": "workspace_state",
+      "terminal": "observer_process",
+      "required_roles": [
+        "producer",
+        "observer"
+      ],
+      "path_cardinality": [
+        {
+          "from": "workspace_state",
+          "to": "observer_process",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "elimination-execution",
+      "event": "eliminate_models",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "elimination_verifier",
+      "required_roles": [
+        "interface",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "elimination_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "elimination-selection-proof",
+      "event": "eliminate_models",
+      "kind": "proof",
+      "entry": "selection_precommit",
+      "terminal": "elimination_verifier",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "selection_precommit",
+          "to": "elimination_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "elimination-observation-proof",
+      "event": "eliminate_models",
+      "kind": "proof",
+      "entry": "observation_receipt",
+      "terminal": "elimination_verifier",
+      "required_roles": [
+        "producer",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "observation_receipt",
+          "to": "elimination_verifier",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "journal-execution",
+      "event": "persist_event",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "inquiry_journal",
+      "required_roles": [
+        "interface",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "inquiry_journal",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "journal-authority",
+      "event": "persist_event",
+      "kind": "authority",
+      "entry": "journal_event_bytes",
+      "terminal": "inquiry_journal",
+      "required_roles": [
+        "producer",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "journal_event_bytes",
+          "to": "inquiry_journal",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "cleanup-execution",
+      "event": "cleanup_generated",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "terminal": "cleanup_owner",
+      "required_roles": [
+        "interface",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "cleanup_owner",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    }
+  ],
+  "source_root": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815"
+}

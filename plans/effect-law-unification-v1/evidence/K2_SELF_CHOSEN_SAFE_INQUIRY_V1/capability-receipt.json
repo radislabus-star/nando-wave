@@ -1,0 +1,228 @@
+{
+  "schema": "nando.k2-self-chosen-safe-inquiry-capability-receipt.v1",
+  "recorded_at_utc": "2026-08-15T12:15:02Z",
+  "source_parent_commit": "421c5a2e953a8da8debffcaf41da822a94bfb507",
+  "tested_commit": "121d933026862d249026b33d784b2b7705a6b6e9",
+  "source_branch": "research/k2-active-inquiry-v1-20260815",
+  "build_host": "e-MEGA-MINI-M1-13th",
+  "claim": "K2_MODEL_GUIDED_ACTIVE_INQUIRY_PASS",
+  "verdict": "PASS",
+  "scope": "bounded_generated_filesystem_environment",
+  "scientific_attempts": 1,
+  "authority": {
+    "natural_k2": false,
+    "production_execution": false,
+    "product": false,
+    "law_certificate": false,
+    "k1_registry_mutation": false,
+    "phase_memory_mutation": false,
+    "package_activation": false,
+    "deployment": false
+  },
+  "frozen_contract": {
+    "confirm_commitment_sha256": "0a48670dbb2035c0502f064ee10c41c20b5c6391743641b814af98892efba6f4",
+    "generator_schema_sha256": "ad591e3c1a7826295ea93056049dd3759f37c6502b86a542e27dd67fb68a0286",
+    "cases": 8,
+    "models_each": 4,
+    "candidate_probes_each": 8,
+    "eligible_probes_each": 4,
+    "probe_budget_each": 1,
+    "maximum_risk_units": 10,
+    "maximum_cost_units": 10
+  },
+  "denominators": {
+    "public_model_hypotheses": 32,
+    "candidate_probes": 64,
+    "eligible_probe_dispositions": 32,
+    "ineligible_probe_dispositions": 32,
+    "complete_predictions": 256,
+    "selection_precommits": 8,
+    "independent_selection_verifications": 8,
+    "sandbox_probe_executions": 8,
+    "separate_observer_receipts": 8,
+    "singleton_updated_model_sets": 8,
+    "model_guided_survivors": 8,
+    "passive_survivors": 32,
+    "stable_hash_survivors": 16,
+    "cheapest_first_survivors": 32,
+    "explicit_heuristic_survivors": 16,
+    "oracle_survivors": 8,
+    "oracle_matches": 8,
+    "exact_best_set_cardinality_sum": 8,
+    "extra_best_score_ties": 0,
+    "negative_controls_passed": 18,
+    "negative_controls_total": 18,
+    "generated_provenance_control_passed_outside_frozen_18": 1,
+    "forbidden_probe_executions": 0,
+    "journal_events": 10,
+    "residual_generated_paths": 0
+  },
+  "per_case_isomorphic_accounting": {
+    "derivation": "frozen partition geometry is identical under the eight case-specific opaque-ID, path, content, and candidate-order transformations; the sealed receipt emitted aggregate totals",
+    "machine_receipt_emitted_per_case_rows": false,
+    "model_guided": {
+      "survivors": 1,
+      "risk_units": 2,
+      "cost_units": 5
+    },
+    "passive": {
+      "survivors": 4,
+      "risk_units": 0,
+      "cost_units": 0
+    },
+    "stable_hash": {
+      "survivors": 2,
+      "risk_units": 3,
+      "cost_units": 6
+    },
+    "cheapest_first": {
+      "survivors": 4,
+      "risk_units": 1,
+      "cost_units": 1
+    },
+    "explicit_heuristic": {
+      "survivors": 2,
+      "risk_units": 2,
+      "cost_units": 4
+    },
+    "oracle": {
+      "survivors": 1,
+      "risk_units": 2,
+      "cost_units": 5
+    }
+  },
+  "aggregate_probe_costs": {
+    "model_guided": {
+      "risk_units": 16,
+      "cost_units": 40
+    },
+    "passive": {
+      "risk_units": 0,
+      "cost_units": 0
+    },
+    "stable_hash": {
+      "risk_units": 24,
+      "cost_units": 48
+    },
+    "cheapest_first": {
+      "risk_units": 8,
+      "cost_units": 8
+    },
+    "explicit_heuristic": {
+      "risk_units": 16,
+      "cost_units": 32
+    },
+    "oracle": {
+      "risk_units": 16,
+      "cost_units": 40
+    }
+  },
+  "safety_dispositions_each_case": {
+    "eligible": 4,
+    "non_reversible": 1,
+    "ambiguous_observation": 1,
+    "delayed_observation": 1,
+    "unknown_action": 1
+  },
+  "outcome_roots": {
+    "sealed_receipt": "739fe66b11e8035815db08e4bec136857851df41cceee6dd24445995eb64f578",
+    "terminal_event": "c5f25afa92e8a3313743ec2c464610899f505388a1c5697e41727123118a3441",
+    "sealed_log_sha256": "3f62f032d5b498beda893fa15ee3b67bffd9f6f17db7283964b20542d5459612"
+  },
+  "executables": {
+    "selector_sha256": "1665d2820395d3193512c70b5983be4d00272a5c041fdddba8a011d7ff43b4be",
+    "baseline_sha256": "49e88988c043681db664f1e9c5275aad0f4fb43aff692f8f681b41117cbf0a5a",
+    "verifier_sha256": "df6d34dba8e966e427eb5c14d8cb1395ffe332ca67ed141486cf2bcd5c398366",
+    "worker_sha256": "bd6848b86e6de3eefc56588877315c48bb6a407d3adb0d5457726acecacd2747",
+    "observer_sha256": "a94a312e0e2e66a018434f0e5fc11eb20c04a4c7515d4861d17b9ade2e4a5740",
+    "all_pairwise_distinct": true
+  },
+  "source_budgets": {
+    "production_modules": 7,
+    "production_module_lines": {
+      "baseline": 140,
+      "journal": 310,
+      "module": 18,
+      "model": 1119,
+      "sandbox": 466,
+      "selector": 247,
+      "verifier": 624
+    },
+    "production_module_total_lines": 2924,
+    "generated_only_binary_wrappers": 5,
+    "generated_only_binary_wrapper_lines": 40,
+    "integration_test_files": 1,
+    "integration_test_lines": 1777,
+    "additive_registration_lines": 2,
+    "source_manifest_sha256": "83aea54dee804dc5a9f613d66af6486f128bf4ee70356018a7684129ff3f587d",
+    "source_manifest_method": "sha256 of sorted sha256sum records for 7 modules, 5 wrappers, and 1 integration test",
+    "all_preregistered_limits_passed": true
+  },
+  "verification": {
+    "implementation_preflight": "READY_TO_IMPLEMENT",
+    "implementation_preflight_input_sha256": "1189c969409c89f9d3e3f7c90d261a6121cdd35e94e66b86630e5fb2cc9bfc88",
+    "implementation_preflight_manifest_sha256": "d69f09b35d4b656985fa3b33922d93bd26290994400c5e9687d7b92b657e0fc1",
+    "implementation_preflight_receipt_sha256": "6f689b99a3876bf5dd085bd1619affebe14e8c669d4fb00ed86339f837fce061",
+    "frozen_baselines": "18_EXACT_PASS_1_ALLOWED_TWO_LINE_REGISTRATION",
+    "cargo_check_all_targets": "PASS",
+    "cargo_fmt_check": "PASS",
+    "cargo_clippy_all_targets_deny_warnings": "PASS",
+    "nonignored_package_tests": "451_PASS",
+    "development_contract_test": "1_PASS_WITH_18_CONTROLS",
+    "sealed_decisive_test": "1_PASS",
+    "presealed_development_log_sha256": "22246c80fc440a22fe54e2b9b9c4b1248105b9f59ab20ad0a0c201457781f2e3",
+    "presealed_full_log_sha256": "f4ade6eccdda6da5b0a38dd0bd6c726e4b7523f925b31d9923f2bf13db92852b",
+    "sealed_decisive_log_sha256": "3f62f032d5b498beda893fa15ee3b67bffd9f6f17db7283964b20542d5459612",
+    "preregistration_route_packets": "5_PASS_AUTHORITY_FALSE",
+    "true_choice_boundary_structural_repair": "PASS_AUTHORITY_FALSE",
+    "observed_source_code_route": "PASS_18_NODES_22_EDGES_17_ROUTES_40_OF_40",
+    "observed_source_receipt_sha256": "abcc38ba3781e0b037b0a45f838588524f11808b2d60e51ed5d7d77f380141ca",
+    "selector_verifier_source_imports": 0,
+    "forbidden_production_or_network_source_hits": 0,
+    "restart_parity": "PASS_EVERY_LEGAL_PREFIX",
+    "same_identity_redispatch": "REJECTED",
+    "production_services_changed": false
+  },
+  "invalid_attempts_preserved": [
+    {
+      "kind": "INVALID_IMPLEMENTATION_ATTEMPT",
+      "tag": "evidence/k2-active-inquiry-invalid-implementation-01",
+      "commit": "2c17cf826c0162d431d41f1718ae7c3db235d5ac",
+      "failure": "initial generated active-inquiry core failed Rust borrow checking before any sealed run"
+    },
+    {
+      "kind": "INVALID_DESIGN_ATTEMPT",
+      "tag": "evidence/k2-active-inquiry-invalid-design-01",
+      "commit": "ba733fa9d1027180a103a70d5aa33b52a66de102",
+      "failure": "the original byte-absence rule confused a public candidate root with the private true-choice relation"
+    },
+    {
+      "kind": "INVALID_IMPLEMENTATION_ATTEMPT",
+      "tag": "evidence/k2-active-inquiry-invalid-implementation-02",
+      "commit": "18ac2b8ae48f8c2434e99dfa8f8805a5db960388",
+      "failure": "strict Clippy rejected a 1296-byte verifier command enum before the sealed run"
+    },
+    {
+      "kind": "INVALID_IMPLEMENTATION_ATTEMPT",
+      "tag": "evidence/k2-active-inquiry-invalid-implementation-03",
+      "commit": "bb72d0fe19e7c55011e1642ab1aa57b42da6a9a6",
+      "failure": "the first size repair left a 440-byte verifier command variant and strict Clippy still failed"
+    }
+  ],
+  "evidence_repairs": [
+    {
+      "kind": "OBSERVED_SOURCE_EVIDENCE_REPAIR",
+      "initial_verdict": "VETO_18_OF_40",
+      "failure": "all 22 edge markers were absent from the first observed-source contract",
+      "repair": "bind every declared edge to its exact source line",
+      "final_verdict": "PASS_40_OF_40",
+      "scientific_result_changed": false
+    }
+  ],
+  "toolchain": {
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "bubblewrap": "bubblewrap 0.6.1",
+    "build_jobs": 20
+  }
+}
