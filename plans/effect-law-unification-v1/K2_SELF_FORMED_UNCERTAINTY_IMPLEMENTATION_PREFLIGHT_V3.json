@@ -1,0 +1,187 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-self-formed-uncertainty-r7-v4-delta",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"architecture-canon","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/ARCHITECTURE_CANON.md","expect":{"size_bytes":93192,"sha256":"8c44515cc368ee5cabf19d04ea8443c0a3f919527707f7899666f2c01e7bc0a0","mode":"0664"}},
+    {"id":"cargo-lock","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/Cargo.lock","expect":{"size_bytes":39973,"sha256":"9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08","mode":"0664"}},
+    {"id":"operator-learning-manifest","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/Cargo.toml","expect":{"size_bytes":663,"sha256":"d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9","mode":"0664"}},
+    {"id":"selector-source","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs","expect":{"size_bytes":9922,"sha256":"733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390","mode":"0664"}},
+    {"id":"uncertainty-module","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs","expect":{"size_bytes":1064,"sha256":"ee0cd9f3d4a9bd32425350d786fa5e5a9b6ff63a49c2ec10441c7690d331474a","mode":"0664"}},
+    {"id":"uncertainty-limits","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/limits.rs","expect":{"size_bytes":8741,"sha256":"a5842cc0de1d4870ce556a695f9992bc0047ebd69b6f916df19d06d3050a6b22","mode":"0664"}},
+    {"id":"frontier-model","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/frontier_model.rs","expect":{"size_bytes":31028,"sha256":"4de3af7e37ab933a0842f6c9faaa6e43527eb394223ac9424ef1bdf4d2dbb09f","mode":"0664"}},
+    {"id":"integration-model","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/integration_model.rs","expect":{"size_bytes":14051,"sha256":"20c2ec9186e0464a2f078d28db9ec784586d92f6854669995208a06aa6664d3a","mode":"0664"}},
+    {"id":"integration-source","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/integration.rs","expect":{"size_bytes":12482,"sha256":"3da762b4e32462dddd8c1c9188c4acb9093104d4d7067ce2fcba75c26df94cb6","mode":"0664"}},
+    {"id":"batch-journal","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/batch_journal.rs","expect":{"size_bytes":15570,"sha256":"9b910aff546c20c41ae8196df406b09b0430ac37ecedd35d5491a0c08f80b30d","mode":"0664"}},
+    {"id":"final-verifier","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier.rs","expect":{"size_bytes":12755,"sha256":"5acba205191b9c76e45467a0ebc4f5513e5d9e8320338d6020c42ec1a332ca7e","mode":"0664"}},
+    {"id":"final-verifier-selection","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier_selection.rs","expect":{"size_bytes":20851,"sha256":"4f9906dbf297cdb57ca02ecc122fb42e13a1ababe0c5de9a29243a6589cf2335","mode":"0664"}},
+    {"id":"process-test","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_process_v1.rs","expect":{"size_bytes":25133,"sha256":"2c4fbb2f6da34230afe87322eb10038ea39d5de74e7541e5e9c7ccb6d4705966","mode":"0664"}},
+    {"id":"r7-discrepancy","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_R7_DISCREPANCY_2026-08-15.md","expect":{"size_bytes":4037,"sha256":"2ef1904fcfdb67232eea98a361161e104770852b93aaf6e3f759c591a242f23b","mode":"0664"}},
+    {"id":"preregistration-v4","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V4.md","expect":{"size_bytes":14994,"sha256":"1c40f6bb696257e4add212f7d2d8edadf30fefb20b0ed2507a6c6b0dadb051ce","mode":"0664"}},
+    {"id":"critique-v3","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_CRITIQUE_V3.md","expect":{"size_bytes":7517,"sha256":"b7f184fe3fc371497298f411c2c0cb8040b79d0c1c3080de58ea30e93b6ee2ae","mode":"0664"}},
+    {"id":"closure-gate","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-closure-route.receipt.json","expect":{"size_bytes":23524,"sha256":"9a938cd5a759af0898dc6c317ce0f829e54c48f65e2f846d47ccfd5b8b1abf60","mode":"0664"}},
+    {"id":"execution-gate","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-execution-route.receipt.json","expect":{"size_bytes":20772,"sha256":"38f3c9e97132940fbd520b53111a7af3ee720a92d4968d93a0d37ab45da03722","mode":"0664"}},
+    {"id":"proof-gate","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-proof-authority-route.receipt.json","expect":{"size_bytes":22117,"sha256":"2e2a13eb77bc427d8cb88b798e5649d4ef3806f070ce655130dfefa79fbf0a38","mode":"0664"}},
+    {"id":"code-route-gate","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-code-route.design.receipt.json","expect":{"size_bytes":4442,"sha256":"f0fd2eb957d717286f2ad89726fbd580078618214c88170bc5f7b9bdb1ff0dda","mode":"0664"}},
+    {"id":"production-serving","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs","expect":{"size_bytes":457899,"sha256":"06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949","mode":"0664"}},
+    {"id":"production-dashboard","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs","expect":{"size_bytes":28960,"sha256":"2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c","mode":"0664"}}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"read-frozen-r7-baseline","kind":"filesystem_read"},
+      {"id":"add-v4-closure-schemas","kind":"source_file_create"},
+      {"id":"register-v4-modules","kind":"source_file_modify"},
+      {"id":"add-independent-closure-verifier","kind":"source_file_create"},
+      {"id":"add-multi-probe-dispatch-and-journal","kind":"source_file_create"},
+      {"id":"modify-development-process-route","kind":"test_file_modify"},
+      {"id":"add-j1-j16-controls","kind":"test_file_create"},
+      {"id":"write-development-journal","kind":"test_lab_journal_write"},
+      {"id":"create-disposable-development-workspaces","kind":"test_fixture_write"},
+      {"id":"spawn-isolated-development-processes","kind":"isolated_test_process_spawn"},
+      {"id":"remove-disposable-development-workspaces","kind":"test_fixture_cleanup"},
+      {"id":"write-r8-gate-receipts","kind":"append_only_evidence_write"},
+      {"id":"freeze-r9-source-binary-test-roots","kind":"append_only_freeze_receipt_write"}
+    ],
+    "forbidden": [
+      "confirm_nonce_interaction",
+      "confirm_seed_read",
+      "sealed_scientific_execution",
+      "generated_traffic",
+      "synthetic_fixture",
+      "experiment_network_access",
+      "natural_traffic_read",
+      "natural_traffic_write",
+      "production_state_mount",
+      "production_write",
+      "service_control",
+      "dashboard_change",
+      "deployment",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "bundle_activation",
+      "phase_memory_mutation",
+      "package_activation",
+      "natural_k2_authority"
+    ]
+  },
+  "source_checks": [
+    {
+      "id":"frozen-predecessor-selector",
+      "path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "sha256":"733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390",
+      "forbidden_effect_patterns":[
+        {"effect":"experiment_network_access","regex":"(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect":"production_write","regex":"(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect":"confirm_nonce_interaction","regex":"(confirm_nonce|confirm\\.seed|run_sealed_attempt)"}
+      ]
+    },
+    {
+      "id":"existing-integration-source",
+      "path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/integration.rs",
+      "sha256":"3da762b4e32462dddd8c1c9188c4acb9093104d4d7067ce2fcba75c26df94cb6",
+      "forbidden_effect_patterns":[
+        {"effect":"experiment_network_access","regex":"(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect":"production_write","regex":"(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect":"service_control","regex":"(systemctl|service\\s+(start|stop|restart))"},
+        {"effect":"deployment","regex":"(deploy_remote|deployment-receipt)"}
+      ]
+    },
+    {
+      "id":"existing-final-verifier-source",
+      "path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier.rs",
+      "sha256":"5acba205191b9c76e45467a0ebc4f5513e5d9e8320338d6020c42ec1a332ca7e",
+      "forbidden_effect_patterns":[
+        {"effect":"natural_traffic_read","regex":"(natural_traffic|ordinary_traffic|provider_capture)"},
+        {"effect":"k1_registry_mutation","regex":"(EpistemicRegistry|K1Vocabulary|LawCertificate)"},
+        {"effect":"natural_k2_authority","regex":"natural_k2_authority\\s*:\\s*true"}
+      ]
+    },
+    {
+      "id":"existing-process-test-source",
+      "path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_process_v1.rs",
+      "sha256":"2c4fbb2f6da34230afe87322eb10038ea39d5de74e7541e5e9c7ccb6d4705966",
+      "forbidden_effect_patterns":[
+        {"effect":"experiment_network_access","regex":"(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect":"production_state_mount","regex":"(/var/lib/nando-wave|/etc/nando-wave|/run/secrets|/\\.ssh)"},
+        {"effect":"confirm_nonce_interaction","regex":"(confirm_nonce|confirm\\.seed|run_sealed_attempt)"}
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state":"V4_PAPER_FROZEN",
+    "terminal_states":["R7A_FAILED","R7B_FAILED","R7C_FAILED","R7D_FAILED","R7E_FAILED","R8_FAILED","R9_FAILED","STOP_AT_R10"],
+    "steps":[
+      {"id":"r7a-closure-schemas","from":"V4_PAPER_FROZEN","to":"R7A_FROZEN","mutates":true,"failure_state":"R7A_FAILED","cleanup":"remove unpublished closure schema modules and restore exact registered-source baselines","preserves":["architecture","selector","r7-failure","v4-paper","v4-critique","production-serving-source","production-dashboard-source"],"test_id":"fault-r7a-rollback"},
+      {"id":"r7b-independent-closure-preverify","from":"R7A_FROZEN","to":"R7B_FROZEN","mutates":true,"failure_state":"R7B_FAILED","cleanup":"remove unpublished verifier modules while preserving closure census failure receipts","preserves":["selector","r7-failure","v4-paper","v4-critique","structural-gates"],"test_id":"fault-r7b-rollback"},
+      {"id":"r7c-multi-probe-dispatch-journal","from":"R7B_FROZEN","to":"R7C_FROZEN","mutates":true,"failure_state":"R7C_FAILED","cleanup":"preserve durable legal journal prefix remove only unpublished temp and disposable unobserved workspaces","preserves":["selector","r7-failure","v4-paper","v4-critique","production-serving-source","production-dashboard-source"],"test_id":"fault-r7c-prefix-projection"},
+      {"id":"r7d-controls-and-process","from":"R7C_FROZEN","to":"R7D_FROZEN","mutates":true,"failure_state":"R7D_FAILED","cleanup":"preserve named control and process failure receipts then remove observed disposable workspaces","preserves":["selector","r7-failure","v4-paper","v4-critique"],"test_id":"fault-r7d-process-cleanup"},
+      {"id":"r7e-focused-quality","from":"R7D_FROZEN","to":"R7_FROZEN","mutates":true,"failure_state":"R7E_FAILED","cleanup":"preserve focused test failures and remove unpublished aggregate receipt temp","preserves":["selector","r7-failure","v4-paper","v4-critique"],"test_id":"fault-r7e-receipt-publish"},
+      {"id":"r8-full-quality-gates","from":"R7_FROZEN","to":"R8_FROZEN","mutates":true,"failure_state":"R8_FAILED","cleanup":"preserve all individual test and gate receipts and remove only unpublished aggregate temp","preserves":["architecture","selector","r7-failure","v4-paper","v4-critique","structural-gates","production-serving-source","production-dashboard-source"],"test_id":"fault-r8-receipt-publish"},
+      {"id":"r9-development-evidence-freeze","from":"R8_FROZEN","to":"STOP_AT_R10","mutates":true,"failure_state":"R9_FAILED","cleanup":"preserve source executable test and evidence roots remove unpublished freeze temp and perform no confirm interaction","preserves":["architecture","selector","r7-failure","v4-paper","v4-critique","structural-gates","production-serving-source","production-dashboard-source"],"test_id":"fault-r9-freeze-publish"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id":"architecture","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/ARCHITECTURE_CANON.md","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"architecture-canon"},
+    {"id":"selector","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"selector-source"},
+    {"id":"r7-failure","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_R7_DISCREPANCY_2026-08-15.md","policy":"append_only_historical_evidence","rollback_policy":"preserve_exact_baseline","baseline_check_id":"r7-discrepancy"},
+    {"id":"v4-paper","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V4.md","policy":"immutable_bytes_after_critique","rollback_policy":"preserve_exact_baseline","baseline_check_id":"preregistration-v4"},
+    {"id":"v4-critique","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_CRITIQUE_V3.md","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"critique-v3"},
+    {"id":"structural-gates","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-code-route.design.receipt.json","policy":"immutable_final_pass_with_failed_receipts_retained","rollback_policy":"preserve_exact_baseline","baseline_check_id":"code-route-gate"},
+    {"id":"production-serving-source","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"production-serving"},
+    {"id":"production-dashboard-source","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"production-dashboard"}
+  ],
+  "identity_contracts": [
+    {"id":"selector-source-parity","producer":"frozen predecessor selector source","consumer":"V4 first-selection adapter","comparison":"exact SHA-256 and byte-identical first winner","test_id":"selector-source-parity"},
+    {"id":"closure-census-parity","producer":"public closure planner","consumer":"independent preverification process","comparison":"complete membership candidate ranking disposition and selected root","test_id":"closure-census-parity"},
+    {"id":"batch-barrier-parity","producer":"sixteen closure census and preverification roots","consumer":"dispatch owner","comparison":"all-case root and zero missing case dispositions before workers","test_id":"batch-barrier-parity"},
+    {"id":"dispatch-journal-parity","producer":"immutable ordered plan dispatch","consumer":"case journal restart projection","comparison":"plan ordinals requests workspace identities and every legal prefix","test_id":"case-journal-restart-parity"},
+    {"id":"workspace-observer-parity","producer":"isolated workspace exact post-state","consumer":"read-only observer","comparison":"ordinal initial manifest workspace identity and outcome root","test_id":"independent-workspace-parity"},
+    {"id":"joint-elimination-parity","producer":"ordered observation vector","consumer":"independent final verifier","comparison":"all per-ordinal predictions exact singleton survivor and private truth match","test_id":"joint-elimination-parity"},
+    {"id":"r9-freeze-parity","producer":"local source test and evidence roots","consumer":"remote executable and test receipts","comparison":"exact commit source binary and suite roots with no confirm interaction","test_id":"freeze-root-parity"}
+  ],
+  "runtime_comparisons": [],
+  "invariants": [
+    {"id":"first-winner-preserved","statement":"V4 does not change predecessor selector bytes eligibility ranking predictions or first winner","test_id":"selector-source-parity"},
+    {"id":"complete-completion-denominator","statement":"every representative except first contributes exactly one candidate or the single-probe set is canonically empty","test_id":"closure-census-parity"},
+    {"id":"outcome-blind-plan","statement":"entire one-or-two probe plan ranking and budget freeze before every observation","test_id":"closure-census-parity"},
+    {"id":"private-fields-excluded","statement":"planner request contains no topology family matched pair private mapping truth safety resolution or outcome","test_id":"j1-j16-control-denominator"},
+    {"id":"minimal-plan","statement":"singleton first partition uses one probe otherwise only a globally ranked closing second probe permits dispatch","test_id":"closure-census-parity"},
+    {"id":"all-cases-retained","statement":"all sixteen dispositions enter the batch root and closure unavailable terminates before dispatch","test_id":"batch-barrier-parity"},
+    {"id":"dispatch-before-observation","statement":"whole ordered plan dispatch is durable before any observation is accepted","test_id":"multi-probe-dispatch-parity"},
+    {"id":"isolated-workspaces","statement":"each ordinal uses a fresh workspace derived from case plan and ordinal with no state carry-over","test_id":"independent-workspace-parity"},
+    {"id":"crash-fail-closed","statement":"unmatched durable execution cannot redispatch invent an outcome eliminate models or clean early","test_id":"case-journal-restart-parity"},
+    {"id":"independent-final-proof","statement":"final verifier imports no planner ranking joint partition or process elimination implementation","test_id":"joint-elimination-parity"},
+    {"id":"exact-single-survivor","statement":"PASS requires exactly one semantic class equal to private truth in every development case","test_id":"process-16-case-parity"},
+    {"id":"resource-bounds","statement":"checked cumulative risk cost protocol memory and wall budgets fail closed without raising limits","test_id":"protocol-budget-parity"},
+    {"id":"controls-exact","statement":"V2 32 controls V3 T1-T4 and V4 J1-J16 return exact named dispositions","test_id":"j1-j16-control-denominator"},
+    {"id":"confirm-untouched","statement":"R7 through R9 commands and implementation cannot name create search read or execute a confirm nonce","test_id":"confirm-nonce-command-exclusion"},
+    {"id":"authority-denied","statement":"all artifacts retain authority false and cannot issue K1 Natural K2 product certificate package or deployment authority","test_id":"authority-boundary-parity"},
+    {"id":"production-immutable","statement":"serving dashboard services connector natural traffic and production state remain untouched","test_id":"production-source-parity"}
+  ],
+  "tests": [
+    {"id":"fault-r7a-rollback","kind":"fault_injection","expected":"R7A_FAILED restores registration baselines and leaves no unpublished closure schema"},
+    {"id":"fault-r7b-rollback","kind":"fault_injection","expected":"R7B_FAILED preserves closure census failures and removes unpublished verifier bytes"},
+    {"id":"fault-r7c-prefix-projection","kind":"fault_injection","expected":"R7C_FAILED preserves exact legal journal prefix and forbids redispatch or invented observation"},
+    {"id":"fault-r7d-process-cleanup","kind":"fault_injection","expected":"R7D_FAILED preserves named failure receipts and removes only observed disposable workspaces"},
+    {"id":"fault-r7e-receipt-publish","kind":"fault_injection","expected":"R7E_FAILED preserves focused failures and removes unpublished aggregate temp"},
+    {"id":"fault-r8-receipt-publish","kind":"fault_injection","expected":"R8_FAILED preserves individual suite and gate receipts and removes unpublished aggregate temp"},
+    {"id":"fault-r9-freeze-publish","kind":"fault_injection","expected":"R9_FAILED preserves frozen roots removes unpublished temp and performs no confirm interaction"},
+    {"id":"selector-source-parity","kind":"parity","expected":"selector SHA-256 remains 733b9b59 and first winner equals V3 direct winner for all sixteen cases"},
+    {"id":"closure-census-parity","kind":"parity","expected":"planner and independent preverification agree on every candidate membership joint tuple disposition and global second winner"},
+    {"id":"batch-barrier-parity","kind":"parity","expected":"all sixteen census dispositions and successful plan roots freeze before any worker starts"},
+    {"id":"multi-probe-dispatch-parity","kind":"parity","expected":"all selected probe requests and ordinals dispatch before first accepted observation"},
+    {"id":"case-journal-restart-parity","kind":"parity","expected":"every legal one-probe and two-probe journal prefix projects exactly and every ambiguous prefix fails closed"},
+    {"id":"independent-workspace-parity","kind":"parity","expected":"two-probe cases use distinct derived workspaces exact initial manifests and no post-state carry-over"},
+    {"id":"joint-elimination-parity","kind":"parity","expected":"independent verifier recomputes joint equality and retains exactly the private true semantic class"},
+    {"id":"j1-j16-control-denominator","kind":"negative_control","expected":"J1 through J16 each return their exact preregistered error disposition"},
+    {"id":"protocol-budget-parity","kind":"budget","expected":"largest owner message at most 1048576 bytes resident process at most 512 MiB and checked risk cost at most 20"},
+    {"id":"confirm-nonce-command-exclusion","kind":"static_and_command_audit","expected":"no R7-R9 source test or executed command names creates searches reads or runs confirm material"},
+    {"id":"authority-boundary-parity","kind":"parity","expected":"authority false and no K1 Natural K2 product certificate package or deployment side effect"},
+    {"id":"production-source-parity","kind":"parity","expected":"serving and dashboard SHA-256 remain exact and no production service or state is touched"},
+    {"id":"process-16-case-parity","kind":"process","expected":"development preverification 16 of 16 all-case precommit and final singleton truth match 16 of 16"},
+    {"id":"full-quality-gates","kind":"quality","expected":"focused controls process durability full crate suites fmt strict Clippy and structural gates pass remotely with 20 jobs"},
+    {"id":"freeze-root-parity","kind":"parity","expected":"R9 binds exact commit source executable test evidence and development-result roots then stops before R10"}
+  ]
+}

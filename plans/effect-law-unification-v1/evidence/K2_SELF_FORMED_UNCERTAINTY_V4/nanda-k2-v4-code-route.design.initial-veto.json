@@ -1,0 +1,254 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "VETO",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": false,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 9,
+  "edge_count": 8,
+  "routes": [
+    {
+      "id": "closure-authority",
+      "event": "plan",
+      "kind": "authority",
+      "entry": "frontier",
+      "via": [],
+      "terminal": "barrier",
+      "path_count": 1,
+      "paths": [
+        [
+          "frontier",
+          "planner",
+          "census",
+          "preverifier",
+          "barrier"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "barrier"
+        ],
+        "producer": [
+          "census"
+        ],
+        "evidence_owner": [
+          "frontier"
+        ],
+        "candidate_rank_owner": [
+          "planner"
+        ],
+        "proof_owner": [
+          "preverifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "plan-execution",
+      "event": "execute",
+      "kind": "execution",
+      "entry": "dispatcher",
+      "via": [],
+      "terminal": "worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "dispatcher",
+          "worker"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "dispatcher"
+        ],
+        "mutation_owner": [
+          "worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "dispatcher",
+          "to": "worker",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "dispatcher",
+              "worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "outcome-observation",
+      "event": "observe",
+      "kind": "observation",
+      "entry": "observer",
+      "via": [],
+      "terminal": "worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "observer",
+          "worker"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "observer"
+        ],
+        "mutation_owner": [
+          "worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "final-proof",
+      "event": "verify",
+      "kind": "proof",
+      "entry": "final_verifier",
+      "via": [],
+      "terminal": "observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "final_verifier",
+          "observer"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "final_verifier"
+        ],
+        "observer": [
+          "observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "plan": {
+      "authorization_owner": [
+        "barrier"
+      ],
+      "display_rank_owner": [],
+      "candidate_rank_owner": [
+        "planner"
+      ],
+      "evidence_owner": [
+        "frontier"
+      ],
+      "mutation_owner": [],
+      "render_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [
+    {
+      "code": "authority_stage_reversal",
+      "message": "logical authority flow moves backward; control calls must use calls/delegates",
+      "edge": "closure-planner-census",
+      "source": "planner",
+      "target": "census",
+      "source_role": "candidate_rank_owner",
+      "target_role": "producer"
+    },
+    {
+      "code": "producer_relation_role_mismatch",
+      "message": "produces_for must originate at a producer",
+      "edge": "closure-planner-census",
+      "source": "planner",
+      "source_role": "candidate_rank_owner"
+    },
+    {
+      "code": "authority_stage_reversal",
+      "message": "logical authority flow moves backward; control calls must use calls/delegates",
+      "edge": "closure-preverify-barrier",
+      "source": "preverifier",
+      "target": "barrier",
+      "source_role": "proof_owner",
+      "target_role": "authorization_owner"
+    },
+    {
+      "code": "authorization_relation_role_mismatch",
+      "message": "authorizes must connect authorization_owner to mutation_owner",
+      "edge": "closure-preverify-barrier",
+      "source_role": "proof_owner",
+      "target_role": "authorization_owner"
+    },
+    {
+      "code": "authority_stage_reversal",
+      "message": "logical authority flow moves backward; control calls must use calls/delegates",
+      "edge": "dispatch-barrier-dispatcher",
+      "source": "barrier",
+      "target": "dispatcher",
+      "source_role": "authorization_owner",
+      "target_role": "orchestrator"
+    },
+    {
+      "code": "authorization_relation_role_mismatch",
+      "message": "authorizes must connect authorization_owner to mutation_owner",
+      "edge": "dispatch-barrier-dispatcher",
+      "source_role": "authorization_owner",
+      "target_role": "orchestrator"
+    },
+    {
+      "code": "observation_relation_role_mismatch",
+      "message": "observes must terminate at an observer",
+      "edge": "observe-observer-worker",
+      "target_role": "mutation_owner"
+    },
+    {
+      "code": "proof_relation_role_mismatch",
+      "message": "proves must terminate at a proof_owner",
+      "edge": "prove-final-observer",
+      "target_role": "observer"
+    },
+    {
+      "code": "authority_route_observer_contamination",
+      "message": "observer and proof nodes cannot participate in live authority flow",
+      "route": "closure-authority",
+      "nodes": [
+        "preverifier"
+      ]
+    },
+    {
+      "code": "non_runtime_route_mutation_contamination",
+      "message": "observation and proof routes cannot own authorization or mutation",
+      "route": "outcome-observation",
+      "nodes": [
+        "worker"
+      ]
+    }
+  ],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

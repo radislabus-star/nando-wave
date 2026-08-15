@@ -389,13 +389,17 @@ impl K2UncertaintyTournamentV1 {
             ))?;
         require_denied_authority_v1(&self.authority)?;
         let expected = self.expected_root()?;
+        if self.tournament_winner_probe_root_sha256 != self.direct_winner.selected_probe_root_sha256
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_tournament_direct_winner_mismatch",
+            ));
+        }
         if self.schema != K2_UNCERTAINTY_TOURNAMENT_SCHEMA_V1
             || self.direct_winner.case_id_sha256 != self.case_id_sha256
             || self.direct_winner.frontier_root_sha256 != self.frontier_root_sha256
             || self.direct_winner.scores.len() as u64 != self.representative_count
             || self.selector_source_sha256 != K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1
-            || self.tournament_winner_probe_root_sha256
-                != self.direct_winner.selected_probe_root_sha256
             || self.adapted_prediction_count != adapted
             || self.tournament_root_sha256 != expected
         {

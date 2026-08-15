@@ -223,7 +223,42 @@ fn r6_real_owners_precommit_before_isolated_dispatch_and_observation() {
     .expect("reopen all-case barrier");
     assert_eq!(reopened.projection(), journal.projection());
 
-    let case_sequence = 0;
+    let mut final_receipts = Vec::new();
+    for case_sequence in 0..generated.public.cases.len() {
+        eprintln!("R7 execute case {}/16", case_sequence + 1);
+        final_receipts.push(execute_precommitted_case(
+            &environment,
+            &binaries,
+            &generated,
+            &batch,
+            &prepared[case_sequence],
+            &mut journal,
+            case_sequence,
+        ));
+    }
+    assert_eq!(final_receipts.len(), 16);
+    assert_eq!(journal.projection().completed_cases, 16);
+    assert_eq!(
+        K2UncertaintyBatchJournalV1::open_existing(
+            &journal_root,
+            generated.public.experiment_id_sha256.clone(),
+        )
+        .expect("restart after all observations")
+        .projection(),
+        journal.projection()
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_precommitted_case(
+    environment: &TestEnvironment,
+    binaries: &ProcessBinaries,
+    generated: &K2UncertaintyGeneratorResponseV1,
+    batch: &K2UncertaintyBatchPrecommitV1,
+    prepared_case: &PreparedCase,
+    journal: &mut K2UncertaintyBatchJournalV1,
+    case_sequence: usize,
+) -> K2UncertaintyCaseVerificationReceiptV1 {
     let public_case = &generated.public.cases[case_sequence];
     let private_case = generated
         .private
@@ -231,7 +266,6 @@ fn r6_real_owners_precommit_before_isolated_dispatch_and_observation() {
         .iter()
         .find(|case| case.case_id_sha256 == public_case.vocabulary.case_id_sha256)
         .expect("private case");
-    let prepared_case = &prepared[case_sequence];
     let selected_probe = prepared_case
         .probe_output
         .pages
@@ -252,7 +286,9 @@ fn r6_real_owners_precommit_before_isolated_dispatch_and_observation() {
         .find(|entry| entry.opaque_action_root_sha256 == selected_probe.action_id_sha256)
         .map(|entry| entry.effect.clone())
         .expect("private selected effect");
-    let workspace = environment.root.join("sandbox-work");
+    let workspace = environment
+        .root
+        .join(format!("sandbox-work-{case_sequence:02}"));
     fs::create_dir_all(&workspace).expect("create sandbox workspace");
     let safety_request = K2UncertaintySafetyRequestV1::seal(
         prepared_case.preverification.receipt_root_sha256.clone(),
@@ -271,7 +307,7 @@ fn r6_real_owners_precommit_before_isolated_dispatch_and_observation() {
         K2UncertaintyPrivateSafetyDispositionV1::Pass
     );
     let dispatch = prepare_self_formed_dispatch_v1(
-        &batch,
+        batch,
         &prepared_case.preverification,
         &journal.projection(),
         public_case,
@@ -351,10 +387,13 @@ fn r6_real_owners_precommit_before_isolated_dispatch_and_observation() {
     let final_request_bytes = uncertainty_bytes_v1(&final_request).expect("final request bytes");
     assert!(final_request_bytes.len() <= K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1);
     eprintln!(
-        "R6 independent final verifier request bytes: {}",
+        "R7 final verifier request bytes case {}: {}",
+        case_sequence + 1,
         final_request_bytes.len()
     );
-    let artifact_root = environment.root.join("frontier-00");
+    let artifact_root = environment
+        .root
+        .join(format!("frontier-{case_sequence:02}"));
     let final_receipt: K2UncertaintyCaseVerificationReceiptV1 = run_isolated(
         &binaries.final_verifier,
         &final_request,
@@ -399,20 +438,12 @@ fn r6_real_owners_precommit_before_isolated_dispatch_and_observation() {
             Some(private_case.case_id_sha256.clone()),
             binaries.final_verifier_sha256.clone(),
             final_request.request_root_sha256,
-            final_receipt.receipt_root_sha256,
+            final_receipt.receipt_root_sha256.clone(),
         )
         .expect("durable model update");
-    assert_eq!(
-        K2UncertaintyBatchJournalV1::open_existing(
-            &journal_root,
-            generated.public.experiment_id_sha256,
-        )
-        .expect("restart after observation")
-        .projection(),
-        journal.projection()
-    );
     fs::remove_dir_all(&workspace).expect("remove disposable workspace");
     assert!(!workspace.exists());
+    final_receipt
 }
 
 struct PreparedCase {

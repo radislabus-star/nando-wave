@@ -1,0 +1,367 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "architecture-canon",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/ARCHITECTURE_CANON.md",
+      "sha256": "8c44515cc368ee5cabf19d04ea8443c0a3f919527707f7899666f2c01e7bc0a0",
+      "size_bytes": 93192
+    },
+    {
+      "exists": true,
+      "id": "cargo-lock",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/Cargo.lock",
+      "sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08",
+      "size_bytes": 39973
+    },
+    {
+      "exists": true,
+      "id": "operator-learning-manifest",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/Cargo.toml",
+      "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+      "size_bytes": 663
+    },
+    {
+      "exists": true,
+      "id": "selector-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "sha256": "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390",
+      "size_bytes": 9922
+    },
+    {
+      "exists": true,
+      "id": "uncertainty-module",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "sha256": "ee0cd9f3d4a9bd32425350d786fa5e5a9b6ff63a49c2ec10441c7690d331474a",
+      "size_bytes": 1064
+    },
+    {
+      "exists": true,
+      "id": "uncertainty-limits",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/limits.rs",
+      "sha256": "a5842cc0de1d4870ce556a695f9992bc0047ebd69b6f916df19d06d3050a6b22",
+      "size_bytes": 8741
+    },
+    {
+      "exists": true,
+      "id": "frontier-model",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/frontier_model.rs",
+      "sha256": "4de3af7e37ab933a0842f6c9faaa6e43527eb394223ac9424ef1bdf4d2dbb09f",
+      "size_bytes": 31028
+    },
+    {
+      "exists": true,
+      "id": "integration-model",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/integration_model.rs",
+      "sha256": "20c2ec9186e0464a2f078d28db9ec784586d92f6854669995208a06aa6664d3a",
+      "size_bytes": 14051
+    },
+    {
+      "exists": true,
+      "id": "integration-source",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/integration.rs",
+      "sha256": "3da762b4e32462dddd8c1c9188c4acb9093104d4d7067ce2fcba75c26df94cb6",
+      "size_bytes": 12482
+    },
+    {
+      "exists": true,
+      "id": "batch-journal",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/batch_journal.rs",
+      "sha256": "9b910aff546c20c41ae8196df406b09b0430ac37ecedd35d5491a0c08f80b30d",
+      "size_bytes": 15570
+    },
+    {
+      "exists": true,
+      "id": "final-verifier",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier.rs",
+      "sha256": "5acba205191b9c76e45467a0ebc4f5513e5d9e8320338d6020c42ec1a332ca7e",
+      "size_bytes": 12755
+    },
+    {
+      "exists": true,
+      "id": "final-verifier-selection",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier_selection.rs",
+      "sha256": "4f9906dbf297cdb57ca02ecc122fb42e13a1ababe0c5de9a29243a6589cf2335",
+      "size_bytes": 20851
+    },
+    {
+      "exists": true,
+      "id": "process-test",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_process_v1.rs",
+      "sha256": "2c4fbb2f6da34230afe87322eb10038ea39d5de74e7541e5e9c7ccb6d4705966",
+      "size_bytes": 25133
+    },
+    {
+      "exists": true,
+      "id": "r7-discrepancy",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_R7_DISCREPANCY_2026-08-15.md",
+      "sha256": "2ef1904fcfdb67232eea98a361161e104770852b93aaf6e3f759c591a242f23b",
+      "size_bytes": 4037
+    },
+    {
+      "exists": true,
+      "id": "preregistration-v4",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V4.md",
+      "sha256": "1c40f6bb696257e4add212f7d2d8edadf30fefb20b0ed2507a6c6b0dadb051ce",
+      "size_bytes": 14994
+    },
+    {
+      "exists": true,
+      "id": "critique-v3",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_CRITIQUE_V3.md",
+      "sha256": "b7f184fe3fc371497298f411c2c0cb8040b79d0c1c3080de58ea30e93b6ee2ae",
+      "size_bytes": 7517
+    },
+    {
+      "exists": true,
+      "id": "closure-gate",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-closure-route.receipt.json",
+      "sha256": "9a938cd5a759af0898dc6c317ce0f829e54c48f65e2f846d47ccfd5b8b1abf60",
+      "size_bytes": 23524
+    },
+    {
+      "exists": true,
+      "id": "execution-gate",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-execution-route.receipt.json",
+      "sha256": "38f3c9e97132940fbd520b53111a7af3ee720a92d4968d93a0d37ab45da03722",
+      "size_bytes": 20772
+    },
+    {
+      "exists": true,
+      "id": "proof-gate",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-proof-authority-route.receipt.json",
+      "sha256": "2e2a13eb77bc427d8cb88b798e5649d4ef3806f070ce655130dfefa79fbf0a38",
+      "size_bytes": 22117
+    },
+    {
+      "exists": true,
+      "id": "code-route-gate",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V4/nanda-k2-v4-code-route.design.receipt.json",
+      "sha256": "f0fd2eb957d717286f2ad89726fbd580078618214c88170bc5f7b9bdb1ff0dda",
+      "size_bytes": 4442
+    },
+    {
+      "exists": true,
+      "id": "production-serving",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs",
+      "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949",
+      "size_bytes": 457899
+    },
+    {
+      "exists": true,
+      "id": "production-dashboard",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c",
+      "size_bytes": 28960
+    }
+  ],
+  "blockers": [
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: bundle_activation"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: confirm_seed_read"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: dashboard_change"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: generated_traffic"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: law_certificate_issue"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: natural_traffic_write"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: package_activation"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: phase_memory_mutation"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: sealed_scientific_execution"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: synthetic_fixture"
+    },
+    {
+      "code": "test_contract_incomplete",
+      "field": "tests[14]",
+      "message": "valid kind and non-empty expected result are required"
+    },
+    {
+      "code": "test_contract_incomplete",
+      "field": "tests[15]",
+      "message": "valid kind and non-empty expected result are required"
+    },
+    {
+      "code": "test_contract_incomplete",
+      "field": "tests[16]",
+      "message": "valid kind and non-empty expected result are required"
+    },
+    {
+      "code": "test_contract_incomplete",
+      "field": "tests[19]",
+      "message": "valid kind and non-empty expected result are required"
+    },
+    {
+      "code": "test_contract_incomplete",
+      "field": "tests[20]",
+      "message": "valid kind and non-empty expected result are required"
+    }
+  ],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 22,
+    "forbidden_side_effect_kinds": [
+      "bundle_activation",
+      "confirm_nonce_interaction",
+      "confirm_seed_read",
+      "dashboard_change",
+      "deployment",
+      "experiment_network_access",
+      "generated_traffic",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "natural_k2_authority",
+      "natural_traffic_read",
+      "natural_traffic_write",
+      "package_activation",
+      "phase_memory_mutation",
+      "production_state_mount",
+      "production_write",
+      "sealed_scientific_execution",
+      "service_control",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 7,
+    "invariants": 16,
+    "planned_side_effect_kinds": [
+      "append_only_evidence_write",
+      "append_only_freeze_receipt_write",
+      "filesystem_read",
+      "isolated_test_process_spawn",
+      "source_file_create",
+      "source_file_modify",
+      "test_file_create",
+      "test_file_modify",
+      "test_fixture_cleanup",
+      "test_fixture_write",
+      "test_lab_journal_write"
+    ],
+    "preserved_artifacts": 8,
+    "runtime_comparisons": 0,
+    "source_checks": 4,
+    "tests": 22
+  },
+  "manifest_sha256": "08013679e9b69a4bdc67cdbff015818a21b845e7dee702ee9638d41e71b1e76e",
+  "safe_to_implement": false,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "frozen-predecessor-selector",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "sha256": "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390",
+      "size_bytes": 9922
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "existing-integration-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/integration.rs",
+      "sha256": "3da762b4e32462dddd8c1c9188c4acb9093104d4d7067ce2fcba75c26df94cb6",
+      "size_bytes": 12482
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "existing-final-verifier-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier.rs",
+      "sha256": "5acba205191b9c76e45467a0ebc4f5513e5d9e8320338d6020c42ec1a332ca7e",
+      "size_bytes": 12755
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "existing-process-test-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_process_v1.rs",
+      "sha256": "2c4fbb2f6da34230afe87322eb10038ea39d5de74e7541e5e9c7ccb6d4705966",
+      "size_bytes": 25133
+    }
+  ],
+  "task_id": "k2-self-formed-uncertainty-r7-v4-delta",
+  "verdict": "BLOCKED_BEFORE_CODE"
+}

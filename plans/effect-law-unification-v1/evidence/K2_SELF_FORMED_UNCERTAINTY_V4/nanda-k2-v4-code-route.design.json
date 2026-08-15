@@ -1,0 +1,69 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id": "frontier_builder", "role": "producer"},
+    {"id": "frontier", "role": "evidence_owner"},
+    {"id": "planner", "role": "candidate_rank_owner"},
+    {"id": "preverifier", "role": "proof_owner"},
+    {"id": "barrier", "role": "authorization_owner"},
+    {"id": "dispatcher", "role": "orchestrator"},
+    {"id": "worker", "role": "mutation_owner"},
+    {"id": "post_state", "role": "evidence_owner"},
+    {"id": "observer", "role": "observer"},
+    {"id": "final_verifier", "role": "proof_owner"}
+  ],
+  "edges": [
+    {"id": "closure-builder-frontier", "from": "frontier_builder", "relation": "produces_for", "to": "frontier", "events": ["plan"]},
+    {"id": "closure-frontier-planner", "from": "frontier", "relation": "passes_to", "to": "planner", "events": ["plan"]},
+    {"id": "closure-planner-barrier", "from": "planner", "relation": "passes_to", "to": "barrier", "events": ["plan"]},
+    {"id": "closure-barrier-worker", "from": "barrier", "relation": "authorizes", "to": "worker", "events": ["plan"]},
+    {"id": "preverify-planner-verifier", "from": "planner", "relation": "proves", "to": "preverifier", "events": ["preverify"]},
+    {"id": "dispatch-dispatcher-worker", "from": "dispatcher", "relation": "calls", "to": "worker", "events": ["execute"]},
+    {"id": "observe-state-observer", "from": "post_state", "relation": "observes", "to": "observer", "events": ["observe"]},
+    {"id": "prove-observer-final", "from": "observer", "relation": "proves", "to": "final_verifier", "events": ["verify"]}
+  ],
+  "routes": [
+    {
+      "id": "closure-authority",
+      "event": "plan",
+      "kind": "authority",
+      "entry": "frontier_builder",
+      "terminal": "worker",
+      "required_roles": ["producer", "evidence_owner", "candidate_rank_owner", "authorization_owner", "mutation_owner"]
+    },
+    {
+      "id": "closure-preverification",
+      "event": "preverify",
+      "kind": "proof",
+      "entry": "planner",
+      "terminal": "preverifier",
+      "required_roles": ["candidate_rank_owner", "proof_owner"]
+    },
+    {
+      "id": "plan-execution",
+      "event": "execute",
+      "kind": "execution",
+      "entry": "dispatcher",
+      "terminal": "worker",
+      "required_roles": ["orchestrator", "mutation_owner"],
+      "path_cardinality": [{"from": "dispatcher", "to": "worker", "min": 1, "max": 1}]
+    },
+    {
+      "id": "outcome-observation",
+      "event": "observe",
+      "kind": "observation",
+      "entry": "post_state",
+      "terminal": "observer",
+      "required_roles": ["evidence_owner", "observer"]
+    },
+    {
+      "id": "final-proof",
+      "event": "verify",
+      "kind": "proof",
+      "entry": "observer",
+      "terminal": "final_verifier",
+      "required_roles": ["observer", "proof_owner"]
+    }
+  ]
+}

@@ -15,7 +15,7 @@ use super::{
     K2_UNCERTAINTY_PROBE_CLASS_SCHEMA_V1, K2_UNCERTAINTY_RAW_PREDICTIONS_V1,
     K2_UNCERTAINTY_RAW_PROBE_SCHEMA_V1, K2_UNCERTAINTY_RAW_PROBES_V1,
     K2_UNCERTAINTY_RESOURCE_TERMINAL_SCHEMA_V1, K2_UNCERTAINTY_RISK_COST_SCHEMA_V1,
-    K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1, K2_UNCERTAINTY_STATE_COUNT_V1,
+    K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1, K2_UNCERTAINTY_STATE_COUNT_V1, denied_authority_v1,
     require_denied_authority_v1, require_exact_len_v1, require_sorted_unique_v1,
     uncertainty_root_v1,
 };
@@ -816,6 +816,34 @@ pub struct K2UncertaintyResourceTerminalV1 {
 }
 
 impl K2UncertaintyResourceTerminalV1 {
+    pub fn seal(
+        case_id_sha256: Option<String>,
+        kind: K2UncertaintyResourceTerminalKindV1,
+        measured: u64,
+        limit: u64,
+    ) -> K2CompositionResultV1<Self> {
+        let authority = denied_authority_v1();
+        let terminal_root_sha256 = uncertainty_root_v1(&(
+            K2_UNCERTAINTY_RESOURCE_TERMINAL_SCHEMA_V1,
+            &case_id_sha256,
+            kind,
+            measured,
+            limit,
+            &authority,
+        ))?;
+        let terminal = Self {
+            schema: K2_UNCERTAINTY_RESOURCE_TERMINAL_SCHEMA_V1.to_owned(),
+            case_id_sha256,
+            kind,
+            measured,
+            limit,
+            authority,
+            terminal_root_sha256,
+        };
+        terminal.validate()?;
+        Ok(terminal)
+    }
+
     pub fn validate(&self) -> K2CompositionResultV1<()> {
         if let Some(case) = &self.case_id_sha256 {
             require_composition_root_v1(case)?;
