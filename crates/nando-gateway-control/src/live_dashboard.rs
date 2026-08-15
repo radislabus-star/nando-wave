@@ -1,7 +1,25 @@
 use serde::Serialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
-const DASHBOARD_BUILD: &str = "2026.08.14-control-v23";
+const DASHBOARD_BUILD: &str = "2026.08.15-control-v24";
+const HIDDEN_EFFECT_EVIDENCE: &str = include_str!(
+    "../../../plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_LEARNED_CAPABILITY_EXECUTION_EVIDENCE_2026-08-14.md"
+);
+const COMPOSITION_RECEIPT: &str = include_str!(
+    "../../../plans/effect-law-unification-v1/evidence/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_V1/capability-receipt.json"
+);
+const REPRESENTATION_RECEIPT: &str = include_str!(
+    "../../../plans/effect-law-unification-v1/evidence/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_V1/capability-receipt.json"
+);
+const HIDDEN_EFFECT_EVIDENCE_SHA256: &str =
+    "aef3dd0025ecdf5ca6b5df0873da842321b03a9240eab2978d2ce8c4521eb9cb";
+const COMPOSITION_RECEIPT_SHA256: &str =
+    "95baf02f6a20a5b6bf884f8a47a0c00b5830ce0f775770273285e266ecb4ebb0";
+const REPRESENTATION_RECEIPT_SHA256: &str =
+    "c5c07cd2990d5f71f935977a932416c7daf6c6ff3b747d9e75243631ddf95a35";
+const COMPOSITION_CLAIM: &str = "K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_PASS";
+const REPRESENTATION_CLAIM: &str = "K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_PASS";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
@@ -60,6 +78,22 @@ pub(crate) struct BridgeView {
     pub(crate) parity_mismatches: u64,
     pub(crate) execution_authority: bool,
     pub(crate) services_active: u64,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct GeneratedCapabilityView {
+    hidden_effect_pass: bool,
+    composition_pass: bool,
+    representation_pass: bool,
+    confirm_exact_goals: u64,
+    confirm_total: u64,
+    action_evaluations: u64,
+    action_evaluation_limit: u64,
+    complete_programs_each: u64,
+    controls_passed: u64,
+    controls_total: u64,
+    production_authority_false: bool,
+    natural_k2_not_proved: bool,
 }
 
 pub(crate) fn build_id() -> &'static str {
@@ -181,6 +215,48 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         "ЗАКРЫТ"
     };
     let cpu_gate_tone = if initial.cpu_allowed { "good" } else { "bad" };
+    let generated = generated_capability_view();
+    let generated_state = |passed| if passed { "PASS" } else { "UNVERIFIED" };
+    let generated_tone = |passed| if passed { "good" } else { "warn" };
+    let generated_confirm_goals = if generated.representation_pass {
+        format!(
+            "{} / {}",
+            generated.confirm_exact_goals, generated.confirm_total
+        )
+    } else {
+        "UNVERIFIED".to_owned()
+    };
+    let generated_search_evaluations = if generated.representation_pass {
+        format!(
+            "{} / {} each",
+            generated.action_evaluations, generated.action_evaluation_limit
+        )
+    } else {
+        "UNVERIFIED".to_owned()
+    };
+    let generated_search_denominator = if generated.representation_pass {
+        format_number(generated.complete_programs_each)
+    } else {
+        "UNVERIFIED".to_owned()
+    };
+    let generated_controls = if generated.representation_pass {
+        format!(
+            "{} / {}",
+            generated.controls_passed, generated.controls_total
+        )
+    } else {
+        "UNVERIFIED".to_owned()
+    };
+    let generated_authority = if generated.production_authority_false {
+        "FALSE"
+    } else {
+        "UNVERIFIED"
+    };
+    let generated_natural_k2 = if generated.natural_k2_not_proved {
+        "NOT PROVED"
+    } else {
+        "UNVERIFIED"
+    };
     TEMPLATE
         .replace("__DASHBOARD_BUILD__", DASHBOARD_BUILD)
         .replace(
@@ -251,6 +327,169 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         .replace("__MINER_UNRECOGNIZED__", &format_number(miner_unrecognized))
         .replace("__CPU_GATE__", cpu_gate)
         .replace("__CPU_GATE_TONE__", cpu_gate_tone)
+        .replace(
+            "__GENERATED_HIDDEN_EFFECT_STATE__",
+            generated_state(generated.hidden_effect_pass),
+        )
+        .replace(
+            "__GENERATED_HIDDEN_EFFECT_TONE__",
+            generated_tone(generated.hidden_effect_pass),
+        )
+        .replace(
+            "__GENERATED_COMPOSITION_STATE__",
+            generated_state(generated.composition_pass),
+        )
+        .replace(
+            "__GENERATED_COMPOSITION_TONE__",
+            generated_tone(generated.composition_pass),
+        )
+        .replace(
+            "__GENERATED_REPRESENTATION_STATE__",
+            generated_state(generated.representation_pass),
+        )
+        .replace(
+            "__GENERATED_REPRESENTATION_TONE__",
+            generated_tone(generated.representation_pass),
+        )
+        .replace("__GENERATED_CONFIRM_GOALS__", &generated_confirm_goals)
+        .replace(
+            "__GENERATED_SEARCH_EVALUATIONS__",
+            &generated_search_evaluations,
+        )
+        .replace(
+            "__GENERATED_SEARCH_DENOMINATOR__",
+            &generated_search_denominator,
+        )
+        .replace("__GENERATED_CONTROLS__", &generated_controls)
+        .replace("__GENERATED_AUTHORITY__", generated_authority)
+        .replace(
+            "__GENERATED_AUTHORITY_TONE__",
+            if generated.production_authority_false {
+                "good"
+            } else {
+                "warn"
+            },
+        )
+        .replace("__GENERATED_NATURAL_K2__", generated_natural_k2)
+        .replace(
+            "__GENERATED_RECEIPT_ROOT__",
+            &REPRESENTATION_RECEIPT_SHA256[..12],
+        )
+}
+
+fn generated_capability_view() -> GeneratedCapabilityView {
+    generated_capability_view_from_sources(
+        HIDDEN_EFFECT_EVIDENCE,
+        COMPOSITION_RECEIPT,
+        REPRESENTATION_RECEIPT,
+    )
+}
+
+fn generated_capability_view_from_sources(
+    hidden_effect_evidence: &str,
+    composition_receipt: &str,
+    representation_receipt: &str,
+) -> GeneratedCapabilityView {
+    let hidden_effect_pass = sha256_hex(hidden_effect_evidence.as_bytes())
+        == HIDDEN_EFFECT_EVIDENCE_SHA256
+        && hidden_effect_evidence.contains("K2_GOAL_ENVIRONMENT_LEARNED_CAPABILITY_PASS")
+        && hidden_effect_evidence
+            .contains("authority                                              false")
+        && hidden_effect_evidence
+            .contains("natural K2 claim                                      not made");
+    let composition = validated_capability_receipt(
+        composition_receipt,
+        COMPOSITION_RECEIPT_SHA256,
+        COMPOSITION_CLAIM,
+    );
+    let representation = validated_capability_receipt(
+        representation_receipt,
+        REPRESENTATION_RECEIPT_SHA256,
+        REPRESENTATION_CLAIM,
+    );
+    let composition_pass = composition.is_some();
+    let representation_pass = representation.is_some();
+    let representation = representation.unwrap_or(Value::Null);
+    let evaluations = representation
+        .pointer("/denominators/policy_action_evaluations_each")
+        .and_then(Value::as_array)
+        .filter(|values| !values.is_empty())
+        .and_then(|values| {
+            let first = values.first()?.as_u64()?;
+            values
+                .iter()
+                .all(|value| value.as_u64() == Some(first))
+                .then_some(first)
+        })
+        .unwrap_or(0);
+    let production_authority_false = hidden_effect_pass
+        && composition_pass
+        && representation_pass
+        && composition
+            .as_ref()
+            .and_then(|value| value.pointer("/authority/production_execution"))
+            .and_then(Value::as_bool)
+            == Some(false)
+        && representation
+            .pointer("/authority/production_execution")
+            .and_then(Value::as_bool)
+            == Some(false);
+    let natural_k2_not_proved = hidden_effect_pass
+        && composition_pass
+        && representation_pass
+        && composition
+            .as_ref()
+            .and_then(|value| value.pointer("/authority/natural_k2"))
+            .and_then(Value::as_bool)
+            == Some(false)
+        && representation
+            .pointer("/authority/natural_k2")
+            .and_then(Value::as_bool)
+            == Some(false);
+
+    GeneratedCapabilityView {
+        hidden_effect_pass,
+        composition_pass,
+        representation_pass,
+        confirm_exact_goals: pointer_u64(&representation, "/denominators/confirm_exact_goals"),
+        confirm_total: pointer_u64(&representation, "/denominators/confirm_tasks"),
+        action_evaluations: evaluations,
+        action_evaluation_limit: pointer_u64(
+            &representation,
+            "/denominators/policy_action_evaluation_limit_each",
+        ),
+        complete_programs_each: pointer_u64(
+            &representation,
+            "/denominators/confirm_complete_programs_each",
+        ),
+        controls_passed: pointer_u64(&representation, "/denominators/negative_controls_passed"),
+        controls_total: pointer_u64(&representation, "/denominators/negative_controls_total"),
+        production_authority_false,
+        natural_k2_not_proved,
+    }
+}
+
+fn validated_capability_receipt(
+    source: &str,
+    expected_sha256: &str,
+    expected_claim: &str,
+) -> Option<Value> {
+    if sha256_hex(source.as_bytes()) != expected_sha256 {
+        return None;
+    }
+    let receipt: Value = serde_json::from_str(source).ok()?;
+    let authority = receipt.pointer("/authority")?.as_object()?;
+    (receipt.pointer("/claim")?.as_str()? == expected_claim
+        && receipt.pointer("/verdict")?.as_str()? == "PASS"
+        && !authority.is_empty()
+        && authority
+            .values()
+            .all(|value| value.as_bool() == Some(false)))
+    .then_some(receipt)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn pointer_u64(value: &Value, pointer: &str) -> u64 {
@@ -365,7 +604,7 @@ mod tests {
         assert!(html.contains("id=\"s1c4-goals\""));
         assert!(html.contains("id=\"k2-next\""));
         assert!(html.contains("Ожидание не изменит это закрытое окно"));
-        assert!(html.contains("отдельная preregistered среда"));
+        assert!(html.contains("Generated-эксперименты ниже не входят в эту строку"));
         assert_eq!(html.matches("class=\"status-line\"").count(), 4);
         assert_eq!(html.matches("class=\"route-row").count(), 3);
         assert!(!html.contains("Распознавание майнера"));
@@ -374,6 +613,71 @@ mod tests {
         assert!(!html.contains("CANDIDATE INPUT"));
         assert!(html.contains("/api/v1/dashboard"));
         assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
+    }
+
+    #[test]
+    fn generated_capability_is_receipt_bound_and_separate_from_natural_k2() {
+        let generated = generated_capability_view();
+        assert!(generated.hidden_effect_pass);
+        assert!(generated.composition_pass);
+        assert!(generated.representation_pass);
+        assert_eq!(
+            (generated.confirm_exact_goals, generated.confirm_total),
+            (2, 2)
+        );
+        assert_eq!(
+            (
+                generated.action_evaluations,
+                generated.action_evaluation_limit
+            ),
+            (61, 67)
+        );
+        assert_eq!(generated.complete_programs_each, 8_659);
+        assert_eq!(
+            (generated.controls_passed, generated.controls_total),
+            (18, 18)
+        );
+        assert!(generated.production_authority_false);
+        assert!(generated.natural_k2_not_proved);
+
+        let html = render(InitialMetrics {
+            server_total_tokens: 0,
+            server_cpu_tokens: 0,
+            epoch_total_tokens: 0,
+            epoch_total_events: 0,
+            epoch_cpu_tokens: 0,
+            epoch_cpu_accepts: 0,
+            epoch_avoided_calls: 0,
+            miner_window_total_tokens: 0,
+            miner_window_total_intents: 0,
+            miner_window_cpu_tokens: 0,
+            miner_window_cpu_intents: 0,
+            cpu_allowed: false,
+        });
+        assert!(html.contains("Generated causal AI"));
+        assert!(html.contains("Hidden effects learned"));
+        assert!(html.contains("Explicit composition"));
+        assert!(html.contains("Hidden representation"));
+        assert!(html.contains("61 / 67 each"));
+        assert!(html.contains("complete denominator 8 659 each"));
+        assert!(html.contains("Production authority</span><strong class=\"good\">FALSE"));
+        assert_eq!(html.matches("Natural K2").count(), 2);
+        assert!(html.contains("NOT PROVED"));
+        assert!(!html.contains("__GENERATED_"));
+    }
+
+    #[test]
+    fn generated_capability_fails_closed_on_unbound_evidence() {
+        let generated = generated_capability_view_from_sources(
+            "tampered",
+            COMPOSITION_RECEIPT,
+            REPRESENTATION_RECEIPT,
+        );
+        assert!(!generated.hidden_effect_pass);
+        assert!(generated.composition_pass);
+        assert!(generated.representation_pass);
+        assert!(!generated.production_authority_false);
+        assert!(!generated.natural_k2_not_proved);
     }
 
     #[test]

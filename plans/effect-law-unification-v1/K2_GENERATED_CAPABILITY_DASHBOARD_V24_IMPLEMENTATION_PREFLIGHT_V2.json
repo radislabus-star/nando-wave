@@ -1,0 +1,227 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-generated-capability-dashboard-v24",
+  "authority_bearing": true,
+  "scientific_future_sensitive": false,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "dashboard-html-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/live_dashboard_v21.html",
+      "expect": {
+        "size_bytes": 19536,
+        "sha256": "5de0e8eceb68fe329f6e74035db7b9d68c180662212cbfc0f1cd475e93f3aac3",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "dashboard-rust-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "expect": {
+        "size_bytes": 17697,
+        "sha256": "a6e0815d7bd74d486efac2e89031a2a787d7648f3a89d77916654edf3b7a068e",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "dashboard-main-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/main.rs",
+      "expect": {
+        "size_bytes": 163170,
+        "sha256": "664df1ca9fa0579001a5db58ae7380afdbd13569f143887f0b1a553f8209962f",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "hidden-effect-evidence-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_LEARNED_CAPABILITY_EXECUTION_EVIDENCE_2026-08-14.md",
+      "expect": {
+        "size_bytes": 6536,
+        "sha256": "aef3dd0025ecdf5ca6b5df0873da842321b03a9240eab2978d2ce8c4521eb9cb",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "composition-receipt-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/plans/effect-law-unification-v1/evidence/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_V1/capability-receipt.json",
+      "expect": {
+        "size_bytes": 3772,
+        "sha256": "95baf02f6a20a5b6bf884f8a47a0c00b5830ce0f775770273285e266ecb4ebb0",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "representation-receipt-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/plans/effect-law-unification-v1/evidence/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_V1/capability-receipt.json",
+      "expect": {
+        "size_bytes": 5709,
+        "sha256": "c5c07cd2990d5f71f935977a932416c7daf6c6ff3b747d9e75243631ddf95a35",
+        "mode": "0664"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {"id": "read-frozen-capability-evidence", "kind": "filesystem_read"},
+      {"id": "edit-dashboard-template", "kind": "source_file_modify"},
+      {"id": "edit-dashboard-projection-tests", "kind": "source_file_modify"},
+      {"id": "build-gateway-control", "kind": "remote_build"},
+      {"id": "stage-control-binary", "kind": "remote_stage_write"},
+      {"id": "install-control-binary", "kind": "remote_atomic_replace"},
+      {"id": "restart-control-service", "kind": "service_restart"}
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "natural_evidence_write",
+      "k1_registry_mutation",
+      "phase_memory_mutation",
+      "law_certificate_issue",
+      "package_activation",
+      "dashboard_api_schema_change",
+      "hot_serving_restart",
+      "nginx_restart",
+      "connector_restart"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "dashboard-main-unchanged",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/main.rs",
+      "sha256": "664df1ca9fa0579001a5db58ae7380afdbd13569f143887f0b1a553f8209962f",
+      "forbidden_effect_patterns": [
+        {"effect": "dashboard_api_schema_change", "regex": "generated_causal_ai"},
+        {"effect": "generated_traffic", "regex": "generate_(synthetic|targeted)_traffic\\s*\\("},
+        {"effect": "synthetic_fixture", "regex": "write_(synthetic|generated)_fixture\\s*\\("},
+        {"effect": "natural_evidence_write", "regex": "write_natural_evidence\\s*\\("},
+        {"effect": "k1_registry_mutation", "regex": "k1_registry_mutated\\s*:\\s*true"},
+        {"effect": "phase_memory_mutation", "regex": "phase_mutation_allowed\\s*:\\s*true"},
+        {"effect": "law_certificate_issue", "regex": "issue_law_certificate\\s*\\("},
+        {"effect": "package_activation", "regex": "package_activated\\s*:\\s*true"},
+        {"effect": "hot_serving_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*transition-serving"},
+        {"effect": "nginx_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*(nginx|transport-gateway)"},
+        {"effect": "connector_restart", "regex": "systemctl[^\\n]*(restart|stop)[^\\n]*connector"}
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "PAPER_FROZEN",
+    "steps": [
+      {
+        "id": "source-edit",
+        "from": "PAPER_FROZEN",
+        "to": "SOURCE_EDITED",
+        "mutates": true,
+        "failure_state": "SOURCE_EDIT_FAILED",
+        "cleanup": "restore only the two dashboard source baselines",
+        "preserves": ["capability-evidence", "main-source"],
+        "test_id": "source-edit-fault"
+      },
+      {
+        "id": "remote-stage",
+        "from": "SOURCE_EDITED",
+        "to": "BINARY_STAGED",
+        "mutates": true,
+        "failure_state": "BUILD_OR_STAGE_FAILED",
+        "cleanup": "remove staged binary without touching installed services",
+        "preserves": ["capability-evidence", "main-source"],
+        "test_id": "remote-stage-fault"
+      },
+      {
+        "id": "control-install",
+        "from": "BINARY_STAGED",
+        "to": "CONTROL_RESTARTED",
+        "mutates": true,
+        "failure_state": "INSTALL_FAILED_ROLLBACK_REQUIRED",
+        "cleanup": "atomically restore backup control binary and restart control service only",
+        "preserves": ["capability-evidence", "main-source"],
+        "test_id": "rollback-and-pids"
+      },
+      {
+        "id": "live-verify",
+        "from": "CONTROL_RESTARTED",
+        "to": "PASS",
+        "mutates": false,
+        "failure_state": "LIVE_VERIFY_FAILED_ROLLBACK_REQUIRED",
+        "cleanup": "run the same control-only rollback",
+        "preserves": ["capability-evidence", "main-source"],
+        "test_id": "live-dashboard"
+      }
+    ],
+    "terminal_states": [
+      "PASS",
+      "SOURCE_EDIT_FAILED",
+      "BUILD_OR_STAGE_FAILED",
+      "INSTALL_FAILED_ROLLBACK_REQUIRED",
+      "LIVE_VERIFY_FAILED_ROLLBACK_REQUIRED"
+    ]
+  },
+  "preserved_artifacts": [
+    {
+      "id": "capability-evidence",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/plans/effect-law-unification-v1/evidence/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_V1/capability-receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "representation-receipt-baseline"
+    },
+    {
+      "id": "main-source",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/main.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "dashboard-main-baseline"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "representation-receipt-projection",
+      "producer": "compiled capability receipt bytes",
+      "consumer": "generated capability dashboard projection",
+      "comparison": "exact claim verdict authority and denominator fields",
+      "test_id": "receipt-projection"
+    },
+    {
+      "id": "installed-binary-identity",
+      "producer": "staged release gateway-control binary",
+      "consumer": "installed and running gateway-control executable",
+      "comparison": "SHA-256 byte identity before and after restart",
+      "test_id": "installed-binary-sha"
+    }
+  ],
+  "runtime_comparisons": [
+    {
+      "id": "service-survival",
+      "source": "predeployment and postdeployment systemd connector and dashboard snapshots",
+      "comparison": "exact_stable_projection",
+      "stable_fields": ["hot_serving_pid=1816591", "nginx_pid=682430", "connector_pid=2919", "false_accepts=0", "parity_failures=0"],
+      "expected_to_change_fields": ["gateway_control_pid", "dashboard_build", "gateway_control_binary_sha256"],
+      "observed_not_compared_fields": ["traffic_counters", "snapshot_timestamp", "source_age"],
+      "reason": "ordinary traffic advances while service ownership and safety remain stable",
+      "test_id": "service-survival-parity"
+    }
+  ],
+  "invariants": [
+    {"id": "generated-natural-separation", "statement": "generated capability PASS is separate from Natural K2 NOT PROVED", "test_id": "claim-boundary"},
+    {"id": "authority-false", "statement": "production authority is false and no receipt authority flag is promoted", "test_id": "receipt-projection"},
+    {"id": "api-unchanged", "statement": "dashboard API schema and runtime counters are unchanged", "test_id": "source-scope-parity"},
+    {"id": "control-only-deployment", "statement": "only gateway control may restart", "test_id": "rollback-and-pids"}
+  ],
+  "tests": [
+    {"id": "source-edit-fault", "kind": "fault_injection", "expected": "failed source edit leaves evidence and main.rs exact and production untouched"},
+    {"id": "remote-stage-fault", "kind": "fault_injection", "expected": "failed build or stage leaves the installed control binary and every service untouched"},
+    {"id": "source-scope-parity", "kind": "parity", "expected": "only dashboard HTML and projection/test Rust source change; main.rs remains exact"},
+    {"id": "receipt-projection", "kind": "parity", "expected": "three PASS facts render only from valid authority-false evidence; malformed input is UNVERIFIED"},
+    {"id": "claim-boundary", "kind": "unit", "expected": "Generated causal AI and Natural K2 are separate and exact forbidden promotions are absent"},
+    {"id": "remote-gates", "kind": "integration", "expected": "gateway-control tests, fmt, check and strict Clippy pass on 20-job mini-PC build"},
+    {"id": "rollback-and-pids", "kind": "fault_injection", "expected": "backup restores control binary; hot serving Nginx and connector PIDs do not change"},
+    {"id": "installed-binary-sha", "kind": "parity", "expected": "staged installed and running gateway-control SHA-256 are identical"},
+    {"id": "service-survival-parity", "kind": "parity", "expected": "hot serving Nginx connector false accepts and parity remain stable"},
+    {"id": "live-dashboard", "kind": "integration", "expected": "V24 facts render on desktop and 390px mobile with no overflow or JavaScript errors"}
+  ]
+}

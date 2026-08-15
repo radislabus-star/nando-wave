@@ -61,6 +61,14 @@
 .status-state.good { color:var(--green); }
 .status-copy { color:#bac2c6; font-size:11px; line-height:1.5; }
 .status-copy b { color:#eef1f2; font-weight:700; }
+.proof-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:var(--line); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.proof-fact { min-width:0; min-height:94px; padding:16px; background:var(--surface); }
+.proof-fact span { display:block; color:var(--muted); font-size:10px; line-height:1.4; }
+.proof-fact strong { display:block; margin-top:7px; color:#f4f6f7; font-size:17px; line-height:1.15; font-weight:760; overflow-wrap:anywhere; }
+.proof-fact strong.good { color:var(--green); }
+.proof-fact strong.warn { color:var(--amber); }
+.proof-fact em { display:block; margin-top:6px; color:#aeb7bb; font-size:9px; font-style:normal; line-height:1.45; overflow-wrap:anywhere; }
+.proof-receipt { margin-top:10px; color:#758086; font-size:9px; line-height:1.5; overflow-wrap:anywhere; }
 .nd-foot { border-top:1px solid var(--line); }
 .nd-foot .nd-inner { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:20px; color:#758086; font-size:9px; }
 .safety-line { display:flex; flex-wrap:wrap; gap:6px 20px; }
@@ -81,7 +89,12 @@
   .outcome { min-height:0; padding:16px; }
   .status-line { grid-template-columns:82px minmax(0,1fr); gap:10px 14px; padding:15px 0; }
   .status-copy { grid-column:1 / -1; }
+  .proof-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .nd-foot .nd-inner { align-items:flex-start; flex-direction:column; padding-top:11px; padding-bottom:11px; }
+}
+@media (max-width:460px) {
+  .proof-grid { grid-template-columns:1fr; }
+  .proof-fact { min-height:0; }
 }
 </style>
 <main class="nando-live" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live control">
@@ -132,8 +145,23 @@
         <div class="status-line"><strong>Exact writer</strong><span id="exact-writer-state" class="status-state">—</span><div class="status-copy"><span id="exact-writer-detail">Policy, runtime и immutable generation загружаются.</span> · authority wire <b id="k1-transport-state">—</b></div></div>
         <div class="status-line"><strong>K1 laws</strong><span id="k1-progress" class="status-state">—</span><div class="status-copy">Law #2 <b id="law2-state">—</b> · последний исход <b id="k1-state">—</b>: <span id="k1-blocker">—</span> · готово сейчас <b id="k1-ready">—</b> · следующая generation <b id="k1-next">—</b></div></div>
         <div class="status-line"><strong>S1C-4</strong><span id="s1c4-state" class="status-state">—</span><div class="status-copy"><b id="s1c4-window">—</b> classified · goals before action <b id="s1c4-goals">—</b> · verdict <b id="s1c4-verdict">—</b>. Ожидание не изменит это закрытое окно.</div></div>
-        <div class="status-line"><strong>K2 meaning</strong><span id="k2-progress" class="status-state">CLOSED</span><div class="status-copy" id="k2-next">Следующий честный маршрут: отдельная preregistered среда с machine-readable goal до действия.</div></div>
+        <div class="status-line"><strong>Natural K2</strong><span id="k2-progress" class="status-state">NOT PROVED</span><div class="status-copy" id="k2-next">Generated-эксперименты ниже не входят в эту строку. В ordinary traffic по-прежнему нет доказанного pre-action goal и альтернатив.</div></div>
       </div>
+    </section>
+
+    <section class="status-section" aria-labelledby="generated-title">
+      <div class="section-head"><h2 id="generated-title">Generated causal AI</h2><p>Замороженная generated-среда · отдельно от K1, natural K2 и product authority.</p></div>
+      <div class="proof-grid">
+        <div class="proof-fact"><span>Hidden effects learned</span><strong class="__GENERATED_HIDDEN_EFFECT_TONE__">__GENERATED_HIDDEN_EFFECT_STATE__</strong><em>opaque actions · exact before/after effects</em></div>
+        <div class="proof-fact"><span>Explicit composition</span><strong class="__GENERATED_COMPOSITION_TONE__">__GENERATED_COMPOSITION_STATE__</strong><em>learned laws · unprovided causal program</em></div>
+        <div class="proof-fact"><span>Hidden representation</span><strong class="__GENERATED_REPRESENTATION_TONE__">__GENERATED_REPRESENTATION_STATE__</strong><em>sealed generated holdout · bounded beam</em></div>
+        <div class="proof-fact"><span>Confirm exact goals</span><strong>__GENERATED_CONFIRM_GOALS__</strong><em>identity/path/content/topology-disjoint</em></div>
+        <div class="proof-fact"><span>Search evaluations</span><strong>__GENERATED_SEARCH_EVALUATIONS__</strong><em>complete denominator __GENERATED_SEARCH_DENOMINATOR__ each · not a latency claim</em></div>
+        <div class="proof-fact"><span>Negative controls</span><strong>__GENERATED_CONTROLS__</strong><em>causal, leakage, replay and authority controls</em></div>
+        <div class="proof-fact"><span>Production authority</span><strong class="__GENERATED_AUTHORITY_TONE__">__GENERATED_AUTHORITY__</strong><em>no package, certificate, phase or serving authority</em></div>
+        <div class="proof-fact"><span>Natural K2</span><strong class="warn">__GENERATED_NATURAL_K2__</strong><em>generated capability is not natural meaning evidence</em></div>
+      </div>
+      <div class="proof-receipt">frozen receipt <b>__GENERATED_RECEIPT_ROOT__</b> · generated only · authority false</div>
     </section>
   </div>
 

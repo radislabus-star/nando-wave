@@ -1,0 +1,211 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "dashboard-html-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/live_dashboard_v21.html",
+      "sha256": "5de0e8eceb68fe329f6e74035db7b9d68c180662212cbfc0f1cd475e93f3aac3",
+      "size_bytes": 19536
+    },
+    {
+      "exists": true,
+      "id": "dashboard-rust-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "sha256": "a6e0815d7bd74d486efac2e89031a2a787d7648f3a89d77916654edf3b7a068e",
+      "size_bytes": 17697
+    },
+    {
+      "exists": true,
+      "id": "dashboard-main-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/main.rs",
+      "sha256": "664df1ca9fa0579001a5db58ae7380afdbd13569f143887f0b1a553f8209962f",
+      "size_bytes": 163170
+    },
+    {
+      "exists": true,
+      "id": "hidden-effect-evidence-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/plans/effect-law-unification-v1/K2_GOAL_ENVIRONMENT_LEARNED_CAPABILITY_EXECUTION_EVIDENCE_2026-08-14.md",
+      "sha256": "aef3dd0025ecdf5ca6b5df0873da842321b03a9240eab2978d2ce8c4521eb9cb",
+      "size_bytes": 6536
+    },
+    {
+      "exists": true,
+      "id": "composition-receipt-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/plans/effect-law-unification-v1/evidence/K2_LEARNED_SEQUENTIAL_COMPOSITION_CAPABILITY_V1/capability-receipt.json",
+      "sha256": "95baf02f6a20a5b6bf884f8a47a0c00b5830ce0f775770273285e266ecb4ebb0",
+      "size_bytes": 3772
+    },
+    {
+      "exists": true,
+      "id": "representation-receipt-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/plans/effect-law-unification-v1/evidence/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_V1/capability-receipt.json",
+      "sha256": "c5c07cd2990d5f71f935977a932416c7daf6c6ff3b747d9e75243631ddf95a35",
+      "size_bytes": 5709
+    }
+  ],
+  "blockers": [
+    {
+      "code": "source_veto_effect_unbound",
+      "field": "source_checks[0].forbidden_effect_patterns[1].effect",
+      "message": "effect is not forbidden: service_control"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: connector_restart"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: generated_traffic"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: hot_serving_restart"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: k1_registry_mutation"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: law_certificate_issue"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: natural_evidence_write"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: nginx_restart"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: package_activation"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: phase_memory_mutation"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: synthetic_fixture"
+    },
+    {
+      "code": "test_contract_incomplete",
+      "field": "tests[3]",
+      "message": "valid kind and non-empty expected result are required"
+    },
+    {
+      "code": "test_contract_incomplete",
+      "field": "tests[6]",
+      "message": "valid kind and non-empty expected result are required"
+    },
+    {
+      "code": "runtime_comparison_incomplete",
+      "field": "runtime_comparisons[0]",
+      "message": "source, comparison, reason, and test_id are required"
+    },
+    {
+      "code": "fault_injection_missing",
+      "field": "state_machine.steps[0].test_id",
+      "message": "mutating failure requires a fault_injection test"
+    },
+    {
+      "code": "preservation_reference_unknown",
+      "field": "state_machine.steps[0].preserves",
+      "message": "unknown artifacts: production-services"
+    },
+    {
+      "code": "fault_injection_missing",
+      "field": "state_machine.steps[1].test_id",
+      "message": "mutating failure requires a fault_injection test"
+    },
+    {
+      "code": "preservation_reference_unknown",
+      "field": "state_machine.steps[1].preserves",
+      "message": "unknown artifacts: installed-control-binary, production-services"
+    },
+    {
+      "code": "preservation_reference_unknown",
+      "field": "state_machine.steps[2].preserves",
+      "message": "unknown artifacts: hot-serving, local-connector, nginx, runtime-state"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[0].test_id",
+      "message": "identity contract requires a parity test"
+    }
+  ],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 6,
+    "forbidden_side_effect_kinds": [
+      "connector_restart",
+      "dashboard_api_schema_change",
+      "generated_traffic",
+      "hot_serving_restart",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "natural_evidence_write",
+      "nginx_restart",
+      "package_activation",
+      "phase_memory_mutation",
+      "synthetic_fixture"
+    ],
+    "identity_contracts": 2,
+    "invariants": 4,
+    "planned_side_effect_kinds": [
+      "filesystem_read",
+      "remote_atomic_replace",
+      "remote_build",
+      "remote_stage_write",
+      "service_restart",
+      "source_file_modify"
+    ],
+    "preserved_artifacts": 2,
+    "runtime_comparisons": 1,
+    "source_checks": 1,
+    "tests": 7
+  },
+  "manifest_sha256": "08b215a379469ad262442250f3ebff9f79bb16d68cab7f647d16352b63d40b80",
+  "safe_to_implement": false,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "dashboard-main-unchanged",
+      "path": "/home/ubu/projects/nando-wave-dashboard-k2-generated-20260815/crates/nando-gateway-control/src/main.rs",
+      "sha256": "664df1ca9fa0579001a5db58ae7380afdbd13569f143887f0b1a553f8209962f",
+      "size_bytes": 163170
+    }
+  ],
+  "task_id": "k2-generated-capability-dashboard-v24",
+  "verdict": "BLOCKED_BEFORE_CODE"
+}
