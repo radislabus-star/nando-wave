@@ -90,6 +90,14 @@ pub const K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1: &str =
     "nando.k2-self-formed-robust-accounting.v1";
 pub const K2_UNCERTAINTY_SAFETY_REQUEST_SCHEMA_V1: &str = "nando.k2-self-formed-safety-request.v1";
 pub const K2_UNCERTAINTY_SAFETY_RECEIPT_SCHEMA_V1: &str = "nando.k2-self-formed-safety-receipt.v1";
+pub const K2_UNCERTAINTY_ARTIFACT_ENTRY_SCHEMA_V1: &str = "nando.k2-self-formed-artifact-entry.v1";
+pub const K2_UNCERTAINTY_PROBE_ARTIFACTS_SCHEMA_V1: &str =
+    "nando.k2-self-formed-probe-artifacts.v1";
+pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-batch-journal-event.v1";
+pub const K2_UNCERTAINTY_BATCH_JOURNAL_SCHEMA_V1: &str = "nando.k2-self-formed-batch-journal.v1";
+pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
+    6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 
 pub fn uncertainty_root_v1<T: Serialize>(value: &T) -> K2CompositionResultV1<String> {
     composition_root_v1(value)

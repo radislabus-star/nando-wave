@@ -3,6 +3,8 @@
 //! This route has no natural, K1, product, certificate, phase, service, or
 //! deployment authority. The confirm nonce is deliberately outside this module.
 
+mod artifact_store;
+mod batch_journal;
 mod frontier_model;
 mod generator;
 mod generator_model;
@@ -16,6 +18,8 @@ mod tournament;
 mod tournament_model;
 mod vocabulary;
 
+pub use artifact_store::*;
+pub use batch_journal::*;
 pub use frontier_model::*;
 pub use generator::*;
 pub use generator_model::*;
