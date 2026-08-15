@@ -279,7 +279,7 @@ fn sealed_model_guided_active_inquiry_uses_one_safe_probe_per_case() {
         .iter()
         .map(|request| {
             let command = K2InquiryVerifierCommandV1::VerifyOutcome {
-                request: request.clone(),
+                request: Box::new(request.clone()),
             };
             match run_isolated_protocol_v1(&binaries.verifier, &command) {
                 K2InquiryVerifierReceiptV1::Outcome { value } => value,

@@ -1086,7 +1086,7 @@ pub enum K2InquiryVerifierCommandV1 {
         precommit: K2InquirySelectionPrecommitV1,
     },
     VerifyOutcome {
-        request: K2InquiryOutcomeVerificationRequestV1,
+        request: Box<K2InquiryOutcomeVerificationRequestV1>,
     },
 }
 
