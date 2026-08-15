@@ -5,6 +5,8 @@
 
 mod artifact_store;
 mod batch_journal;
+mod closure;
+mod closure_model;
 mod final_verifier;
 mod final_verifier_frontier;
 mod final_verifier_induction;
@@ -27,6 +29,8 @@ mod vocabulary;
 
 pub use artifact_store::*;
 pub use batch_journal::*;
+pub use closure::*;
+pub use closure_model::*;
 pub use final_verifier::*;
 pub use final_verifier_model::*;
 pub use frontier_model::*;

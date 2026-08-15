@@ -37,6 +37,9 @@ pub const K2_UNCERTAINTY_MAX_CASE_WALL_MS_V1: u64 = 60_000;
 pub const K2_UNCERTAINTY_MAX_BATCH_WALL_MS_V1: u64 = 20 * 60 * 1_000;
 pub const K2_UNCERTAINTY_MAX_RISK_UNITS_V1: u64 = 10;
 pub const K2_UNCERTAINTY_MAX_COST_UNITS_V1: u64 = 10;
+pub const K2_UNCERTAINTY_MAX_PLAN_PROBES_V1: usize = 2;
+pub const K2_UNCERTAINTY_MAX_PLAN_RISK_UNITS_V1: u64 = 20;
+pub const K2_UNCERTAINTY_MAX_PLAN_COST_UNITS_V1: u64 = 20;
 pub const K2_UNCERTAINTY_FRONTIER_PAGE_PROBES_V1: usize = 32;
 pub const K2_SELF_FORMED_UNCERTAINTY_CAPABILITY_PASS_V1: &str =
     "K2_SELF_FORMED_UNCERTAINTY_CAPABILITY_PASS";
@@ -110,6 +113,11 @@ pub const K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V1: &str =
     "nando.k2-self-formed-final-verifier-request.v1";
 pub const K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V1: &str =
     "nando.k2-self-formed-case-verification.v1";
+pub const K2_UNCERTAINTY_CLOSURE_PLANNER_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-closure-planner-request.v1";
+pub const K2_UNCERTAINTY_COMPLETION_CANDIDATE_SCHEMA_V1: &str =
+    "nando.k2-self-formed-completion-candidate.v1";
+pub const K2_UNCERTAINTY_CLOSURE_CENSUS_SCHEMA_V1: &str = "nando.k2-self-formed-closure-census.v1";
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
     6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 
