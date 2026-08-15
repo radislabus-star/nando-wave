@@ -7,15 +7,17 @@ use super::super::{
     K2CompositionTreeManifestV1, K2InquiryProbeV1, require_composition_root_v1,
 };
 use super::{
-    K2_UNCERTAINTY_CONFIRM_MODELS_V1, K2_UNCERTAINTY_FRONTIER_PAGE_PROBES_V1,
-    K2_UNCERTAINTY_FRONTIER_PAGE_SCHEMA_V1, K2_UNCERTAINTY_FRONTIER_SCHEMA_V1,
-    K2_UNCERTAINTY_MAX_COST_UNITS_V1, K2_UNCERTAINTY_MAX_REPRESENTATIVES_V1,
-    K2_UNCERTAINTY_MAX_RISK_UNITS_V1, K2_UNCERTAINTY_MIN_REPRESENTATIVES_V1,
-    K2_UNCERTAINTY_PREDICTION_WITNESS_SCHEMA_V1, K2_UNCERTAINTY_PROBE_CLASS_SCHEMA_V1,
-    K2_UNCERTAINTY_RAW_PREDICTIONS_V1, K2_UNCERTAINTY_RAW_PROBE_SCHEMA_V1,
-    K2_UNCERTAINTY_RAW_PROBES_V1, K2_UNCERTAINTY_RESOURCE_TERMINAL_SCHEMA_V1,
-    K2_UNCERTAINTY_RISK_COST_SCHEMA_V1, K2_UNCERTAINTY_STATE_COUNT_V1, require_denied_authority_v1,
-    require_exact_len_v1, require_sorted_unique_v1, uncertainty_root_v1,
+    K2_UNCERTAINTY_CONFIRM_MODELS_V1, K2_UNCERTAINTY_EFFECT_ACCOUNTING_SCHEMA_V1,
+    K2_UNCERTAINTY_FRONTIER_PAGE_PROBES_V1, K2_UNCERTAINTY_FRONTIER_PAGE_SCHEMA_V1,
+    K2_UNCERTAINTY_FRONTIER_SCHEMA_V1, K2_UNCERTAINTY_MAX_COST_UNITS_V1,
+    K2_UNCERTAINTY_MAX_REPRESENTATIVES_V1, K2_UNCERTAINTY_MAX_RISK_UNITS_V1,
+    K2_UNCERTAINTY_MIN_REPRESENTATIVES_V1, K2_UNCERTAINTY_PREDICTION_WITNESS_SCHEMA_V1,
+    K2_UNCERTAINTY_PROBE_CLASS_SCHEMA_V1, K2_UNCERTAINTY_RAW_PREDICTIONS_V1,
+    K2_UNCERTAINTY_RAW_PROBE_SCHEMA_V1, K2_UNCERTAINTY_RAW_PROBES_V1,
+    K2_UNCERTAINTY_RESOURCE_TERMINAL_SCHEMA_V1, K2_UNCERTAINTY_RISK_COST_SCHEMA_V1,
+    K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1, K2_UNCERTAINTY_STATE_COUNT_V1,
+    require_denied_authority_v1, require_exact_len_v1, require_sorted_unique_v1,
+    uncertainty_root_v1,
 };
 
 pub const K2_UNCERTAINTY_STATE_UNIVERSE_SCHEMA_V1: &str = "nando.k2-self-formed-state-universe.v1";
@@ -213,6 +215,129 @@ impl K2UncertaintyRiskCostV1 {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct K2UncertaintyEffectAccountingV1 {
+    pub schema: String,
+    pub effect_root_sha256: String,
+    pub accounting: K2UncertaintyRiskCostV1,
+    pub effect_accounting_root_sha256: String,
+}
+
+impl K2UncertaintyEffectAccountingV1 {
+    pub fn validate(&self) -> K2CompositionResultV1<()> {
+        require_composition_root_v1(&self.effect_root_sha256)?;
+        self.accounting.validate()?;
+        let expected = uncertainty_root_v1(&(
+            K2_UNCERTAINTY_EFFECT_ACCOUNTING_SCHEMA_V1,
+            &self.effect_root_sha256,
+            &self.accounting,
+        ))?;
+        if self.schema != K2_UNCERTAINTY_EFFECT_ACCOUNTING_SCHEMA_V1
+            || self.effect_accounting_root_sha256 != expected
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_effect_accounting_invalid",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn reseal(&mut self) -> K2CompositionResultV1<()> {
+        self.effect_accounting_root_sha256 = uncertainty_root_v1(&(
+            K2_UNCERTAINTY_EFFECT_ACCOUNTING_SCHEMA_V1,
+            &self.effect_root_sha256,
+            &self.accounting,
+        ))?;
+        self.validate()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct K2UncertaintyRobustAccountingV1 {
+    pub schema: String,
+    pub effects: Vec<K2UncertaintyEffectAccountingV1>,
+    pub maximum_risk_units: u64,
+    pub maximum_cost_units: u64,
+    pub robust_accounting_root_sha256: String,
+}
+
+impl K2UncertaintyRobustAccountingV1 {
+    pub fn validate(&self) -> K2CompositionResultV1<()> {
+        require_exact_len_v1(
+            self.effects.len(),
+            super::K2_UNCERTAINTY_EFFECTS_PER_ACTION_V1,
+            "self_formed_robust_accounting_effect_count_invalid",
+        )?;
+        for effect in &self.effects {
+            effect.validate()?;
+        }
+        if self
+            .effects
+            .windows(2)
+            .any(|pair| pair[0].effect_root_sha256 >= pair[1].effect_root_sha256)
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_robust_accounting_not_canonical",
+            ));
+        }
+        let risk = self
+            .effects
+            .iter()
+            .map(|effect| effect.accounting.risk_units)
+            .max()
+            .unwrap_or(0);
+        let cost = self
+            .effects
+            .iter()
+            .map(|effect| effect.accounting.cost_units)
+            .max()
+            .unwrap_or(0);
+        let expected = uncertainty_root_v1(&(
+            K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1,
+            &self.effects,
+            risk,
+            cost,
+        ))?;
+        if self.schema != K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1
+            || self.maximum_risk_units != risk
+            || self.maximum_cost_units != cost
+            || self.maximum_risk_units > K2_UNCERTAINTY_MAX_RISK_UNITS_V1
+            || self.maximum_cost_units > K2_UNCERTAINTY_MAX_COST_UNITS_V1
+            || self.robust_accounting_root_sha256 != expected
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_robust_accounting_invalid",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn reseal(&mut self) -> K2CompositionResultV1<()> {
+        self.effects.sort();
+        self.maximum_risk_units = self
+            .effects
+            .iter()
+            .map(|effect| effect.accounting.risk_units)
+            .max()
+            .unwrap_or(0);
+        self.maximum_cost_units = self
+            .effects
+            .iter()
+            .map(|effect| effect.accounting.cost_units)
+            .max()
+            .unwrap_or(0);
+        self.robust_accounting_root_sha256 = uncertainty_root_v1(&(
+            K2_UNCERTAINTY_ROBUST_ACCOUNTING_SCHEMA_V1,
+            &self.effects,
+            self.maximum_risk_units,
+            self.maximum_cost_units,
+        ))?;
+        self.validate()
+    }
+}
+
 #[must_use]
 pub const fn ceil_page_units_v1(bytes: u64) -> u64 {
     if bytes == 0 {
@@ -241,7 +366,19 @@ impl K2UncertaintyPredictionWitnessV1 {
         require_composition_root_v1(&self.probe_root_sha256)?;
         require_composition_root_v1(&self.observable_outcome_root_sha256)?;
         self.predicted_post_manifest.validate()?;
-        if self.transition_reason.is_empty() || self.transition_reason.len() > 64 {
+        let observable = uncertainty_root_v1(&(
+            "nando.k2-inquiry-observable-exact-manifest.v1",
+            &self.predicted_post_manifest,
+        ))?;
+        let reason_valid = if self.transition_applied {
+            self.transition_reason == "applied"
+        } else {
+            matches!(
+                self.transition_reason.as_str(),
+                "copy_source_missing" | "remove_path_missing"
+            )
+        };
+        if !reason_valid || self.observable_outcome_root_sha256 != observable {
             return Err(K2CompositionErrorV1::Invalid(
                 "self_formed_prediction_reason_invalid",
             ));
@@ -342,7 +479,7 @@ pub struct K2UncertaintyRawProbeDispositionV1 {
     pub raw_sequence: u64,
     pub probe: K2InquiryProbeV1,
     pub predictions: Vec<K2UncertaintyPredictionWitnessV1>,
-    pub robust_accounting: K2UncertaintyRiskCostV1,
+    pub robust_accounting: K2UncertaintyRobustAccountingV1,
     pub eligibility: K2UncertaintyEligibilityDispositionV1,
     pub safety: K2UncertaintySafetyDispositionV1,
     pub equivalence_key: K2UncertaintyProbeEquivalenceKeyV1,
@@ -406,8 +543,11 @@ impl K2UncertaintyRawProbeDispositionV1 {
             || self.equivalence_key.safety != self.safety
             || self.equivalence_key.risk_units != self.probe.risk_units
             || self.equivalence_key.cost_units != self.probe.cost_units
-            || self.robust_accounting.risk_units != self.probe.risk_units
-            || self.robust_accounting.cost_units != self.probe.cost_units
+            || self.equivalence_key.applicability_hint != self.probe.applicability_hint
+            || self.equivalence_key.dependency_hint != self.probe.dependency_hint
+            || self.equivalence_key.cleanup_hint != self.probe.cleanup_hint
+            || self.robust_accounting.maximum_risk_units != self.probe.risk_units
+            || self.robust_accounting.maximum_cost_units != self.probe.cost_units
             || self.raw_probe_root_sha256 != expected
         {
             return Err(K2CompositionErrorV1::Invalid(
