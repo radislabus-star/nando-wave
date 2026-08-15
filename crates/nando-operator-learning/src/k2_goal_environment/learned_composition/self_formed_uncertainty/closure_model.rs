@@ -260,6 +260,31 @@ pub struct K2UncertaintyClosureCensusV1 {
     pub census_root_sha256: String,
 }
 
+#[derive(Serialize)]
+struct K2UncertaintyClosureCensusRootPreimageV1<'a> {
+    schema: &'static str,
+    planner_request_root_sha256: &'a str,
+    case_id_sha256: &'a str,
+    frontier_root_sha256: &'a str,
+    representative_probe_roots_sha256: &'a [String],
+    representative_count: u64,
+    first_tournament_root_sha256: &'a str,
+    first_probe_root_sha256: &'a str,
+    first_pairwise_outcome_equal: [bool; 6],
+    first_partition_sizes: &'a [u64],
+    completion_required: bool,
+    second_probe_candidate_roots_sha256: &'a [String],
+    candidate_count: u64,
+    membership_root_sha256: &'a str,
+    candidates: &'a [K2UncertaintyCompletionCandidateV1],
+    candidate_denominator_root_sha256: &'a str,
+    disposition: K2UncertaintyClosureDispositionV1,
+    selected_second_probe_root_sha256: &'a Option<String>,
+    selected_joint_partition_sizes: &'a Option<Vec<u64>>,
+    planner_executable_sha256: &'a str,
+    authority: &'a K2CompositionAuthorityBoundaryV1,
+}
+
 impl K2UncertaintyClosureCensusV1 {
     pub fn validate(&self) -> K2CompositionResultV1<()> {
         for root in [
@@ -380,29 +405,29 @@ impl K2UncertaintyClosureCensusV1 {
     }
 
     fn expected_root(&self) -> K2CompositionResultV1<String> {
-        uncertainty_root_v1(&(
-            K2_UNCERTAINTY_CLOSURE_CENSUS_SCHEMA_V1,
-            &self.planner_request_root_sha256,
-            &self.case_id_sha256,
-            &self.frontier_root_sha256,
-            &self.representative_probe_roots_sha256,
-            self.representative_count,
-            &self.first_tournament_root_sha256,
-            &self.first_probe_root_sha256,
-            self.first_pairwise_outcome_equal,
-            &self.first_partition_sizes,
-            self.completion_required,
-            &self.second_probe_candidate_roots_sha256,
-            self.candidate_count,
-            &self.membership_root_sha256,
-            &self.candidates,
-            &self.candidate_denominator_root_sha256,
-            self.disposition,
-            &self.selected_second_probe_root_sha256,
-            &self.selected_joint_partition_sizes,
-            &self.planner_executable_sha256,
-            &self.authority,
-        ))
+        uncertainty_root_v1(&K2UncertaintyClosureCensusRootPreimageV1 {
+            schema: K2_UNCERTAINTY_CLOSURE_CENSUS_SCHEMA_V1,
+            planner_request_root_sha256: &self.planner_request_root_sha256,
+            case_id_sha256: &self.case_id_sha256,
+            frontier_root_sha256: &self.frontier_root_sha256,
+            representative_probe_roots_sha256: &self.representative_probe_roots_sha256,
+            representative_count: self.representative_count,
+            first_tournament_root_sha256: &self.first_tournament_root_sha256,
+            first_probe_root_sha256: &self.first_probe_root_sha256,
+            first_pairwise_outcome_equal: self.first_pairwise_outcome_equal,
+            first_partition_sizes: &self.first_partition_sizes,
+            completion_required: self.completion_required,
+            second_probe_candidate_roots_sha256: &self.second_probe_candidate_roots_sha256,
+            candidate_count: self.candidate_count,
+            membership_root_sha256: &self.membership_root_sha256,
+            candidates: &self.candidates,
+            candidate_denominator_root_sha256: &self.candidate_denominator_root_sha256,
+            disposition: self.disposition,
+            selected_second_probe_root_sha256: &self.selected_second_probe_root_sha256,
+            selected_joint_partition_sizes: &self.selected_joint_partition_sizes,
+            planner_executable_sha256: &self.planner_executable_sha256,
+            authority: &self.authority,
+        })
     }
 }
 
