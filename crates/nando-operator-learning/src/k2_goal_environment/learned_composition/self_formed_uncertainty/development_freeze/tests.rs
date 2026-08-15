@@ -2,7 +2,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::super::{K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1, uncertainty_root_v1};
+use super::super::K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1;
 use super::persistence::{
     K2UncertaintyDevelopmentFreezeFaultV1, publish_self_formed_development_freeze_with_fault_v1,
 };
