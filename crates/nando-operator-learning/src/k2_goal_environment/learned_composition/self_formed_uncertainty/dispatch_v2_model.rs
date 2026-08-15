@@ -240,6 +240,7 @@ impl K2UncertaintyPlanDispatchV2 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn blank_probe_dispatch_item_v2(
     case_id_sha256: String,
     closure_plan_root_sha256: String,

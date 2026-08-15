@@ -249,8 +249,8 @@ fn independent_pairwise_equal_v1(
 fn independent_partition_sizes_v1(equal: [bool; 6]) -> K2CompositionResultV1<Vec<u64>> {
     let pairs = [(0_usize, 1_usize), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)];
     let mut adjacency = [[false; 4]; 4];
-    for index in 0..4 {
-        adjacency[index][index] = true;
+    for (index, row) in adjacency.iter_mut().enumerate() {
+        row[index] = true;
     }
     for ((left, right), same) in pairs.into_iter().zip(equal) {
         adjacency[left][right] = same;
