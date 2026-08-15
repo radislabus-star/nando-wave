@@ -21,6 +21,14 @@ use nando_operator_learning::{
 
 use super::fixture::{R7Fixture, root_hash};
 
+pub(super) struct TwoProbeHarness {
+    pub planner_request: K2UncertaintyClosurePlannerRequestV1,
+    pub census: K2UncertaintyClosureCensusV1,
+    pub verification_request: K2UncertaintyClosureVerificationRequestV1,
+    pub case_preverification: K2UncertaintyCasePreverificationV2,
+    pub dispatch: K2UncertaintyPlanDispatchV2,
+}
+
 pub fn run() {
     let fixture = R7Fixture::new();
     let representatives = representative_dispositions(&fixture);
@@ -85,20 +93,23 @@ pub fn run() {
 
     let manifests = distinct_manifests(&representatives);
     verify_single_probe(&fixture, &representatives, &manifests);
-    let (two_probe_request, two_probe_plan) = verify_two_probe_and_order_invariance(
-        &fixture,
-        &representatives,
-        &manifests,
-        &verifier_sha256,
-    );
-    let dispatch = dispatch_for_plan(&fixture, &two_probe_request, &two_probe_plan);
-    verify_case_journal(&fixture, dispatch);
+    let two_probe = build_two_probe_harness(&fixture, &verifier_sha256);
+    verify_case_journal(&fixture, two_probe.dispatch);
     verify_unavailable_and_omission_rejection(
         &fixture,
         &representatives,
         &manifests,
         &verifier_sha256,
     );
+}
+
+pub(super) fn build_two_probe_harness(
+    fixture: &R7Fixture,
+    verifier_sha256: &str,
+) -> TwoProbeHarness {
+    let representatives = representative_dispositions(fixture);
+    let manifests = distinct_manifests(&representatives);
+    verify_two_probe_and_order_invariance(fixture, &representatives, &manifests, verifier_sha256)
 }
 
 fn verify_single_probe(
@@ -122,15 +133,12 @@ fn verify_single_probe(
     assert!(census.selected_second_probe_root_sha256.is_none());
 }
 
-fn verify_two_probe_and_order_invariance(
+pub(super) fn verify_two_probe_and_order_invariance(
     fixture: &R7Fixture,
     representatives: &[K2UncertaintyRawProbeDispositionV1],
     manifests: &[K2CompositionTreeManifestV1],
     verifier_sha256: &str,
-) -> (
-    K2UncertaintyClosurePlannerRequestV1,
-    K2UncertaintyClosurePlanV1,
-) {
+) -> TwoProbeHarness {
     let first_root = first_probe_root(fixture);
     let second_root = representatives
         .iter()
@@ -166,7 +174,8 @@ fn verify_two_probe_and_order_invariance(
         census.candidate_count,
         census.representative_count.saturating_sub(1)
     );
-    let (_, _, plan) = verify_closure(&request, &census, verifier_sha256.to_owned());
+    let (verification_request, verification_receipt, plan) =
+        verify_closure(&request, &census, verifier_sha256.to_owned());
     assert_eq!(plan.plan_length, 2);
     assert_eq!(plan.ordered_probe_roots_sha256[1], second_root);
 
@@ -178,7 +187,21 @@ fn verify_two_probe_and_order_invariance(
         census.candidate_denominator_root_sha256,
         reordered.candidate_denominator_root_sha256
     );
-    (request, plan)
+    let case_preverification = K2UncertaintyCasePreverificationV2::seal(
+        fixture.preverification.clone(),
+        verification_request.clone(),
+        verification_receipt.clone(),
+        Some(plan.clone()),
+    )
+    .expect("two-probe case preverification");
+    let dispatch = dispatch_for_plan(fixture, &request, &plan);
+    TwoProbeHarness {
+        planner_request: request,
+        census,
+        verification_request,
+        case_preverification,
+        dispatch,
+    }
 }
 
 fn verify_unavailable_and_omission_rejection(

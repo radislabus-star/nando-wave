@@ -42,8 +42,52 @@ const EXPECTED: [(&str, &str); 36] = [
     ("T4", "tournament_direct_winner_mismatch_rejected"),
 ];
 
+const V4_EXPECTED: [(&str, &str); 16] = [
+    ("J1", "private_completion_input_rejected"),
+    ("J2", "post_outcome_completion_input_rejected"),
+    ("J3", "omitted_completion_candidate_rejected"),
+    ("J4", "duplicate_or_foreign_second_probe_rejected"),
+    ("J5", "wrong_joint_and_matrix_rejected"),
+    ("J6", "changed_predecessor_winner_rejected"),
+    ("J7", "swapped_probe_ordinal_rejected"),
+    ("J8", "shared_workspace_binding_rejected"),
+    ("J9", "missing_second_observation_rejected"),
+    ("J10", "cleanup_before_terminal_rejected"),
+    ("J11", "unavailable_case_omission_rejected"),
+    ("J12", "completion_count_or_membership_rejected"),
+    ("J13", "non_global_second_winner_rejected"),
+    ("J14", "cumulative_budget_excess_rejected"),
+    ("J15", "invalid_crash_prefix_or_redispatch_rejected"),
+    ("J16", "stored_joint_partition_drift_rejected"),
+];
+
 pub struct ControlLedger {
     passed: BTreeMap<&'static str, &'static str>,
+}
+
+pub struct V4ControlLedger {
+    passed: BTreeMap<&'static str, &'static str>,
+}
+
+impl V4ControlLedger {
+    pub fn new() -> Self {
+        Self {
+            passed: BTreeMap::new(),
+        }
+    }
+
+    pub fn pass(&mut self, id: &'static str, disposition: &'static str) {
+        assert!(
+            self.passed.insert(id, disposition).is_none(),
+            "duplicate {id}"
+        );
+    }
+
+    pub fn finish(self) {
+        let expected = V4_EXPECTED.into_iter().collect::<BTreeMap<_, _>>();
+        assert_eq!(self.passed, expected);
+        eprintln!("R7 V4 controls PASS: J1-J16");
+    }
 }
 
 impl ControlLedger {

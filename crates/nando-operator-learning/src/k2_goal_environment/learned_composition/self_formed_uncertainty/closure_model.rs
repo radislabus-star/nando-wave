@@ -10,11 +10,12 @@ use super::{
     K2_UNCERTAINTY_CLOSURE_CENSUS_SCHEMA_V1, K2_UNCERTAINTY_CLOSURE_PLANNER_REQUEST_SCHEMA_V1,
     K2_UNCERTAINTY_COMPLETION_CANDIDATE_SCHEMA_V1, K2_UNCERTAINTY_CONFIRM_MODELS_V1,
     K2_UNCERTAINTY_MAX_COST_UNITS_V1, K2_UNCERTAINTY_MAX_PLAN_COST_UNITS_V1,
-    K2_UNCERTAINTY_MAX_PLAN_RISK_UNITS_V1, K2_UNCERTAINTY_MAX_REPRESENTATIVES_V1,
-    K2_UNCERTAINTY_MAX_RISK_UNITS_V1, K2_UNCERTAINTY_MIN_REPRESENTATIVES_V1,
-    K2UncertaintyEligibilityDispositionV1, K2UncertaintyRawProbeDispositionV1,
-    K2UncertaintySafetyDispositionV1, denied_authority_v1, require_denied_authority_v1,
-    require_exact_len_v1, require_sorted_unique_v1, uncertainty_root_v1,
+    K2_UNCERTAINTY_MAX_PLAN_RISK_UNITS_V1, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+    K2_UNCERTAINTY_MAX_REPRESENTATIVES_V1, K2_UNCERTAINTY_MAX_RISK_UNITS_V1,
+    K2_UNCERTAINTY_MIN_REPRESENTATIVES_V1, K2UncertaintyEligibilityDispositionV1,
+    K2UncertaintyRawProbeDispositionV1, K2UncertaintySafetyDispositionV1, denied_authority_v1,
+    require_denied_authority_v1, require_exact_len_v1, require_sorted_unique_v1,
+    uncertainty_decode_v1, uncertainty_root_v1,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -129,6 +130,61 @@ impl K2UncertaintyClosurePlannerRequestV1 {
             &self.planner_executable_sha256,
             &self.authority,
         ))
+    }
+}
+
+pub fn decode_self_formed_closure_planner_request_v1(
+    bytes: &[u8],
+) -> K2CompositionResultV1<K2UncertaintyClosurePlannerRequestV1> {
+    if bytes.len() > K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_protocol_bytes_exhausted",
+        ));
+    }
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|_| K2CompositionErrorV1::Invalid("self_formed_closure_protocol_invalid"))?;
+    if json_contains_any_key_v1(
+        &value,
+        &[
+            "mapping",
+            "topology_family",
+            "matched_pair_index",
+            "private_case",
+            "private_truth",
+            "resolved_private_effect",
+        ],
+    ) {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_closure_private_input_forbidden",
+        ));
+    }
+    if json_contains_any_key_v1(
+        &value,
+        &[
+            "observed_outcome",
+            "observation_vector",
+            "post_manifest",
+            "worker_outcome",
+        ],
+    ) {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_closure_post_outcome_input_forbidden",
+        ));
+    }
+    let request = uncertainty_decode_v1(bytes)?;
+    request.validate()?;
+    Ok(request)
+}
+
+fn json_contains_any_key_v1(value: &serde_json::Value, forbidden: &[&str]) -> bool {
+    match value {
+        serde_json::Value::Object(object) => object.iter().any(|(key, value)| {
+            forbidden.contains(&key.as_str()) || json_contains_any_key_v1(value, forbidden)
+        }),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .any(|value| json_contains_any_key_v1(value, forbidden)),
+        _ => false,
     }
 }
 
