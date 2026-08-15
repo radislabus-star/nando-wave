@@ -19,7 +19,7 @@ use super::model::{
     K2InquiryOutcomeVerificationRequestV1, K2InquiryPredictionV1, K2InquiryProbeEvaluationV1,
     K2InquiryProbeV1, K2InquiryPublicCaseV1, K2InquirySelectionPrecommitV1,
     K2InquirySelectionVerificationReceiptV1, K2InquirySelectorRequestV1,
-    K2InquiryVerifierCommandV1, K2InquiryVerifierReceiptV1, inquiry_observable_outcome_root_v1,
+    K2InquiryVerifierCommandV1, K2InquiryVerifierReceiptV1,
 };
 
 pub fn verify_inquiry_selection_v1(
@@ -357,12 +357,14 @@ fn verifier_reconstruct_precommit_v1(
                 && probe.cost_units == selected_probe.cost_units
         })
         .count() as u64;
+    let selected_probe_root_sha256 = selected.probe_root_sha256.clone();
+    drop(eligible);
     let mut precommit = K2InquirySelectionPrecommitV1 {
         schema: K2_INQUIRY_PRECOMMIT_SCHEMA_V1.to_owned(),
         selector_request_root_sha256: request.request_root_sha256.clone(),
         public_case_root_sha256: request.public_case.case_root_sha256.clone(),
         evaluations,
-        selected_probe_root_sha256: selected.probe_root_sha256.clone(),
+        selected_probe_root_sha256,
         exact_best_ties,
         authority: K2CompositionAuthorityBoundaryV1::denied(),
         precommit_root_sha256: String::new(),
@@ -540,17 +542,19 @@ fn verifier_reconstruct_baselines_v1(
             "inquiry_verifier_no_baseline_probe",
         ));
     }
-    let stable = eligible
+    let stable_probe_root_sha256 = eligible
         .iter()
         .min_by_key(|probe| &probe.probe_root_sha256)
-        .expect("nonempty verifier baseline probes");
+        .expect("nonempty verifier baseline probes")
+        .probe_root_sha256
+        .clone();
     eligible.sort_by(|left, right| {
         left.cost_units
             .cmp(&right.cost_units)
             .then_with(|| left.risk_units.cmp(&right.risk_units))
             .then_with(|| left.probe_root_sha256.cmp(&right.probe_root_sha256))
     });
-    let cheapest = eligible[0];
+    let cheapest_probe_root_sha256 = eligible[0].probe_root_sha256.clone();
     eligible.sort_by(|left, right| {
         verifier_heuristic_score_v1(right)
             .cmp(&verifier_heuristic_score_v1(left))
@@ -558,20 +562,20 @@ fn verifier_reconstruct_baselines_v1(
             .then_with(|| left.cost_units.cmp(&right.cost_units))
             .then_with(|| left.probe_root_sha256.cmp(&right.probe_root_sha256))
     });
-    let heuristic = eligible[0];
+    let heuristic_probe_root_sha256 = eligible[0].probe_root_sha256.clone();
     let mut decisions = vec![
         verifier_baseline_decision_v1(K2InquiryBaselineKindV1::Passive, None)?,
         verifier_baseline_decision_v1(
             K2InquiryBaselineKindV1::StableHash,
-            Some(stable.probe_root_sha256.clone()),
+            Some(stable_probe_root_sha256),
         )?,
         verifier_baseline_decision_v1(
             K2InquiryBaselineKindV1::CheapestFirst,
-            Some(cheapest.probe_root_sha256.clone()),
+            Some(cheapest_probe_root_sha256),
         )?,
         verifier_baseline_decision_v1(
             K2InquiryBaselineKindV1::ExplicitHeuristic,
-            Some(heuristic.probe_root_sha256.clone()),
+            Some(heuristic_probe_root_sha256),
         )?,
     ];
     decisions.sort_by_key(|decision| decision.kind);

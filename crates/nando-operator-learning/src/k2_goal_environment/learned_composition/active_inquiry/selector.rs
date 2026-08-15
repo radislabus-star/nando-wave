@@ -54,12 +54,14 @@ pub fn select_model_guided_probe_v1(
                 && probe.cost_units == selected_probe.cost_units
         })
         .count() as u64;
+    let selected_probe_root_sha256 = selected.probe_root_sha256.clone();
+    drop(eligible);
     let mut precommit = K2InquirySelectionPrecommitV1 {
         schema: K2_INQUIRY_PRECOMMIT_SCHEMA_V1.to_owned(),
         selector_request_root_sha256: request.request_root_sha256.clone(),
         public_case_root_sha256: request.public_case.case_root_sha256.clone(),
         evaluations,
-        selected_probe_root_sha256: selected.probe_root_sha256.clone(),
+        selected_probe_root_sha256,
         exact_best_ties,
         authority: K2CompositionAuthorityBoundaryV1::denied(),
         precommit_root_sha256: String::new(),
