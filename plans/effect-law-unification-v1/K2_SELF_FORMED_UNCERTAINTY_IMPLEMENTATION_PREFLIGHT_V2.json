@@ -1,0 +1,1285 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-self-formed-uncertainty-r0-r9-v3",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "architecture-canon-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/ARCHITECTURE_CANON.md",
+      "expect": {
+        "size_bytes": 93192,
+        "sha256": "8c44515cc368ee5cabf19d04ea8443c0a3f919527707f7899666f2c01e7bc0a0",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "cargo-lock-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/Cargo.lock",
+      "expect": {
+        "size_bytes": 39973,
+        "sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "operator-learning-manifest-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/Cargo.toml",
+      "expect": {
+        "size_bytes": 663,
+        "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "learned-capability-router-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_capability.rs",
+      "expect": {
+        "size_bytes": 7502,
+        "sha256": "2b823e0f57a271d1c50ccf207c6801550c899fa508e5fd902886080f84e66f71",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "goal-model-router-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/model.rs",
+      "expect": {
+        "size_bytes": 3489,
+        "sha256": "762d654f0389579964d235f0f9b783a6974acd2b0be341784191e87544ba0714",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "active-inquiry-test-router-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+      "expect": {
+        "size_bytes": 943,
+        "sha256": "1a4916e745d864c62168cb8304b8e08de1c5145dd7c073d4151a131003db1971",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "goal-test-router-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_goal_environment_learned_v1.rs",
+      "expect": {
+        "size_bytes": 544,
+        "sha256": "09d4c063fdcfb6292856d52d648329582679903fd3ff64c98eb18991e834ad1d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "active-inquiry-model-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/model.rs",
+      "expect": {
+        "size_bytes": 39059,
+        "sha256": "dbc4a158b4c4c3828c4e14749d53839dd32f8965d93c9d0c89863d549bba71a5",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "active-inquiry-selector-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "expect": {
+        "size_bytes": 9922,
+        "sha256": "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "active-inquiry-baseline-policy-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/baseline.rs",
+      "expect": {
+        "size_bytes": 5386,
+        "sha256": "febf3c09ae22de3bcf0989ce6aeb569925124a2c1b32277b1f5cb3083736974b",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "active-inquiry-journal-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/journal.rs",
+      "expect": {
+        "size_bytes": 10218,
+        "sha256": "976ca9055aace6540970717105b9c96b5b3e61c93dc93e566b649128f823ab2a",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "active-inquiry-sandbox-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+      "expect": {
+        "size_bytes": 17505,
+        "sha256": "913cb04b69f970adab23aadde9d7059d0bcb1082fea5a7623cbbff4ff2e1c6e9",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "active-inquiry-verifier-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/verifier.rs",
+      "expect": {
+        "size_bytes": 24459,
+        "sha256": "1bfce2953c0fbb739a637d3af34ce50e4b2c0fcc6910a3216efb376037be6cd7",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "predecessor-result-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_CHOSEN_SAFE_INQUIRY_CAPABILITY_RESULT_2026-08-15.md",
+      "expect": {
+        "size_bytes": 8104,
+        "sha256": "67e135f22455b71278a7f5d104dd3f0273299bc076b306cc26bcba74f7214c1e",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "predecessor-critique-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_CHOSEN_SAFE_INQUIRY_POST_RESULT_CRITIQUE_V1.md",
+      "expect": {
+        "size_bytes": 8224,
+        "sha256": "167475724c3fddc9e1a7a1d03075406ed6f0660147f62518ea3435f4f7ad89f8",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "successor-v1-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V1.md",
+      "expect": {
+        "size_bytes": 22878,
+        "sha256": "3ab9c3e6539eb6f13f21829baa75f8c96a3f680183f56a6a5ee468b5e0e6e185",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "successor-critique-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_CRITIQUE_V1.md",
+      "expect": {
+        "size_bytes": 12274,
+        "sha256": "d7429c8e9e0fc421c1d3990248194cb7b600b4faa1cdd6b5e6b8112361556a13",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "successor-v2-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2.md",
+      "expect": {
+        "size_bytes": 35757,
+        "sha256": "7875d8809b9340774170d2468b07302e17e503712728173b6efb699f9b768a95",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "structural-gate-result-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_STRUCTURAL_GATE_RESULT_V2.md",
+      "expect": {
+        "size_bytes": 2293,
+        "sha256": "8e3c9785d86544f25d879001e9b6213789013181820a7c38cbb232dbe9e7454b",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "structural-evidence-index-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2/SHA256SUMS",
+      "expect": {
+        "size_bytes": 2639,
+        "sha256": "7fc2ca99281a64a3a1151480e031c5979283d9a71f6ed58d969caf60a060702b",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "dashboard-source-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "expect": {
+        "size_bytes": 28960,
+        "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "serving-source-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs",
+      "expect": {
+        "size_bytes": 457899,
+        "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "development-seed-baseline",
+      "kind": "file",
+      "path": "/home/ubu/.local/state/nando-wave/k2-self-formed-uncertainty-v1/development.seed",
+      "expect": {
+        "size_bytes": 32,
+        "sha256": "f8fde5ba0c466bf1d4570daf6326eb54522453dc8e006637906321c764cea138",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "superseded-confirm-seed-baseline",
+      "kind": "file",
+      "path": "/home/ubu/.local/state/nando-wave/k2-self-formed-uncertainty-v1/confirm.seed",
+      "expect": {
+        "size_bytes": 32,
+        "sha256": "ba7173ac286e3ac1e5eff1eb1fd510acc29a4454f25bbd6cddc8236cf1ebb988",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "successor-discrepancy-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_IMPLEMENTATION_DISCREPANCY_2026-08-15.md",
+      "expect": {
+        "size_bytes": 3036,
+        "sha256": "01f8d5c63a2a1afa983ee76fa4161b11498f3b72afe12109735b35448eca9368",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "successor-v3-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V3.md",
+      "expect": {
+        "size_bytes": 7784,
+        "sha256": "79b50fb11ed01a246f18882afd5cd27025cbd9d05898585675bd11f3a2c611f8",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "successor-critique-v2-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_CRITIQUE_V2.md",
+      "expect": {
+        "size_bytes": 4531,
+        "sha256": "5e6e8ada63824b8f68e92c918c237562086ac6ec3fb38b7c44d7b23d5b20a1b1",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "v3-quotient-gate-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V1/nanda-k2-v3-quotient-route.receipt.json",
+      "expect": {
+        "size_bytes": 19700,
+        "sha256": "58e74e52ac6975b388f5ef0c4ec1834273a035dc6f4d531044920fb9fbe9ca88",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "v3-tournament-gate-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V1/nanda-k2-v3-tournament-route.receipt.json",
+      "expect": {
+        "size_bytes": 22334,
+        "sha256": "4c14ae317739b8732002ab19be836da1b241c5df8ee62690d445b4aff3f4f2af",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "v3-authority-gate-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V1/nanda-k2-v3-authority-route.receipt.json",
+      "expect": {
+        "size_bytes": 15632,
+        "sha256": "6c9a1c4149630a80fe71881466e884e7c497eaf95256fb71711f2ff7314bcb9d",
+        "mode": "0664"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "read-frozen-sources",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "split-four-k2-monoliths",
+        "kind": "behavior_preserving_source_move"
+      },
+      {
+        "id": "write-superseded-evidence-index",
+        "kind": "append_only_evidence_index_write"
+      },
+      {
+        "id": "add-self-formed-protocol",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "register-self-formed-module",
+        "kind": "source_file_modify"
+      },
+      {
+        "id": "add-independent-owner-binaries",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "add-development-tests",
+        "kind": "test_file_create"
+      },
+      {
+        "id": "write-development-journal",
+        "kind": "test_lab_journal_write"
+      },
+      {
+        "id": "create-development-fixtures",
+        "kind": "test_fixture_write"
+      },
+      {
+        "id": "spawn-isolated-development-processes",
+        "kind": "isolated_test_process_spawn"
+      },
+      {
+        "id": "remove-development-fixtures",
+        "kind": "test_fixture_cleanup"
+      },
+      {
+        "id": "freeze-source-binary-test-roots",
+        "kind": "append_only_freeze_receipt_write"
+      },
+      {
+        "id": "arm-confirm-read-capability",
+        "kind": "deny_by_default_capability_write"
+      }
+    ],
+    "forbidden": [
+      "confirm_nonce_creation_before_r10_authorization",
+      "confirm_seed_read",
+      "sealed_scientific_execution",
+      "generated_traffic",
+      "synthetic_fixture",
+      "network_access",
+      "natural_traffic_read",
+      "natural_traffic_write",
+      "production_state_mount",
+      "production_write",
+      "service_control",
+      "dashboard_change",
+      "deployment",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "bundle_activation",
+      "phase_memory_mutation",
+      "package_activation",
+      "natural_k2_authority"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "selector-source-freeze",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "sha256": "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "generated_traffic",
+          "regex": "(/v1/responses|/v2/responses|chat/completions|generated_traffic_as_evidence)"
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "(synthetic_fixture_as_science|fixture_counts_as_science)"
+        },
+        {
+          "effect": "bundle_activation",
+          "regex": "(bundle_activated\\s*:\\s*true|activate_bundle)"
+        },
+        {
+          "effect": "confirm_nonce_creation_before_r10_authorization",
+          "regex": "(create_confirm_nonce_before_r10|confirm_nonce_before_authorization)"
+        },
+        {
+          "effect": "confirm_seed_read",
+          "regex": "(read_confirm_seed|confirm\\.seed|SUPERSEDED_PREPAPER_SEED)"
+        },
+        {
+          "effect": "k1_registry_mutation",
+          "regex": "k1_registry_mutated\\s*:\\s*true"
+        },
+        {
+          "effect": "law_certificate_issue",
+          "regex": "law_certificate_issued\\s*:\\s*true"
+        },
+        {
+          "effect": "natural_k2_authority",
+          "regex": "natural_k2_authority\\s*:\\s*true"
+        },
+        {
+          "effect": "natural_traffic_read",
+          "regex": "(read_natural_traffic|natural_traffic_reader)"
+        },
+        {
+          "effect": "natural_traffic_write",
+          "regex": "(write_natural_traffic|natural_traffic_writer)"
+        },
+        {
+          "effect": "package_activation",
+          "regex": "package_activated\\s*:\\s*true"
+        },
+        {
+          "effect": "phase_memory_mutation",
+          "regex": "phase_memory_mutated\\s*:\\s*true"
+        },
+        {
+          "effect": "sealed_scientific_execution",
+          "regex": "(run_sealed_attempt|execute_confirm_batch)"
+        }
+      ]
+    },
+    {
+      "id": "active-inquiry-model-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/model.rs",
+      "sha256": "dbc4a158b4c4c3828c4e14749d53839dd32f8965d93c9d0c89863d549bba71a5",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "dashboard_change",
+          "regex": "(live_dashboard|control_page|dashboard_html)"
+        }
+      ]
+    },
+    {
+      "id": "active-inquiry-sandbox-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/sandbox.rs",
+      "sha256": "913cb04b69f970adab23aadde9d7059d0bcb1082fea5a7623cbbff4ff2e1c6e9",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "production_state_mount",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave|/run/secrets|/\\.ssh)"
+        },
+        {
+          "effect": "network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "service_control",
+          "regex": "(systemctl|service\\s+(start|stop|restart))"
+        }
+      ]
+    },
+    {
+      "id": "learned-capability-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_capability.rs",
+      "sha256": "2b823e0f57a271d1c50ccf207c6801550c899fa508e5fd902886080f84e66f71",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "deployment",
+          "regex": "(deploy_remote|systemctl|service\\s+(start|stop|restart))"
+        }
+      ]
+    },
+    {
+      "id": "goal-model-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/model.rs",
+      "sha256": "762d654f0389579964d235f0f9b783a6974acd2b0be341784191e87544ba0714",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "natural_traffic_write",
+          "regex": "(natural|future|certification)[_-](ledger|journal)"
+        }
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "PAPER_FROZEN",
+    "terminal_states": [
+      "STOP_BEFORE_CODE",
+      "R0_FAILED",
+      "R1_FAILED",
+      "R2_FAILED",
+      "R3_FAILED",
+      "R4_FAILED",
+      "R5_FAILED",
+      "R6_FAILED",
+      "R7_FAILED",
+      "R8_FAILED",
+      "R9_FAILED",
+      "READY_FOR_SEALED_AUTHORIZATION"
+    ],
+    "steps": [
+      {
+        "id": "freeze-paper-stop",
+        "from": "PAPER_FROZEN",
+        "to": "STOP_BEFORE_CODE",
+        "mutates": true,
+        "failure_state": "R0_FAILED",
+        "cleanup": "remove unpublished stop temp and preserve V1 critique V2 gates and preflight",
+        "preserves": [
+          "architecture-canon",
+          "predecessor-critique",
+          "predecessor-result",
+          "production-sources",
+          "selector-source",
+          "successor-critique",
+          "successor-critique-v2",
+          "successor-v1",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-paper-stop-publish"
+      },
+      {
+        "id": "r0-ownership-split",
+        "from": "STOP_BEFORE_CODE",
+        "to": "R0_FROZEN",
+        "mutates": true,
+        "failure_state": "R0_FAILED",
+        "cleanup": "restore exact four source baselines and remove unpublished split modules and index temp",
+        "preserves": [
+          "architecture-canon",
+          "predecessor-critique",
+          "predecessor-result",
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-r0-rollback"
+      },
+      {
+        "id": "r1-protocol-schemas",
+        "from": "R0_FROZEN",
+        "to": "R1_FROZEN",
+        "mutates": true,
+        "failure_state": "R1_FAILED",
+        "cleanup": "remove unpublished schema files and restore registration baseline",
+        "preserves": [
+          "architecture-canon",
+          "predecessor-result",
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-r1-rollback"
+      },
+      {
+        "id": "r2-generator-and-nonce-protocol",
+        "from": "R1_FROZEN",
+        "to": "R2_FROZEN",
+        "mutates": true,
+        "failure_state": "R2_FAILED",
+        "cleanup": "remove unpublished generator bytes and verify no confirm nonce exists",
+        "preserves": [
+          "development-seed",
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3",
+          "superseded-confirm-seed"
+        ],
+        "test_id": "fault-r2-rollback"
+      },
+      {
+        "id": "r3-learner-and-quotient",
+        "from": "R2_FROZEN",
+        "to": "R3_FROZEN",
+        "mutates": true,
+        "failure_state": "R3_FAILED",
+        "cleanup": "remove unpublished learner modules and development model receipts",
+        "preserves": [
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-r3-rollback"
+      },
+      {
+        "id": "r4-probe-and-private-safety",
+        "from": "R3_FROZEN",
+        "to": "R4_FROZEN",
+        "mutates": true,
+        "failure_state": "R4_FAILED",
+        "cleanup": "remove unpublished probe safety modules and disposable development probe trees",
+        "preserves": [
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-r4-rollback"
+      },
+      {
+        "id": "r5-predecessor-adapter",
+        "from": "R4_FROZEN",
+        "to": "R5_FROZEN",
+        "mutates": true,
+        "failure_state": "R5_FAILED",
+        "cleanup": "remove unpublished adapter and retain exact predecessor selector bytes",
+        "preserves": [
+          "active-inquiry-baselines",
+          "active-inquiry-model",
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-r5-rollback"
+      },
+      {
+        "id": "r6-journal-owner-integration",
+        "from": "R5_FROZEN",
+        "to": "R6_FROZEN",
+        "mutates": true,
+        "failure_state": "R6_FAILED",
+        "cleanup": "remove unpublished integration files and development journal temp while preserving published prefixes",
+        "preserves": [
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-r6-rollback"
+      },
+      {
+        "id": "r7-development-controls",
+        "from": "R6_FROZEN",
+        "to": "R7_FROZEN",
+        "mutates": true,
+        "failure_state": "R7_FAILED",
+        "cleanup": "preserve failed development receipts and remove disposable fixtures after observations publish",
+        "preserves": [
+          "development-seed",
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3",
+          "superseded-confirm-seed"
+        ],
+        "test_id": "fault-r7-rollback"
+      },
+      {
+        "id": "r8-quality-and-route-gates",
+        "from": "R7_FROZEN",
+        "to": "R8_FROZEN",
+        "mutates": true,
+        "failure_state": "R8_FAILED",
+        "cleanup": "preserve gate failures and remove unpublished aggregate receipt temp",
+        "preserves": [
+          "production-sources",
+          "selector-source",
+          "structural-gate-evidence",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3"
+        ],
+        "test_id": "fault-r8-receipt-publish"
+      },
+      {
+        "id": "r9-artifact-freeze",
+        "from": "R8_FROZEN",
+        "to": "READY_FOR_SEALED_AUTHORIZATION",
+        "mutates": true,
+        "failure_state": "R9_FAILED",
+        "cleanup": "remove unpublished freeze temp preserve source binary test roots and verify confirm nonce absent",
+        "preserves": [
+          "production-sources",
+          "selector-source",
+          "successor-critique-v2",
+          "successor-v2",
+          "successor-v3",
+          "superseded-confirm-seed"
+        ],
+        "test_id": "fault-r9-freeze-publish"
+      }
+    ]
+  },
+  "preserved_artifacts": [
+    {
+      "id": "architecture-canon",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/ARCHITECTURE_CANON.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "architecture-canon-baseline"
+    },
+    {
+      "id": "successor-v1",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V1.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "successor-v1-baseline"
+    },
+    {
+      "id": "successor-critique",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_CRITIQUE_V1.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "successor-critique-baseline"
+    },
+    {
+      "id": "successor-v2",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "successor-v2-baseline"
+    },
+    {
+      "id": "predecessor-result",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_CHOSEN_SAFE_INQUIRY_CAPABILITY_RESULT_2026-08-15.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "predecessor-result-baseline"
+    },
+    {
+      "id": "predecessor-critique",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_CHOSEN_SAFE_INQUIRY_POST_RESULT_CRITIQUE_V1.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "predecessor-critique-baseline"
+    },
+    {
+      "id": "selector-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "active-inquiry-selector-baseline"
+    },
+    {
+      "id": "active-inquiry-model",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/model.rs",
+      "policy": "immutable_public_schema_and_behavior",
+      "rollback_policy": "restore_exact_baseline_on_failure",
+      "baseline_check_id": "active-inquiry-model-baseline"
+    },
+    {
+      "id": "active-inquiry-baselines",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/baseline.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "active-inquiry-baseline-policy-baseline"
+    },
+    {
+      "id": "production-sources",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs",
+      "policy": "immutable_bytes_including_dashboard_peer",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "serving-source-baseline"
+    },
+    {
+      "id": "structural-gate-evidence",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2/SHA256SUMS",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "structural-evidence-index-baseline"
+    },
+    {
+      "id": "development-seed",
+      "path": "/home/ubu/.local/state/nando-wave/k2-self-formed-uncertainty-v1/development.seed",
+      "policy": "development_only_never_confirm",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "development-seed-baseline"
+    },
+    {
+      "id": "superseded-confirm-seed",
+      "path": "/home/ubu/.local/state/nando-wave/k2-self-formed-uncertainty-v1/confirm.seed",
+      "policy": "superseded_never_read_never_use",
+      "rollback_policy": "preserve_exact_baseline_without_reading_payload",
+      "baseline_check_id": "superseded-confirm-seed-baseline"
+    },
+    {
+      "id": "successor-discrepancy",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_IMPLEMENTATION_DISCREPANCY_2026-08-15.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "successor-discrepancy-baseline"
+    },
+    {
+      "id": "successor-v3",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V3.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "successor-v3-baseline"
+    },
+    {
+      "id": "successor-critique-v2",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_CRITIQUE_V2.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "successor-critique-v2-baseline"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "r0-public-api-parity",
+      "producer": "four pre-split K2 monolith public surfaces",
+      "consumer": "post-split model protocol receipt fixture modules",
+      "comparison": "public API schemas constants tests and source-layout manifest",
+      "test_id": "r0-public-api-parity"
+    },
+    {
+      "id": "evidence-supersession-parity",
+      "producer": "historical combined VETO and five split PASS receipts",
+      "consumer": "non-authority supersession index",
+      "comparison": "exact immutable SHA-256 roots and chronology",
+      "test_id": "evidence-supersession-parity"
+    },
+    {
+      "id": "vocabulary-support-parity",
+      "producer": "public domain vocabulary owner",
+      "consumer": "generator learner and verifier",
+      "comparison": "seven actions four paths three contents and schema root",
+      "test_id": "vocabulary-support-parity"
+    },
+    {
+      "id": "learner-verifier-consistency",
+      "producer": "factorized consistency learner",
+      "consumer": "independent final verifier",
+      "comparison": "all 336 dispositions and exact Cartesian-product count per case",
+      "test_id": "learner-verifier-consistency"
+    },
+    {
+      "id": "semantic-quotient-parity",
+      "producer": "learner semantic signatures",
+      "consumer": "independent verifier signatures",
+      "comparison": "all 1792 typed outcomes per model and class roots",
+      "test_id": "semantic-quotient-parity"
+    },
+    {
+      "id": "probe-frontier-parity",
+      "producer": "mechanical probe owner",
+      "consumer": "independent verifier",
+      "comparison": "all 1792 raw dispositions exact witness roots complete scorer-sufficient membership and canonical representatives",
+      "test_id": "probe-frontier-parity"
+    },
+    {
+      "id": "risk-cost-parity",
+      "producer": "probe accounting owner",
+      "consumer": "independent verifier",
+      "comparison": "checked formulas worst-case grammar maxima and golden vectors",
+      "test_id": "risk-cost-parity"
+    },
+    {
+      "id": "adapter-predecessor-parity",
+      "producer": "successor adapter",
+      "consumer": "unchanged predecessor selector",
+      "comparison": "canonical eight-probe request bytes every tournament precommit conservation step and direct global winner",
+      "test_id": "adapter-predecessor-parity"
+    },
+    {
+      "id": "selection-preverify-parity",
+      "producer": "selector prediction ranking precommit",
+      "consumer": "independent pre-execution verifier",
+      "comparison": "all predictions scores ties selected root and executable root",
+      "test_id": "selection-preverify-parity"
+    },
+    {
+      "id": "private-safety-dispatch-parity",
+      "producer": "private safety owner",
+      "consumer": "dispatch owner",
+      "comparison": "selected probe private effect grammar confinement budget and batch root",
+      "test_id": "private-safety-dispatch-parity"
+    },
+    {
+      "id": "worker-observer-parity",
+      "producer": "sandbox workspace state",
+      "consumer": "read-only observer",
+      "comparison": "post-manifest scan independent from worker stdout",
+      "test_id": "worker-observer-parity"
+    },
+    {
+      "id": "observer-elimination-parity",
+      "producer": "observer receipt",
+      "consumer": "final verifier",
+      "comparison": "precommitted outcome semantic class and private truth signature",
+      "test_id": "observer-elimination-parity"
+    },
+    {
+      "id": "batch-barrier-parity",
+      "producer": "sixteen preverified case roots",
+      "consumer": "dispatch owner",
+      "comparison": "ALL_CASES_PRECOMMITTED root before every worker spawn",
+      "test_id": "batch-barrier-parity"
+    },
+    {
+      "id": "journal-restart-parity",
+      "producer": "atomic append-only journal",
+      "consumer": "restart projection",
+      "comparison": "every legal prefix event root and terminal state",
+      "test_id": "journal-restart-parity"
+    },
+    {
+      "id": "cleanup-census-parity",
+      "producer": "classified path census before cleanup",
+      "consumer": "terminal retained and deleted path census",
+      "comparison": "every path class root and zero disposable residue",
+      "test_id": "cleanup-census-parity"
+    }
+  ],
+  "runtime_comparisons": [],
+  "invariants": [
+    {
+      "id": "one-new-mechanism",
+      "statement": "only uncertainty-set and probe-frontier formation change while predecessor scorer remains exact",
+      "test_id": "adapter-predecessor-parity"
+    },
+    {
+      "id": "no-supplied-models",
+      "statement": "generator-to-learner protocol contains zero candidate world models or expected class roots",
+      "test_id": "public-request-exclusion-parity"
+    },
+    {
+      "id": "complete-induction",
+      "statement": "every one of 336 effect-support dispositions per case is emitted and independently reconstructed",
+      "test_id": "learner-verifier-consistency"
+    },
+    {
+      "id": "semantic-truth",
+      "statement": "private truth matches the surviving complete semantic signature rather than syntax identity",
+      "test_id": "semantic-quotient-parity"
+    },
+    {
+      "id": "complete-probe-frontier",
+      "statement": "all 1792 raw probes are bound into complete scorer-sufficient classes before every representative enters the predecessor tournament",
+      "test_id": "probe-frontier-parity"
+    },
+    {
+      "id": "exact-accounting",
+      "statement": "risk and cost use frozen checked formulas and worst-case complete-grammar aggregation",
+      "test_id": "risk-cost-parity"
+    },
+    {
+      "id": "selector-immutable",
+      "statement": "predecessor selector source hash ranking behavior and every eight-probe request remain exact across the complete-frontier tournament",
+      "test_id": "selector-source-parity"
+    },
+    {
+      "id": "all-case-before-outcome",
+      "statement": "all sixteen selections and predictions freeze before first worker dispatch",
+      "test_id": "batch-barrier-parity"
+    },
+    {
+      "id": "private-answer-excluded",
+      "statement": "nonce true mapping topology labels and expected outcomes are absent from public owner requests",
+      "test_id": "public-request-exclusion-parity"
+    },
+    {
+      "id": "private-safety-fail-closed",
+      "statement": "true effect grammar membership and sandbox confinement pass before dispatch",
+      "test_id": "private-safety-dispatch-parity"
+    },
+    {
+      "id": "one-probe-per-case",
+      "statement": "same-identity redispatch is rejected after durable dispatch",
+      "test_id": "one-probe-parity"
+    },
+    {
+      "id": "independent-observation",
+      "statement": "observer reads post-state without models effects predictions or worker stdout",
+      "test_id": "worker-observer-parity"
+    },
+    {
+      "id": "independent-proof",
+      "statement": "final verifier imports no generator learner probe selector baseline worker observer or cleanup helpers",
+      "test_id": "verifier-import-separation"
+    },
+    {
+      "id": "exact-controls",
+      "statement": "all 32 controls return their named expected dispositions",
+      "test_id": "negative-control-denominator"
+    },
+    {
+      "id": "resource-fail-closed",
+      "statement": "overflow memory deadline or protocol exhaustion terminates without approximation",
+      "test_id": "resource-terminal-parity"
+    },
+    {
+      "id": "confirm-not-created",
+      "statement": "R0 through R9 cannot create read or execute a confirm nonce",
+      "test_id": "confirm-absence-parity"
+    },
+    {
+      "id": "authority-denied",
+      "statement": "Natural K2 K1 product phase package certificate dashboard service and deployment authority remain false",
+      "test_id": "authority-boundary-parity"
+    },
+    {
+      "id": "production-immutable",
+      "statement": "serving dashboard services natural evidence and production state remain untouched",
+      "test_id": "production-source-parity"
+    },
+    {
+      "id": "predecessor-proof-preserved",
+      "statement": "predecessor sealed result and critique remain exact and sealed test is never rerun",
+      "test_id": "predecessor-proof-parity"
+    },
+    {
+      "id": "zero-disposable-residue",
+      "statement": "development disposable paths are removed only after durable observation and receipt publication",
+      "test_id": "cleanup-census-parity"
+    },
+    {
+      "id": "complete-frontier-tournament",
+      "statement": "every quotient representative enters a denominator-conserving predecessor tournament and the winner equals independent direct ranking",
+      "test_id": "tournament-direct-winner-parity"
+    },
+    {
+      "id": "absolute-outcome-witness-preserved",
+      "statement": "exact post-manifest roots remain witnesses while scorer-invariant outcome labels are excluded from quotient identity",
+      "test_id": "absolute-outcome-witness-parity"
+    }
+  ],
+  "tests": [
+    {
+      "id": "fault-paper-stop-publish",
+      "kind": "fault_injection",
+      "expected": "R0_FAILED with paper and preflight bytes preserved"
+    },
+    {
+      "id": "fault-r0-rollback",
+      "kind": "fault_injection",
+      "expected": "R0_FAILED restores exact four source baselines and removes unpublished modules"
+    },
+    {
+      "id": "fault-r1-rollback",
+      "kind": "fault_injection",
+      "expected": "R1_FAILED restores registration and removes unpublished schemas"
+    },
+    {
+      "id": "fault-r2-rollback",
+      "kind": "fault_injection",
+      "expected": "R2_FAILED removes generator bytes and confirm nonce remains absent"
+    },
+    {
+      "id": "fault-r3-rollback",
+      "kind": "fault_injection",
+      "expected": "R3_FAILED removes unpublished learner bytes and preserves predecessor"
+    },
+    {
+      "id": "fault-r4-rollback",
+      "kind": "fault_injection",
+      "expected": "R4_FAILED removes unpublished probe bytes and disposable probe trees"
+    },
+    {
+      "id": "fault-r5-rollback",
+      "kind": "fault_injection",
+      "expected": "R5_FAILED removes adapter and preserves exact selector bytes"
+    },
+    {
+      "id": "fault-r6-rollback",
+      "kind": "fault_injection",
+      "expected": "R6_FAILED preserves published journal prefix and removes unpublished integration bytes"
+    },
+    {
+      "id": "fault-r7-rollback",
+      "kind": "fault_injection",
+      "expected": "R7_FAILED preserves development failure receipts and removes observed fixtures"
+    },
+    {
+      "id": "fault-r8-receipt-publish",
+      "kind": "fault_injection",
+      "expected": "R8_FAILED preserves individual gate receipts and removes aggregate temp"
+    },
+    {
+      "id": "fault-r9-freeze-publish",
+      "kind": "fault_injection",
+      "expected": "R9_FAILED preserves frozen roots and confirm nonce remains absent"
+    },
+    {
+      "id": "r0-public-api-parity",
+      "kind": "parity",
+      "expected": "pre-split and post-split public API schemas constants and non-sealed behavior match"
+    },
+    {
+      "id": "evidence-supersession-parity",
+      "kind": "parity",
+      "expected": "index binds exact immutable historical VETO and five scoped PASS roots with authority false"
+    },
+    {
+      "id": "vocabulary-support-parity",
+      "kind": "parity",
+      "expected": "generator learner and verifier agree on fixed seven-action four-path three-content vocabulary"
+    },
+    {
+      "id": "learner-verifier-consistency",
+      "kind": "parity",
+      "expected": "independent verifier reconstructs all consistency dispositions and four-model product"
+    },
+    {
+      "id": "semantic-quotient-parity",
+      "kind": "parity",
+      "expected": "independent verifier reconstructs every semantic signature class and private truth match"
+    },
+    {
+      "id": "probe-frontier-parity",
+      "kind": "parity",
+      "expected": "independent verifier reconstructs 1792 raw probes root and eight representatives"
+    },
+    {
+      "id": "risk-cost-parity",
+      "kind": "parity",
+      "expected": "selector-side and verifier-side checked risk cost and robust maxima match all golden vectors"
+    },
+    {
+      "id": "adapter-predecessor-parity",
+      "kind": "parity",
+      "expected": "successor adapter and predecessor route emit identical canonical request and precommit bytes"
+    },
+    {
+      "id": "selection-preverify-parity",
+      "kind": "parity",
+      "expected": "all predictions scores ties and selected roots match before dispatch"
+    },
+    {
+      "id": "private-safety-dispatch-parity",
+      "kind": "parity",
+      "expected": "dispatch binds only a grammar-valid confined true effect after batch preverification"
+    },
+    {
+      "id": "worker-observer-parity",
+      "kind": "parity",
+      "expected": "read-only observer independently scans worker post-state without worker output"
+    },
+    {
+      "id": "observer-elimination-parity",
+      "kind": "parity",
+      "expected": "observed outcome retains exactly the matching semantic class and private truth signature"
+    },
+    {
+      "id": "batch-barrier-parity",
+      "kind": "parity",
+      "expected": "all sixteen case roots form one durable batch barrier before any worker spawn"
+    },
+    {
+      "id": "journal-restart-parity",
+      "kind": "parity",
+      "expected": "every legal append-only prefix projects identically after restart"
+    },
+    {
+      "id": "cleanup-census-parity",
+      "kind": "parity",
+      "expected": "retained sealed and disposable classes are complete and disposable residue is zero"
+    },
+    {
+      "id": "public-request-exclusion-parity",
+      "kind": "parity",
+      "expected": "model lists nonce true mapping topology and expected outcomes are absent from public request bytes"
+    },
+    {
+      "id": "selector-source-parity",
+      "kind": "parity",
+      "expected": "selector source remains SHA-256 733b9b59 and all golden behavior vectors match"
+    },
+    {
+      "id": "one-probe-parity",
+      "kind": "parity",
+      "expected": "same-identity redispatch is rejected after durable dispatch"
+    },
+    {
+      "id": "verifier-import-separation",
+      "kind": "parity",
+      "expected": "final verifier imports only canonical types and hashing from implementation owners"
+    },
+    {
+      "id": "negative-control-denominator",
+      "kind": "parity",
+      "expected": "exactly 32 controls return their named dispositions"
+    },
+    {
+      "id": "resource-terminal-parity",
+      "kind": "fault_injection",
+      "expected": "every resource ceiling produces RESOURCE_EXHAUSTED without approximation"
+    },
+    {
+      "id": "confirm-absence-parity",
+      "kind": "parity",
+      "expected": "no V2 confirm nonce path bytes event or process exists through R9"
+    },
+    {
+      "id": "authority-boundary-parity",
+      "kind": "parity",
+      "expected": "all authority flags remain false and every promotion attempt is rejected"
+    },
+    {
+      "id": "production-source-parity",
+      "kind": "parity",
+      "expected": "serving dashboard and production paths retain exact baseline roots and no service control occurs"
+    },
+    {
+      "id": "predecessor-proof-parity",
+      "kind": "parity",
+      "expected": "predecessor result critique and sealed evidence remain exact without sealed test rerun"
+    },
+    {
+      "id": "absolute-outcome-quotient-rejected",
+      "kind": "parity",
+      "expected": "absolute post-root quotient is rejected as cardinality-incoherent"
+    },
+    {
+      "id": "top-k-frontier-truncation-rejected",
+      "kind": "parity",
+      "expected": "omitting any quotient class fails complete membership parity"
+    },
+    {
+      "id": "tournament-conservation-parity",
+      "kind": "parity",
+      "expected": "every reduction conserves active plus eliminated roots with unique final fillers"
+    },
+    {
+      "id": "tournament-direct-winner-parity",
+      "kind": "parity",
+      "expected": "byte-identical predecessor tournament winner equals independent direct complete-frontier winner"
+    },
+    {
+      "id": "absolute-outcome-witness-parity",
+      "kind": "parity",
+      "expected": "every quotient member retains its exact raw predictions and post-manifest roots"
+    }
+  ]
+}

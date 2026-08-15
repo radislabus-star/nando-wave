@@ -1,0 +1,2258 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k2-self-formed-uncertainty-v3-repair",
+  "domain": "code",
+  "complexity_score": 122,
+  "mandatory_gate": true,
+  "limits": [
+    "entities target limit exceeded: 60>32",
+    "roles target limit exceeded: 44>24",
+    "routes target limit exceeded: 13>8"
+  ],
+  "stable_triads": [
+    "t1",
+    "t2",
+    "t3",
+    "t4",
+    "t5",
+    "t6",
+    "t7",
+    "t8",
+    "t9",
+    "t10",
+    "t11",
+    "t12",
+    "t13",
+    "t14",
+    "t15",
+    "t16",
+    "t17",
+    "t18",
+    "t19"
+  ],
+  "weak_triads": [
+    "c1",
+    "c10",
+    "c11",
+    "c12",
+    "c13",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8",
+    "c9"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.0,
+      "c10": 0.0,
+      "c11": 0.0,
+      "c12": 0.0,
+      "c13": 0.0,
+      "c2": 0.0,
+      "c3": 0.0,
+      "c4": 0.0,
+      "c5": 0.0,
+      "c6": 0.0,
+      "c7": 0.0,
+      "c8": 0.0,
+      "c9": 0.0
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 32,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "t15",
+      "t16",
+      "t17",
+      "t18",
+      "t19",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12",
+      "c13"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": -0.0092,
+      "c10": 0.0083,
+      "c11": 0.0473,
+      "c12": 0.0416,
+      "c13": -0.0118,
+      "c2": 0.0053,
+      "c3": 0.0574,
+      "c4": 0.0306,
+      "c5": 0.0009,
+      "c6": 0.0425,
+      "c7": 0.007,
+      "c8": -0.0044,
+      "c9": -0.0057
+    },
+    "source_self_score": 0.2348,
+    "stable": [],
+    "weak": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12",
+      "c13"
+    ],
+    "weak_details": {
+      "c1": {
+        "nearest_source": "t12",
+        "nearest_source_score": 0.0469,
+        "score": -0.0092,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c10": {
+        "nearest_source": "t19",
+        "nearest_source_score": 0.0469,
+        "score": 0.0083,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c11": {
+        "nearest_source": "t16",
+        "nearest_source_score": 0.0586,
+        "score": 0.0473,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c12": {
+        "nearest_source": "t5",
+        "nearest_source_score": 0.0859,
+        "score": 0.0416,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c13": {
+        "nearest_source": "t15",
+        "nearest_source_score": 0.0723,
+        "score": -0.0118,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c2": {
+        "nearest_source": "t11",
+        "nearest_source_score": 0.0508,
+        "score": 0.0053,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c3": {
+        "nearest_source": "t11",
+        "nearest_source_score": 0.0879,
+        "score": 0.0574,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c4": {
+        "nearest_source": "t17",
+        "nearest_source_score": 0.0742,
+        "score": 0.0306,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c5": {
+        "nearest_source": "t19",
+        "nearest_source_score": 0.0449,
+        "score": 0.0009,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c6": {
+        "nearest_source": "t3",
+        "nearest_source_score": 0.043,
+        "score": 0.0425,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c7": {
+        "nearest_source": "t1",
+        "nearest_source_score": 0.0469,
+        "score": 0.007,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c8": {
+        "nearest_source": "t4",
+        "nearest_source_score": 0.043,
+        "score": -0.0044,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c9": {
+        "nearest_source": "t3",
+        "nearest_source_score": 0.0273,
+        "score": -0.0057,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "baselines": "boundary",
+      "batch": "boundary",
+      "boundary": "batch",
+      "confirm": "quotient",
+      "controls": "proof",
+      "quotient": "baselines",
+      "raw-frontier": "baselines",
+      "tournament": "confirm"
+    },
+    "scores": {
+      "baselines": 0.0364,
+      "batch": 0.0224,
+      "boundary": 0.0723,
+      "confirm": 0.0544,
+      "controls": 0.0586,
+      "quotient": 0.0448,
+      "raw-frontier": 0.0378,
+      "tournament": 0.0316
+    },
+    "weak": [
+      "quotient",
+      "tournament"
+    ]
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "baselines": 1,
+      "batch": 1,
+      "boundary": 1,
+      "confirm": 1,
+      "controls": 1,
+      "quotient": 3,
+      "raw-frontier": 1,
+      "tournament": 4
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.2752,
+      "norm": 114.4727,
+      "triads": 13
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "baselines": "boundary",
+      "batch": "boundary",
+      "boundary": "batch",
+      "confirm": "quotient",
+      "controls": "proof",
+      "quotient": "baselines",
+      "raw-frontier": "baselines",
+      "tournament": "confirm"
+    },
+    "foreign_pull": [
+      {
+        "candidate_group": "quotient",
+        "candidate_triad": "c2",
+        "dominant_source_group": "baselines",
+        "exact_source_groups": [],
+        "object": "every exact raw witness",
+        "relation": "retains",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "R4 quotient builder",
+        "triad_best_score": 0.043,
+        "triad_best_source_group": "proof"
+      },
+      {
+        "candidate_group": "quotient",
+        "candidate_triad": "c3",
+        "dominant_source_group": "baselines",
+        "exact_source_groups": [],
+        "object": "scorer-sufficient equality and accounting",
+        "relation": "keys_by",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "R4 quotient builder",
+        "triad_best_score": 0.0575,
+        "triad_best_source_group": "tournament"
+      },
+      {
+        "candidate_group": "quotient",
+        "candidate_triad": "c4",
+        "dominant_source_group": "baselines",
+        "exact_source_groups": [],
+        "object": "all members and representatives",
+        "relation": "binds",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "R4 quotient receipt",
+        "triad_best_score": 0.0742,
+        "triad_best_source_group": "confirm"
+      },
+      {
+        "candidate_group": "tournament",
+        "candidate_triad": "c5",
+        "dominant_source_group": "confirm",
+        "exact_source_groups": [],
+        "object": "complete representative active set",
+        "relation": "transports",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "R5 adapter",
+        "triad_best_score": 0.0392,
+        "triad_best_source_group": "boundary"
+      },
+      {
+        "candidate_group": "tournament",
+        "candidate_triad": "c6",
+        "dominant_source_group": "confirm",
+        "exact_source_groups": [],
+        "object": "byte-identical predecessor executable",
+        "relation": "use",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "R5 selector calls",
+        "triad_best_score": 0.0419,
+        "triad_best_source_group": "quotient"
+      },
+      {
+        "candidate_group": "tournament",
+        "candidate_triad": "c7",
+        "dominant_source_group": "confirm",
+        "exact_source_groups": [],
+        "object": "every elimination and filler",
+        "relation": "binds",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "R5 tournament journal",
+        "triad_best_score": 0.0352,
+        "triad_best_source_group": "batch"
+      },
+      {
+        "candidate_group": "tournament",
+        "candidate_triad": "c8",
+        "dominant_source_group": "confirm",
+        "exact_source_groups": [],
+        "object": "direct global winner",
+        "relation": "computes",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "R6 preverify process",
+        "triad_best_score": 0.0313,
+        "triad_best_source_group": "batch"
+      }
+    ],
+    "group_centroids": {
+      "candidate": {
+        "baselines": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "batch": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "confirm": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "quotient": {
+          "norm": 54.9909,
+          "self_coherence": 0.5728,
+          "triads": 3
+        },
+        "raw-frontier": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "tournament": {
+          "norm": 65.3299,
+          "self_coherence": 0.5104,
+          "triads": 4
+        }
+      },
+      "source": {
+        "baselines": {
+          "norm": 44.6766,
+          "self_coherence": 0.6981,
+          "triads": 2
+        },
+        "batch": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "boundary": {
+          "norm": 44.6318,
+          "self_coherence": 0.6974,
+          "triads": 2
+        },
+        "confirm": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "quotient": {
+          "norm": 70.1427,
+          "self_coherence": 0.4384,
+          "triads": 5
+        },
+        "raw-frontier": {
+          "norm": 55.1362,
+          "self_coherence": 0.5743,
+          "triads": 3
+        },
+        "tournament": {
+          "norm": 65.1767,
+          "self_coherence": 0.5092,
+          "triads": 4
+        }
+      }
+    },
+    "group_links": {
+      "baselines": {
+        "dominant_score": 0.0364,
+        "dominant_source_group": "boundary",
+        "exact_source_groups": []
+      },
+      "batch": {
+        "dominant_score": 0.0224,
+        "dominant_source_group": "boundary",
+        "exact_source_groups": []
+      },
+      "boundary": {
+        "dominant_score": 0.0723,
+        "dominant_source_group": "batch",
+        "exact_source_groups": []
+      },
+      "confirm": {
+        "dominant_score": 0.0544,
+        "dominant_source_group": "quotient",
+        "exact_source_groups": []
+      },
+      "controls": {
+        "dominant_score": 0.0586,
+        "dominant_source_group": "proof",
+        "exact_source_groups": []
+      },
+      "quotient": {
+        "dominant_score": 0.0448,
+        "dominant_source_group": "baselines",
+        "exact_source_groups": []
+      },
+      "raw-frontier": {
+        "dominant_score": 0.0378,
+        "dominant_source_group": "baselines",
+        "exact_source_groups": []
+      },
+      "tournament": {
+        "dominant_score": 0.0316,
+        "dominant_source_group": "confirm",
+        "exact_source_groups": []
+      }
+    },
+    "interference_matrix": {
+      "baselines": {
+        "baselines": -0.0462,
+        "batch": -0.0137,
+        "boundary": 0.0364,
+        "confirm": 0.0254,
+        "proof": -0.0098,
+        "quotient": 0.0116,
+        "raw-frontier": -0.0136,
+        "tournament": 0.023
+      },
+      "batch": {
+        "baselines": -0.0098,
+        "batch": -0.0254,
+        "boundary": 0.0224,
+        "confirm": 0.0137,
+        "proof": 0.0098,
+        "quotient": -0.0223,
+        "raw-frontier": 0.0,
+        "tournament": 0.0038
+      },
+      "boundary": {
+        "baselines": -0.0042,
+        "batch": 0.0723,
+        "boundary": -0.0168,
+        "confirm": 0.0176,
+        "proof": 0.0059,
+        "quotient": -0.0419,
+        "raw-frontier": 0.0204,
+        "tournament": -0.0307
+      },
+      "confirm": {
+        "baselines": 0.0294,
+        "batch": 0.0371,
+        "boundary": 0.0168,
+        "confirm": 0.0098,
+        "proof": 0.0059,
+        "quotient": 0.0544,
+        "raw-frontier": 0.0272,
+        "tournament": -0.0479
+      },
+      "controls": {
+        "baselines": 0.021,
+        "batch": 0.0313,
+        "boundary": 0.0308,
+        "confirm": -0.0117,
+        "proof": 0.0586,
+        "quotient": 0.0463,
+        "raw-frontier": -0.0623,
+        "tournament": 0.0326
+      },
+      "quotient": {
+        "baselines": 0.0448,
+        "batch": 0.0034,
+        "boundary": 0.0016,
+        "confirm": 0.0352,
+        "proof": -0.0102,
+        "quotient": 0.0264,
+        "raw-frontier": 0.0172,
+        "tournament": 0.0301
+      },
+      "raw-frontier": {
+        "baselines": 0.0378,
+        "batch": -0.0059,
+        "boundary": -0.028,
+        "confirm": -0.0137,
+        "proof": 0.0332,
+        "quotient": -0.033,
+        "raw-frontier": 0.0045,
+        "tournament": -0.0019
+      },
+      "tournament": {
+        "baselines": -0.0315,
+        "batch": 0.0163,
+        "boundary": -0.0206,
+        "confirm": 0.0316,
+        "proof": -0.0086,
+        "quotient": 0.0188,
+        "raw-frontier": 0.025,
+        "tournament": 0.0244
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [
+        {
+          "center": "baseline owner",
+          "group": "baselines",
+          "kind": "owner_conflict",
+          "owners": [
+            "baseline owner",
+            "baseline process",
+            "final verifier"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "dispatch process",
+          "group": "batch",
+          "kind": "owner_conflict",
+          "owners": [
+            "dispatch process",
+            "journal owner"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "artifact owner",
+          "group": "boundary",
+          "kind": "owner_conflict",
+          "owners": [
+            "artifact owner",
+            "production owner",
+            "successor owners"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "freeze owner",
+          "group": "confirm",
+          "kind": "owner_conflict",
+          "owners": [
+            "freeze owner",
+            "nonce owner"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "probe owner",
+          "group": "quotient",
+          "kind": "owner_conflict",
+          "owners": [
+            "probe owner",
+            "probe process"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "probe owner",
+          "group": "raw-frontier",
+          "kind": "owner_conflict",
+          "owners": [
+            "probe owner",
+            "probe process"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "adapter owner",
+          "group": "tournament",
+          "kind": "owner_conflict",
+          "owners": [
+            "adapter owner",
+            "adapter process",
+            "preverify owner",
+            "preverify process",
+            "selector owner",
+            "selector process"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        }
+      ],
+      "group_centers": {
+        "baselines": {
+          "gravity": 0.3333,
+          "owner": "baseline owner",
+          "owners": {
+            "baseline owner": 1,
+            "baseline process": 1,
+            "final verifier": 1
+          },
+          "support": 1,
+          "total": 3
+        },
+        "batch": {
+          "gravity": 0.5,
+          "owner": "dispatch process",
+          "owners": {
+            "dispatch process": 1,
+            "journal owner": 1
+          },
+          "support": 1,
+          "total": 2
+        },
+        "boundary": {
+          "gravity": 0.3333,
+          "owner": "artifact owner",
+          "owners": {
+            "artifact owner": 1,
+            "production owner": 1,
+            "successor owners": 1
+          },
+          "support": 1,
+          "total": 3
+        },
+        "confirm": {
+          "gravity": 0.5,
+          "owner": "freeze owner",
+          "owners": {
+            "freeze owner": 1,
+            "nonce owner": 1
+          },
+          "support": 1,
+          "total": 2
+        },
+        "controls": {
+          "gravity": 1.0,
+          "owner": "test owner",
+          "owners": {
+            "test owner": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "final verifier",
+          "owners": {
+            "final verifier": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "quotient": {
+          "gravity": 0.625,
+          "owner": "probe owner",
+          "owners": {
+            "probe owner": 5,
+            "probe process": 3
+          },
+          "support": 5,
+          "total": 8
+        },
+        "raw-frontier": {
+          "gravity": 0.75,
+          "owner": "probe owner",
+          "owners": {
+            "probe owner": 3,
+            "probe process": 1
+          },
+          "support": 3,
+          "total": 4
+        },
+        "tournament": {
+          "gravity": 0.25,
+          "owner": "adapter owner",
+          "owners": {
+            "adapter owner": 2,
+            "adapter process": 2,
+            "preverify owner": 1,
+            "preverify process": 1,
+            "selector owner": 1,
+            "selector process": 1
+          },
+          "support": 2,
+          "total": 8
+        }
+      },
+      "route_centers": {
+        "adaptation": {
+          "gravity": 0.5,
+          "owner": "adapter owner",
+          "owners": {
+            "adapter owner": 1,
+            "adapter process": 1
+          },
+          "support": 1,
+          "total": 2
+        },
+        "authority": {
+          "gravity": 0.2,
+          "owner": "artifact owner",
+          "owners": {
+            "artifact owner": 1,
+            "final verifier": 1,
+            "freeze owner": 1,
+            "production owner": 1,
+            "successor owners": 1
+          },
+          "support": 1,
+          "total": 5
+        },
+        "baseline": {
+          "gravity": 0.5,
+          "owner": "baseline owner",
+          "owners": {
+            "baseline owner": 1,
+            "baseline process": 1
+          },
+          "support": 1,
+          "total": 2
+        },
+        "enumeration": {
+          "gravity": 0.6667,
+          "owner": "probe owner",
+          "owners": {
+            "probe owner": 2,
+            "probe process": 1
+          },
+          "support": 2,
+          "total": 3
+        },
+        "negative": {
+          "gravity": 1.0,
+          "owner": "test owner",
+          "owners": {
+            "test owner": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "oracle": {
+          "gravity": 1.0,
+          "owner": "final verifier",
+          "owners": {
+            "final verifier": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "persistence": {
+          "gravity": 1.0,
+          "owner": "adapter process",
+          "owners": {
+            "adapter process": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "prediction": {
+          "gravity": 1.0,
+          "owner": "probe owner",
+          "owners": {
+            "probe owner": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "proof": {
+          "gravity": 0.5,
+          "owner": "probe owner",
+          "owners": {
+            "probe owner": 1,
+            "probe process": 1
+          },
+          "support": 1,
+          "total": 2
+        },
+        "quotient": {
+          "gravity": 0.6667,
+          "owner": "probe owner",
+          "owners": {
+            "probe owner": 4,
+            "probe process": 2
+          },
+          "support": 4,
+          "total": 6
+        },
+        "selection": {
+          "gravity": 0.5,
+          "owner": "selector owner",
+          "owners": {
+            "selector owner": 1,
+            "selector process": 1
+          },
+          "support": 1,
+          "total": 2
+        },
+        "temporal": {
+          "gravity": 0.25,
+          "owner": "adapter owner",
+          "owners": {
+            "adapter owner": 1,
+            "dispatch process": 1,
+            "journal owner": 1,
+            "nonce owner": 1
+          },
+          "support": 1,
+          "total": 4
+        },
+        "verification": {
+          "gravity": 0.5,
+          "owner": "preverify owner",
+          "owners": {
+            "preverify owner": 1,
+            "preverify process": 1
+          },
+          "support": 1,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "baselines"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "batch"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "boundary"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "confirm"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "controls"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "quotient"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "raw-frontier"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "tournament"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "proof",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c2"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "tournament",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c3"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "confirm",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c4"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "boundary",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c5"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "quotient",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c6"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "batch",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c7"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "batch",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c8"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "baselines"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "batch"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "boundary"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "confirm"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "quotient"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "raw-frontier"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "tournament"
+      }
+    ],
+    "repair_tasks": [
+      {
+        "candidate_group": "baselines",
+        "dominant_source_group": "boundary",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0364,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "batch",
+        "dominant_source_group": "boundary",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0224,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "boundary",
+        "dominant_source_group": "batch",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0723,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "confirm",
+        "dominant_source_group": "quotient",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0544,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "controls",
+        "dominant_source_group": "proof",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0586,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "quotient",
+        "dominant_source_group": "baselines",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0448,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "raw-frontier",
+        "dominant_source_group": "baselines",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0378,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "tournament",
+        "dominant_source_group": "confirm",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0316,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      }
+    ],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "adaptation": {
+          "avg_confidence": 0.995,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "frontier receipt"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:107"
+          ],
+          "layers": [
+            "application"
+          ],
+          "outputs": [
+            "active set",
+            "active-set root"
+          ],
+          "owners": [
+            "adapter owner",
+            "adapter process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "generated-only api",
+            "none",
+            "private packet",
+            "seal",
+            "source binary test roots"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v2.md:52",
+            "k2_self_formed_uncertainty_preregistration_v2.md:823",
+            "k2_self_formed_uncertainty_preregistration_v2.md:874",
+            "k2_self_formed_uncertainty_preregistration_v3.md:193"
+          ],
+          "layers": [
+            "authority",
+            "domain",
+            "interface",
+            "proof"
+          ],
+          "outputs": [
+            "authority false",
+            "confirm-read receipt only",
+            "denied boundary",
+            "independent result",
+            "no effect"
+          ],
+          "owners": [
+            "artifact owner",
+            "final verifier",
+            "freeze owner",
+            "production owner",
+            "successor owners"
+          ],
+          "scopes": [
+            "generated lab",
+            "local procedural",
+            "production"
+          ],
+          "source_triads": 3,
+          "triads": 5
+        },
+        "baseline": {
+          "avg_confidence": 0.995,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "frontier",
+            "frontier receipt"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:139"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "baseline decisions",
+            "baseline receipts"
+          ],
+          "owners": [
+            "baseline owner",
+            "baseline process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "enumeration": {
+          "avg_confidence": 0.9967,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "frozen vocabulary",
+            "seven action roots",
+            "vocabulary plus model set"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v2.md:169",
+            "k2_self_formed_uncertainty_preregistration_v2.md:273",
+            "k2_self_formed_uncertainty_preregistration_v3.md:177"
+          ],
+          "layers": [
+            "domain"
+          ],
+          "outputs": [
+            "1792 raw probes",
+            "manifest roots",
+            "raw frontier receipt"
+          ],
+          "owners": [
+            "probe owner",
+            "probe process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 2,
+          "triads": 3
+        },
+        "negative": {
+          "avg_confidence": 0.99,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "tampered packet"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:164"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "named veto"
+          ],
+          "owners": [
+            "test owner"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 0,
+          "triads": 1
+        },
+        "oracle": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "private reveal"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:139"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "oracle receipt"
+          ],
+          "owners": [
+            "final verifier"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        },
+        "persistence": {
+          "avg_confidence": 0.99,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "precommit"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:107"
+          ],
+          "layers": [
+            "persistence"
+          ],
+          "outputs": [
+            "step receipt"
+          ],
+          "owners": [
+            "adapter process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 0,
+          "triads": 1
+        },
+        "prediction": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "raw probe"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v2.md:273"
+          ],
+          "layers": [
+            "domain"
+          ],
+          "outputs": [
+            "four exact outcomes"
+          ],
+          "owners": [
+            "probe owner"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        },
+        "proof": {
+          "avg_confidence": 0.995,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "complete classes",
+            "prediction"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:35",
+            "k2_self_formed_uncertainty_preregistration_v3.md:89"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "frontier root",
+            "witness root"
+          ],
+          "owners": [
+            "probe owner",
+            "probe process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "quotient": {
+          "avg_confidence": 0.9967,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "four predictions",
+            "predictions",
+            "raw denominator",
+            "raw disposition",
+            "raw frontier",
+            "sorted members"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:35",
+            "k2_self_formed_uncertainty_preregistration_v3.md:63",
+            "k2_self_formed_uncertainty_preregistration_v3.md:75",
+            "k2_self_formed_uncertainty_preregistration_v3.md:85",
+            "k2_self_formed_uncertainty_preregistration_v3.md:89"
+          ],
+          "layers": [
+            "domain"
+          ],
+          "outputs": [
+            "class key",
+            "class membership",
+            "membership witness",
+            "quotient key",
+            "representative",
+            "six-bit matrix"
+          ],
+          "owners": [
+            "probe owner",
+            "probe process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 4,
+          "triads": 6
+        },
+        "selection": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "canonical request",
+            "eight-probe request"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:102",
+            "k2_self_formed_uncertainty_preregistration_v3.md:99"
+          ],
+          "layers": [
+            "runtime"
+          ],
+          "outputs": [
+            "precommit"
+          ],
+          "owners": [
+            "selector owner",
+            "selector process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "temporal": {
+          "avg_confidence": 0.9975,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "active root",
+            "all case roots",
+            "r10 authorization",
+            "verified selection"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_critique_v2.md:35",
+            "k2_self_formed_uncertainty_preregistration_v2.md:554",
+            "k2_self_formed_uncertainty_preregistration_v3.md:193"
+          ],
+          "layers": [
+            "application",
+            "authority",
+            "persistence"
+          ],
+          "outputs": [
+            "batch root",
+            "one dispatch",
+            "one-shot descriptor",
+            "successor active root"
+          ],
+          "owners": [
+            "adapter owner",
+            "dispatch process",
+            "journal owner",
+            "nonce owner"
+          ],
+          "scopes": [
+            "generated lab",
+            "local procedural"
+          ],
+          "source_triads": 3,
+          "triads": 4
+        },
+        "verification": {
+          "avg_confidence": 0.995,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "all representatives",
+            "complete frontier"
+          ],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v3.md:125"
+          ],
+          "layers": [
+            "proof"
+          ],
+          "outputs": [
+            "parity receipt"
+          ],
+          "owners": [
+            "preverify owner",
+            "preverify process"
+          ],
+          "scopes": [
+            "generated lab"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "adaptation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 45.6946,
+          "self_coherence": 0.714,
+          "triads": 2
+        },
+        "baseline": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "enumeration": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "negative": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "persistence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "quotient": {
+          "norm": 44.9444,
+          "self_coherence": 0.7023,
+          "triads": 2
+        },
+        "selection": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "temporal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "verification": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "adaptation": {
+          "adaptation": 0.0293,
+          "authority": 0.016,
+          "baseline": -0.0371,
+          "enumeration": 0.0082,
+          "oracle": 0.0,
+          "prediction": -0.0215,
+          "proof": 0.0039,
+          "quotient": -0.0182,
+          "selection": -0.0117,
+          "temporal": 0.0227,
+          "verification": -0.002
+        },
+        "authority": {
+          "adaptation": -0.0137,
+          "authority": 0.0048,
+          "baseline": 0.0137,
+          "enumeration": 0.0191,
+          "oracle": 0.0109,
+          "prediction": 0.0301,
+          "proof": -0.0055,
+          "quotient": 0.0127,
+          "selection": -0.0711,
+          "temporal": 0.0318,
+          "verification": 0.0137
+        },
+        "baseline": {
+          "adaptation": 0.0156,
+          "authority": 0.0239,
+          "baseline": -0.0234,
+          "enumeration": 0.0,
+          "oracle": -0.041,
+          "prediction": -0.0234,
+          "proof": -0.0176,
+          "quotient": 0.0222,
+          "selection": 0.0332,
+          "temporal": 0.0148,
+          "verification": -0.0156
+        },
+        "enumeration": {
+          "adaptation": -0.0195,
+          "authority": -0.0034,
+          "baseline": 0.0313,
+          "enumeration": 0.0191,
+          "oracle": 0.0215,
+          "prediction": -0.0195,
+          "proof": -0.0371,
+          "quotient": -0.0182,
+          "selection": -0.002,
+          "temporal": -0.0284,
+          "verification": 0.0469
+        },
+        "negative": {
+          "adaptation": 0.0176,
+          "authority": 0.0593,
+          "baseline": 0.0137,
+          "enumeration": -0.0683,
+          "oracle": 0.0156,
+          "prediction": -0.0098,
+          "proof": 0.0039,
+          "quotient": 0.0505,
+          "selection": 0.0469,
+          "temporal": 0.0023,
+          "verification": 0.0176
+        },
+        "persistence": {
+          "adaptation": 0.0215,
+          "authority": -0.0524,
+          "baseline": -0.0293,
+          "enumeration": 0.0328,
+          "oracle": -0.0078,
+          "prediction": -0.0059,
+          "proof": 0.0391,
+          "quotient": -0.0121,
+          "selection": 0.0195,
+          "temporal": 0.0499,
+          "verification": -0.0254
+        },
+        "proof": {
+          "adaptation": 0.0254,
+          "authority": -0.0296,
+          "baseline": 0.0059,
+          "enumeration": 0.0218,
+          "oracle": 0.0039,
+          "prediction": -0.0059,
+          "proof": -0.0039,
+          "quotient": 0.0364,
+          "selection": 0.0195,
+          "temporal": 0.0227,
+          "verification": 0.002
+        },
+        "quotient": {
+          "adaptation": 0.0042,
+          "authority": 0.0154,
+          "baseline": 0.0153,
+          "enumeration": 0.0039,
+          "oracle": 0.0542,
+          "prediction": 0.0125,
+          "proof": -0.0375,
+          "quotient": 0.0317,
+          "selection": -0.0014,
+          "temporal": 0.0525,
+          "verification": -0.032
+        },
+        "selection": {
+          "adaptation": -0.0117,
+          "authority": 0.008,
+          "baseline": 0.0195,
+          "enumeration": 0.0191,
+          "oracle": -0.0332,
+          "prediction": 0.043,
+          "proof": -0.002,
+          "quotient": 0.0485,
+          "selection": 0.0098,
+          "temporal": 0.0057,
+          "verification": 0.0195
+        },
+        "temporal": {
+          "adaptation": 0.0078,
+          "authority": 0.0239,
+          "baseline": -0.0156,
+          "enumeration": -0.0191,
+          "oracle": 0.002,
+          "prediction": 0.0273,
+          "proof": -0.002,
+          "quotient": -0.0243,
+          "selection": 0.0059,
+          "temporal": -0.017,
+          "verification": 0.0117
+        },
+        "verification": {
+          "adaptation": -0.0137,
+          "authority": -0.016,
+          "baseline": 0.0371,
+          "enumeration": -0.0137,
+          "oracle": -0.0391,
+          "prediction": 0.0059,
+          "proof": 0.043,
+          "quotient": -0.0182,
+          "selection": -0.0078,
+          "temporal": 0.0091,
+          "verification": 0.0215
+        }
+      },
+      "source": {
+        "adaptation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 54.8452,
+          "self_coherence": 0.5713,
+          "triads": 3
+        },
+        "baseline": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "enumeration": {
+          "norm": 45.7821,
+          "self_coherence": 0.7153,
+          "triads": 2
+        },
+        "oracle": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "prediction": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "quotient": {
+          "norm": 61.8385,
+          "self_coherence": 0.4831,
+          "triads": 4
+        },
+        "selection": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "temporal": {
+          "norm": 55.0636,
+          "self_coherence": 0.5736,
+          "triads": 3
+        },
+        "verification": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "baselines": 2,
+      "batch": 1,
+      "boundary": 2,
+      "confirm": 1,
+      "proof": 1,
+      "quotient": 5,
+      "raw-frontier": 3,
+      "tournament": 4
+    },
+    "stable_groups": [],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 14,
+      "foreign_pull_energy": 7,
+      "owner_conflict": 7,
+      "route_coherence": 0.9962,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2.md:273"
+    },
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V3.md:139"
+    },
+    {
+      "kind": "route_splice",
+      "priority": "high",
+      "reason": "candidate triad is pulled toward a foreign source route",
+      "repair": "Move the triad to its source-owned route or split the candidate group.",
+      "target": "quotient"
+    },
+    {
+      "kind": "route_splice",
+      "priority": "high",
+      "reason": "candidate triad is pulled toward a foreign source route",
+      "repair": "Move the triad to its source-owned route or split the candidate group.",
+      "target": "tournament"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "baselines"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "batch"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "boundary"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "confirm"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "controls"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "quotient"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "raw-frontier"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "tournament"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "proof",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c2"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "tournament",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c3"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "confirm",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c4"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "boundary",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c5"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "quotient",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c6"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "batch",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c7"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "batch",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c8"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "baselines"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "batch"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "boundary"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "confirm"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "quotient"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "raw-frontier"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "tournament"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 26,
+    "repair_queue": [
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2.md:273"
+      },
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V3.md:139"
+      },
+      {
+        "kind": "route_splice",
+        "priority": "high",
+        "reason": "candidate triad is pulled toward a foreign source route",
+        "repair": "Move the triad to its source-owned route or split the candidate group.",
+        "target": "quotient"
+      },
+      {
+        "kind": "route_splice",
+        "priority": "high",
+        "reason": "candidate triad is pulled toward a foreign source route",
+        "repair": "Move the triad to its source-owned route or split the candidate group.",
+        "target": "tournament"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "baselines"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "batch"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "boundary"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "confirm"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "controls"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "quotient"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "raw-frontier"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "tournament"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "proof",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c2"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "tournament",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c3"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "confirm",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c4"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "boundary",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c5"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "quotient",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c6"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "batch",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c7"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "batch",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c8"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "baselines"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "batch"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "boundary"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "confirm"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "quotient"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "raw-frontier"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "tournament"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate group has weak route coherence.",
+    "Route splice suspected: at least one candidate triad pulls toward a different source group.",
+    "At least one candidate triad has weak composite-mode support.",
+    "Task exceeds target or hard limits and should be split."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] route_splice: Move the triad to its source-owned route or split the candidate group.\n- [high] route_splice: Move the triad to its source-owned route or split the candidate group.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\nDo not splice triads from different source groups into one candidate group.\n- candidate group quotient best matches baselines only weakly: 0.0448\n- candidate group tournament best matches confirm only weakly: 0.0316\nRoute splice suspected from foreign_pull:\n- c2 in quotient pulls from baselines toward proof; repair: Move this triad to the matching route or split the candidate group.\n- c3 in quotient pulls from baselines toward tournament; repair: Move this triad to the matching route or split the candidate group.\n- c4 in quotient pulls from baselines toward confirm; repair: Move this triad to the matching route or split the candidate group.\n- c5 in tournament pulls from confirm toward boundary; repair: Move this triad to the matching route or split the candidate group.\n- c6 in tournament pulls from confirm toward quotient; repair: Move this triad to the matching route or split the candidate group.\n- c7 in tournament pulls from confirm toward batch; repair: Move this triad to the matching route or split the candidate group.\n- c8 in tournament pulls from confirm toward batch; repair: Move this triad to the matching route or split the candidate group.\nRecheck or remove weak candidate triads:\n- c1: score=-0.0092, nearest_source=t12, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c10: score=0.0083, nearest_source=t19, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c11: score=0.0473, nearest_source=t16, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c12: score=0.0416, nearest_source=t5, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c13: score=-0.0118, nearest_source=t15, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c2: score=0.0053, nearest_source=t11, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c3: score=0.0574, nearest_source=t11, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c4: score=0.0306, nearest_source=t17, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c5: score=0.0009, nearest_source=t19, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c6: score=0.0425, nearest_source=t3, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c7: score=0.007, nearest_source=t1, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c8: score=-0.0044, nearest_source=t4, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c9: score=-0.0057, nearest_source=t3, why=candidate triad does not resonate with the composite source memory above the stability threshold\nSplit the task before retrying:\n- entities target limit exceeded: 60>32\n- roles target limit exceeded: 44>24\n- routes target limit exceeded: 13>8",
+  "trace_path": "/tmp/nanda-structural-gate/k2-self-formed-uncertainty-v3-repair.trace.json"
+}
