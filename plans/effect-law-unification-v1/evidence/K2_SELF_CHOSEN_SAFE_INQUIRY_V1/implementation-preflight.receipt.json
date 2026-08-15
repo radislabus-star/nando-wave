@@ -1,0 +1,242 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "architecture-canon-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/ARCHITECTURE_CANON.md",
+      "sha256": "8c44515cc368ee5cabf19d04ea8443c0a3f919527707f7899666f2c01e7bc0a0",
+      "size_bytes": 93192
+    },
+    {
+      "exists": true,
+      "id": "composition-registration-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/mod.rs",
+      "sha256": "812fe6dc092cdce58ef5249f028dd10bddf1b96074fd6b962d992d2f638d56e6",
+      "size_bytes": 495
+    },
+    {
+      "exists": true,
+      "id": "composition-model-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs",
+      "sha256": "87d2724781803a7540e974d4f209da0085f5213c6660e36cd24ef01860814b8d",
+      "size_bytes": 49583
+    },
+    {
+      "exists": true,
+      "id": "composition-learner-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/learner.rs",
+      "sha256": "ce1e7a635e4e3ef0c8c6c0baa6aa46430575e15808abce05e256ce1031a718bd",
+      "size_bytes": 6261
+    },
+    {
+      "exists": true,
+      "id": "composition-sandbox-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+      "sha256": "ed61fd6205f8f2d5a80bfe6e36d7c05dfe28105248816bde7b435f9b2824640f",
+      "size_bytes": 19420
+    },
+    {
+      "exists": true,
+      "id": "composition-journal-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+      "sha256": "a3b118074e39b7f32a573dd6ce6d65d2ceb1fd57966cd7198e2049ea0a8d414f",
+      "size_bytes": 20664
+    },
+    {
+      "exists": true,
+      "id": "composition-verifier-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs",
+      "sha256": "8e16630539f3bd9ecd23d35cf40bba4071e7021d98f4011d5cd66e6bfc61e29e",
+      "size_bytes": 14020
+    },
+    {
+      "exists": true,
+      "id": "hidden-representation-model-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/model.rs",
+      "sha256": "6b390b39260fa644927566f2ae263c9d6490d290fd9df0081e0bad88949624d7",
+      "size_bytes": 41229
+    },
+    {
+      "exists": true,
+      "id": "hidden-representation-sandbox-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+      "sha256": "b8b8b1ee5483f4807fd8630cd229ce3243bc96eafba28426bd4d362b1f5396f9",
+      "size_bytes": 20309
+    },
+    {
+      "exists": true,
+      "id": "hidden-representation-journal-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/journal.rs",
+      "sha256": "34711f171488ba0b215d2c25a455eaf53d48cb5b2eae4dd89d143af864b4061f",
+      "size_bytes": 11109
+    },
+    {
+      "exists": true,
+      "id": "hidden-representation-test-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+      "sha256": "e098a910c2d0b1bead1a451535f3715f1696d6b5679ae77f6e979dc2ca461a0d",
+      "size_bytes": 51865
+    },
+    {
+      "exists": true,
+      "id": "crate-manifest-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/Cargo.toml",
+      "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+      "size_bytes": 663
+    },
+    {
+      "exists": true,
+      "id": "cargo-lock-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/Cargo.lock",
+      "sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08",
+      "size_bytes": 39973
+    },
+    {
+      "exists": true,
+      "id": "prior-result-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_RESULT_2026-08-15.md",
+      "sha256": "4ea3a34110aa6b72f6ee044f08e741b445a7e1488f1b77acc1fdfe00e6cd4561",
+      "size_bytes": 8337
+    },
+    {
+      "exists": true,
+      "id": "prior-critique-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_POST_RESULT_CRITIQUE_V1.md",
+      "sha256": "540cad1d14d625eb596bf18568abadd823f9f26c247155ac58c6a4c029450a61",
+      "size_bytes": 6359
+    },
+    {
+      "exists": true,
+      "id": "dashboard-source-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c",
+      "size_bytes": 28960
+    },
+    {
+      "exists": true,
+      "id": "serving-source-baseline",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-transition-serving/src/lib.rs",
+      "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949",
+      "size_bytes": 457899
+    },
+    {
+      "exists": true,
+      "id": "bin-directory-baseline",
+      "kind": "directory",
+      "mode": "0775",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/bin"
+    },
+    {
+      "exists": true,
+      "id": "test-directory-baseline",
+      "kind": "directory",
+      "mode": "0775",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/tests"
+    }
+  ],
+  "blockers": [],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 19,
+    "forbidden_side_effect_kinds": [
+      "dashboard_change",
+      "deployment",
+      "generated_natural_traffic",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "natural_evidence_write",
+      "network_access",
+      "package_activation",
+      "phase_memory_mutation",
+      "production_state_mount",
+      "production_write",
+      "secret_mount",
+      "service_control"
+    ],
+    "identity_contracts": 5,
+    "invariants": 11,
+    "planned_side_effect_kinds": [
+      "filesystem_read",
+      "isolated_test_process_spawn",
+      "source_file_create",
+      "source_file_modify",
+      "test_fixture_cleanup",
+      "test_fixture_write",
+      "test_lab_journal_write"
+    ],
+    "preserved_artifacts": 7,
+    "runtime_comparisons": 0,
+    "source_checks": 3,
+    "tests": 29
+  },
+  "manifest_sha256": "d69f09b35d4b656985fa3b33922d93bd26290994400c5e9687d7b92b657e0fc1",
+  "safe_to_implement": true,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "composition-model-source",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs",
+      "sha256": "87d2724781803a7540e974d4f209da0085f5213c6660e36cd24ef01860814b8d",
+      "size_bytes": 49583
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "composition-sandbox-source",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+      "sha256": "ed61fd6205f8f2d5a80bfe6e36d7c05dfe28105248816bde7b435f9b2824640f",
+      "size_bytes": 19420
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "hidden-representation-source",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/model.rs",
+      "sha256": "6b390b39260fa644927566f2ae263c9d6490d290fd9df0081e0bad88949624d7",
+      "size_bytes": 41229
+    }
+  ],
+  "task_id": "k2-self-chosen-safe-inquiry-source-v1",
+  "verdict": "READY_TO_IMPLEMENT"
+}

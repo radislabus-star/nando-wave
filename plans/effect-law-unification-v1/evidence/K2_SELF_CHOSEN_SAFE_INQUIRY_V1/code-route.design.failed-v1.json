@@ -1,0 +1,848 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "VETO",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": false,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_CHOSEN_SAFE_INQUIRY_V1/code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 19,
+  "edge_count": 23,
+  "routes": [
+    {
+      "id": "baseline-execution",
+      "event": "evaluate_baselines",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "baseline_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "baseline_process"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "baseline_process"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "baseline_process",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "baseline_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "baseline-authority",
+      "event": "evaluate_baselines",
+      "kind": "authority",
+      "entry": "public_case_bytes",
+      "via": [],
+      "terminal": "baseline_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "public_case_bytes",
+          "public_case_store",
+          "baseline_process"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "baseline_process"
+        ],
+        "producer": [
+          "public_case_bytes"
+        ],
+        "evidence_owner": [
+          "public_case_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "public_case_bytes",
+          "to": "baseline_process",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "public_case_bytes",
+              "public_case_store",
+              "baseline_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "selector-execution",
+      "event": "select_probe",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "selector_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "selector_process"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "candidate_rank_owner": [
+          "selector_process"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "selector_process",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "selector_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "selector-authority",
+      "event": "select_probe",
+      "kind": "authority",
+      "entry": "public_case_bytes",
+      "via": [],
+      "terminal": "selector_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "public_case_bytes",
+          "public_case_store",
+          "selector_process"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "public_case_bytes"
+        ],
+        "evidence_owner": [
+          "public_case_store"
+        ],
+        "candidate_rank_owner": [
+          "selector_process"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "public_case_bytes",
+          "to": "selector_process",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "public_case_bytes",
+              "public_case_store",
+              "selector_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "preverify-execution",
+      "event": "verify_selection",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "preexecution_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "preexecution_verifier"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "proof_owner": [
+          "preexecution_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "preexecution_verifier",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "preexecution_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "selection-proof",
+      "event": "verify_selection",
+      "kind": "proof",
+      "entry": "selection_precommit",
+      "via": [],
+      "terminal": "preexecution_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "selection_precommit",
+          "preexecution_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "preexecution_verifier"
+        ],
+        "producer": [
+          "selection_precommit"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "selection_precommit",
+          "to": "preexecution_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "selection_precommit",
+              "preexecution_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "selection-authority",
+      "event": "publish_verified_selection",
+      "kind": "authority",
+      "entry": "selection_precommit",
+      "via": [],
+      "terminal": "verified_selection_store",
+      "path_count": 1,
+      "paths": [
+        [
+          "selection_precommit",
+          "verified_selection_store"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "selection_precommit"
+        ],
+        "evidence_owner": [
+          "verified_selection_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "selection_precommit",
+          "to": "verified_selection_store",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "selection_precommit",
+              "verified_selection_store"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "probe-execution",
+      "event": "execute_probe",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "sandbox_worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "dispatch_owner",
+          "sandbox_adapter",
+          "sandbox_worker"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "dispatch_owner"
+        ],
+        "interface": [
+          "experiment_driver"
+        ],
+        "orchestrator": [
+          "sandbox_adapter"
+        ],
+        "mutation_owner": [
+          "sandbox_worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "sandbox_worker",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "dispatch_owner",
+              "sandbox_adapter",
+              "sandbox_worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "probe-authority",
+      "event": "execute_probe",
+      "kind": "authority",
+      "entry": "verified_selection_store",
+      "via": [],
+      "terminal": "sandbox_worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "verified_selection_store",
+          "dispatch_owner",
+          "sandbox_worker"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "dispatch_owner"
+        ],
+        "mutation_owner": [
+          "sandbox_worker"
+        ],
+        "evidence_owner": [
+          "verified_selection_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "verified_selection_store",
+          "to": "sandbox_worker",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "verified_selection_store",
+              "dispatch_owner",
+              "sandbox_worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "observer-execution",
+      "event": "observe_probe",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "observer_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "observer_process"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "observer": [
+          "observer_process"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "observer_process",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "observer_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "probe-observation",
+      "event": "observe_probe",
+      "kind": "observation",
+      "entry": "workspace_state",
+      "via": [],
+      "terminal": "observer_process",
+      "path_count": 1,
+      "paths": [
+        [
+          "workspace_state",
+          "observer_process"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "observer_process"
+        ],
+        "producer": [
+          "workspace_state"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "workspace_state",
+          "to": "observer_process",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "workspace_state",
+              "observer_process"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "elimination-execution",
+      "event": "eliminate_models",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "elimination_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "elimination_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "elimination_verifier"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "elimination_verifier",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "elimination_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "elimination-selection-proof",
+      "event": "eliminate_models",
+      "kind": "proof",
+      "entry": "selection_precommit",
+      "via": [],
+      "terminal": "elimination_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "selection_precommit",
+          "elimination_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "elimination_verifier"
+        ],
+        "producer": [
+          "selection_precommit"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "selection_precommit",
+          "to": "elimination_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "selection_precommit",
+              "elimination_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "elimination-observation-proof",
+      "event": "eliminate_models",
+      "kind": "proof",
+      "entry": "observation_receipt",
+      "via": [],
+      "terminal": "elimination_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "observation_receipt",
+          "elimination_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "elimination_verifier"
+        ],
+        "producer": [
+          "observation_receipt"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "observation_receipt",
+          "to": "elimination_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "observation_receipt",
+              "elimination_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journal-execution",
+      "event": "persist_event",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "inquiry_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "inquiry_journal"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "experiment_driver"
+        ],
+        "evidence_owner": [
+          "inquiry_journal"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "inquiry_journal",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "inquiry_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journal-authority",
+      "event": "persist_event",
+      "kind": "authority",
+      "entry": "journal_event_bytes",
+      "via": [],
+      "terminal": "inquiry_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "journal_event_bytes",
+          "inquiry_journal"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "inquiry_journal"
+        ],
+        "producer": [
+          "journal_event_bytes"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "journal_event_bytes",
+          "to": "inquiry_journal",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "journal_event_bytes",
+              "inquiry_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup-execution",
+      "event": "cleanup_generated",
+      "kind": "execution",
+      "entry": "experiment_driver",
+      "via": [],
+      "terminal": "cleanup_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "experiment_driver",
+          "cleanup_owner"
+        ]
+      ],
+      "role_owners": {
+        "mutation_owner": [
+          "cleanup_owner"
+        ],
+        "interface": [
+          "experiment_driver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "experiment_driver",
+          "to": "cleanup_owner",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "experiment_driver",
+              "cleanup_owner"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "evaluate_baselines": {
+      "authorization_owner": [],
+      "evidence_owner": [
+        "public_case_store"
+      ],
+      "display_rank_owner": [],
+      "candidate_rank_owner": [
+        "baseline_process"
+      ],
+      "mutation_owner": [],
+      "render_owner": []
+    },
+    "select_probe": {
+      "authorization_owner": [],
+      "evidence_owner": [
+        "public_case_store"
+      ],
+      "display_rank_owner": [],
+      "candidate_rank_owner": [
+        "selector_process"
+      ],
+      "mutation_owner": [],
+      "render_owner": []
+    },
+    "publish_verified_selection": {
+      "authorization_owner": [],
+      "evidence_owner": [
+        "verified_selection_store"
+      ],
+      "display_rank_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": [],
+      "render_owner": []
+    },
+    "execute_probe": {
+      "authorization_owner": [
+        "dispatch_owner"
+      ],
+      "evidence_owner": [
+        "verified_selection_store"
+      ],
+      "display_rank_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": [
+        "sandbox_worker"
+      ],
+      "render_owner": []
+    },
+    "persist_event": {
+      "authorization_owner": [],
+      "evidence_owner": [
+        "inquiry_journal"
+      ],
+      "display_rank_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": [],
+      "render_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [
+    {
+      "code": "authority_stage_reversal",
+      "message": "logical authority flow moves backward; control calls must use calls/delegates",
+      "edge": "proof-updated-model-set",
+      "source": "elimination_verifier",
+      "target": "updated_model_set",
+      "source_role": "proof_owner",
+      "target_role": "producer"
+    },
+    {
+      "code": "producer_relation_role_mismatch",
+      "message": "produces_for must originate at a producer",
+      "edge": "proof-updated-model-set",
+      "source": "elimination_verifier",
+      "source_role": "proof_owner"
+    }
+  ],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

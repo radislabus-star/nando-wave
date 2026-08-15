@@ -1,0 +1,708 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k2-safe-inquiry-search-v1",
+  "domain": "general",
+  "complexity_score": 33,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1765,
+      "c2": 0.1765,
+      "c3": 0.1765,
+      "c4": 0.1765,
+      "c5": 0.1765,
+      "c6": 0.1765
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 12,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.393,
+      "c2": 0.4103,
+      "c3": 0.3993,
+      "c4": 0.4212,
+      "c5": 0.4463,
+      "c6": 0.4197
+    },
+    "source_self_score": 0.415,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "complete-matrix": "complete-matrix",
+      "fixed-scorer": "fixed-scorer",
+      "input-parity": "input-parity",
+      "oracle-equality": "oracle-equality",
+      "strict-superiority": "strict-superiority",
+      "strong-heuristic": "strong-heuristic"
+    },
+    "scores": {
+      "complete-matrix": 1.0,
+      "fixed-scorer": 1.0,
+      "input-parity": 1.0,
+      "oracle-equality": 1.0,
+      "strict-superiority": 1.0,
+      "strong-heuristic": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "complete-matrix": 1,
+      "fixed-scorer": 1,
+      "input-parity": 1,
+      "oracle-equality": 1,
+      "strict-superiority": 1,
+      "strong-heuristic": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.415,
+      "norm": 79.6743,
+      "triads": 6
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "complete-matrix": "complete-matrix",
+      "fixed-scorer": "fixed-scorer",
+      "input-parity": "input-parity",
+      "oracle-equality": "oracle-equality",
+      "strict-superiority": "strict-superiority",
+      "strong-heuristic": "strong-heuristic"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "complete-matrix": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fixed-scorer": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "input-parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle-equality": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "strict-superiority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "strong-heuristic": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "complete-matrix": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fixed-scorer": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "input-parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle-equality": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "strict-superiority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "strong-heuristic": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "complete-matrix": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "complete-matrix",
+        "exact_source_groups": [
+          "complete-matrix"
+        ]
+      },
+      "fixed-scorer": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "fixed-scorer",
+        "exact_source_groups": [
+          "fixed-scorer"
+        ]
+      },
+      "input-parity": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "input-parity",
+        "exact_source_groups": [
+          "input-parity"
+        ]
+      },
+      "oracle-equality": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "oracle-equality",
+        "exact_source_groups": [
+          "oracle-equality"
+        ]
+      },
+      "strict-superiority": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "strict-superiority",
+        "exact_source_groups": [
+          "strict-superiority"
+        ]
+      },
+      "strong-heuristic": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "strong-heuristic",
+        "exact_source_groups": [
+          "strong-heuristic"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "complete-matrix": {
+        "complete-matrix": 1.0,
+        "fixed-scorer": 0.0273,
+        "input-parity": -0.0254,
+        "oracle-equality": 0.0117,
+        "strict-superiority": 0.043,
+        "strong-heuristic": -0.0352
+      },
+      "fixed-scorer": {
+        "complete-matrix": 0.0273,
+        "fixed-scorer": 1.0,
+        "input-parity": -0.0293,
+        "oracle-equality": 0.0156,
+        "strict-superiority": -0.0313,
+        "strong-heuristic": -0.0039
+      },
+      "input-parity": {
+        "complete-matrix": -0.0254,
+        "fixed-scorer": -0.0293,
+        "input-parity": 1.0,
+        "oracle-equality": 0.0332,
+        "strict-superiority": -0.0332,
+        "strong-heuristic": 0.0488
+      },
+      "oracle-equality": {
+        "complete-matrix": 0.0117,
+        "fixed-scorer": 0.0156,
+        "input-parity": 0.0332,
+        "oracle-equality": 1.0,
+        "strict-superiority": 0.0391,
+        "strong-heuristic": 0.0117
+      },
+      "strict-superiority": {
+        "complete-matrix": 0.043,
+        "fixed-scorer": -0.0313,
+        "input-parity": -0.0332,
+        "oracle-equality": 0.0391,
+        "strict-superiority": 1.0,
+        "strong-heuristic": 0.0273
+      },
+      "strong-heuristic": {
+        "complete-matrix": -0.0352,
+        "fixed-scorer": -0.0039,
+        "input-parity": 0.0488,
+        "oracle-equality": 0.0117,
+        "strict-superiority": 0.0273,
+        "strong-heuristic": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "complete-matrix": {
+          "gravity": 1.0,
+          "owner": "public denominator",
+          "owners": {
+            "public denominator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "fixed-scorer": {
+          "gravity": 1.0,
+          "owner": "exact information scorer",
+          "owners": {
+            "exact information scorer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "input-parity": {
+          "gravity": 1.0,
+          "owner": "all rule baselines",
+          "owners": {
+            "all rule baselines": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "oracle-equality": {
+          "gravity": 1.0,
+          "owner": "oracle-equality",
+          "owners": {
+            "oracle-equality": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "strict-superiority": {
+          "gravity": 1.0,
+          "owner": "strict-superiority",
+          "owners": {
+            "strict-superiority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "strong-heuristic": {
+          "gravity": 1.0,
+          "owner": "explicit heuristic baseline",
+          "owners": {
+            "explicit heuristic baseline": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "accounting": {
+          "gravity": 1.0,
+          "owner": "public denominator",
+          "owners": {
+            "public denominator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "baseline": {
+          "gravity": 0.5,
+          "owner": "all rule baselines",
+          "owners": {
+            "all rule baselines": 2,
+            "explicit heuristic baseline": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "comparison": {
+          "gravity": 1.0,
+          "owner": "strict-superiority",
+          "owners": {
+            "strict-superiority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "oracle-equality",
+          "owners": {
+            "oracle-equality": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "ranking": {
+          "gravity": 1.0,
+          "owner": "exact information scorer",
+          "owners": {
+            "exact information scorer": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "accounting": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:35",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:106"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "public denominator"
+          ],
+          "scopes": [
+            "accounting"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "baseline": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:36",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:37",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:232",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:245"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "all rule baselines",
+            "explicit heuristic baseline"
+          ],
+          "scopes": [
+            "baseline"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "comparison": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:101",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:367"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "strict-superiority"
+          ],
+          "scopes": [
+            "comparison"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:31",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:254"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "oracle-equality"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "ranking": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:30",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:55"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "exact information scorer"
+          ],
+          "scopes": [
+            "ranking"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "accounting": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "baseline": {
+          "norm": 46.3465,
+          "self_coherence": 0.7242,
+          "triads": 2
+        },
+        "comparison": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ranking": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "accounting": {
+          "accounting": 1.0,
+          "baseline": -0.0418,
+          "comparison": 0.043,
+          "proof": 0.0117,
+          "ranking": 0.0273
+        },
+        "baseline": {
+          "accounting": -0.0418,
+          "baseline": 1.0,
+          "comparison": -0.004,
+          "proof": 0.031,
+          "ranking": -0.0229
+        },
+        "comparison": {
+          "accounting": 0.043,
+          "baseline": -0.004,
+          "comparison": 1.0,
+          "proof": 0.0391,
+          "ranking": -0.0313
+        },
+        "proof": {
+          "accounting": 0.0117,
+          "baseline": 0.031,
+          "comparison": 0.0391,
+          "proof": 1.0,
+          "ranking": 0.0156
+        },
+        "ranking": {
+          "accounting": 0.0273,
+          "baseline": -0.0229,
+          "comparison": -0.0313,
+          "proof": 0.0156,
+          "ranking": 1.0
+        }
+      },
+      "source": {
+        "accounting": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "baseline": {
+          "norm": 46.3465,
+          "self_coherence": 0.7242,
+          "triads": 2
+        },
+        "comparison": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ranking": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "complete-matrix": 1,
+      "fixed-scorer": 1,
+      "input-parity": 1,
+      "oracle-equality": 1,
+      "strict-superiority": 1,
+      "strong-heuristic": 1
+    },
+    "stable_groups": [
+      "complete-matrix",
+      "fixed-scorer",
+      "input-parity",
+      "oracle-equality",
+      "strict-superiority",
+      "strong-heuristic"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k2-safe-inquiry-search-v1.trace.json"
+}

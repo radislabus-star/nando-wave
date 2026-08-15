@@ -1,0 +1,1445 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k2-self-chosen-safe-inquiry-v1",
+  "domain": "general",
+  "complexity_score": 100,
+  "mandatory_gate": true,
+  "limits": [
+    "entities target limit exceeded: 49>32",
+    "routes target limit exceeded: 12>8"
+  ],
+  "stable_triads": [
+    "t1",
+    "t2",
+    "t3",
+    "t4",
+    "t5",
+    "t6",
+    "t7",
+    "t8",
+    "t9",
+    "t10",
+    "t11",
+    "t12",
+    "t13",
+    "t14",
+    "t15",
+    "t16",
+    "t17",
+    "t18",
+    "t19",
+    "t20",
+    "t21",
+    "t22"
+  ],
+  "weak_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.0,
+      "c2": 0.0,
+      "c3": 0.0,
+      "c4": 0.0,
+      "c5": 0.0
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 27,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "t15",
+      "t16",
+      "t17",
+      "t18",
+      "t19",
+      "t20",
+      "t21",
+      "t22",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": -0.004,
+      "c2": 0.0539,
+      "c3": 0.0298,
+      "c4": 0.0064,
+      "c5": -0.0467
+    },
+    "source_self_score": 0.2207,
+    "stable": [],
+    "weak": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5"
+    ],
+    "weak_details": {
+      "c1": {
+        "nearest_source": "t22",
+        "nearest_source_score": 0.041,
+        "score": -0.004,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c2": {
+        "nearest_source": "t18",
+        "nearest_source_score": 0.0605,
+        "score": 0.0539,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c3": {
+        "nearest_source": "t3",
+        "nearest_source_score": 0.0703,
+        "score": 0.0298,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c4": {
+        "nearest_source": "t9",
+        "nearest_source_score": 0.0664,
+        "score": 0.0064,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c5": {
+        "nearest_source": "t8",
+        "nearest_source_score": 0.0391,
+        "score": -0.0467,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "authority-boundary": "selection",
+      "freeze": "source-boundary",
+      "oracle-comparison": "authority-boundary",
+      "ranking": "execution"
+    },
+    "scores": {
+      "authority-boundary": 0.0703,
+      "freeze": 0.041,
+      "oracle-comparison": 0.0234,
+      "ranking": 0.0523
+    },
+    "weak": [
+      "ranking"
+    ]
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "authority-boundary": 1,
+      "freeze": 1,
+      "oracle-comparison": 1,
+      "ranking": 2
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.4524,
+      "norm": 72.3878,
+      "triads": 5
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "authority-boundary": "selection",
+      "freeze": "source-boundary",
+      "oracle-comparison": "authority-boundary",
+      "ranking": "execution"
+    },
+    "foreign_pull": [
+      {
+        "candidate_group": "ranking",
+        "candidate_triad": "c2",
+        "dominant_source_group": "execution",
+        "exact_source_groups": [],
+        "object": "bounded active inquiry",
+        "relation": "may establish",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "model guided selection",
+        "triad_best_score": 0.0605,
+        "triad_best_source_group": "elimination"
+      },
+      {
+        "candidate_group": "ranking",
+        "candidate_triad": "c4",
+        "dominant_source_group": "execution",
+        "exact_source_groups": [],
+        "object": "fixed K0 primitive",
+        "relation": "is",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "subject": "exact information scorer",
+        "triad_best_score": 0.0398,
+        "triad_best_source_group": "baseline-comparison"
+      }
+    ],
+    "group_centroids": {
+      "candidate": {
+        "authority-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle-comparison": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ranking": {
+          "norm": 45.4313,
+          "self_coherence": 0.7099,
+          "triads": 2
+        }
+      },
+      "source": {
+        "authority-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "baseline-comparison": {
+          "norm": 56.4978,
+          "self_coherence": 0.5885,
+          "triads": 3
+        },
+        "canon-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "dispatch": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "eligibility": {
+          "norm": 64.1872,
+          "self_coherence": 0.5015,
+          "triads": 4
+        },
+        "elimination": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "execution": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "freeze": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "journal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle-comparison": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "ranking": {
+          "norm": 43.7264,
+          "self_coherence": 0.6832,
+          "triads": 2
+        },
+        "sandbox-cleanup": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "sandbox-mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "sandbox-observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "selection": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "source-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "authority-boundary": {
+        "dominant_score": 0.0703,
+        "dominant_source_group": "selection",
+        "exact_source_groups": []
+      },
+      "freeze": {
+        "dominant_score": 0.041,
+        "dominant_source_group": "source-boundary",
+        "exact_source_groups": []
+      },
+      "oracle-comparison": {
+        "dominant_score": 0.0234,
+        "dominant_source_group": "authority-boundary",
+        "exact_source_groups": []
+      },
+      "ranking": {
+        "dominant_score": 0.0523,
+        "dominant_source_group": "execution",
+        "exact_source_groups": []
+      }
+    },
+    "interference_matrix": {
+      "authority-boundary": {
+        "authority-boundary": 0.0,
+        "baseline-comparison": -0.0022,
+        "canon-boundary": 0.0039,
+        "dispatch": 0.0176,
+        "eligibility": 0.0175,
+        "elimination": -0.0215,
+        "execution": -0.0469,
+        "freeze": 0.0176,
+        "journal": -0.0059,
+        "oracle-comparison": 0.0508,
+        "ranking": 0.0029,
+        "sandbox-cleanup": 0.0254,
+        "sandbox-mutation": 0.0313,
+        "sandbox-observation": -0.0156,
+        "selection": 0.0703,
+        "source-boundary": -0.0176
+      },
+      "freeze": {
+        "authority-boundary": 0.0039,
+        "baseline-comparison": 0.0,
+        "canon-boundary": 0.0273,
+        "dispatch": -0.0293,
+        "eligibility": -0.0214,
+        "elimination": 0.0332,
+        "execution": 0.0,
+        "freeze": 0.0098,
+        "journal": 0.0215,
+        "oracle-comparison": 0.0352,
+        "ranking": -0.0543,
+        "sandbox-cleanup": 0.0098,
+        "sandbox-mutation": 0.0039,
+        "sandbox-observation": -0.0352,
+        "selection": -0.0234,
+        "source-boundary": 0.041
+      },
+      "oracle-comparison": {
+        "authority-boundary": 0.0234,
+        "baseline-comparison": -0.0221,
+        "canon-boundary": 0.0,
+        "dispatch": -0.0098,
+        "eligibility": -0.0136,
+        "elimination": -0.0332,
+        "execution": -0.043,
+        "freeze": 0.0215,
+        "journal": 0.0098,
+        "oracle-comparison": -0.0586,
+        "ranking": 0.0143,
+        "sandbox-cleanup": -0.0332,
+        "sandbox-mutation": -0.0117,
+        "sandbox-observation": -0.0391,
+        "selection": 0.0117,
+        "source-boundary": -0.0176
+      },
+      "ranking": {
+        "authority-boundary": -0.044,
+        "baseline-comparison": 0.0358,
+        "canon-boundary": -0.0055,
+        "dispatch": 0.0303,
+        "eligibility": 0.0082,
+        "elimination": 0.0138,
+        "execution": 0.0523,
+        "freeze": 0.0165,
+        "journal": 0.0303,
+        "oracle-comparison": -0.033,
+        "ranking": 0.006,
+        "sandbox-cleanup": 0.0385,
+        "sandbox-mutation": -0.0248,
+        "sandbox-observation": 0.0138,
+        "selection": 0.0413,
+        "source-boundary": -0.011
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "authority-boundary": {
+          "gravity": 1.0,
+          "owner": "all processes",
+          "owners": {
+            "all processes": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "baseline-comparison": {
+          "gravity": 1.0,
+          "owner": "baseline process",
+          "owners": {
+            "baseline process": 3
+          },
+          "support": 3,
+          "total": 3
+        },
+        "canon-boundary": {
+          "gravity": 1.0,
+          "owner": "canon",
+          "owners": {
+            "canon": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "dispatch": {
+          "gravity": 1.0,
+          "owner": "driver",
+          "owners": {
+            "driver": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "eligibility": {
+          "gravity": 1.0,
+          "owner": "pre-execution verifier",
+          "owners": {
+            "pre-execution verifier": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "elimination": {
+          "gravity": 1.0,
+          "owner": "verifier process",
+          "owners": {
+            "verifier process": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "execution": {
+          "gravity": 1.0,
+          "owner": "journal",
+          "owners": {
+            "journal": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "freeze": {
+          "gravity": 1.0,
+          "owner": "preregistration",
+          "owners": {
+            "preregistration": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "journal": {
+          "gravity": 1.0,
+          "owner": "journal",
+          "owners": {
+            "journal": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "oracle-comparison": {
+          "gravity": 1.0,
+          "owner": "verifier",
+          "owners": {
+            "verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "ranking": {
+          "gravity": 1.0,
+          "owner": "selector process",
+          "owners": {
+            "selector process": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "sandbox-cleanup": {
+          "gravity": 1.0,
+          "owner": "adapter",
+          "owners": {
+            "adapter": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "sandbox-mutation": {
+          "gravity": 1.0,
+          "owner": "worker process",
+          "owners": {
+            "worker process": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "sandbox-observation": {
+          "gravity": 1.0,
+          "owner": "observer process",
+          "owners": {
+            "observer process": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "selection": {
+          "gravity": 1.0,
+          "owner": "driver",
+          "owners": {
+            "driver": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "source-boundary": {
+          "gravity": 1.0,
+          "owner": "preflight",
+          "owners": {
+            "preflight": 1
+          },
+          "support": 1,
+          "total": 1
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.5,
+          "owner": "all processes",
+          "owners": {
+            "all processes": 2,
+            "driver": 1,
+            "preflight": 1
+          },
+          "support": 2,
+          "total": 4
+        },
+        "baseline": {
+          "gravity": 1.0,
+          "owner": "baseline process",
+          "owners": {
+            "baseline process": 3
+          },
+          "support": 3,
+          "total": 3
+        },
+        "cleanup": {
+          "gravity": 1.0,
+          "owner": "adapter",
+          "owners": {
+            "adapter": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "contract": {
+          "gravity": 1.0,
+          "owner": "canon",
+          "owners": {
+            "canon": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "durability": {
+          "gravity": 1.0,
+          "owner": "journal",
+          "owners": {
+            "journal": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "execution": {
+          "gravity": 0.5,
+          "owner": "driver",
+          "owners": {
+            "driver": 1,
+            "worker process": 1
+          },
+          "support": 1,
+          "total": 2
+        },
+        "observation": {
+          "gravity": 1.0,
+          "owner": "observer process",
+          "owners": {
+            "observer process": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "oracle": {
+          "gravity": 1.0,
+          "owner": "verifier",
+          "owners": {
+            "verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "verifier process",
+          "owners": {
+            "verifier process": 1
+          },
+          "support": 1,
+          "total": 1
+        },
+        "safety": {
+          "gravity": 1.0,
+          "owner": "pre-execution verifier",
+          "owners": {
+            "pre-execution verifier": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "selection": {
+          "gravity": 1.0,
+          "owner": "selector process",
+          "owners": {
+            "selector process": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "temporal": {
+          "gravity": 0.6667,
+          "owner": "preregistration",
+          "owners": {
+            "journal": 1,
+            "preregistration": 2
+          },
+          "support": 2,
+          "total": 3
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "authority-boundary"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "freeze"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "oracle-comparison"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "ranking"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "elimination",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c2"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "baseline-comparison",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c4"
+      }
+    ],
+    "repair_tasks": [
+      {
+        "candidate_group": "authority-boundary",
+        "dominant_source_group": "selection",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0703,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "freeze",
+        "dominant_source_group": "source-boundary",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.041,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "oracle-comparison",
+        "dominant_source_group": "authority-boundary",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0234,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      },
+      {
+        "candidate_group": "ranking",
+        "dominant_source_group": "execution",
+        "reason": "candidate group has low interference coherence with every source group",
+        "score": 0.0523,
+        "suggested_fix": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes."
+      }
+    ],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "generated result",
+            "public receipts",
+            "selector request",
+            "source scope"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:103",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:385",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:407",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:425"
+          ],
+          "layers": [
+            "claim",
+            "design"
+          ],
+          "outputs": [
+            "answer blind input",
+            "false authority",
+            "not proved",
+            "unchanged dashboard"
+          ],
+          "owners": [
+            "all processes",
+            "driver",
+            "preflight"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 3,
+          "triads": 4
+        },
+        "baseline": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "public request"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:207",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:210",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:213"
+          ],
+          "layers": [
+            "design"
+          ],
+          "outputs": [
+            "baseline decision"
+          ],
+          "owners": [
+            "baseline process"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 3,
+          "triads": 3
+        },
+        "cleanup": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "observed workspace"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:245"
+          ],
+          "layers": [
+            "design"
+          ],
+          "outputs": [
+            "zero residue"
+          ],
+          "owners": [
+            "adapter"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        },
+        "contract": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "k2 contract"
+          ],
+          "evidence_paths": [
+            "architecture_canon.md:461"
+          ],
+          "layers": [
+            "paper"
+          ],
+          "outputs": [
+            "authority false"
+          ],
+          "owners": [
+            "canon"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        },
+        "durability": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "dispatch root"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:277"
+          ],
+          "layers": [
+            "design"
+          ],
+          "outputs": [
+            "retry veto"
+          ],
+          "owners": [
+            "journal"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        },
+        "execution": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "dispatch request",
+            "verified selection"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:228",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:241"
+          ],
+          "layers": [
+            "design"
+          ],
+          "outputs": [
+            "one typed effect",
+            "post-state bytes"
+          ],
+          "owners": [
+            "driver",
+            "worker process"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 2,
+          "triads": 2
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "read-only workspace"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:231"
+          ],
+          "layers": [
+            "design"
+          ],
+          "outputs": [
+            "manifest receipt"
+          ],
+          "owners": [
+            "observer process"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        },
+        "oracle": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "observed outcome",
+            "true outcome"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:26",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:217"
+          ],
+          "layers": [
+            "claim",
+            "design"
+          ],
+          "outputs": [
+            "upper bound",
+            "upper bound match"
+          ],
+          "owners": [
+            "verifier"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "precommit and observation"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:252"
+          ],
+          "layers": [
+            "design"
+          ],
+          "outputs": [
+            "updated model set"
+          ],
+          "owners": [
+            "verifier process"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 1,
+          "triads": 1
+        },
+        "safety": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 0,
+          "entrypoints": [
+            "probe catalog"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:160"
+          ],
+          "layers": [
+            "design"
+          ],
+          "outputs": [
+            "eligible set",
+            "veto"
+          ],
+          "owners": [
+            "pre-execution verifier"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 4,
+          "triads": 4
+        },
+        "selection": {
+          "avg_confidence": 0.9875,
+          "candidate_triads": 2,
+          "entrypoints": [
+            "prediction matrix",
+            "public models",
+            "public request"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:25",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:174",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:190",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:335"
+          ],
+          "layers": [
+            "claim",
+            "design"
+          ],
+          "outputs": [
+            "narrow interpretation",
+            "prediction precommit",
+            "scoped inquiry evidence",
+            "selected probe"
+          ],
+          "owners": [
+            "selector process"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "temporal": {
+          "avg_confidence": 0.9833,
+          "candidate_triads": 1,
+          "entrypoints": [
+            "confirm split",
+            "repaired contract",
+            "selection root"
+          ],
+          "evidence_paths": [
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_critique_v1.md:16",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:235",
+            "plans/effect-law-unification-v1/k2_self_chosen_safe_inquiry_preregistration_v1.md:72"
+          ],
+          "layers": [
+            "design",
+            "paper"
+          ],
+          "outputs": [
+            "dispatch permit",
+            "immutable commitment",
+            "implementation candidate"
+          ],
+          "owners": [
+            "journal",
+            "preregistration"
+          ],
+          "scopes": [
+            "generated-only"
+          ],
+          "source_triads": 2,
+          "triads": 3
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "selection": {
+          "norm": 45.4313,
+          "self_coherence": 0.7099,
+          "triads": 2
+        },
+        "temporal": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 0.0301,
+          "baseline": -0.0022,
+          "cleanup": 0.0254,
+          "contract": 0.0039,
+          "durability": -0.0059,
+          "execution": 0.034,
+          "observation": -0.0156,
+          "oracle": 0.0508,
+          "proof": -0.0215,
+          "safety": 0.0175,
+          "selection": 0.0029,
+          "temporal": -0.0214
+        },
+        "oracle": {
+          "authority": 0.01,
+          "baseline": -0.0221,
+          "cleanup": -0.0332,
+          "contract": 0.0,
+          "durability": 0.0098,
+          "execution": -0.015,
+          "observation": -0.0391,
+          "oracle": -0.0586,
+          "proof": -0.0332,
+          "safety": -0.0136,
+          "selection": 0.0143,
+          "temporal": -0.0157
+        },
+        "selection": {
+          "authority": -0.0079,
+          "baseline": 0.0358,
+          "cleanup": 0.0385,
+          "contract": -0.0055,
+          "durability": 0.0303,
+          "execution": 0.0038,
+          "observation": 0.0138,
+          "oracle": -0.033,
+          "proof": 0.0138,
+          "safety": 0.0082,
+          "selection": 0.006,
+          "temporal": 0.0503
+        },
+        "temporal": {
+          "authority": 0.0123,
+          "baseline": 0.0,
+          "cleanup": 0.0098,
+          "contract": 0.0273,
+          "durability": 0.0215,
+          "execution": -0.0177,
+          "observation": -0.0352,
+          "oracle": 0.0352,
+          "proof": 0.0332,
+          "safety": -0.0214,
+          "selection": -0.0543,
+          "temporal": 0.0071
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 56.0714,
+          "self_coherence": 0.5841,
+          "triads": 3
+        },
+        "baseline": {
+          "norm": 56.4978,
+          "self_coherence": 0.5885,
+          "triads": 3
+        },
+        "cleanup": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "contract": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "durability": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "execution": {
+          "norm": 45.913,
+          "self_coherence": 0.7174,
+          "triads": 2
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "safety": {
+          "norm": 64.1872,
+          "self_coherence": 0.5015,
+          "triads": 4
+        },
+        "selection": {
+          "norm": 43.7264,
+          "self_coherence": 0.6832,
+          "triads": 2
+        },
+        "temporal": {
+          "norm": 43.7721,
+          "self_coherence": 0.6839,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "authority-boundary": 1,
+      "baseline-comparison": 3,
+      "canon-boundary": 1,
+      "dispatch": 1,
+      "eligibility": 4,
+      "elimination": 1,
+      "execution": 1,
+      "freeze": 1,
+      "journal": 1,
+      "oracle-comparison": 1,
+      "ranking": 2,
+      "sandbox-cleanup": 1,
+      "sandbox-mutation": 1,
+      "sandbox-observation": 1,
+      "selection": 1,
+      "source-boundary": 1
+    },
+    "stable_groups": [],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 2,
+      "foreign_pull_energy": 2,
+      "owner_conflict": 0,
+      "route_coherence": 0.9976,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "route_splice",
+      "priority": "high",
+      "reason": "candidate triad is pulled toward a foreign source route",
+      "repair": "Move the triad to its source-owned route or split the candidate group.",
+      "target": "ranking"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "authority-boundary"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "freeze"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "oracle-comparison"
+    },
+    {
+      "kind": "coherence_repair",
+      "priority": "medium",
+      "reason": "candidate group has low interference coherence with every source group",
+      "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+      "target": "ranking"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "elimination",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c2"
+    },
+    {
+      "kind": "foreign_pull_repair",
+      "owner_should_review": "baseline-comparison",
+      "priority": "high",
+      "reason": "candidate triad pulls toward a foreign source route",
+      "repair": "Move this triad to the matching route or split the candidate group.",
+      "target": "c4"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 7,
+    "repair_queue": [
+      {
+        "kind": "route_splice",
+        "priority": "high",
+        "reason": "candidate triad is pulled toward a foreign source route",
+        "repair": "Move the triad to its source-owned route or split the candidate group.",
+        "target": "ranking"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "authority-boundary"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "freeze"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "oracle-comparison"
+      },
+      {
+        "kind": "coherence_repair",
+        "priority": "medium",
+        "reason": "candidate group has low interference coherence with every source group",
+        "repair": "Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.",
+        "target": "ranking"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "elimination",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c2"
+      },
+      {
+        "kind": "foreign_pull_repair",
+        "owner_should_review": "baseline-comparison",
+        "priority": "high",
+        "reason": "candidate triad pulls toward a foreign source route",
+        "repair": "Move this triad to the matching route or split the candidate group.",
+        "target": "c4"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate group has weak route coherence.",
+    "Route splice suspected: at least one candidate triad pulls toward a different source group.",
+    "At least one candidate triad has weak composite-mode support.",
+    "Task exceeds target or hard limits and should be split."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [high] route_splice: Move the triad to its source-owned route or split the candidate group.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [medium] coherence_repair: Check whether this candidate route is missing triads, using wrong roles, or mixing unrelated routes.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\n- [high] foreign_pull_repair: Move this triad to the matching route or split the candidate group.\nDo not splice triads from different source groups into one candidate group.\n- candidate group ranking best matches execution only weakly: 0.0523\nRoute splice suspected from foreign_pull:\n- c2 in ranking pulls from execution toward elimination; repair: Move this triad to the matching route or split the candidate group.\n- c4 in ranking pulls from execution toward baseline-comparison; repair: Move this triad to the matching route or split the candidate group.\nRecheck or remove weak candidate triads:\n- c1: score=-0.004, nearest_source=t22, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c2: score=0.0539, nearest_source=t18, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c3: score=0.0298, nearest_source=t3, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c4: score=0.0064, nearest_source=t9, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c5: score=-0.0467, nearest_source=t8, why=candidate triad does not resonate with the composite source memory above the stability threshold\nSplit the task before retrying:\n- entities target limit exceeded: 49>32\n- routes target limit exceeded: 12>8",
+  "trace_path": "/tmp/nanda-structural-gate/k2-self-chosen-safe-inquiry-v1.trace.json"
+}

@@ -1,0 +1,285 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-self-chosen-safe-inquiry-source-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": false,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "architecture-canon-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/ARCHITECTURE_CANON.md",
+      "expect": {"size_bytes": 93192, "sha256": "8c44515cc368ee5cabf19d04ea8443c0a3f919527707f7899666f2c01e7bc0a0", "mode": "0664"}
+    },
+    {
+      "id": "composition-registration-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/mod.rs",
+      "expect": {"size_bytes": 495, "sha256": "812fe6dc092cdce58ef5249f028dd10bddf1b96074fd6b962d992d2f638d56e6", "mode": "0664"}
+    },
+    {
+      "id": "composition-model-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs",
+      "expect": {"size_bytes": 49583, "sha256": "87d2724781803a7540e974d4f209da0085f5213c6660e36cd24ef01860814b8d", "mode": "0664"}
+    },
+    {
+      "id": "composition-learner-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/learner.rs",
+      "expect": {"size_bytes": 6261, "sha256": "ce1e7a635e4e3ef0c8c6c0baa6aa46430575e15808abce05e256ce1031a718bd", "mode": "0664"}
+    },
+    {
+      "id": "composition-sandbox-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+      "expect": {"size_bytes": 19420, "sha256": "ed61fd6205f8f2d5a80bfe6e36d7c05dfe28105248816bde7b435f9b2824640f", "mode": "0664"}
+    },
+    {
+      "id": "composition-journal-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/journal.rs",
+      "expect": {"size_bytes": 20664, "sha256": "a3b118074e39b7f32a573dd6ce6d65d2ceb1fd57966cd7198e2049ea0a8d414f", "mode": "0664"}
+    },
+    {
+      "id": "composition-verifier-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/verifier.rs",
+      "expect": {"size_bytes": 14020, "sha256": "8e16630539f3bd9ecd23d35cf40bba4071e7021d98f4011d5cd66e6bfc61e29e", "mode": "0664"}
+    },
+    {
+      "id": "hidden-representation-model-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/model.rs",
+      "expect": {"size_bytes": 41229, "sha256": "6b390b39260fa644927566f2ae263c9d6490d290fd9df0081e0bad88949624d7", "mode": "0664"}
+    },
+    {
+      "id": "hidden-representation-sandbox-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/sandbox.rs",
+      "expect": {"size_bytes": 20309, "sha256": "b8b8b1ee5483f4807fd8630cd229ce3243bc96eafba28426bd4d362b1f5396f9", "mode": "0664"}
+    },
+    {
+      "id": "hidden-representation-journal-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/journal.rs",
+      "expect": {"size_bytes": 11109, "sha256": "34711f171488ba0b215d2c25a455eaf53d48cb5b2eae4dd89d143af864b4061f", "mode": "0664"}
+    },
+    {
+      "id": "hidden-representation-test-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/tests/k2_hidden_composition_representation_v1.rs",
+      "expect": {"size_bytes": 51865, "sha256": "e098a910c2d0b1bead1a451535f3715f1696d6b5679ae77f6e979dc2ca461a0d", "mode": "0664"}
+    },
+    {
+      "id": "crate-manifest-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/Cargo.toml",
+      "expect": {"size_bytes": 663, "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9", "mode": "0664"}
+    },
+    {
+      "id": "cargo-lock-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/Cargo.lock",
+      "expect": {"size_bytes": 39973, "sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08", "mode": "0664"}
+    },
+    {
+      "id": "prior-result-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_RESULT_2026-08-15.md",
+      "expect": {"size_bytes": 8337, "sha256": "4ea3a34110aa6b72f6ee044f08e741b445a7e1488f1b77acc1fdfe00e6cd4561", "mode": "0664"}
+    },
+    {
+      "id": "prior-critique-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_POST_RESULT_CRITIQUE_V1.md",
+      "expect": {"size_bytes": 6359, "sha256": "540cad1d14d625eb596bf18568abadd823f9f26c247155ac58c6a4c029450a61", "mode": "0664"}
+    },
+    {
+      "id": "dashboard-source-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "expect": {"size_bytes": 28960, "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c", "mode": "0664"}
+    },
+    {
+      "id": "serving-source-baseline",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-transition-serving/src/lib.rs",
+      "expect": {"size_bytes": 457899, "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949", "mode": "0664"}
+    },
+    {
+      "id": "bin-directory-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/bin",
+      "expect": {"mode": "0775"}
+    },
+    {
+      "id": "test-directory-baseline",
+      "kind": "directory",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/tests",
+      "expect": {"mode": "0775"}
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {"id": "read-frozen-sources", "kind": "filesystem_read"},
+      {"id": "add-active-inquiry-sibling", "kind": "source_file_create"},
+      {"id": "register-active-inquiry-sibling", "kind": "source_file_modify"},
+      {"id": "add-five-generated-only-wrappers", "kind": "source_file_create"},
+      {"id": "add-inquiry-integration-test", "kind": "source_file_create"},
+      {"id": "write-generated-journal", "kind": "test_lab_journal_write"},
+      {"id": "create-disposable-generated-fixtures", "kind": "test_fixture_write"},
+      {"id": "spawn-isolated-generated-processes", "kind": "isolated_test_process_spawn"},
+      {"id": "remove-disposable-generated-fixtures", "kind": "test_fixture_cleanup"}
+    ],
+    "forbidden": [
+      "network_access",
+      "production_state_mount",
+      "production_write",
+      "secret_mount",
+      "generated_natural_traffic",
+      "natural_evidence_write",
+      "k1_registry_mutation",
+      "phase_memory_mutation",
+      "package_activation",
+      "law_certificate_issue",
+      "service_control",
+      "dashboard_change",
+      "deployment"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "composition-model-source",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs",
+      "sha256": "87d2724781803a7540e974d4f209da0085f5213c6660e36cd24ef01860814b8d",
+      "forbidden_effect_patterns": [
+        {"effect": "network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "generated_natural_traffic", "regex": "(/v1/responses|/v2/responses|chat/completions)"},
+        {"effect": "law_certificate_issue", "regex": "(issue_law_certificate|law_certificate_issued\\s*:\\s*true)"},
+        {"effect": "deployment", "regex": "(deploy_remote|deployment_started\\s*:\\s*true)"},
+        {"effect": "k1_registry_mutation", "regex": "k1_registry_mutated\\s*:\\s*true"},
+        {"effect": "natural_evidence_write", "regex": "(natural|future|certification)[_-](ledger|journal)"},
+        {"effect": "package_activation", "regex": "package_activated\\s*:\\s*true"},
+        {"effect": "phase_memory_mutation", "regex": "phase_memory_mutated\\s*:\\s*true"},
+        {"effect": "secret_mount", "regex": "(--bind|--ro-bind).*(/run/secrets|/\\.ssh)"}
+      ]
+    },
+    {
+      "id": "composition-sandbox-source",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/sandbox.rs",
+      "sha256": "ed61fd6205f8f2d5a80bfe6e36d7c05dfe28105248816bde7b435f9b2824640f",
+      "forbidden_effect_patterns": [
+        {"effect": "production_state_mount", "regex": "(/var/lib/nando-wave|/etc/nando-wave|/run/secrets|/\\.ssh)"},
+        {"effect": "generated_natural_traffic", "regex": "(/v1/responses|/v2/responses|chat/completions)"},
+        {"effect": "service_control", "regex": "(systemctl|service\\s+(start|stop|restart))"}
+      ]
+    },
+    {
+      "id": "hidden-representation-source",
+      "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/hidden_representation/model.rs",
+      "sha256": "6b390b39260fa644927566f2ae263c9d6490d290fd9df0081e0bad88949624d7",
+      "forbidden_effect_patterns": [
+        {"effect": "network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "dashboard_change", "regex": "(live_dashboard|control_page|dashboard_html)"}
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "EMPTY",
+    "terminal_states": [
+      "PASS",
+      "SCIENTIFIC_FAIL",
+      "EXPERIMENT_FREEZE_FAILED",
+      "BASELINE_FAILED",
+      "SELECTION_DISPATCH_FAILED",
+      "INDETERMINATE_AFTER_SELECTION_DISPATCH",
+      "SELECTION_VERIFICATION_FAILED",
+      "PROBE_DISPATCH_FAILED",
+      "INDETERMINATE_AFTER_PROBE_DISPATCH",
+      "OBSERVATION_FAILED",
+      "ELIMINATION_FAILED",
+      "CONTROL_FAILED",
+      "TERMINAL_PUBLISH_FAILED",
+      "CLEANUP_FAILED"
+    ],
+    "steps": [
+      {"id": "freeze-experiment", "from": "EMPTY", "to": "EXPERIMENT_FROZEN", "mutates": true, "failure_state": "EXPERIMENT_FREEZE_FAILED", "cleanup": "remove unpublished temp and preserve preregistration plus predecessor proof", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-experiment-freeze"},
+      {"id": "publish-baselines", "from": "EXPERIMENT_FROZEN", "to": "BASELINES_FROZEN", "mutates": true, "failure_state": "BASELINE_FAILED", "cleanup": "preserve experiment freeze and remove unpublished baseline bytes", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-baseline-publish"},
+      {"id": "dispatch-selection", "from": "BASELINES_FROZEN", "to": "SELECTION_RUNNING", "mutates": true, "failure_state": "SELECTION_DISPATCH_FAILED", "cleanup": "remove unpublished dispatch and spawn no selector", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-selection-dispatch"},
+      {"id": "publish-selection", "from": "SELECTION_RUNNING", "to": "SELECTION_PRECOMMITTED", "mutates": true, "failure_state": "INDETERMINATE_AFTER_SELECTION_DISPATCH", "cleanup": "preserve dispatch and forbid same-identity selector rerun", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-selection-publish"},
+      {"id": "verify-selection", "from": "SELECTION_PRECOMMITTED", "to": "SELECTION_VERIFIED", "mutates": true, "failure_state": "SELECTION_VERIFICATION_FAILED", "cleanup": "preserve precommit and dispatch no worker", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-selection-verification"},
+      {"id": "dispatch-probe", "from": "SELECTION_VERIFIED", "to": "PROBE_RUNNING", "mutates": true, "failure_state": "PROBE_DISPATCH_FAILED", "cleanup": "remove unpublished dispatch and spawn no worker", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-probe-dispatch"},
+      {"id": "publish-observation", "from": "PROBE_RUNNING", "to": "PROBE_OBSERVED", "mutates": true, "failure_state": "INDETERMINATE_AFTER_PROBE_DISPATCH", "cleanup": "preserve dispatch and workspace identity and forbid same-identity rerun", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-observation-publish"},
+      {"id": "publish-model-update", "from": "PROBE_OBSERVED", "to": "MODELS_UPDATED", "mutates": true, "failure_state": "ELIMINATION_FAILED", "cleanup": "preserve observation and remove unpublished update bytes", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-model-update"},
+      {"id": "publish-controls", "from": "MODELS_UPDATED", "to": "CONTROLS_FROZEN", "mutates": true, "failure_state": "CONTROL_FAILED", "cleanup": "preserve positive path and every completed control", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-controls"},
+      {"id": "publish-terminal", "from": "CONTROLS_FROZEN", "to": "PASS", "mutates": true, "failure_state": "TERMINAL_PUBLISH_FAILED", "cleanup": "remove unpublished terminal and preserve full acyclic prefix", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-terminal"},
+      {"id": "publish-scientific-fail", "from": "CONTROLS_FROZEN", "to": "SCIENTIFIC_FAIL", "mutates": true, "failure_state": "TERMINAL_PUBLISH_FAILED", "cleanup": "remove unpublished terminal and preserve full acyclic prefix", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-terminal"},
+      {"id": "cleanup-generated-pass", "from": "PASS", "to": "PASS", "mutates": true, "failure_state": "CLEANUP_FAILED", "cleanup": "report retained paths and preserve receipts", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-cleanup"},
+      {"id": "cleanup-generated-fail", "from": "SCIENTIFIC_FAIL", "to": "SCIENTIFIC_FAIL", "mutates": true, "failure_state": "CLEANUP_FAILED", "cleanup": "report retained paths and preserve receipts", "preserves": ["architecture-canon", "prior-result", "prior-critique", "dashboard-source", "serving-source"], "test_id": "fault-cleanup"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id": "architecture-canon", "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/ARCHITECTURE_CANON.md", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "architecture-canon-baseline"},
+    {"id": "composition-model", "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/model.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "composition-model-baseline"},
+    {"id": "composition-registration", "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/mod.rs", "policy": "additive_active_inquiry_sibling_only", "rollback_policy": "restore_exact_baseline_on_failure", "baseline_check_id": "composition-registration-baseline"},
+    {"id": "prior-result", "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_CAPABILITY_RESULT_2026-08-15.md", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "prior-result-baseline"},
+    {"id": "prior-critique", "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/plans/effect-law-unification-v1/K2_HIDDEN_COMPOSITION_REPRESENTATION_POST_RESULT_CRITIQUE_V1.md", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "prior-critique-baseline"},
+    {"id": "dashboard-source", "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-gateway-control/src/live_dashboard.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "dashboard-source-baseline"},
+    {"id": "serving-source", "path": "/home/ubu/projects/nando-wave-k2-active-inquiry-20260815/crates/nando-transition-serving/src/lib.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "serving-source-baseline"}
+  ],
+  "identity_contracts": [
+    {"id": "selector-preverify-identity", "producer": "selector prediction and ranking bytes", "consumer": "independent pre-execution reconstruction", "comparison": "canonical roots and executable SHA-256", "test_id": "selection-verifier-parity"},
+    {"id": "selection-dispatch-identity", "producer": "verified selected probe root", "consumer": "private effect dispatch", "comparison": "experiment selection probe and action roots", "test_id": "dispatch-binding-parity"},
+    {"id": "worker-observer-identity", "producer": "sandbox workspace bytes", "consumer": "read-only observer manifest", "comparison": "post-manifest scan independent of worker stdout", "test_id": "observer-parity"},
+    {"id": "observer-elimination-identity", "producer": "observer receipt", "consumer": "independent elimination verifier", "comparison": "observation root and executable SHA-256", "test_id": "elimination-verifier-parity"},
+    {"id": "journal-restart-identity", "producer": "journal atomic writer", "consumer": "journal restart projection", "comparison": "every event and chain root", "test_id": "journal-restart-parity"}
+  ],
+  "runtime_comparisons": [],
+  "invariants": [
+    {"id": "complete-public-denominator", "statement": "each case has exactly four models eight probes and thirty-two model-probe dispositions", "test_id": "denominator-parity"},
+    {"id": "selection-before-outcome", "statement": "complete immutable selection and prediction matrix precedes worker dispatch", "test_id": "temporal-precommit-parity"},
+    {"id": "private-answer-excluded", "statement": "selector and baseline bytes exclude private true-model and outcome roots", "test_id": "private-input-exclusion-parity"},
+    {"id": "safety-fail-closed", "statement": "unsafe ambiguous delayed unknown malformed and over-budget probes cannot execute", "test_id": "probe-veto-parity"},
+    {"id": "single-probe-budget", "statement": "each confirm case has exactly one durable dispatch and one observation", "test_id": "one-probe-parity"},
+    {"id": "independent-observation", "statement": "observer scans read-only workspace without model prediction effect or worker stdout inputs", "test_id": "observer-parity"},
+    {"id": "independent-elimination", "statement": "verifier reconstructs predictions ranking and model elimination without selector calls", "test_id": "elimination-verifier-parity"},
+    {"id": "baseline-fairness", "statement": "all non-oracle baselines receive identical public bytes and no private outcome", "test_id": "baseline-input-parity"},
+    {"id": "authority-denied", "statement": "natural K2 K1 product phase certificate package and deployment authority remain false", "test_id": "authority-boundary-parity"},
+    {"id": "prior-proof-preserved", "statement": "all predecessor proof code paper serving and dashboard baselines retain exact SHA-256", "test_id": "frozen-baseline-parity"},
+    {"id": "zero-generated-residue", "statement": "all disposable case journal and workspace paths are removed after receipts freeze", "test_id": "cleanup-parity"}
+  ],
+  "tests": [
+    {"id": "denominator-parity", "kind": "parity", "expected": "eight cases each account for four models eight probes and thirty-two predictions"},
+    {"id": "selection-verifier-parity", "kind": "parity", "expected": "independent verifier reconstructs every eligibility prediction score and selected root"},
+    {"id": "dispatch-binding-parity", "kind": "parity", "expected": "worker receives exactly the verified selected opaque action and private effect"},
+    {"id": "observer-parity", "kind": "parity", "expected": "separate read-only observer scans the worker post-state without worker output"},
+    {"id": "elimination-verifier-parity", "kind": "parity", "expected": "observed outcome retains exactly the independently predicted matching models"},
+    {"id": "journal-restart-parity", "kind": "parity", "expected": "every legal journal prefix projects identically after restart"},
+    {"id": "temporal-precommit-parity", "kind": "parity", "expected": "precommit root is durable before any probe dispatch"},
+    {"id": "private-input-exclusion-parity", "kind": "parity", "expected": "private true-model and outcome roots are absent from selector and baseline bytes"},
+    {"id": "probe-veto-parity", "kind": "parity", "expected": "all five required negative probe roles are ineligible and never execute"},
+    {"id": "one-probe-parity", "kind": "parity", "expected": "one and only one probe executes per case and redispatch is rejected"},
+    {"id": "baseline-input-parity", "kind": "parity", "expected": "four non-oracle baselines use exactly the public case root"},
+    {"id": "baseline-superiority-parity", "kind": "parity", "expected": "model-guided route leaves eight models total and each rule baseline leaves more than eight"},
+    {"id": "oracle-parity", "kind": "parity", "expected": "model-guided selected probe equals one-probe oracle in all eight cases"},
+    {"id": "renaming-transfer-parity", "kind": "parity", "expected": "opaque action permutation path bijection and candidate order shuffle preserve semantic result"},
+    {"id": "prediction-ablation-parity", "kind": "parity", "expected": "collapsed or shuffled model predictions destroy expected unique identification"},
+    {"id": "authority-boundary-parity", "kind": "parity", "expected": "every request receipt and control rejects authority promotion"},
+    {"id": "frozen-baseline-parity", "kind": "parity", "expected": "all preflight-frozen bytes and directory modes remain exact"},
+    {"id": "cleanup-parity", "kind": "parity", "expected": "no generated fixture journal or workspace remains"},
+    {"id": "fault-experiment-freeze", "kind": "fault_injection", "expected": "EXPERIMENT_FREEZE_FAILED with no unpublished bytes"},
+    {"id": "fault-baseline-publish", "kind": "fault_injection", "expected": "BASELINE_FAILED with experiment freeze preserved"},
+    {"id": "fault-selection-dispatch", "kind": "fault_injection", "expected": "SELECTION_DISPATCH_FAILED before selector spawn"},
+    {"id": "fault-selection-publish", "kind": "fault_injection", "expected": "indeterminate selector dispatch is preserved and not retried"},
+    {"id": "fault-selection-verification", "kind": "fault_injection", "expected": "SELECTION_VERIFICATION_FAILED before worker dispatch"},
+    {"id": "fault-probe-dispatch", "kind": "fault_injection", "expected": "PROBE_DISPATCH_FAILED before worker spawn"},
+    {"id": "fault-observation-publish", "kind": "fault_injection", "expected": "indeterminate probe dispatch is preserved and not retried"},
+    {"id": "fault-model-update", "kind": "fault_injection", "expected": "ELIMINATION_FAILED with observation preserved"},
+    {"id": "fault-controls", "kind": "fault_injection", "expected": "CONTROL_FAILED preserves positive evidence and completed controls"},
+    {"id": "fault-terminal", "kind": "fault_injection", "expected": "TERMINAL_PUBLISH_FAILED preserves full acyclic prefix"},
+    {"id": "fault-cleanup", "kind": "fault_injection", "expected": "CLEANUP_FAILED reports every retained generated path"}
+  ]
+}
