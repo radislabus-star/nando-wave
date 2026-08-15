@@ -446,19 +446,45 @@ fn verify_case_journal(fixture: &R7Fixture, dispatch: K2UncertaintyPlanDispatchV
             K2UncertaintyCaseJournalFaultV2::None,
         )
         .expect("freeze observation vector");
+    assert_error(
+        journal.freeze_cleanup(
+            root_hash("r7c-coordinator"),
+            root_hash("r7c-cleanup-request-early"),
+            root_hash("r7c-cleanup-receipt-early"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        ),
+        "self_formed_case_journal_cleanup_order_v2_invalid",
+        "self_formed_case_journal_cleanup_order_v2_invalid",
+    );
     journal
-        .record_models_updated(
+        .record_case_terminal(
             root_hash("r7c-final-verifier"),
             root_hash("r7c-final-request"),
             root_hash("r7c-final-receipt"),
             K2UncertaintyCaseJournalFaultV2::None,
         )
+        .expect("record case terminal");
+    journal
+        .record_models_updated(
+            root_hash("r7c-coordinator"),
+            root_hash("r7c-outer-model-update"),
+            root_hash("r7c-final-receipt"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        )
         .expect("record models updated");
+    journal
+        .freeze_cleanup(
+            root_hash("r7c-coordinator"),
+            root_hash("r7c-cleanup-request"),
+            root_hash("r7c-cleanup-receipt"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        )
+        .expect("freeze cleanup");
     let reopened = K2UncertaintyCaseJournalV2::reopen(&journal_root).expect("reopen happy journal");
     assert_eq!(journal.state(), reopened.state());
     assert_eq!(
         reopened.projection().expect("reopened projection").phase,
-        K2UncertaintyCaseJournalPhaseV2::ModelsUpdated
+        K2UncertaintyCaseJournalPhaseV2::CleanupFrozen
     );
 
     let before_root = fixture.root.join("r7c-before-rename-journal");

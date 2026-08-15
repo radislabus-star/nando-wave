@@ -24,7 +24,9 @@ pub enum K2UncertaintyCaseJournalEventKindV2 {
     ProbeExecutionStarted,
     ProbeObservationFrozen,
     ObservationVectorFrozen,
+    CaseTerminal,
     ModelsUpdated,
+    CleanupFrozen,
     IndeterminateExecutionFrozen,
 }
 
@@ -161,7 +163,9 @@ pub enum K2UncertaintyCaseJournalPhaseV2 {
     IndeterminateExecution { probe_ordinal: u64 },
     ReadyForObservationVector,
     ObservationVectorFrozen,
+    CaseTerminal,
     ModelsUpdated,
+    CleanupFrozen,
     IndeterminateTerminal { probe_ordinal: u64 },
 }
 
@@ -257,7 +261,9 @@ impl K2UncertaintyCaseJournalV2 {
             CaseMachineV2::ObservationVectorFrozen => {
                 K2UncertaintyCaseJournalPhaseV2::ObservationVectorFrozen
             }
+            CaseMachineV2::CaseTerminal => K2UncertaintyCaseJournalPhaseV2::CaseTerminal,
             CaseMachineV2::ModelsUpdated => K2UncertaintyCaseJournalPhaseV2::ModelsUpdated,
+            CaseMachineV2::CleanupFrozen => K2UncertaintyCaseJournalPhaseV2::CleanupFrozen,
             CaseMachineV2::IndeterminateTerminal(probe_ordinal) => {
                 K2UncertaintyCaseJournalPhaseV2::IndeterminateTerminal { probe_ordinal }
             }
@@ -397,7 +403,7 @@ impl K2UncertaintyCaseJournalV2 {
         verifier_receipt_root_sha256: String,
         fault: K2UncertaintyCaseJournalFaultV2,
     ) -> K2CompositionResultV1<()> {
-        if self.projection()?.phase != K2UncertaintyCaseJournalPhaseV2::ObservationVectorFrozen {
+        if self.projection()?.phase != K2UncertaintyCaseJournalPhaseV2::CaseTerminal {
             return Err(K2CompositionErrorV1::Invalid(
                 "self_formed_case_journal_models_update_order_v2_invalid",
             ));
@@ -409,6 +415,54 @@ impl K2UncertaintyCaseJournalV2 {
             owner_executable_sha256,
             verifier_request_root_sha256,
             verifier_receipt_root_sha256,
+            fault,
+        )?;
+        Ok(())
+    }
+
+    pub fn record_case_terminal(
+        &mut self,
+        owner_executable_sha256: String,
+        verifier_request_root_sha256: String,
+        verifier_receipt_root_sha256: String,
+        fault: K2UncertaintyCaseJournalFaultV2,
+    ) -> K2CompositionResultV1<()> {
+        if self.projection()?.phase != K2UncertaintyCaseJournalPhaseV2::ObservationVectorFrozen {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_case_journal_terminal_order_v2_invalid",
+            ));
+        }
+        self.append_event_v2(
+            K2UncertaintyCaseJournalEventKindV2::CaseTerminal,
+            None,
+            None,
+            owner_executable_sha256,
+            verifier_request_root_sha256,
+            verifier_receipt_root_sha256,
+            fault,
+        )?;
+        Ok(())
+    }
+
+    pub fn freeze_cleanup(
+        &mut self,
+        owner_executable_sha256: String,
+        cleanup_request_root_sha256: String,
+        cleanup_receipt_root_sha256: String,
+        fault: K2UncertaintyCaseJournalFaultV2,
+    ) -> K2CompositionResultV1<()> {
+        if self.projection()?.phase != K2UncertaintyCaseJournalPhaseV2::ModelsUpdated {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_case_journal_cleanup_order_v2_invalid",
+            ));
+        }
+        self.append_event_v2(
+            K2UncertaintyCaseJournalEventKindV2::CleanupFrozen,
+            None,
+            None,
+            owner_executable_sha256,
+            cleanup_request_root_sha256,
+            cleanup_receipt_root_sha256,
             fault,
         )?;
         Ok(())
@@ -512,7 +566,9 @@ enum CaseMachineV2 {
     Executing(u64),
     ReadyForObservationVector,
     ObservationVectorFrozen,
+    CaseTerminal,
     ModelsUpdated,
+    CleanupFrozen,
     IndeterminateTerminal(u64),
 }
 
@@ -561,10 +617,20 @@ fn apply_event_v2(
         {
             CaseMachineV2::ObservationVectorFrozen
         }
-        (CaseMachineV2::ObservationVectorFrozen, Event::ModelsUpdated)
+        (CaseMachineV2::ObservationVectorFrozen, Event::CaseTerminal)
+            if event.probe_ordinal.is_none() && event.workspace_identity_root_sha256.is_none() =>
+        {
+            CaseMachineV2::CaseTerminal
+        }
+        (CaseMachineV2::CaseTerminal, Event::ModelsUpdated)
             if event.probe_ordinal.is_none() && event.workspace_identity_root_sha256.is_none() =>
         {
             CaseMachineV2::ModelsUpdated
+        }
+        (CaseMachineV2::ModelsUpdated, Event::CleanupFrozen)
+            if event.probe_ordinal.is_none() && event.workspace_identity_root_sha256.is_none() =>
+        {
+            CaseMachineV2::CleanupFrozen
         }
         (CaseMachineV2::Executing(expected), Event::IndeterminateExecutionFrozen)
             if event.probe_ordinal == Some(expected)
