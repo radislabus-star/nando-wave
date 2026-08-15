@@ -5,11 +5,14 @@
 
 mod artifact_store;
 mod batch_journal;
+mod case_journal_v2;
 mod closure;
 mod closure_model;
 mod closure_plan;
 mod closure_verifier;
 mod closure_verifier_model;
+mod dispatch_v2;
+mod dispatch_v2_model;
 mod final_verifier;
 mod final_verifier_frontier;
 mod final_verifier_induction;
@@ -33,11 +36,14 @@ mod vocabulary;
 
 pub use artifact_store::*;
 pub use batch_journal::*;
+pub use case_journal_v2::*;
 pub use closure::*;
 pub use closure_model::*;
 pub use closure_plan::*;
 pub use closure_verifier::*;
 pub use closure_verifier_model::*;
+pub use dispatch_v2::*;
+pub use dispatch_v2_model::*;
 pub use final_verifier::*;
 pub use final_verifier_model::*;
 pub use frontier_model::*;

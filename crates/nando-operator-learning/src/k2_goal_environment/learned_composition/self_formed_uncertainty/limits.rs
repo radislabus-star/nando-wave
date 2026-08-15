@@ -129,6 +129,14 @@ pub const K2_UNCERTAINTY_CASE_PRECOMMIT_ENTRY_SCHEMA_V2: &str =
     "nando.k2-self-formed-case-precommit-entry.v2";
 pub const K2_UNCERTAINTY_BATCH_PRECOMMIT_SCHEMA_V2: &str =
     "nando.k2-self-formed-batch-precommit.v2";
+pub const K2_UNCERTAINTY_WORKSPACE_IDENTITY_SCHEMA_V2: &str =
+    "nando.k2-self-formed-workspace-identity.v2";
+pub const K2_UNCERTAINTY_PROBE_DISPATCH_ITEM_SCHEMA_V2: &str =
+    "nando.k2-self-formed-probe-dispatch-item.v2";
+pub const K2_UNCERTAINTY_PLAN_DISPATCH_SCHEMA_V2: &str = "nando.k2-self-formed-plan-dispatch.v2";
+pub const K2_UNCERTAINTY_CASE_JOURNAL_EVENT_SCHEMA_V2: &str =
+    "nando.k2-self-formed-case-journal-event.v2";
+pub const K2_UNCERTAINTY_CASE_JOURNAL_SCHEMA_V2: &str = "nando.k2-self-formed-case-journal.v2";
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
     6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 
