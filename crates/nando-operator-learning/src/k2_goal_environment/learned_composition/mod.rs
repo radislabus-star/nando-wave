@@ -4,6 +4,7 @@
 //! authority. Planner and verifier transitions intentionally live in separate
 //! modules.
 
+mod active_inquiry;
 mod hidden_representation;
 mod journal;
 mod learner;
@@ -12,6 +13,7 @@ mod planner;
 mod sandbox;
 mod verifier;
 
+pub use active_inquiry::*;
 pub use hidden_representation::*;
 pub use journal::*;
 pub use learner::*;
