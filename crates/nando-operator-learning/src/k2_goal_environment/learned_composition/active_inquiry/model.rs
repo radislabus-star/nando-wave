@@ -37,6 +37,8 @@ pub const K2_INQUIRY_OUTCOME_VERIFICATION_REQUEST_SCHEMA_V1: &str =
     "nando.k2-inquiry-outcome-verification-request.v1";
 pub const K2_INQUIRY_OUTCOME_VERIFICATION_SCHEMA_V1: &str =
     "nando.k2-inquiry-outcome-verification.v1";
+pub const K2_INQUIRY_GENERATED_PROBE_PROVENANCE_SCHEMA_V1: &str =
+    "nando.k2-inquiry-generated-probe-provenance.v1";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -270,6 +272,23 @@ impl K2InquiryProbeV1 {
         }
         Ok(())
     }
+}
+
+pub fn inquiry_generated_probe_provenance_root_v1(
+    experiment_id_sha256: &str,
+    generator_schema_root_sha256: &str,
+    split_commitment_root_sha256: &str,
+    probe_id_sha256: &str,
+    action_id_sha256: &str,
+) -> K2CompositionResultV1<String> {
+    composition_root_v1(&(
+        K2_INQUIRY_GENERATED_PROBE_PROVENANCE_SCHEMA_V1,
+        experiment_id_sha256,
+        generator_schema_root_sha256,
+        split_commitment_root_sha256,
+        probe_id_sha256,
+        action_id_sha256,
+    ))
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -530,6 +549,7 @@ impl K2InquiryBaselineRequestV1 {
 #[serde(rename_all = "snake_case")]
 pub enum K2InquiryEligibilityReasonV1 {
     Eligible,
+    NonGeneratedProvenance,
     NonReversible,
     AmbiguousObservation,
     DelayedObservation,

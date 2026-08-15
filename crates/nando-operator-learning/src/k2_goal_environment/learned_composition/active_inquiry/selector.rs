@@ -12,6 +12,7 @@ use super::model::{
     K2_INQUIRY_PRECOMMIT_SCHEMA_V1, K2InquiryEligibilityReasonV1, K2InquiryEligibilityV1,
     K2InquiryPredictionV1, K2InquiryProbeEvaluationV1, K2InquiryProbeV1, K2InquiryPublicCaseV1,
     K2InquirySelectionPrecommitV1, K2InquirySelectorRequestV1,
+    inquiry_generated_probe_provenance_root_v1,
 };
 
 pub fn select_model_guided_probe_v1(
@@ -94,7 +95,16 @@ pub(crate) fn selector_probe_eligibility_v1(
     case: &K2InquiryPublicCaseV1,
     probe: &K2InquiryProbeV1,
 ) -> K2CompositionResultV1<K2InquiryEligibilityV1> {
-    let reason = if !probe.reversible {
+    let expected_provenance = inquiry_generated_probe_provenance_root_v1(
+        &case.experiment_id_sha256,
+        &case.generator_schema_root_sha256,
+        &case.split_commitment_root_sha256,
+        &probe.probe_id_sha256,
+        &probe.action_id_sha256,
+    )?;
+    let reason = if probe.generated_provenance_root_sha256 != expected_provenance {
+        K2InquiryEligibilityReasonV1::NonGeneratedProvenance
+    } else if !probe.reversible {
         K2InquiryEligibilityReasonV1::NonReversible
     } else if probe.observation_mode == super::model::K2InquiryObservationModeV1::Ambiguous {
         K2InquiryEligibilityReasonV1::AmbiguousObservation
