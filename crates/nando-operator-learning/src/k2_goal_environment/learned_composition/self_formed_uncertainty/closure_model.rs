@@ -12,7 +12,8 @@ use super::{
     K2_UNCERTAINTY_MAX_COST_UNITS_V1, K2_UNCERTAINTY_MAX_PLAN_COST_UNITS_V1,
     K2_UNCERTAINTY_MAX_PLAN_RISK_UNITS_V1, K2_UNCERTAINTY_MAX_REPRESENTATIVES_V1,
     K2_UNCERTAINTY_MAX_RISK_UNITS_V1, K2_UNCERTAINTY_MIN_REPRESENTATIVES_V1,
-    K2UncertaintyRawProbeDispositionV1, denied_authority_v1, require_denied_authority_v1,
+    K2UncertaintyEligibilityDispositionV1, K2UncertaintyRawProbeDispositionV1,
+    K2UncertaintySafetyDispositionV1, denied_authority_v1, require_denied_authority_v1,
     require_exact_len_v1, require_sorted_unique_v1, uncertainty_root_v1,
 };
 
@@ -214,23 +215,29 @@ impl K2UncertaintyCompletionCandidateV1 {
     }
 
     fn expected_root(&self) -> K2CompositionResultV1<String> {
-        uncertainty_root_v1(&(
-            K2_UNCERTAINTY_COMPLETION_CANDIDATE_SCHEMA_V1,
-            &self.case_id_sha256,
-            &self.first_probe_root_sha256,
-            &self.second_probe_root_sha256,
-            &self.first_prediction_roots_sha256,
-            &self.second_prediction_roots_sha256,
-            self.joint_pairwise_outcome_equal,
-            &self.joint_partition_sizes,
-            self.joint_minimax_eliminated,
-            self.joint_pair_separation,
-            self.cumulative_risk_units,
-            self.cumulative_cost_units,
-            self.eligible,
-            &self.authority,
-        ))
+        completion_candidate_root_v1(self)
     }
+}
+
+pub(crate) fn completion_candidate_root_v1(
+    value: &K2UncertaintyCompletionCandidateV1,
+) -> K2CompositionResultV1<String> {
+    uncertainty_root_v1(&(
+        K2_UNCERTAINTY_COMPLETION_CANDIDATE_SCHEMA_V1,
+        &value.case_id_sha256,
+        &value.first_probe_root_sha256,
+        &value.second_probe_root_sha256,
+        &value.first_prediction_roots_sha256,
+        &value.second_prediction_roots_sha256,
+        value.joint_pairwise_outcome_equal,
+        &value.joint_partition_sizes,
+        value.joint_minimax_eliminated,
+        value.joint_pair_separation,
+        value.cumulative_risk_units,
+        value.cumulative_cost_units,
+        value.eligible,
+        &value.authority,
+    ))
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -405,34 +412,42 @@ impl K2UncertaintyClosureCensusV1 {
     }
 
     fn expected_root(&self) -> K2CompositionResultV1<String> {
-        uncertainty_root_v1(&K2UncertaintyClosureCensusRootPreimageV1 {
-            schema: K2_UNCERTAINTY_CLOSURE_CENSUS_SCHEMA_V1,
-            planner_request_root_sha256: &self.planner_request_root_sha256,
-            case_id_sha256: &self.case_id_sha256,
-            frontier_root_sha256: &self.frontier_root_sha256,
-            representative_probe_roots_sha256: &self.representative_probe_roots_sha256,
-            representative_count: self.representative_count,
-            first_tournament_root_sha256: &self.first_tournament_root_sha256,
-            first_probe_root_sha256: &self.first_probe_root_sha256,
-            first_pairwise_outcome_equal: self.first_pairwise_outcome_equal,
-            first_partition_sizes: &self.first_partition_sizes,
-            completion_required: self.completion_required,
-            second_probe_candidate_roots_sha256: &self.second_probe_candidate_roots_sha256,
-            candidate_count: self.candidate_count,
-            membership_root_sha256: &self.membership_root_sha256,
-            candidates: &self.candidates,
-            candidate_denominator_root_sha256: &self.candidate_denominator_root_sha256,
-            disposition: self.disposition,
-            selected_second_probe_root_sha256: &self.selected_second_probe_root_sha256,
-            selected_joint_partition_sizes: &self.selected_joint_partition_sizes,
-            planner_executable_sha256: &self.planner_executable_sha256,
-            authority: &self.authority,
-        })
+        closure_census_root_v1(self)
     }
 }
 
+pub(crate) fn closure_census_root_v1(
+    value: &K2UncertaintyClosureCensusV1,
+) -> K2CompositionResultV1<String> {
+    uncertainty_root_v1(&K2UncertaintyClosureCensusRootPreimageV1 {
+        schema: K2_UNCERTAINTY_CLOSURE_CENSUS_SCHEMA_V1,
+        planner_request_root_sha256: &value.planner_request_root_sha256,
+        case_id_sha256: &value.case_id_sha256,
+        frontier_root_sha256: &value.frontier_root_sha256,
+        representative_probe_roots_sha256: &value.representative_probe_roots_sha256,
+        representative_count: value.representative_count,
+        first_tournament_root_sha256: &value.first_tournament_root_sha256,
+        first_probe_root_sha256: &value.first_probe_root_sha256,
+        first_pairwise_outcome_equal: value.first_pairwise_outcome_equal,
+        first_partition_sizes: &value.first_partition_sizes,
+        completion_required: value.completion_required,
+        second_probe_candidate_roots_sha256: &value.second_probe_candidate_roots_sha256,
+        candidate_count: value.candidate_count,
+        membership_root_sha256: &value.membership_root_sha256,
+        candidates: &value.candidates,
+        candidate_denominator_root_sha256: &value.candidate_denominator_root_sha256,
+        disposition: value.disposition,
+        selected_second_probe_root_sha256: &value.selected_second_probe_root_sha256,
+        selected_joint_partition_sizes: &value.selected_joint_partition_sizes,
+        planner_executable_sha256: &value.planner_executable_sha256,
+        authority: &value.authority,
+    })
+}
+
 pub(crate) fn closure_probe_eligible_v1(disposition: &K2UncertaintyRawProbeDispositionV1) -> bool {
-    disposition.probe.reversible
+    disposition.eligibility == K2UncertaintyEligibilityDispositionV1::Eligible
+        && disposition.safety == K2UncertaintySafetyDispositionV1::Pass
+        && disposition.probe.reversible
         && disposition.probe.observation_mode == K2InquiryObservationModeV1::ExactImmediate
         && disposition.probe.risk_units <= K2_UNCERTAINTY_MAX_RISK_UNITS_V1
         && disposition.probe.cost_units <= K2_UNCERTAINTY_MAX_COST_UNITS_V1

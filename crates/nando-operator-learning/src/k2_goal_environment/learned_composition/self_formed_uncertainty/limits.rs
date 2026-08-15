@@ -118,6 +118,17 @@ pub const K2_UNCERTAINTY_CLOSURE_PLANNER_REQUEST_SCHEMA_V1: &str =
 pub const K2_UNCERTAINTY_COMPLETION_CANDIDATE_SCHEMA_V1: &str =
     "nando.k2-self-formed-completion-candidate.v1";
 pub const K2_UNCERTAINTY_CLOSURE_CENSUS_SCHEMA_V1: &str = "nando.k2-self-formed-closure-census.v1";
+pub const K2_UNCERTAINTY_CLOSURE_VERIFICATION_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-closure-verification-request.v1";
+pub const K2_UNCERTAINTY_CLOSURE_VERIFICATION_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-closure-verification-receipt.v1";
+pub const K2_UNCERTAINTY_CLOSURE_PLAN_SCHEMA_V1: &str = "nando.k2-self-formed-closure-plan.v1";
+pub const K2_UNCERTAINTY_CASE_PREVERIFICATION_SCHEMA_V2: &str =
+    "nando.k2-self-formed-case-preverification.v2";
+pub const K2_UNCERTAINTY_CASE_PRECOMMIT_ENTRY_SCHEMA_V2: &str =
+    "nando.k2-self-formed-case-precommit-entry.v2";
+pub const K2_UNCERTAINTY_BATCH_PRECOMMIT_SCHEMA_V2: &str =
+    "nando.k2-self-formed-batch-precommit.v2";
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
     6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 
