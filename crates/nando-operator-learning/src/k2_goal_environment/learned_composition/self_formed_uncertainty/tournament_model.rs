@@ -10,9 +10,10 @@ use super::super::{
 use super::{
     K2_UNCERTAINTY_DIRECT_WINNER_SCHEMA_V1, K2_UNCERTAINTY_MAX_REPRESENTATIVES_V1,
     K2_UNCERTAINTY_MAX_SELECTOR_REQUESTS_V1, K2_UNCERTAINTY_MIN_REPRESENTATIVES_V1,
-    K2_UNCERTAINTY_SELECTOR_PROBES_V1, K2_UNCERTAINTY_TOURNAMENT_SCHEMA_V1,
-    K2_UNCERTAINTY_TOURNAMENT_STEP_SCHEMA_V1, denied_authority_v1, require_denied_authority_v1,
-    require_exact_len_v1, require_sorted_unique_v1, uncertainty_root_v1,
+    K2_UNCERTAINTY_SELECTOR_PROBES_V1, K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1,
+    K2_UNCERTAINTY_TOURNAMENT_SCHEMA_V1, K2_UNCERTAINTY_TOURNAMENT_STEP_SCHEMA_V1,
+    denied_authority_v1, require_denied_authority_v1, require_exact_len_v1,
+    require_sorted_unique_v1, uncertainty_root_v1,
 };
 
 pub const K2_UNCERTAINTY_DIRECT_SCORE_SCHEMA_V1: &str = "nando.k2-self-formed-direct-score.v1";
@@ -354,9 +355,14 @@ impl K2UncertaintyTournamentV1 {
             require_composition_root_v1(root)?;
         }
         self.direct_winner.validate()?;
+        let expected_requests = self
+            .representative_count
+            .saturating_sub(K2_UNCERTAINTY_SELECTOR_PROBES_V1 as u64)
+            .div_ceil((K2_UNCERTAINTY_SELECTOR_PROBES_V1 - 1) as u64)
+            + 1;
         if self.representative_count < K2_UNCERTAINTY_MIN_REPRESENTATIVES_V1 as u64
             || self.representative_count > K2_UNCERTAINTY_MAX_REPRESENTATIVES_V1 as u64
-            || self.request_count == 0
+            || self.request_count != expected_requests
             || self.request_count > K2_UNCERTAINTY_MAX_SELECTOR_REQUESTS_V1 as u64
             || self.step_roots_sha256.len() as u64 != self.request_count
         {
@@ -367,10 +373,13 @@ impl K2UncertaintyTournamentV1 {
         for root in &self.step_roots_sha256 {
             require_composition_root_v1(root)?;
         }
-        require_sorted_unique_v1(
-            &self.step_roots_sha256,
-            "self_formed_tournament_step_roots_invalid",
-        )?;
+        if self.step_roots_sha256.iter().collect::<BTreeSet<_>>().len()
+            != self.step_roots_sha256.len()
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_tournament_step_roots_invalid",
+            ));
+        }
         let adapted = self
             .request_count
             .checked_mul(K2_UNCERTAINTY_SELECTOR_PROBES_V1 as u64)
@@ -384,6 +393,7 @@ impl K2UncertaintyTournamentV1 {
             || self.direct_winner.case_id_sha256 != self.case_id_sha256
             || self.direct_winner.frontier_root_sha256 != self.frontier_root_sha256
             || self.direct_winner.scores.len() as u64 != self.representative_count
+            || self.selector_source_sha256 != K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1
             || self.tournament_winner_probe_root_sha256
                 != self.direct_winner.selected_probe_root_sha256
             || self.adapted_prediction_count != adapted

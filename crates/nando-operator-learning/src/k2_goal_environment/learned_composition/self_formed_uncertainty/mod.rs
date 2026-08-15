@@ -12,6 +12,7 @@ mod model_set;
 mod probe;
 mod safety;
 mod support;
+mod tournament;
 mod tournament_model;
 mod vocabulary;
 
@@ -24,5 +25,6 @@ pub use model_set::*;
 pub use probe::*;
 pub use safety::*;
 pub use support::*;
+pub use tournament::*;
 pub use tournament_model::*;
 pub use vocabulary::*;
