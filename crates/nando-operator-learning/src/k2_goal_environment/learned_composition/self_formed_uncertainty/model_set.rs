@@ -510,11 +510,75 @@ impl K2UncertaintyModelSetV1 {
         for model in &self.syntactic_models {
             model.validate()?;
         }
+        if self
+            .syntactic_models
+            .windows(2)
+            .any(|pair| pair[0].syntax_root_sha256 >= pair[1].syntax_root_sha256)
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_syntactic_models_not_canonical",
+            ));
+        }
         for signature in &self.semantic_signatures {
             signature.validate()?;
         }
+        if self
+            .semantic_signatures
+            .windows(2)
+            .any(|pair| pair[0].syntax_root_sha256 >= pair[1].syntax_root_sha256)
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_semantic_signatures_not_canonical",
+            ));
+        }
+        let model_roots = self
+            .syntactic_models
+            .iter()
+            .map(|model| model.syntax_root_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        let signature_roots = self
+            .semantic_signatures
+            .iter()
+            .map(|signature| signature.syntax_root_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        if model_roots != signature_roots {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_semantic_signature_model_binding_invalid",
+            ));
+        }
+        let signature_by_syntax = self
+            .semantic_signatures
+            .iter()
+            .map(|signature| {
+                (
+                    signature.syntax_root_sha256.as_str(),
+                    signature.semantic_signature_root_sha256.as_str(),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut class_members = BTreeSet::new();
         for class in &self.semantic_classes {
             class.validate()?;
+            for member in &class.syntax_member_roots_sha256 {
+                if signature_by_syntax.get(member.as_str()).copied()
+                    != Some(class.semantic_signature_root_sha256.as_str())
+                    || !class_members.insert(member.as_str())
+                {
+                    return Err(K2CompositionErrorV1::Invalid(
+                        "self_formed_semantic_class_partition_invalid",
+                    ));
+                }
+            }
+        }
+        if class_members != model_roots
+            || self
+                .semantic_classes
+                .windows(2)
+                .any(|pair| pair[0].class_root_sha256 >= pair[1].class_root_sha256)
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_semantic_classes_not_canonical",
+            ));
         }
         require_denied_authority_v1(&self.authority)?;
         let expected = self.expected_root()?;

@@ -78,6 +78,8 @@ pub const K2_UNCERTAINTY_PUBLIC_BATCH_SCHEMA_V1: &str = "nando.k2-self-formed-pu
 pub const K2_UNCERTAINTY_PRIVATE_BATCH_SCHEMA_V1: &str = "nando.k2-self-formed-private-batch.v1";
 pub const K2_UNCERTAINTY_GENERATOR_RESPONSE_SCHEMA_V1: &str =
     "nando.k2-self-formed-generator-response.v1";
+pub const K2_UNCERTAINTY_LEARNER_RESPONSE_SCHEMA_V1: &str =
+    "nando.k2-self-formed-learner-response.v1";
 
 pub fn uncertainty_root_v1<T: Serialize>(value: &T) -> K2CompositionResultV1<String> {
     composition_root_v1(value)
