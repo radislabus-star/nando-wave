@@ -12,10 +12,12 @@ use super::final_verifier_selection::verify_selection_v1;
 use super::final_verifier_v2_closure::verify_closure_v2;
 use super::{
     K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V2, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+    K2UncertaintyBatchPrecommitV2, K2UncertaintyCasePreverificationV2,
     K2UncertaintyCaseVerificationReceiptV2, K2UncertaintyFinalVerifierRequestV2,
     K2UncertaintyPrivateSafetyDispositionV1, K2UncertaintyRawProbeDispositionV1,
-    K2UncertaintySyntacticModelV1, denied_authority_v1, uncertainty_bytes_v1,
-    uncertainty_decode_v1, uncertainty_root_v1,
+    K2UncertaintySyntacticModelV1, denied_authority_v1,
+    resolve_self_formed_final_verifier_material_v2, uncertainty_bytes_v1, uncertainty_decode_v1,
+    uncertainty_root_v1,
 };
 
 pub fn verify_self_formed_case_independently_v2(
@@ -23,6 +25,13 @@ pub fn verify_self_formed_case_independently_v2(
     evidence_root: &Path,
 ) -> K2CompositionResultV1<K2UncertaintyCaseVerificationReceiptV2> {
     request.validate()?;
+    let material =
+        resolve_self_formed_final_verifier_material_v2(evidence_root, &request.material)?;
+    verify_material_bindings_v2(
+        request,
+        &material.batch_precommit,
+        &material.case_preverification,
+    )?;
     let output = independent_reopen_frontier_v1(
         &request.probe_request,
         &request.probe_artifacts,
@@ -44,9 +53,9 @@ pub fn verify_self_formed_case_independently_v2(
         &frontier,
         &output.frontier.frontier_root_sha256,
         &request.probe_request.split_commitment_root_sha256,
-        &request.case_preverification.selection_preverification,
+        &material.case_preverification.selection_preverification,
     )?;
-    let closure = verify_closure_v2(&frontier, &request.case_preverification)?;
+    let closure = verify_closure_v2(&frontier, &material.case_preverification)?;
     verify_plan_execution_v2(request, &frontier, &induction.effects)?;
 
     let survivors = learned
@@ -156,6 +165,49 @@ pub fn verify_self_formed_case_independently_v2(
     };
     receipt.reseal()?;
     Ok(receipt)
+}
+
+fn verify_material_bindings_v2(
+    request: &K2UncertaintyFinalVerifierRequestV2,
+    batch: &K2UncertaintyBatchPrecommitV2,
+    case: &K2UncertaintyCasePreverificationV2,
+) -> K2CompositionResultV1<()> {
+    batch.validate()?;
+    case.validate()?;
+    let case_id = &request.probe_request.public_case.vocabulary.case_id_sha256;
+    let entry = batch
+        .cases
+        .iter()
+        .find(|entry| &entry.case_id_sha256 == case_id)
+        .ok_or(K2CompositionErrorV1::Invalid(
+            "self_formed_final_v2_batch_case_missing",
+        ))?;
+    let plan = case
+        .closure_plan
+        .as_ref()
+        .ok_or(K2CompositionErrorV1::Invalid(
+            "self_formed_final_v2_closure_unavailable",
+        ))?;
+    if !batch.dispatch_permitted
+        || batch.experiment_id_sha256
+            != request
+                .probe_request
+                .public_case
+                .vocabulary
+                .experiment_id_sha256
+        || request.private_case.experiment_id_sha256 != batch.experiment_id_sha256
+        || case.selection_preverification.case_id_sha256 != *case_id
+        || entry.case_preverification_root_sha256 != case.receipt_root_sha256
+        || entry.closure_plan_root_sha256.as_deref() != Some(plan.plan_root_sha256.as_str())
+        || request.dispatch.batch_precommit_root_sha256 != batch.batch_root_sha256
+        || request.dispatch.case_preverification_root_sha256 != case.receipt_root_sha256
+        || request.dispatch.closure_plan != *plan
+    {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_final_v2_material_binding_invalid",
+        ));
+    }
+    Ok(())
 }
 
 pub fn run_self_formed_final_verifier_process_v2() -> K2CompositionResultV1<()> {

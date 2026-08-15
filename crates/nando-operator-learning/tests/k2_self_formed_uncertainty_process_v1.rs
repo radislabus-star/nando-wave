@@ -27,9 +27,10 @@ use nando_operator_learning::{
     K2UncertaintyWorkspaceIdentityV2, composition_root_v1, composition_sha256_file_v1,
     enumerate_self_formed_probe_frontier_v1, materialize_self_formed_probe_files_v1,
     plan_self_formed_uncertainty_closure_v1, prepare_self_formed_plan_dispatch_v2,
-    preverify_self_formed_case_with_owner_v1, publish_self_formed_probe_output_v1,
-    reopen_self_formed_probe_output_v1, run_self_formed_tournament_with_owners_v1,
-    self_formed_grammar_root_v1, uncertainty_bytes_v1, uncertainty_decode_v1,
+    preverify_self_formed_case_with_owner_v1, publish_self_formed_final_verifier_material_v2,
+    publish_self_formed_probe_output_v1, reopen_self_formed_probe_output_v1,
+    run_self_formed_tournament_with_owners_v1, self_formed_grammar_root_v1, uncertainty_bytes_v1,
+    uncertainty_decode_v1,
 };
 
 static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -537,12 +538,20 @@ fn execute_precommitted_case(
             observation_vector.vector_root_sha256.clone(),
         )
         .expect("durable case-level observation vector");
+    let artifact_root = environment
+        .root
+        .join(format!("frontier-{case_sequence:02}"));
+    let final_material = publish_self_formed_final_verifier_material_v2(
+        &artifact_root,
+        batch,
+        &prepared_case.preverification,
+    )
+    .expect("publish root-addressed V4 verifier material");
     let final_request = K2UncertaintyFinalVerifierRequestV2::seal(
         binaries.final_verifier_v2_sha256.clone(),
-        batch.clone(),
+        final_material,
         prepared_case.probe_request.clone(),
         prepared_case.probe_artifacts.clone(),
-        prepared_case.preverification.clone(),
         private_case.clone(),
         dispatch.clone(),
         observation_vector.clone(),
@@ -556,9 +565,6 @@ fn execute_precommitted_case(
         case_sequence + 1,
         final_request_bytes.len()
     );
-    let artifact_root = environment
-        .root
-        .join(format!("frontier-{case_sequence:02}"));
     let final_receipt: K2UncertaintyCaseVerificationReceiptV2 = run_isolated(
         &binaries.final_verifier_v2,
         &final_request,

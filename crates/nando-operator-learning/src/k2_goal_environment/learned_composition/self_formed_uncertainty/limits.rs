@@ -145,6 +145,10 @@ pub const K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2: &str =
     "nando.k2-self-formed-final-verifier-request.v2";
 pub const K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V2: &str =
     "nando.k2-self-formed-case-verification.v2";
+pub const K2_UNCERTAINTY_FINAL_VERIFIER_ARTIFACT_SCHEMA_V2: &str =
+    "nando.k2-self-formed-final-verifier-artifact.v2";
+pub const K2_UNCERTAINTY_FINAL_VERIFIER_MATERIAL_SCHEMA_V2: &str =
+    "nando.k2-self-formed-final-verifier-material.v2";
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
     6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 

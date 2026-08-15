@@ -6,11 +6,11 @@ use super::super::{
 };
 use super::{
     K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V2, K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2,
-    K2UncertaintyBatchPrecommitV2, K2UncertaintyCaseJournalEventKindV2,
-    K2UncertaintyCaseJournalStateV2, K2UncertaintyCasePreverificationV2,
-    K2UncertaintyObservationVectorV2, K2UncertaintyPlanDispatchV2, K2UncertaintyPrivateCaseV1,
-    K2UncertaintyProbeArtifactsV1, K2UncertaintyProbeRequestV1, denied_authority_v1,
-    require_denied_authority_v1, uncertainty_root_v1,
+    K2UncertaintyCaseJournalEventKindV2, K2UncertaintyCaseJournalStateV2,
+    K2UncertaintyFinalVerifierMaterialV2, K2UncertaintyObservationVectorV2,
+    K2UncertaintyPlanDispatchV2, K2UncertaintyPrivateCaseV1, K2UncertaintyProbeArtifactsV1,
+    K2UncertaintyProbeRequestV1, denied_authority_v1, require_denied_authority_v1,
+    uncertainty_root_v1,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -18,10 +18,9 @@ use super::{
 pub struct K2UncertaintyFinalVerifierRequestV2 {
     pub schema: String,
     pub verifier_executable_sha256: String,
-    pub batch_precommit: K2UncertaintyBatchPrecommitV2,
+    pub material: K2UncertaintyFinalVerifierMaterialV2,
     pub probe_request: K2UncertaintyProbeRequestV1,
     pub probe_artifacts: K2UncertaintyProbeArtifactsV1,
-    pub case_preverification: K2UncertaintyCasePreverificationV2,
     pub private_case: K2UncertaintyPrivateCaseV1,
     pub dispatch: K2UncertaintyPlanDispatchV2,
     pub observation_vector: K2UncertaintyObservationVectorV2,
@@ -34,10 +33,9 @@ impl K2UncertaintyFinalVerifierRequestV2 {
     #[allow(clippy::too_many_arguments)]
     pub fn seal(
         verifier_executable_sha256: String,
-        batch_precommit: K2UncertaintyBatchPrecommitV2,
+        material: K2UncertaintyFinalVerifierMaterialV2,
         probe_request: K2UncertaintyProbeRequestV1,
         probe_artifacts: K2UncertaintyProbeArtifactsV1,
-        case_preverification: K2UncertaintyCasePreverificationV2,
         private_case: K2UncertaintyPrivateCaseV1,
         dispatch: K2UncertaintyPlanDispatchV2,
         observation_vector: K2UncertaintyObservationVectorV2,
@@ -46,10 +44,9 @@ impl K2UncertaintyFinalVerifierRequestV2 {
         let mut value = Self {
             schema: K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2.to_owned(),
             verifier_executable_sha256,
-            batch_precommit,
+            material,
             probe_request,
             probe_artifacts,
-            case_preverification,
             private_case,
             dispatch,
             observation_vector,
@@ -64,27 +61,15 @@ impl K2UncertaintyFinalVerifierRequestV2 {
 
     pub fn validate(&self) -> K2CompositionResultV1<()> {
         require_composition_root_v1(&self.verifier_executable_sha256)?;
-        self.batch_precommit.validate()?;
+        self.material.validate()?;
         self.probe_request.validate()?;
         self.probe_artifacts.validate()?;
-        self.case_preverification.validate()?;
         self.private_case.validate()?;
         self.dispatch.validate()?;
         self.observation_vector
             .validate_against_dispatch(&self.dispatch)?;
         self.case_journal_state.validate()?;
         let case_id = &self.probe_request.public_case.vocabulary.case_id_sha256;
-        let entry = self
-            .batch_precommit
-            .cases
-            .iter()
-            .find(|entry| &entry.case_id_sha256 == case_id)
-            .ok_or(K2CompositionErrorV1::Invalid(
-                "self_formed_final_v2_batch_case_missing",
-            ))?;
-        let plan = self.case_preverification.closure_plan.as_ref().ok_or(
-            K2CompositionErrorV1::Invalid("self_formed_final_v2_closure_unavailable"),
-        )?;
         let observation_events = self
             .case_journal_state
             .events
@@ -110,32 +95,24 @@ impl K2UncertaintyFinalVerifierRequestV2 {
         });
         require_denied_authority_v1(&self.authority)?;
         if self.schema != K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2
-            || !self.batch_precommit.dispatch_permitted
-            || self.batch_precommit.experiment_id_sha256
+            || self.material.experiment_id_sha256
                 != self
                     .probe_request
                     .public_case
                     .vocabulary
                     .experiment_id_sha256
-            || self.private_case.experiment_id_sha256 != self.batch_precommit.experiment_id_sha256
+            || self.private_case.experiment_id_sha256 != self.material.experiment_id_sha256
+            || self.material.case_id_sha256 != *case_id
             || self.probe_artifacts.probe_request_root_sha256
                 != self.probe_request.request_root_sha256
             || self.probe_artifacts.case_id_sha256 != *case_id
-            || self
-                .case_preverification
-                .selection_preverification
-                .case_id_sha256
-                != *case_id
             || self.private_case.case_id_sha256 != *case_id
             || self.private_case.public_case_root_sha256
                 != self.probe_request.public_case.public_case_root_sha256
-            || entry.case_preverification_root_sha256
-                != self.case_preverification.receipt_root_sha256
-            || entry.closure_plan_root_sha256.as_deref() != Some(plan.plan_root_sha256.as_str())
-            || self.dispatch.batch_precommit_root_sha256 != self.batch_precommit.batch_root_sha256
+            || self.dispatch.batch_precommit_root_sha256
+                != self.material.batch_precommit.semantic_root_sha256
             || self.dispatch.case_preverification_root_sha256
-                != self.case_preverification.receipt_root_sha256
-            || self.dispatch.closure_plan != *plan
+                != self.material.case_preverification.semantic_root_sha256
             || self.case_journal_state.dispatch != self.dispatch
             || !journal_observations_match
             || !vector_event_matches
@@ -157,10 +134,9 @@ impl K2UncertaintyFinalVerifierRequestV2 {
         uncertainty_root_v1(&K2UncertaintyFinalVerifierRequestRootV2 {
             schema: K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2,
             verifier_executable_sha256: &self.verifier_executable_sha256,
-            batch_precommit_root_sha256: &self.batch_precommit.batch_root_sha256,
+            material_root_sha256: &self.material.material_root_sha256,
             probe_request_root_sha256: &self.probe_request.request_root_sha256,
             probe_artifacts_root_sha256: &self.probe_artifacts.artifacts_root_sha256,
-            case_preverification_root_sha256: &self.case_preverification.receipt_root_sha256,
             private_case_root_sha256: &self.private_case.private_case_root_sha256,
             dispatch_root_sha256: &self.dispatch.dispatch_root_sha256,
             observation_vector_root_sha256: &self.observation_vector.vector_root_sha256,
@@ -174,10 +150,9 @@ impl K2UncertaintyFinalVerifierRequestV2 {
 struct K2UncertaintyFinalVerifierRequestRootV2<'a> {
     schema: &'static str,
     verifier_executable_sha256: &'a str,
-    batch_precommit_root_sha256: &'a str,
+    material_root_sha256: &'a str,
     probe_request_root_sha256: &'a str,
     probe_artifacts_root_sha256: &'a str,
-    case_preverification_root_sha256: &'a str,
     private_case_root_sha256: &'a str,
     dispatch_root_sha256: &'a str,
     observation_vector_root_sha256: &'a str,
