@@ -1,5 +1,7 @@
 #[path = "k2_self_formed_uncertainty_controls_v1/boundary.rs"]
 mod boundary;
+#[path = "k2_self_formed_uncertainty_controls_v1/closure.rs"]
+mod closure;
 #[path = "k2_self_formed_uncertainty_controls_v1/fixture.rs"]
 mod fixture;
 #[path = "k2_self_formed_uncertainty_controls_v1/identity.rs"]
@@ -26,4 +28,9 @@ fn r7_exact_negative_controls_and_v3_shortcut_controls_pass() {
     temporal::run(&fixture, &mut ledger);
     boundary::run(&fixture, &mut ledger);
     ledger.finish();
+}
+
+#[test]
+fn r7a_closure_planner_freezes_complete_bounded_census() {
+    closure::run();
 }
