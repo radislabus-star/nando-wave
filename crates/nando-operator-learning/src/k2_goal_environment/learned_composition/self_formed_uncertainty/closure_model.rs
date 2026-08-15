@@ -171,7 +171,7 @@ pub fn decode_self_formed_closure_planner_request_v1(
             "self_formed_closure_post_outcome_input_forbidden",
         ));
     }
-    let request = uncertainty_decode_v1(bytes)?;
+    let request: K2UncertaintyClosurePlannerRequestV1 = uncertainty_decode_v1(bytes)?;
     request.validate()?;
     Ok(request)
 }
