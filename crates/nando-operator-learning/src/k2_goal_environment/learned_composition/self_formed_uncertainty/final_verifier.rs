@@ -24,7 +24,11 @@ pub fn verify_self_formed_case_independently_v1(
     evidence_root: &Path,
 ) -> K2CompositionResultV1<K2UncertaintyCaseVerificationReceiptV1> {
     request.validate()?;
-    let output = independent_reopen_frontier_v1(request, evidence_root)?;
+    let output = independent_reopen_frontier_v1(
+        &request.probe_request,
+        &request.probe_artifacts,
+        evidence_root,
+    )?;
     let public_case = &request.probe_request.public_case;
     let learned = &request.probe_request.learner_response;
     let induction = verify_induction_v1(public_case, learned)?;
@@ -163,12 +167,13 @@ pub fn run_self_formed_final_verifier_process_v1() -> K2CompositionResultV1<()> 
         .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_final_verifier_stdout"))
 }
 
-fn independent_reopen_frontier_v1(
-    request: &K2UncertaintyFinalVerifierRequestV1,
+pub(super) fn independent_reopen_frontier_v1(
+    probe_request: &super::K2UncertaintyProbeRequestV1,
+    probe_artifacts: &super::K2UncertaintyProbeArtifactsV1,
     evidence_root: &Path,
 ) -> K2CompositionResultV1<K2UncertaintyProbeOutputV1> {
-    let mut values = Vec::with_capacity(request.probe_artifacts.entries.len());
-    for entry in &request.probe_artifacts.entries {
+    let mut values = Vec::with_capacity(probe_artifacts.entries.len());
+    for entry in &probe_artifacts.entries {
         let relative = Path::new(&entry.relative_path);
         if relative.is_absolute()
             || relative
@@ -205,7 +210,7 @@ fn independent_reopen_frontier_v1(
     }
     let mut output = K2UncertaintyProbeOutputV1 {
         schema: K2_UNCERTAINTY_PROBE_OUTPUT_SCHEMA_V1.to_owned(),
-        probe_request_root_sha256: request.probe_request.request_root_sha256.clone(),
+        probe_request_root_sha256: probe_request.request_root_sha256.clone(),
         state_universe: state,
         pages,
         frontier,
@@ -213,9 +218,8 @@ fn independent_reopen_frontier_v1(
         output_root_sha256: String::new(),
     };
     output.reseal()?;
-    if output.state_universe.universe_root_sha256
-        != request.probe_artifacts.state_universe_root_sha256
-        || output.frontier.frontier_root_sha256 != request.probe_artifacts.frontier_root_sha256
+    if output.state_universe.universe_root_sha256 != probe_artifacts.state_universe_root_sha256
+        || output.frontier.frontier_root_sha256 != probe_artifacts.frontier_root_sha256
     {
         return Err(K2CompositionErrorV1::Invalid(
             "self_formed_final_artifact_receipt_mismatch",
