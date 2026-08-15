@@ -4,12 +4,19 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use nando_operator_learning::{
-    K2CompositionErrorV1, K2CompositionTreeManifestV1, K2UncertaintyCasePreverificationV2,
-    K2UncertaintyClosureCensusV1, K2UncertaintyClosureDispositionV1, K2UncertaintyClosurePlanV1,
+    K2_UNCERTAINTY_PLAN_DISPATCH_SCHEMA_V2, K2_UNCERTAINTY_PROBE_DISPATCH_ITEM_SCHEMA_V2,
+    K2CompositionAuthorityBoundaryV1, K2CompositionErrorV1, K2CompositionTreeManifestV1,
+    K2InquiryObserverRequestV1, K2InquiryWorkerRequestV1, K2UncertaintyCaseJournalFaultV2,
+    K2UncertaintyCaseJournalPhaseV2, K2UncertaintyCaseJournalV2,
+    K2UncertaintyCasePreverificationV2, K2UncertaintyClosureCensusV1,
+    K2UncertaintyClosureDispositionV1, K2UncertaintyClosurePlanV1,
     K2UncertaintyClosurePlannerRequestV1, K2UncertaintyClosureVerificationReceiptV1,
-    K2UncertaintyClosureVerificationRequestV1, K2UncertaintyRawProbeDispositionV1,
-    composition_root_v1, composition_sha256_file_v1, plan_self_formed_uncertainty_closure_v1,
-    uncertainty_bytes_v1, uncertainty_decode_v1, verify_self_formed_closure_independently_v1,
+    K2UncertaintyClosureVerificationRequestV1, K2UncertaintyPlanDispatchV2,
+    K2UncertaintyProbeDispatchItemV2, K2UncertaintyRawProbeDispositionV1,
+    K2UncertaintySafetyRequestV1, K2UncertaintyWorkspaceIdentityV2, composition_root_v1,
+    composition_sha256_file_v1, plan_self_formed_uncertainty_closure_v1,
+    self_formed_grammar_root_v1, uncertainty_bytes_v1, uncertainty_decode_v1,
+    verify_self_formed_closure_independently_v1, verify_self_formed_private_safety_v1,
 };
 
 use super::fixture::{R7Fixture, root_hash};
@@ -78,7 +85,14 @@ pub fn run() {
 
     let manifests = distinct_manifests(&representatives);
     verify_single_probe(&fixture, &representatives, &manifests);
-    verify_two_probe_and_order_invariance(&fixture, &representatives, &manifests, &verifier_sha256);
+    let (two_probe_request, two_probe_plan) = verify_two_probe_and_order_invariance(
+        &fixture,
+        &representatives,
+        &manifests,
+        &verifier_sha256,
+    );
+    let dispatch = dispatch_for_plan(&fixture, &two_probe_request, &two_probe_plan);
+    verify_case_journal(&fixture, dispatch);
     verify_unavailable_and_omission_rejection(
         &fixture,
         &representatives,
@@ -113,6 +127,9 @@ fn verify_two_probe_and_order_invariance(
     representatives: &[K2UncertaintyRawProbeDispositionV1],
     manifests: &[K2CompositionTreeManifestV1],
     verifier_sha256: &str,
+) -> (
+    K2UncertaintyClosurePlannerRequestV1,
+    K2UncertaintyClosurePlanV1,
 ) {
     let first_root = first_probe_root(fixture);
     let second_root = representatives
@@ -161,6 +178,7 @@ fn verify_two_probe_and_order_invariance(
         census.candidate_denominator_root_sha256,
         reordered.candidate_denominator_root_sha256
     );
+    (request, plan)
 }
 
 fn verify_unavailable_and_omission_rejection(
@@ -276,6 +294,237 @@ fn verify_verifier_source_independence() {
             "closure verifier imports planner helper {forbidden}"
         );
     }
+}
+
+fn dispatch_for_plan(
+    fixture: &R7Fixture,
+    planner_request: &K2UncertaintyClosurePlannerRequestV1,
+    plan: &K2UncertaintyClosurePlanV1,
+) -> K2UncertaintyPlanDispatchV2 {
+    let grammar_root =
+        self_formed_grammar_root_v1(&fixture.public_case.vocabulary).expect("private grammar root");
+    let mut items = Vec::new();
+    for (ordinal, probe_root) in plan.ordered_probe_roots_sha256.iter().enumerate() {
+        let probe = planner_request
+            .representatives
+            .iter()
+            .find(|value| &value.probe.probe_root_sha256 == probe_root)
+            .expect("planned probe")
+            .probe
+            .clone();
+        let effect = fixture
+            .private_case
+            .mapping
+            .iter()
+            .find(|value| value.opaque_action_root_sha256 == probe.action_id_sha256)
+            .expect("private planned effect")
+            .effect
+            .clone();
+        let safety_request = K2UncertaintySafetyRequestV1::seal(
+            plan.plan_root_sha256.clone(),
+            probe.clone(),
+            effect.clone(),
+            fixture.public_case.vocabulary.clone(),
+            grammar_root.clone(),
+            root_hash("r7c-sandbox"),
+            root_hash("r7c-safety"),
+        )
+        .expect("plan safety request");
+        let safety_receipt =
+            verify_self_formed_private_safety_v1(&safety_request).expect("plan safety receipt");
+        let worker_request = K2InquiryWorkerRequestV1::seal(
+            plan.case_id_sha256.clone(),
+            plan.plan_root_sha256.clone(),
+            probe.probe_root_sha256.clone(),
+            probe.action_id_sha256.clone(),
+            root_hash("r7c-worker"),
+            probe.initial_manifest.clone(),
+            effect,
+        )
+        .expect("plan worker request");
+        let observer_request = K2InquiryObserverRequestV1::seal(
+            plan.case_id_sha256.clone(),
+            probe.probe_root_sha256.clone(),
+            root_hash("r7c-observer"),
+        )
+        .expect("plan observer request");
+        let workspace_identity = K2UncertaintyWorkspaceIdentityV2::seal(
+            plan.case_id_sha256.clone(),
+            plan.plan_root_sha256.clone(),
+            ordinal as u64,
+        )
+        .expect("workspace identity");
+        let mut item = K2UncertaintyProbeDispatchItemV2 {
+            schema: K2_UNCERTAINTY_PROBE_DISPATCH_ITEM_SCHEMA_V2.to_owned(),
+            case_id_sha256: plan.case_id_sha256.clone(),
+            closure_plan_root_sha256: plan.plan_root_sha256.clone(),
+            probe_ordinal: ordinal as u64,
+            initial_manifest_root_sha256: probe.initial_manifest.tree_root_sha256.clone(),
+            selected_probe: probe,
+            safety_request,
+            safety_receipt,
+            worker_request,
+            observer_request,
+            workspace_identity,
+            authority: K2CompositionAuthorityBoundaryV1::denied(),
+            item_root_sha256: String::new(),
+        };
+        item.reseal().expect("dispatch item");
+        items.push(item);
+    }
+    assert_eq!(items.len(), 2);
+    assert_ne!(
+        items[0].workspace_identity.identity_root_sha256,
+        items[1].workspace_identity.identity_root_sha256
+    );
+    let workspace_roots = items
+        .iter()
+        .map(|value| value.workspace_identity.identity_root_sha256.as_str())
+        .collect::<Vec<_>>();
+    let workspace_denominator_root_sha256 = composition_root_v1(&(
+        "nando.k2-self-formed-workspace-denominator.v2",
+        &plan.plan_root_sha256,
+        workspace_roots,
+    ))
+    .expect("workspace denominator");
+    let mut dispatch = K2UncertaintyPlanDispatchV2 {
+        schema: K2_UNCERTAINTY_PLAN_DISPATCH_SCHEMA_V2.to_owned(),
+        batch_precommit_root_sha256: root_hash("r7c-batch"),
+        case_preverification_root_sha256: root_hash("r7c-case"),
+        closure_plan: plan.clone(),
+        items,
+        workspace_denominator_root_sha256,
+        all_requests_precommitted: true,
+        authority: K2CompositionAuthorityBoundaryV1::denied(),
+        dispatch_root_sha256: String::new(),
+    };
+    dispatch.reseal().expect("plan dispatch");
+    dispatch
+}
+
+fn verify_case_journal(fixture: &R7Fixture, dispatch: K2UncertaintyPlanDispatchV2) {
+    let journal_root = fixture.root.join("r7c-happy-journal");
+    let mut journal = K2UncertaintyCaseJournalV2::create(&journal_root, dispatch.clone())
+        .expect("create R7C journal");
+    assert_error(
+        journal.freeze_observation_vector(
+            root_hash("r7c-coordinator"),
+            root_hash("r7c-vector-request-early"),
+            root_hash("r7c-vector-early"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        ),
+        "self_formed_case_journal_observation_vector_order_v2_invalid",
+        "self_formed_case_journal_observation_vector_order_v2_invalid",
+    );
+    journal
+        .record_plan_dispatch(
+            root_hash("r7c-coordinator"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        )
+        .expect("record whole plan dispatch");
+    for ordinal in 0..dispatch.closure_plan.plan_length {
+        let permit = journal
+            .begin_probe_execution(ordinal, K2UncertaintyCaseJournalFaultV2::None)
+            .expect("begin planned execution");
+        journal
+            .record_probe_observation(
+                permit,
+                root_hash(&format!("r7c-observation-{ordinal}")),
+                K2UncertaintyCaseJournalFaultV2::None,
+            )
+            .expect("freeze planned observation");
+    }
+    assert_eq!(
+        journal.projection().expect("happy projection").phase,
+        K2UncertaintyCaseJournalPhaseV2::ReadyForObservationVector
+    );
+    journal
+        .freeze_observation_vector(
+            root_hash("r7c-coordinator"),
+            root_hash("r7c-vector-request"),
+            root_hash("r7c-vector"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        )
+        .expect("freeze observation vector");
+    journal
+        .record_models_updated(
+            root_hash("r7c-final-verifier"),
+            root_hash("r7c-final-request"),
+            root_hash("r7c-final-receipt"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        )
+        .expect("record models updated");
+    let reopened = K2UncertaintyCaseJournalV2::reopen(&journal_root).expect("reopen happy journal");
+    assert_eq!(journal.state(), reopened.state());
+    assert_eq!(
+        reopened.projection().expect("reopened projection").phase,
+        K2UncertaintyCaseJournalPhaseV2::ModelsUpdated
+    );
+
+    let before_root = fixture.root.join("r7c-before-rename-journal");
+    let mut before = K2UncertaintyCaseJournalV2::create(&before_root, dispatch.clone())
+        .expect("create before-rename journal");
+    assert_error(
+        before.record_plan_dispatch(
+            root_hash("r7c-coordinator"),
+            K2UncertaintyCaseJournalFaultV2::BeforeRename,
+        ),
+        "self_formed_case_journal_v2_fault_before_rename",
+        "self_formed_case_journal_v2_fault_before_rename",
+    );
+    let before_reopened =
+        K2UncertaintyCaseJournalV2::reopen(&before_root).expect("reopen before-rename journal");
+    assert_eq!(
+        before_reopened
+            .projection()
+            .expect("before-rename projection")
+            .phase,
+        K2UncertaintyCaseJournalPhaseV2::AwaitingPlanDispatch
+    );
+
+    let after_root = fixture.root.join("r7c-after-rename-journal");
+    let mut after = K2UncertaintyCaseJournalV2::create(&after_root, dispatch)
+        .expect("create after-rename journal");
+    after
+        .record_plan_dispatch(
+            root_hash("r7c-coordinator"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        )
+        .expect("record crash plan dispatch");
+    assert_error(
+        after.begin_probe_execution(0, K2UncertaintyCaseJournalFaultV2::AfterRename),
+        "self_formed_case_journal_v2_fault_after_rename",
+        "self_formed_case_journal_v2_fault_after_rename",
+    );
+    let mut after_reopened =
+        K2UncertaintyCaseJournalV2::reopen(&after_root).expect("reopen after-rename journal");
+    assert_eq!(
+        after_reopened
+            .projection()
+            .expect("after-rename projection")
+            .phase,
+        K2UncertaintyCaseJournalPhaseV2::IndeterminateExecution { probe_ordinal: 0 }
+    );
+    assert_error(
+        after_reopened.begin_probe_execution(0, K2UncertaintyCaseJournalFaultV2::None),
+        "self_formed_case_journal_probe_redispatch_v2",
+        "self_formed_case_journal_probe_redispatch_v2",
+    );
+    after_reopened
+        .freeze_indeterminate_execution(
+            root_hash("r7c-coordinator"),
+            root_hash("r7c-indeterminate-terminal"),
+            K2UncertaintyCaseJournalFaultV2::None,
+        )
+        .expect("freeze indeterminate terminal");
+    assert_eq!(
+        K2UncertaintyCaseJournalV2::reopen(&after_root)
+            .expect("reopen terminal journal")
+            .projection()
+            .expect("terminal projection")
+            .phase,
+        K2UncertaintyCaseJournalPhaseV2::IndeterminateTerminal { probe_ordinal: 0 }
+    );
 }
 
 fn representatives_with_partition(
