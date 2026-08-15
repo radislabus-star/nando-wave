@@ -137,7 +137,10 @@ fn verify_two_probe_and_order_invariance(
         census.disposition,
         K2UncertaintyClosureDispositionV1::TwoProbe
     );
-    assert_eq!(census.selected_second_probe_root_sha256, Some(second_root));
+    assert_eq!(
+        census.selected_second_probe_root_sha256,
+        Some(second_root.clone())
+    );
     assert_eq!(
         census.selected_joint_partition_sizes,
         Some(vec![1, 1, 1, 1])
