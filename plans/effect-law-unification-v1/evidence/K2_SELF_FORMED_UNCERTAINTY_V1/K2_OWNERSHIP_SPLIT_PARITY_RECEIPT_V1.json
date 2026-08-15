@@ -1,0 +1,74 @@
+{
+  "schema": "nando.k2-ownership-split-parity-receipt.v1",
+  "base_commit": "17df25f2d47db0476836a1162817d176d364242f",
+  "source_commit": "bc2220ade2fe27cb04b676d86dccbf5a0dd39839",
+  "branch": "research/k2-ownership-split-v1-20260815",
+  "remote_host": "e-MEGA-MINI-M1-13th",
+  "remote_worktree": "/home/e/projects/nando-wave-k2-ownership-split-20260815",
+  "toolchain": {
+    "cargo": "1.97.1 (c980f4866 2026-06-30)",
+    "rustc": "1.97.1 (8bab26f4f 2026-07-14)",
+    "build_jobs": 20
+  },
+  "public_api_parity": {
+    "method": "lexical_include_payload_reconstruction_sha256",
+    "all_original_payload_bytes_preserved": true,
+    "public_schema_change": false,
+    "public_constant_change": false,
+    "visibility_change": false,
+    "original_sha256": [
+      "da9b3e6d5812ed0dd36711840064bd2472dd58199d3e91d8e1a0db8abe8d6096",
+      "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da",
+      "e9f4d1346d84a4c373673c89681f28a9d0157536c4ff6bd61f441f0ff719bf3f",
+      "9ffc14ed0c89a9fdd9e2bfaa12e21230f985a275d9a46c75ae46292fb0511b54"
+    ],
+    "reconstructed_sha256": [
+      "da9b3e6d5812ed0dd36711840064bd2472dd58199d3e91d8e1a0db8abe8d6096",
+      "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da",
+      "e9f4d1346d84a4c373673c89681f28a9d0157536c4ff6bd61f441f0ff719bf3f",
+      "9ffc14ed0c89a9fdd9e2bfaa12e21230f985a275d9a46c75ae46292fb0511b54"
+    ],
+    "parity": true
+  },
+  "bound_artifacts": {
+    "source_layout_manifest_sha256": "0a68ff432428b21a611bc6b99846850f3b05493472f4ef1799b506409a6df159",
+    "evidence_supersession_index_sha256": "0890e9fc11deaae47eb1e58d0c89c6c80d8bebc64174622da0104abbce4f563d",
+    "predecessor_selector_sha256": "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390"
+  },
+  "checks": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "status": "PASS"
+    },
+    {
+      "command": "cargo check -p nando-operator-learning --all-targets --jobs 20",
+      "status": "PASS"
+    },
+    {
+      "command": "cargo test -p nando-operator-learning --lib --jobs 20",
+      "status": "PASS",
+      "passed": 444,
+      "failed": 0
+    },
+    {
+      "command": "cargo test -p nando-operator-learning --tests --jobs 20 -- --skip sealed_model_guided_active_inquiry_uses_one_safe_probe_per_case",
+      "status": "PASS",
+      "sealed_predecessor_test_executions": 0,
+      "sealed_predecessor_test_filtered": 1
+    },
+    {
+      "command": "cargo clippy -p nando-operator-learning --all-targets --all-features --jobs 20 -- -D warnings",
+      "status": "PASS"
+    },
+    {
+      "command": "git diff --check 17df25f2d47db0476836a1162817d176d364242f...HEAD",
+      "status": "PASS",
+      "new_findings": 0
+    }
+  ],
+  "behavior_change": false,
+  "fixture_change": false,
+  "scientific_result_change": false,
+  "authority": false,
+  "verdict": "PASS"
+}

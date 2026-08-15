@@ -1,0 +1,67 @@
+{
+  "schema": "nando.k2-evidence-supersession-index.v1",
+  "base_commit": "17df25f2d47db0476836a1162817d176d364242f",
+  "append_only": true,
+  "authority": false,
+  "relation": "SUPERSEDED_BY_SPLIT_ROUTE_FOR_SCOPED_REVIEW",
+  "historical_inputs": [
+    {
+      "role": "combined_worksheet",
+      "path": "nanda-task-k2-self-chosen-safe-inquiry-v1.md",
+      "sha256": "964da603927f6ebdcc34bc8ab10c8a44c94e2f66b2bbbf1925121ee2c2959373",
+      "bytes_preserved": true
+    },
+    {
+      "role": "combined_historical_veto",
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_CHOSEN_SAFE_INQUIRY_V1/nanda-structural.receipt.json",
+      "sha256": "343ab73a5ef6d73a0bf7356553ba81b38eb6ff9c400f2ad489c1e95a22cd2356",
+      "verdict": "VETO",
+      "authority_ready": false,
+      "bytes_preserved": true
+    }
+  ],
+  "replacement_split_route_receipts": [
+    {
+      "route": "search",
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_CHOSEN_SAFE_INQUIRY_V1/nanda-search.receipt.json",
+      "sha256": "5e55f010dc746e0172f6653a896ddd85aa8fb48a2f852213fd4d9e150d8530ef",
+      "verdict": "PASS",
+      "authority_ready": false
+    },
+    {
+      "route": "execution",
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_CHOSEN_SAFE_INQUIRY_V1/nanda-execution.receipt.json",
+      "sha256": "f00f7a6a16a19ebacf5b77ec76690bdfa9d895510eab7a2ef8d36075fdbfc972",
+      "verdict": "PASS",
+      "authority_ready": false
+    },
+    {
+      "route": "temporal",
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_CHOSEN_SAFE_INQUIRY_V1/nanda-temporal.receipt.json",
+      "sha256": "0d98c5a4a50c4483381d46aba7d9db11948068feb7c3b6d6ce22b95f9a9fb3b1",
+      "verdict": "PASS",
+      "authority_ready": false
+    },
+    {
+      "route": "authority",
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_CHOSEN_SAFE_INQUIRY_V1/nanda-authority.receipt.json",
+      "sha256": "91432cebae31bee5a60cacf94be5088613b74f8f3dbd0ee40807d011bd678be5",
+      "verdict": "PASS",
+      "authority_ready": false
+    },
+    {
+      "route": "proof",
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_CHOSEN_SAFE_INQUIRY_V1/nanda-proof.receipt.json",
+      "sha256": "23e1ca86713069de973d8c7c143e435b1e13b020f6c24db3c408afe72a0a4702",
+      "verdict": "PASS",
+      "authority_ready": false
+    }
+  ],
+  "claim_boundary": {
+    "historical_veto_mutated": false,
+    "chronology_erased": false,
+    "global_pass_granted": false,
+    "execution_authority_granted": false,
+    "scientific_claim_granted": false
+  }
+}
