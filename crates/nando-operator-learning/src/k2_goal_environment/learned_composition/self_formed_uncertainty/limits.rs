@@ -70,6 +70,14 @@ pub const K2_UNCERTAINTY_TOURNAMENT_SCHEMA_V1: &str = "nando.k2-self-formed-tour
 pub const K2_UNCERTAINTY_DIRECT_WINNER_SCHEMA_V1: &str = "nando.k2-self-formed-direct-winner.v1";
 pub const K2_UNCERTAINTY_RESOURCE_TERMINAL_SCHEMA_V1: &str =
     "nando.k2-self-formed-resource-terminal.v1";
+pub const K2_UNCERTAINTY_GENERATOR_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-generator-request.v1";
+pub const K2_UNCERTAINTY_PUBLIC_CASE_SCHEMA_V1: &str = "nando.k2-self-formed-public-case.v1";
+pub const K2_UNCERTAINTY_PRIVATE_CASE_SCHEMA_V1: &str = "nando.k2-self-formed-private-case.v1";
+pub const K2_UNCERTAINTY_PUBLIC_BATCH_SCHEMA_V1: &str = "nando.k2-self-formed-public-batch.v1";
+pub const K2_UNCERTAINTY_PRIVATE_BATCH_SCHEMA_V1: &str = "nando.k2-self-formed-private-batch.v1";
+pub const K2_UNCERTAINTY_GENERATOR_RESPONSE_SCHEMA_V1: &str =
+    "nando.k2-self-formed-generator-response.v1";
 
 pub fn uncertainty_root_v1<T: Serialize>(value: &T) -> K2CompositionResultV1<String> {
     composition_root_v1(value)
