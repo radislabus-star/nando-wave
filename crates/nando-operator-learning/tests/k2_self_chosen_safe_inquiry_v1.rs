@@ -145,8 +145,8 @@ fn sealed_model_guided_active_inquiry_uses_one_safe_probe_per_case() {
         .map(|(selector_request, precommit)| {
             let command = K2InquiryVerifierCommandV1::VerifySelection {
                 verifier_executable_sha256: binaries.verifier_sha256.clone(),
-                selector_request: selector_request.clone(),
-                precommit: precommit.clone(),
+                selector_request: Box::new(selector_request.clone()),
+                precommit: Box::new(precommit.clone()),
             };
             match run_isolated_protocol_v1(&binaries.verifier, &command) {
                 K2InquiryVerifierReceiptV1::Selection { value } => value,

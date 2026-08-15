@@ -1082,8 +1082,8 @@ impl K2InquiryOutcomeVerificationReceiptV1 {
 pub enum K2InquiryVerifierCommandV1 {
     VerifySelection {
         verifier_executable_sha256: String,
-        selector_request: K2InquirySelectorRequestV1,
-        precommit: K2InquirySelectionPrecommitV1,
+        selector_request: Box<K2InquirySelectorRequestV1>,
+        precommit: Box<K2InquirySelectionPrecommitV1>,
     },
     VerifyOutcome {
         request: Box<K2InquiryOutcomeVerificationRequestV1>,
