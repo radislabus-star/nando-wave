@@ -314,14 +314,14 @@ fn r7_v4_real_owners_close_all_cases_with_precommitted_probe_plans() {
     assert_eq!(reopened.projection(), journal.projection());
 
     let mut final_receipts = Vec::new();
-    for case_sequence in 0..generated.public.cases.len() {
+    for (case_sequence, prepared_case) in prepared.iter().enumerate() {
         eprintln!("R7 V4 execute case {}/16", case_sequence + 1);
         final_receipts.push(execute_precommitted_case(
             &environment,
             &binaries,
             &generated,
             &batch,
-            &prepared[case_sequence],
+            prepared_case,
             &mut journal,
             case_sequence,
         ));
