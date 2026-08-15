@@ -14,9 +14,8 @@ use super::{
     K2_UNCERTAINTY_PREDICTION_WITNESS_SCHEMA_V1, K2_UNCERTAINTY_PROBE_CLASS_SCHEMA_V1,
     K2_UNCERTAINTY_RAW_PREDICTIONS_V1, K2_UNCERTAINTY_RAW_PROBE_SCHEMA_V1,
     K2_UNCERTAINTY_RAW_PROBES_V1, K2_UNCERTAINTY_RESOURCE_TERMINAL_SCHEMA_V1,
-    K2_UNCERTAINTY_RISK_COST_SCHEMA_V1, K2_UNCERTAINTY_STATE_COUNT_V1, denied_authority_v1,
-    require_denied_authority_v1, require_exact_len_v1, require_sorted_unique_v1,
-    uncertainty_root_v1,
+    K2_UNCERTAINTY_RISK_COST_SCHEMA_V1, K2_UNCERTAINTY_STATE_COUNT_V1, require_denied_authority_v1,
+    require_exact_len_v1, require_sorted_unique_v1, uncertainty_root_v1,
 };
 
 pub const K2_UNCERTAINTY_STATE_UNIVERSE_SCHEMA_V1: &str = "nando.k2-self-formed-state-universe.v1";
