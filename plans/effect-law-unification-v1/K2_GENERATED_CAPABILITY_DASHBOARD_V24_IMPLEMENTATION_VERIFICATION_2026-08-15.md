@@ -1,6 +1,6 @@
 # K2 Generated Capability Dashboard V24 Implementation Verification
 
-Status: `IMPLEMENTATION PASS / DEPLOYMENT PENDING / SCIENTIFIC AUTHORITY FALSE`
+Status: `IMPLEMENTATION PASS / CONTROL DEPLOYED / SCIENTIFIC AUTHORITY FALSE`
 
 Date: `2026-08-15`
 
@@ -85,9 +85,9 @@ Workspace-wide strict Clippy still reports pre-existing warnings in untouched
 `nando-cli` files. The changed gateway-control target is clean; unrelated CLI
 debt is not repaired or hidden by this slice.
 
-## Remaining Transaction
+## Completed Transaction
 
-Implementation PASS authorizes only the preregistered control-plane deployment:
+The preregistered control-plane deployment completed:
 
 ```text
 commit and publish source
@@ -100,6 +100,13 @@ commit and publish source
 -> verify live V24 desktop and 390 px mobile
 ```
 
+The authoritative remote deployment receipt root is
+`5332195d30bc7f9db7939f0d6cd84bbe62881f8ba7bf21f9018e1c026c13c7f0`.
+The repository verification receipt is
+`evidence/K2_GENERATED_CAPABILITY_DASHBOARD_V24/live-deployment-verification.v1.json`
+with SHA-256
+`af51dfdb8289bdddcd8025f9f742ff3b99811a720810f830501ec8586c1f00ef`.
+
 No natural traffic, K1 registry, phase memory, package, LawCertificate,
 transition-serving process, Nginx process, connector process, learner, or
-authority service may be changed by this transaction.
+authority service was changed by this transaction.

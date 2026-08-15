@@ -1,0 +1,86 @@
+{
+  "schema": "nando.k2-generated-capability-dashboard-live-deployment-verification.v1",
+  "generated_at": "2026-08-15T08:58:32Z",
+  "verdict": "PASS",
+  "dashboard": {
+    "build": "2026.08.15-control-v24",
+    "source_commit": "1701c468fc2bd607486280c06b0500575cf44da1",
+    "source_tree": "8dbb7041642705ffa13ea145e72224bcdbac645b",
+    "url": "http://192.168.3.94:8787/control/0798c80a29c748461e00c846908e11d0cb109e0dfb5c0c6bef2962676e1ddaa0"
+  },
+  "deployment_receipt": {
+    "path": "/var/lib/nando-wave/deployments/20260815T085454Z-1701c468fc2b/deployment-receipt.json",
+    "sha256_root": "5332195d30bc7f9db7939f0d6cd84bbe62881f8ba7bf21f9018e1c026c13c7f0",
+    "independently_recomputed": true,
+    "mode": "0400",
+    "owner": "root:root",
+    "rollback_commit": "c223f6f162dc73cc19bf643c3de66f3fe52fe48e"
+  },
+  "binary_identity": {
+    "release_sha256": "d447b899e4830adf2604b2c056a80375d5105b28764c90ccab80d1d0107ad090",
+    "installed_sha256": "d447b899e4830adf2604b2c056a80375d5105b28764c90ccab80d1d0107ad090",
+    "running_sha256": "d447b899e4830adf2604b2c056a80375d5105b28764c90ccab80d1d0107ad090",
+    "size_bytes": 5595336,
+    "exact_match": true
+  },
+  "process_parity": {
+    "gateway_control": {"before": 298415, "after": 2304299, "intentional_restart": true},
+    "hot_serving": {"before": 1816591, "after": 1816591, "unchanged": true},
+    "cold_learning": {"before": 298492, "after": 298492, "unchanged": true},
+    "certification_authority": {"before": 150005, "after": 150005, "unchanged": true},
+    "nginx": {"before": 682430, "after": 682430, "unchanged": true},
+    "local_connector": {"before": 2919, "after": 2919, "unchanged": true},
+    "service_restart_counters": 0,
+    "survival_seconds": 15
+  },
+  "runtime": {
+    "services_active": 3,
+    "services_expected": 3,
+    "cpu_allowed": true,
+    "false_accepts": 0,
+    "parity_failures": 0,
+    "k1_laws": 1,
+    "k1_min_laws": 3,
+    "law_2": "NOT_PROVED",
+    "natural_k2": "NOT_PROVED"
+  },
+  "generated_capability_projection": {
+    "hidden_effects_learned": "PASS",
+    "explicit_composition": "PASS",
+    "hidden_representation": "PASS",
+    "confirm_exact_goals": [2, 2],
+    "search_evaluations_each": [61, 67],
+    "complete_denominator_each": 8659,
+    "negative_controls": [18, 18],
+    "production_authority": false,
+    "natural_k2_proved": false
+  },
+  "verification": {
+    "gateway_control_tests": {"passed": 65, "failed": 0},
+    "experimental_lab_tests": {"passed": 5, "failed": 0},
+    "operator_learning_lib_tests": {"passed": 444, "failed": 0},
+    "workspace_check_all_targets": "PASS",
+    "rustfmt": "PASS",
+    "gateway_control_strict_clippy": "PASS",
+    "desktop": {"width": 1440, "height": 900, "horizontal_overflow_px": 0},
+    "mobile": {"width": 390, "height": 844, "horizontal_overflow_px": 0},
+    "page_errors": 0,
+    "console_errors": 0,
+    "browser_sessions_after_cleanup": 0,
+    "responsive_evidence_manifest": {
+      "path": "/home/ubu/Загрузки/agent-browser/responsive/20260815T085616.906021593-3919766-a85ba9ca-nando-k2-v24-responsive-nando-k2-v24/manifest.json",
+      "sha256": "89d8e0984d90149f7edd42272d9fad5702f41ca61933f6704b7bc7f9f52f6cfc",
+      "verdict": "PASS"
+    }
+  },
+  "authority_boundary": {
+    "operational_deployment": true,
+    "generated_capability": true,
+    "production_execution_authority": false,
+    "natural_k2_authority": false,
+    "law_certificate_issued": false,
+    "k1_registry_mutated": false,
+    "phase_memory_mutated": false,
+    "package_activated": false
+  }
+}
