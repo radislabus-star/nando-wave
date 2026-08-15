@@ -1,0 +1,54 @@
+{
+  "schema": "nando.k2-ownership-split-source-layout.v1",
+  "base_commit": "17df25f2d47db0476836a1162817d176d364242f",
+  "behavior_change": false,
+  "public_schema_change": false,
+  "authority_change": false,
+  "files": [
+    {
+      "original_path": "crates/nando-operator-learning/src/k2_goal_environment/learned_capability.rs",
+      "original_sha256": "da9b3e6d5812ed0dd36711840064bd2472dd58199d3e91d8e1a0db8abe8d6096",
+      "owners": [
+        "learned_capability/model.rs",
+        "learned_capability/protocol.rs",
+        "learned_capability/receipt.rs"
+      ],
+      "concatenated_payload_sha256": "da9b3e6d5812ed0dd36711840064bd2472dd58199d3e91d8e1a0db8abe8d6096",
+      "payload_byte_parity": true
+    },
+    {
+      "original_path": "crates/nando-operator-learning/src/k2_goal_environment/model.rs",
+      "original_sha256": "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da",
+      "owners": [
+        "model/domain.rs",
+        "model/protocol.rs",
+        "model/receipt.rs"
+      ],
+      "concatenated_payload_sha256": "94c77c9c5e82e75c805b7087f6eeff640c256ef0983304b436fcd701bd1f32da",
+      "payload_byte_parity": true
+    },
+    {
+      "original_path": "crates/nando-operator-learning/tests/k2_self_chosen_safe_inquiry_v1.rs",
+      "original_sha256": "e9f4d1346d84a4c373673c89681f28a9d0157536c4ff6bd61f441f0ff719bf3f",
+      "owners": [
+        "k2_self_chosen_safe_inquiry_v1/protocol_tests.rs",
+        "k2_self_chosen_safe_inquiry_v1/fixture.rs",
+        "k2_self_chosen_safe_inquiry_v1/receipt_assertions.rs",
+        "k2_self_chosen_safe_inquiry_v1/process_fixture.rs"
+      ],
+      "concatenated_payload_sha256": "e9f4d1346d84a4c373673c89681f28a9d0157536c4ff6bd61f441f0ff719bf3f",
+      "payload_byte_parity": true
+    },
+    {
+      "original_path": "crates/nando-operator-learning/tests/k2_goal_environment_learned_v1.rs",
+      "original_sha256": "9ffc14ed0c89a9fdd9e2bfaa12e21230f985a275d9a46c75ae46292fb0511b54",
+      "owners": [
+        "k2_goal_environment_learned_v1/protocol_test.rs",
+        "k2_goal_environment_learned_v1/receipt_assertions.rs",
+        "k2_goal_environment_learned_v1/fixture.rs"
+      ],
+      "concatenated_payload_sha256": "9ffc14ed0c89a9fdd9e2bfaa12e21230f985a275d9a46c75ae46292fb0511b54",
+      "payload_byte_parity": true
+    }
+  ]
+}
