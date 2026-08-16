@@ -1,0 +1,63 @@
+{
+  "schema": "nando.k2-self-formed-uncertainty-v5-r7g-result.v1",
+  "status": "R7G_PASS_R7G_FROZEN",
+  "implementation_commit_sha1": "8f916ddff33180b8c94f6b41c50b06fd67fccdd5",
+  "branch": "research/k2-self-formed-uncertainty-v1-20260815",
+  "remote_checkout": "/home/e/build/nando-wave-k2-self-formed-r2",
+  "remote_target": "/home/e/.cache/nando-wave-k2-active-inquiry-target",
+  "implementation": {
+    "development_wire_fields_changed": false,
+    "confirm_request_schema_closed": true,
+    "confirm_response_schema_closed": true,
+    "generator_dispatch_by_exact_schema": true,
+    "development_and_confirm_domains_disjoint": true,
+    "closure_planner_process_separate_from_coordinator": true,
+    "network_callsites_added": 0,
+    "production_callsites_added": 0
+  },
+  "development_parity": {
+    "historical_request_root_sha256": "c285343b9aa9c5146a1f512cf3c2f412a0e538dd803665429b42035e81430588",
+    "historical_response_root_sha256": "10264f4a25e3ad22156a30c49dc1f53aee1de5754d6dd0f1b77c54929b3531cf",
+    "public_batch_root_sha256": "9fbdd35627b2b5265b8e35274412e7dc2a0cce576066022d99b8c67f13b8ad8a",
+    "private_batch_root_sha256": "5ed5436d0c78e5e62f58bbb4efa34cda73a50af296fdf03dfab16014f1c274e5",
+    "denominator_root_sha256": "011ea03be71e80d520101ce2e7b8897be2a2b88e4285d0c8ca905dbb715026dc",
+    "historical_response_bytes_sha256": "26e509ae09fd68b97323e9e9d0ee1bce9bfee7b0dbd75be5aca2015675027c6e",
+    "successor_inner_artifacts_byte_equal": true,
+    "successor_outer_identity_only_rebinding": true
+  },
+  "verification": {
+    "release_compile_no_run": "PASS",
+    "generator_tests_passed": 3,
+    "generator_tests_failed": 0,
+    "development_cases_preverified": 16,
+    "development_cases_executed": 16,
+    "process_tests_passed": 1,
+    "process_tests_failed": 0,
+    "maximum_final_verifier_request_bytes": 913356,
+    "maximum_protocol_bytes": 1048576,
+    "process_test_duration_ms": 165080,
+    "strict_clippy": "PASS",
+    "strict_clippy_duration_ms": 27190
+  },
+  "confirm_test_boundary": {
+    "material": "fixed_static_test_material",
+    "csprng_used": false,
+    "authorization_slot_claimed": false,
+    "generator_dispatched_as_sealed_attempt": false,
+    "scientific_verdict_created": false
+  },
+  "authority": {
+    "natural_k2_authority": false,
+    "k1_registry_mutated": false,
+    "product_authority": false,
+    "phase_memory_mutated": false,
+    "law_certificate_issued": false,
+    "package_activated": false,
+    "deployment_authority": false
+  },
+  "confirm_nonce": "ABSENT",
+  "authorization_slot_claims": 0,
+  "sealed_attempts": 0,
+  "production_effects": 0,
+  "next_transition": "R7H_AUTHORIZATION_NONCE_JOURNAL"
+}
