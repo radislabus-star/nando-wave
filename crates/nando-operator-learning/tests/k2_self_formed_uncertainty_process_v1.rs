@@ -15,18 +15,18 @@ use nando_operator_learning::{
     K2UncertaintyBatchPrecommitV2, K2UncertaintyCaseJournalFaultV2,
     K2UncertaintyCaseJournalPhaseV2, K2UncertaintyCaseJournalV2,
     K2UncertaintyCasePreverificationV1, K2UncertaintyCasePreverificationV2,
-    K2UncertaintyCaseVerificationReceiptV2, K2UncertaintyClosurePlanV1,
-    K2UncertaintyClosurePlannerRequestV1, K2UncertaintyClosureVerificationReceiptV1,
-    K2UncertaintyClosureVerificationRequestV1, K2UncertaintyFinalVerifierRequestV2,
-    K2UncertaintyGeneratorRequestV1, K2UncertaintyGeneratorResponseV1,
-    K2UncertaintyLearnerRequestV1, K2UncertaintyLearnerResponseV1,
-    K2UncertaintyObservationVectorV2, K2UncertaintyPlanSafetyBindingV2,
-    K2UncertaintyPrivateSafetyDispositionV1, K2UncertaintyProbeArtifactsV1,
-    K2UncertaintyProbeExecutionEvidenceV2, K2UncertaintyProbeRequestV1,
-    K2UncertaintySafetyReceiptV1, K2UncertaintySafetyRequestV1, K2UncertaintyTournamentArtifactsV1,
-    K2UncertaintyWorkspaceIdentityV2, composition_root_v1, composition_sha256_file_v1,
-    enumerate_self_formed_probe_frontier_v1, materialize_self_formed_probe_files_v1,
-    plan_self_formed_uncertainty_closure_v1, prepare_self_formed_plan_dispatch_v2,
+    K2UncertaintyCaseVerificationReceiptV2, K2UncertaintyClosureCensusV1,
+    K2UncertaintyClosurePlanV1, K2UncertaintyClosurePlannerRequestV1,
+    K2UncertaintyClosureVerificationReceiptV1, K2UncertaintyClosureVerificationRequestV1,
+    K2UncertaintyFinalVerifierRequestV2, K2UncertaintyGeneratorRequestV1,
+    K2UncertaintyGeneratorResponseV1, K2UncertaintyLearnerRequestV1,
+    K2UncertaintyLearnerResponseV1, K2UncertaintyObservationVectorV2,
+    K2UncertaintyPlanSafetyBindingV2, K2UncertaintyPrivateSafetyDispositionV1,
+    K2UncertaintyProbeArtifactsV1, K2UncertaintyProbeExecutionEvidenceV2,
+    K2UncertaintyProbeRequestV1, K2UncertaintySafetyReceiptV1, K2UncertaintySafetyRequestV1,
+    K2UncertaintyTournamentArtifactsV1, K2UncertaintyWorkspaceIdentityV2, composition_root_v1,
+    composition_sha256_file_v1, enumerate_self_formed_probe_frontier_v1,
+    materialize_self_formed_probe_files_v1, prepare_self_formed_plan_dispatch_v2,
     preverify_self_formed_case_with_owner_v1, publish_self_formed_final_verifier_material_v2,
     publish_self_formed_probe_output_v1, reopen_self_formed_probe_output_v1,
     run_self_formed_tournament_with_owners_v1, self_formed_grammar_root_v1, uncertainty_bytes_v1,
@@ -147,11 +147,11 @@ fn r7_v4_real_owners_close_all_cases_with_precommitted_probe_plans() {
                 .tournament_winner_probe_root_sha256
                 .clone(),
             representatives,
-            binaries.coordinator_sha256.clone(),
+            binaries.closure_planner_sha256.clone(),
         )
         .expect("closure planner request");
-        let closure_census = plan_self_formed_uncertainty_closure_v1(&closure_planner_request)
-            .expect("complete closure census");
+        let closure_census: K2UncertaintyClosureCensusV1 =
+            run_isolated(&binaries.closure_planner, &closure_planner_request, &[], 60);
         let closure_verification_request = K2UncertaintyClosureVerificationRequestV1::seal(
             binaries.closure_verifier_sha256.clone(),
             closure_planner_request,
@@ -656,6 +656,7 @@ struct ProcessBinaries {
     selector: PathBuf,
     baseline: PathBuf,
     preverifier: PathBuf,
+    closure_planner: PathBuf,
     closure_verifier: PathBuf,
     safety: PathBuf,
     worker: PathBuf,
@@ -667,6 +668,7 @@ struct ProcessBinaries {
     selector_sha256: String,
     baseline_sha256: String,
     preverifier_sha256: String,
+    closure_planner_sha256: String,
     closure_verifier_sha256: String,
     safety_sha256: String,
     worker_sha256: String,
@@ -683,6 +685,8 @@ impl ProcessBinaries {
         let selector = PathBuf::from(env!("CARGO_BIN_EXE_nando-k2-inquiry-selector"));
         let baseline = PathBuf::from(env!("CARGO_BIN_EXE_nando-k2-inquiry-baseline"));
         let preverifier = PathBuf::from(env!("CARGO_BIN_EXE_nando-k2-inquiry-verifier"));
+        let closure_planner =
+            PathBuf::from(env!("CARGO_BIN_EXE_nando-k2-self-formed-closure-planner"));
         let closure_verifier =
             PathBuf::from(env!("CARGO_BIN_EXE_nando-k2-self-formed-closure-verifier"));
         let safety = PathBuf::from(env!("CARGO_BIN_EXE_nando-k2-self-formed-safety"));
@@ -698,6 +702,7 @@ impl ProcessBinaries {
             selector_sha256: sha(&selector),
             baseline_sha256: sha(&baseline),
             preverifier_sha256: sha(&preverifier),
+            closure_planner_sha256: sha(&closure_planner),
             closure_verifier_sha256: sha(&closure_verifier),
             safety_sha256: sha(&safety),
             worker_sha256: sha(&worker),
@@ -710,6 +715,7 @@ impl ProcessBinaries {
             selector,
             baseline,
             preverifier,
+            closure_planner,
             closure_verifier,
             safety,
             worker,
@@ -726,6 +732,7 @@ impl ProcessBinaries {
             &self.selector_sha256,
             &self.baseline_sha256,
             &self.preverifier_sha256,
+            &self.closure_planner_sha256,
             &self.closure_verifier_sha256,
             &self.safety_sha256,
             &self.worker_sha256,

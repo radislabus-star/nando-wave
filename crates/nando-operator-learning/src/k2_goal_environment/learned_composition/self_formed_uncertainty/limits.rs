@@ -85,6 +85,10 @@ pub const K2_UNCERTAINTY_PUBLIC_BATCH_SCHEMA_V1: &str = "nando.k2-self-formed-pu
 pub const K2_UNCERTAINTY_PRIVATE_BATCH_SCHEMA_V1: &str = "nando.k2-self-formed-private-batch.v1";
 pub const K2_UNCERTAINTY_GENERATOR_RESPONSE_SCHEMA_V1: &str =
     "nando.k2-self-formed-generator-response.v1";
+pub const K2_UNCERTAINTY_CONFIRM_GENERATOR_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-generator-request.v1";
+pub const K2_UNCERTAINTY_CONFIRM_GENERATOR_RESPONSE_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-generator-response.v1";
 pub const K2_UNCERTAINTY_LEARNER_RESPONSE_SCHEMA_V1: &str =
     "nando.k2-self-formed-learner-response.v1";
 pub const K2_UNCERTAINTY_PROBE_REQUEST_SCHEMA_V1: &str = "nando.k2-self-formed-probe-request.v1";

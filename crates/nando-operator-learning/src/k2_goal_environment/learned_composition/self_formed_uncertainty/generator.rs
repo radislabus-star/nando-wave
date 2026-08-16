@@ -10,10 +10,14 @@ use super::super::{
 };
 use super::{
     K2_UNCERTAINTY_ACTIONS_V1, K2_UNCERTAINTY_CONFIRM_CASES_V1,
-    K2_UNCERTAINTY_GENERATOR_RESPONSE_SCHEMA_V1, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
-    K2_UNCERTAINTY_PATHS_V1, K2_UNCERTAINTY_PRIVATE_BATCH_SCHEMA_V1,
-    K2_UNCERTAINTY_PRIVATE_CASE_SCHEMA_V1, K2_UNCERTAINTY_PUBLIC_BATCH_SCHEMA_V1,
-    K2UncertaintyContentAtomV1, K2UncertaintyDomainVocabularyV1, K2UncertaintyGeneratorRequestV1,
+    K2_UNCERTAINTY_CONFIRM_GENERATOR_REQUEST_SCHEMA_V1,
+    K2_UNCERTAINTY_CONFIRM_GENERATOR_RESPONSE_SCHEMA_V1,
+    K2_UNCERTAINTY_GENERATOR_REQUEST_SCHEMA_V1, K2_UNCERTAINTY_GENERATOR_RESPONSE_SCHEMA_V1,
+    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_PATHS_V1,
+    K2_UNCERTAINTY_PRIVATE_BATCH_SCHEMA_V1, K2_UNCERTAINTY_PRIVATE_CASE_SCHEMA_V1,
+    K2_UNCERTAINTY_PUBLIC_BATCH_SCHEMA_V1, K2UncertaintyConfirmGeneratorRequestV1,
+    K2UncertaintyConfirmGeneratorResponseV1, K2UncertaintyContentAtomV1,
+    K2UncertaintyDomainVocabularyV1, K2UncertaintyGeneratorRequestV1,
     K2UncertaintyGeneratorResponseV1, K2UncertaintyPathAtomV1, K2UncertaintyPrivateBatchV1,
     K2UncertaintyPrivateCaseV1, K2UncertaintyPrivateMappingEntryV1, K2UncertaintyPublicBatchV1,
     K2UncertaintyPublicCaseV1, K2UncertaintySplitV1, K2UncertaintySupportObservationV1,
@@ -23,6 +27,11 @@ use super::{
 };
 
 const GENERATOR_SCHEMA_V1: &str = "nando.k2-self-formed-deterministic-generator.v1";
+const CONFIRM_GENERATOR_SCHEMA_V1: &str = "nando.k2-self-formed-deterministic-generator.confirm.v1";
+const DEVELOPMENT_EXPERIMENT_DOMAIN_V1: &str = "nando.k2-self-formed-development-experiment.v1";
+const CONFIRM_EXPERIMENT_DOMAIN_V1: &str = "nando.k2-self-formed-confirm-experiment.v1";
+const DEVELOPMENT_CASE_DOMAIN_V1: &str = "nando.k2-self-formed-development-case.v1";
+const CONFIRM_CASE_DOMAIN_V1: &str = "nando.k2-self-formed-confirm-case.v1";
 
 pub fn generate_self_formed_development_batch_v1(
     request: &K2UncertaintyGeneratorRequestV1,
@@ -33,9 +42,73 @@ pub fn generate_self_formed_development_batch_v1(
         &request.preregistration_v2_root_sha256,
         &request.preregistration_v3_root_sha256,
     ))?;
-    let experiment_id_sha256 = uncertainty_root_v1(&(
-        "nando.k2-self-formed-development-experiment.v1",
+    let generated = generate_self_formed_batch_core_v1(
+        &request.seed_bytes,
+        request.split,
         &request.seed_commitment_sha256,
+        &generator_schema_root_sha256,
+        DEVELOPMENT_EXPERIMENT_DOMAIN_V1,
+        DEVELOPMENT_CASE_DOMAIN_V1,
+    )?;
+    let mut response = K2UncertaintyGeneratorResponseV1 {
+        schema: K2_UNCERTAINTY_GENERATOR_RESPONSE_SCHEMA_V1.to_owned(),
+        generator_request_root_sha256: request.request_root_sha256.clone(),
+        public: generated.public,
+        private: generated.private,
+        authority: denied_authority_v1(),
+        response_root_sha256: String::new(),
+    };
+    response.reseal()?;
+    Ok(response)
+}
+
+pub fn generate_self_formed_confirm_batch_v1(
+    request: &K2UncertaintyConfirmGeneratorRequestV1,
+) -> K2CompositionResultV1<K2UncertaintyConfirmGeneratorResponseV1> {
+    request.validate()?;
+    let generator_schema_root_sha256 = uncertainty_root_v1(&(
+        CONFIRM_GENERATOR_SCHEMA_V1,
+        &request.preregistration_v2_root_sha256,
+        &request.preregistration_v3_root_sha256,
+        &request.preregistration_v4_root_sha256,
+        &request.preregistration_v5_root_sha256,
+    ))?;
+    let generated = generate_self_formed_batch_core_v1(
+        &request.nonce_bytes,
+        request.split,
+        &request.nonce_commitment_sha256,
+        &generator_schema_root_sha256,
+        CONFIRM_EXPERIMENT_DOMAIN_V1,
+        CONFIRM_CASE_DOMAIN_V1,
+    )?;
+    let mut response = K2UncertaintyConfirmGeneratorResponseV1 {
+        schema: K2_UNCERTAINTY_CONFIRM_GENERATOR_RESPONSE_SCHEMA_V1.to_owned(),
+        generator_request_root_sha256: request.request_root_sha256.clone(),
+        public: generated.public,
+        private: generated.private,
+        authority: denied_authority_v1(),
+        response_root_sha256: String::new(),
+    };
+    response.reseal()?;
+    Ok(response)
+}
+
+struct GeneratedBatchesV1 {
+    public: K2UncertaintyPublicBatchV1,
+    private: K2UncertaintyPrivateBatchV1,
+}
+
+fn generate_self_formed_batch_core_v1(
+    seed: &[u8],
+    split: K2UncertaintySplitV1,
+    split_commitment_root_sha256: &str,
+    generator_schema_root_sha256: &str,
+    experiment_domain: &'static str,
+    case_domain: &'static str,
+) -> K2CompositionResultV1<GeneratedBatchesV1> {
+    let experiment_id_sha256 = uncertainty_root_v1(&(
+        experiment_domain,
+        split_commitment_root_sha256,
         &generator_schema_root_sha256,
     ))?;
 
@@ -43,9 +116,11 @@ pub fn generate_self_formed_development_batch_v1(
     let mut private_cases = Vec::with_capacity(K2_UNCERTAINTY_CONFIRM_CASES_V1);
     for case_index in 0..K2_UNCERTAINTY_CONFIRM_CASES_V1 {
         let generated = generate_case_v1(
-            &request.seed_bytes,
+            seed,
             &experiment_id_sha256,
-            &generator_schema_root_sha256,
+            generator_schema_root_sha256,
+            split,
+            case_domain,
             case_index,
         )?;
         public_cases.push(generated.0);
@@ -53,7 +128,7 @@ pub fn generate_self_formed_development_batch_v1(
     }
     public_cases.sort_by_key(|case| {
         derivation_bytes_v1(
-            &request.seed_bytes,
+            seed,
             "public-case-order",
             case.public_case_root_sha256.as_bytes(),
         )
@@ -63,7 +138,7 @@ pub fn generate_self_formed_development_batch_v1(
     let mut public = K2UncertaintyPublicBatchV1 {
         schema: K2_UNCERTAINTY_PUBLIC_BATCH_SCHEMA_V1.to_owned(),
         experiment_id_sha256: experiment_id_sha256.clone(),
-        split_commitment_root_sha256: request.seed_commitment_sha256.clone(),
+        split_commitment_root_sha256: split_commitment_root_sha256.to_owned(),
         cases: public_cases,
         authority: denied_authority_v1(),
         public_batch_root_sha256: String::new(),
@@ -89,16 +164,7 @@ pub fn generate_self_formed_development_batch_v1(
         private_batch_root_sha256: String::new(),
     };
     private.reseal()?;
-    let mut response = K2UncertaintyGeneratorResponseV1 {
-        schema: K2_UNCERTAINTY_GENERATOR_RESPONSE_SCHEMA_V1.to_owned(),
-        generator_request_root_sha256: request.request_root_sha256.clone(),
-        public,
-        private,
-        authority: denied_authority_v1(),
-        response_root_sha256: String::new(),
-    };
-    response.reseal()?;
-    Ok(response)
+    Ok(GeneratedBatchesV1 { public, private })
 }
 
 pub fn run_self_formed_generator_process_v1() -> K2CompositionResultV1<()> {
@@ -107,17 +173,45 @@ pub fn run_self_formed_generator_process_v1() -> K2CompositionResultV1<()> {
         .take((K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 + 1) as u64)
         .read_to_end(&mut input)
         .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_generator_stdin"))?;
-    let request: K2UncertaintyGeneratorRequestV1 = uncertainty_decode_v1(&input)?;
     let executable = std::env::current_exe()
         .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_generator"))?;
-    if composition_sha256_file_v1(&executable)? != request.generator_executable_sha256 {
-        return Err(K2CompositionErrorV1::Invalid(
-            "self_formed_generator_executable_mismatch",
-        ));
-    }
-    let response = generate_self_formed_development_batch_v1(&request)?;
+    let executable_sha256 = composition_sha256_file_v1(&executable)?;
+    let value: serde_json::Value = serde_json::from_slice(&input)
+        .map_err(|_| K2CompositionErrorV1::Invalid("self_formed_generator_protocol_invalid"))?;
+    let schema = value
+        .as_object()
+        .and_then(|object| object.get("schema"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or(K2CompositionErrorV1::Invalid(
+            "self_formed_generator_schema_missing",
+        ))?;
+    let output = match schema {
+        K2_UNCERTAINTY_GENERATOR_REQUEST_SCHEMA_V1 => {
+            let request: K2UncertaintyGeneratorRequestV1 = uncertainty_decode_v1(&input)?;
+            if executable_sha256 != request.generator_executable_sha256 {
+                return Err(K2CompositionErrorV1::Invalid(
+                    "self_formed_generator_executable_mismatch",
+                ));
+            }
+            composition_bytes_v1(&generate_self_formed_development_batch_v1(&request)?)?
+        }
+        K2_UNCERTAINTY_CONFIRM_GENERATOR_REQUEST_SCHEMA_V1 => {
+            let request: K2UncertaintyConfirmGeneratorRequestV1 = uncertainty_decode_v1(&input)?;
+            if executable_sha256 != request.generator_executable_sha256 {
+                return Err(K2CompositionErrorV1::Invalid(
+                    "self_formed_confirm_generator_executable_mismatch",
+                ));
+            }
+            composition_bytes_v1(&generate_self_formed_confirm_batch_v1(&request)?)?
+        }
+        _ => {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_generator_schema_unknown",
+            ));
+        }
+    };
     std::io::stdout()
-        .write_all(&composition_bytes_v1(&response)?)
+        .write_all(&output)
         .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_generator_stdout"))
 }
 
@@ -125,11 +219,13 @@ fn generate_case_v1(
     seed: &[u8],
     experiment_id_sha256: &str,
     generator_schema_root_sha256: &str,
+    split: K2UncertaintySplitV1,
+    case_domain: &'static str,
     case_index: usize,
 ) -> K2CompositionResultV1<(K2UncertaintyPublicCaseV1, K2UncertaintyPrivateCaseV1)> {
     let case_context = format!("case-{case_index}");
     let case_id_sha256 = uncertainty_root_v1(&(
-        "nando.k2-self-formed-development-case.v1",
+        case_domain,
         experiment_id_sha256,
         case_index,
         derivation_bytes_v1(seed, "case-id", case_context.as_bytes()),
@@ -180,7 +276,7 @@ fn generate_case_v1(
     let vocabulary = K2UncertaintyDomainVocabularyV1::seal(
         experiment_id_sha256.to_owned(),
         case_id_sha256.clone(),
-        K2UncertaintySplitV1::Development,
+        split,
         generator_schema_root_sha256.to_owned(),
         actions.clone(),
         paths,

@@ -150,7 +150,6 @@ impl K2UncertaintyPublicCaseV1 {
         self.support.validate()?;
         require_denied_authority_v1(&self.authority)?;
         if self.schema != K2_UNCERTAINTY_PUBLIC_CASE_SCHEMA_V1
-            || self.vocabulary.split != K2UncertaintySplitV1::Development
             || self.vocabulary.case_id_sha256 != self.support.case_id_sha256
             || self.vocabulary.vocabulary_root_sha256 != self.support.vocabulary_root_sha256
             || self.public_case_root_sha256 != self.expected_root()?
@@ -258,9 +257,13 @@ impl K2UncertaintyPublicBatchV1 {
             "self_formed_public_batch_case_count_invalid",
         )?;
         let mut case_ids = BTreeSet::new();
+        let split = self.cases.first().map(|case| case.vocabulary.split).ok_or(
+            K2CompositionErrorV1::Invalid("self_formed_public_batch_split_missing"),
+        )?;
         for case in &self.cases {
             case.validate()?;
             if case.vocabulary.experiment_id_sha256 != self.experiment_id_sha256
+                || case.vocabulary.split != split
                 || !case_ids.insert(&case.vocabulary.case_id_sha256)
             {
                 return Err(K2CompositionErrorV1::Invalid(
@@ -270,8 +273,16 @@ impl K2UncertaintyPublicBatchV1 {
         }
         require_denied_authority_v1(&self.authority)?;
         let expected = self.expected_root()?;
+        let commitment_valid = match split {
+            K2UncertaintySplitV1::Development => {
+                self.split_commitment_root_sha256 == K2_UNCERTAINTY_DEVELOPMENT_SEED_COMMITMENT_V1
+            }
+            K2UncertaintySplitV1::Confirm => {
+                self.split_commitment_root_sha256 != K2_UNCERTAINTY_DEVELOPMENT_SEED_COMMITMENT_V1
+            }
+        };
         if self.schema != K2_UNCERTAINTY_PUBLIC_BATCH_SCHEMA_V1
-            || self.split_commitment_root_sha256 != K2_UNCERTAINTY_DEVELOPMENT_SEED_COMMITMENT_V1
+            || !commitment_valid
             || self.public_batch_root_sha256 != expected
         {
             return Err(K2CompositionErrorV1::Invalid(
