@@ -5,13 +5,164 @@ use super::super::{
     require_composition_root_v1,
 };
 use super::{
-    K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V2, K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2,
-    K2UncertaintyCaseJournalEventKindV2, K2UncertaintyCaseJournalStateV2,
-    K2UncertaintyFinalVerifierMaterialV2, K2UncertaintyObservationVectorV2,
-    K2UncertaintyPlanDispatchV2, K2UncertaintyPrivateCaseV1, K2UncertaintyProbeArtifactsV1,
-    K2UncertaintyProbeRequestV1, denied_authority_v1, require_denied_authority_v1,
-    uncertainty_root_v1,
+    K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V2,
+    K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_RECEIPT_SCHEMA_V1,
+    K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_REQUEST_SCHEMA_V1,
+    K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2, K2UncertaintyCaseJournalEventKindV2,
+    K2UncertaintyCaseJournalStateV2, K2UncertaintyFinalVerifierMaterialV2,
+    K2UncertaintyObservationVectorV2, K2UncertaintyPlanDispatchV2, K2UncertaintyPrivateCaseV1,
+    K2UncertaintyProbeArtifactsV1, K2UncertaintyProbeRequestV1, denied_authority_v1,
+    require_denied_authority_v1, uncertainty_root_v1,
 };
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct K2UncertaintyConfirmFinalVerifierRequestV1 {
+    pub schema: String,
+    pub verifier_executable_sha256: String,
+    pub material: K2UncertaintyFinalVerifierMaterialV2,
+    pub probe_request: K2UncertaintyProbeRequestV1,
+    pub probe_artifacts: K2UncertaintyProbeArtifactsV1,
+    pub dispatch: K2UncertaintyPlanDispatchV2,
+    pub observation_vector: K2UncertaintyObservationVectorV2,
+    pub case_journal_state: K2UncertaintyCaseJournalStateV2,
+    pub expected_final_truth_root_sha256: String,
+    pub authority: K2CompositionAuthorityBoundaryV1,
+    pub request_root_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct K2UncertaintyConfirmFinalVerifierReceiptV1 {
+    pub schema: String,
+    pub confirm_request_root_sha256: String,
+    pub final_truth_root_sha256: String,
+    pub verification: K2UncertaintyCaseVerificationReceiptV2,
+    pub authority: K2CompositionAuthorityBoundaryV1,
+    pub receipt_root_sha256: String,
+}
+
+impl K2UncertaintyConfirmFinalVerifierReceiptV1 {
+    pub(crate) fn seal(
+        confirm_request_root_sha256: String,
+        final_truth_root_sha256: String,
+        verification: K2UncertaintyCaseVerificationReceiptV2,
+    ) -> K2CompositionResultV1<Self> {
+        let mut value = Self {
+            schema: K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_RECEIPT_SCHEMA_V1.to_owned(),
+            confirm_request_root_sha256,
+            final_truth_root_sha256,
+            verification,
+            authority: denied_authority_v1(),
+            receipt_root_sha256: String::new(),
+        };
+        value.receipt_root_sha256 = value.expected_root()?;
+        value.validate()?;
+        Ok(value)
+    }
+
+    pub fn validate(&self) -> K2CompositionResultV1<()> {
+        require_composition_root_v1(&self.confirm_request_root_sha256)?;
+        require_composition_root_v1(&self.final_truth_root_sha256)?;
+        self.verification.validate()?;
+        require_denied_authority_v1(&self.authority)?;
+        if self.schema != K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_RECEIPT_SCHEMA_V1
+            || self.receipt_root_sha256 != self.expected_root()?
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_final_verifier_receipt_invalid",
+            ));
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> K2CompositionResultV1<String> {
+        uncertainty_root_v1(&(
+            K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_RECEIPT_SCHEMA_V1,
+            &self.confirm_request_root_sha256,
+            &self.final_truth_root_sha256,
+            &self.verification.receipt_root_sha256,
+            &self.authority,
+        ))
+    }
+}
+
+impl K2UncertaintyConfirmFinalVerifierRequestV1 {
+    #[allow(clippy::too_many_arguments)]
+    pub fn seal(
+        verifier_executable_sha256: String,
+        material: K2UncertaintyFinalVerifierMaterialV2,
+        probe_request: K2UncertaintyProbeRequestV1,
+        probe_artifacts: K2UncertaintyProbeArtifactsV1,
+        dispatch: K2UncertaintyPlanDispatchV2,
+        observation_vector: K2UncertaintyObservationVectorV2,
+        case_journal_state: K2UncertaintyCaseJournalStateV2,
+        expected_final_truth_root_sha256: String,
+    ) -> K2CompositionResultV1<Self> {
+        let mut value = Self {
+            schema: K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_REQUEST_SCHEMA_V1.to_owned(),
+            verifier_executable_sha256,
+            material,
+            probe_request,
+            probe_artifacts,
+            dispatch,
+            observation_vector,
+            case_journal_state,
+            expected_final_truth_root_sha256,
+            authority: denied_authority_v1(),
+            request_root_sha256: String::new(),
+        };
+        value.request_root_sha256 = value.expected_root()?;
+        value.validate()?;
+        Ok(value)
+    }
+
+    pub fn validate(&self) -> K2CompositionResultV1<()> {
+        require_composition_root_v1(&self.verifier_executable_sha256)?;
+        require_composition_root_v1(&self.expected_final_truth_root_sha256)?;
+        self.material.validate()?;
+        self.probe_request.validate()?;
+        self.probe_artifacts.validate()?;
+        self.dispatch.validate()?;
+        self.observation_vector
+            .validate_against_dispatch(&self.dispatch)?;
+        self.case_journal_state.validate()?;
+        require_denied_authority_v1(&self.authority)?;
+        let case_id = &self.probe_request.public_case.vocabulary.case_id_sha256;
+        let vector_event_matches = self.case_journal_state.events.last().is_some_and(|event| {
+            event.kind == K2UncertaintyCaseJournalEventKindV2::ObservationVectorFrozen
+                && event.payload_root_sha256 == self.observation_vector.vector_root_sha256
+        });
+        if self.schema != K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_REQUEST_SCHEMA_V1
+            || self.material.case_id_sha256 != *case_id
+            || self.probe_artifacts.case_id_sha256 != *case_id
+            || self.dispatch.closure_plan.case_id_sha256 != *case_id
+            || self.case_journal_state.dispatch != self.dispatch
+            || !vector_event_matches
+            || self.request_root_sha256 != self.expected_root()?
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_final_verifier_request_invalid",
+            ));
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> K2CompositionResultV1<String> {
+        uncertainty_root_v1(&(
+            K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_REQUEST_SCHEMA_V1,
+            &self.verifier_executable_sha256,
+            &self.material.material_root_sha256,
+            &self.probe_request.request_root_sha256,
+            &self.probe_artifacts.artifacts_root_sha256,
+            &self.dispatch.dispatch_root_sha256,
+            &self.observation_vector.vector_root_sha256,
+            &self.case_journal_state.journal_root_sha256,
+            &self.expected_final_truth_root_sha256,
+            &self.authority,
+        ))
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

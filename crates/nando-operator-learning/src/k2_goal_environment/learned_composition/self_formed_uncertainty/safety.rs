@@ -8,12 +8,15 @@ use super::super::{
     composition_sha256_file_v1, require_composition_root_v1,
 };
 use super::{
-    K2_UNCERTAINTY_MAX_COST_UNITS_V1, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
-    K2_UNCERTAINTY_MAX_RISK_UNITS_V1, K2_UNCERTAINTY_RISK_COST_SCHEMA_V1,
-    K2_UNCERTAINTY_SAFETY_RECEIPT_SCHEMA_V1, K2_UNCERTAINTY_SAFETY_REQUEST_SCHEMA_V1,
-    K2UncertaintyDomainVocabularyV1, K2UncertaintyEffectCandidateV1, K2UncertaintyRiskCostV1,
-    denied_authority_v1, require_denied_authority_v1, uncertainty_bytes_v1, uncertainty_decode_v1,
-    uncertainty_root_v1,
+    K2_UNCERTAINTY_CONFIRM_SAFETY_RECEIPT_SCHEMA_V1,
+    K2_UNCERTAINTY_CONFIRM_SAFETY_REQUEST_SCHEMA_V1, K2_UNCERTAINTY_MAX_COST_UNITS_V1,
+    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_MAX_RISK_UNITS_V1,
+    K2_UNCERTAINTY_RISK_COST_SCHEMA_V1, K2_UNCERTAINTY_SAFETY_RECEIPT_SCHEMA_V1,
+    K2_UNCERTAINTY_SAFETY_REQUEST_SCHEMA_V1, K2UncertaintyDomainVocabularyV1,
+    K2UncertaintyEffectCandidateV1, K2UncertaintyPrivateResolverReceiptV1,
+    K2UncertaintyPrivateResolverRequestV1, K2UncertaintyRiskCostV1,
+    K2UncertaintyWorkspaceIdentityV2, denied_authority_v1, require_denied_authority_v1,
+    uncertainty_bytes_v1, uncertainty_decode_v1, uncertainty_root_v1,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -154,6 +157,176 @@ impl K2UncertaintySafetyReceiptV1 {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct K2UncertaintyConfirmSafetyRequestV1 {
+    pub schema: String,
+    pub resolver_request: K2UncertaintyPrivateResolverRequestV1,
+    pub resolver_receipt: K2UncertaintyPrivateResolverReceiptV1,
+    pub vocabulary: K2UncertaintyDomainVocabularyV1,
+    pub workspace_identity: K2UncertaintyWorkspaceIdentityV2,
+    pub safety_executable_sha256: String,
+    pub authority: K2CompositionAuthorityBoundaryV1,
+    pub request_root_sha256: String,
+}
+
+impl K2UncertaintyConfirmSafetyRequestV1 {
+    pub fn seal(
+        resolver_request: K2UncertaintyPrivateResolverRequestV1,
+        resolver_receipt: K2UncertaintyPrivateResolverReceiptV1,
+        vocabulary: K2UncertaintyDomainVocabularyV1,
+        workspace_identity: K2UncertaintyWorkspaceIdentityV2,
+        safety_executable_sha256: String,
+    ) -> K2CompositionResultV1<Self> {
+        let mut value = Self {
+            schema: K2_UNCERTAINTY_CONFIRM_SAFETY_REQUEST_SCHEMA_V1.to_owned(),
+            resolver_request,
+            resolver_receipt,
+            vocabulary,
+            workspace_identity,
+            safety_executable_sha256,
+            authority: denied_authority_v1(),
+            request_root_sha256: String::new(),
+        };
+        value.request_root_sha256 = value.expected_root()?;
+        value.validate()?;
+        Ok(value)
+    }
+
+    pub fn validate(&self) -> K2CompositionResultV1<()> {
+        self.resolver_request.validate()?;
+        self.resolver_receipt.validate()?;
+        self.vocabulary.validate()?;
+        self.workspace_identity.validate()?;
+        require_composition_root_v1(&self.safety_executable_sha256)?;
+        require_denied_authority_v1(&self.authority)?;
+        if self.schema != K2_UNCERTAINTY_CONFIRM_SAFETY_REQUEST_SCHEMA_V1
+            || self.resolver_receipt.resolver_request_root_sha256
+                != self.resolver_request.request_root_sha256
+            || self.resolver_receipt.case_id_sha256
+                != self.resolver_request.closure_plan.case_id_sha256
+            || self.resolver_receipt.closure_plan_root_sha256
+                != self.resolver_request.closure_plan.plan_root_sha256
+            || self.resolver_receipt.probe_ordinal != self.resolver_request.probe_ordinal
+            || self.resolver_receipt.selected_probe_root_sha256
+                != self.resolver_request.selected_probe.probe_root_sha256
+            || self.resolver_receipt.selected_action_root_sha256
+                != self.resolver_request.selected_probe.action_id_sha256
+            || self.vocabulary.case_id_sha256 != self.resolver_receipt.case_id_sha256
+            || self.workspace_identity.case_id_sha256 != self.resolver_receipt.case_id_sha256
+            || self.workspace_identity.closure_plan_root_sha256
+                != self.resolver_receipt.closure_plan_root_sha256
+            || self.workspace_identity.probe_ordinal != self.resolver_receipt.probe_ordinal
+            || self.request_root_sha256 != self.expected_root()?
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_safety_request_invalid",
+            ));
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> K2CompositionResultV1<String> {
+        uncertainty_root_v1(&(
+            K2_UNCERTAINTY_CONFIRM_SAFETY_REQUEST_SCHEMA_V1,
+            &self.resolver_request.request_root_sha256,
+            &self.resolver_receipt.receipt_root_sha256,
+            &self.vocabulary.vocabulary_root_sha256,
+            &self.workspace_identity.identity_root_sha256,
+            &self.safety_executable_sha256,
+            &self.authority,
+        ))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct K2UncertaintyConfirmSafetyReceiptV1 {
+    pub schema: String,
+    pub confirm_request_root_sha256: String,
+    pub resolver_receipt_root_sha256: String,
+    pub workspace_identity_root_sha256: String,
+    pub safety_request: K2UncertaintySafetyRequestV1,
+    pub safety_receipt: K2UncertaintySafetyReceiptV1,
+    pub authority: K2CompositionAuthorityBoundaryV1,
+    pub receipt_root_sha256: String,
+}
+
+impl K2UncertaintyConfirmSafetyReceiptV1 {
+    pub fn validate(&self) -> K2CompositionResultV1<()> {
+        for root in [
+            &self.confirm_request_root_sha256,
+            &self.resolver_receipt_root_sha256,
+            &self.workspace_identity_root_sha256,
+        ] {
+            require_composition_root_v1(root)?;
+        }
+        self.safety_request.validate()?;
+        self.safety_receipt.validate()?;
+        require_denied_authority_v1(&self.authority)?;
+        if self.schema != K2_UNCERTAINTY_CONFIRM_SAFETY_RECEIPT_SCHEMA_V1
+            || self.safety_receipt.safety_request_root_sha256
+                != self.safety_request.request_root_sha256
+            || self.receipt_root_sha256 != self.expected_root()?
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_safety_receipt_invalid",
+            ));
+        }
+        Ok(())
+    }
+
+    fn expected_root(&self) -> K2CompositionResultV1<String> {
+        uncertainty_root_v1(&(
+            K2_UNCERTAINTY_CONFIRM_SAFETY_RECEIPT_SCHEMA_V1,
+            &self.confirm_request_root_sha256,
+            &self.resolver_receipt_root_sha256,
+            &self.workspace_identity_root_sha256,
+            &self.safety_request.request_root_sha256,
+            &self.safety_receipt.receipt_root_sha256,
+            &self.authority,
+        ))
+    }
+}
+
+pub fn verify_self_formed_confirm_safety_v1(
+    request: &K2UncertaintyConfirmSafetyRequestV1,
+) -> K2CompositionResultV1<K2UncertaintyConfirmSafetyReceiptV1> {
+    request.validate()?;
+    let safety_request = K2UncertaintySafetyRequestV1::seal(
+        request.resolver_receipt.closure_plan_root_sha256.clone(),
+        request.resolver_request.selected_probe.clone(),
+        request.resolver_receipt.resolved_effect.clone(),
+        request.vocabulary.clone(),
+        self_formed_grammar_root_v1(&request.vocabulary)?,
+        request.workspace_identity.identity_root_sha256.clone(),
+        request.safety_executable_sha256.clone(),
+    )?;
+    let safety_receipt = verify_self_formed_private_safety_v1(&safety_request)?;
+    let authority = denied_authority_v1();
+    let receipt_root_sha256 = uncertainty_root_v1(&(
+        K2_UNCERTAINTY_CONFIRM_SAFETY_RECEIPT_SCHEMA_V1,
+        &request.request_root_sha256,
+        &request.resolver_receipt.receipt_root_sha256,
+        &request.workspace_identity.identity_root_sha256,
+        &safety_request.request_root_sha256,
+        &safety_receipt.receipt_root_sha256,
+        &authority,
+    ))?;
+    let receipt = K2UncertaintyConfirmSafetyReceiptV1 {
+        schema: K2_UNCERTAINTY_CONFIRM_SAFETY_RECEIPT_SCHEMA_V1.to_owned(),
+        confirm_request_root_sha256: request.request_root_sha256.clone(),
+        resolver_receipt_root_sha256: request.resolver_receipt.receipt_root_sha256.clone(),
+        workspace_identity_root_sha256: request.workspace_identity.identity_root_sha256.clone(),
+        safety_request,
+        safety_receipt,
+        authority,
+        receipt_root_sha256,
+    };
+    receipt.validate()?;
+    Ok(receipt)
+}
+
 pub fn verify_self_formed_private_safety_v1(
     request: &K2UncertaintySafetyRequestV1,
 ) -> K2CompositionResultV1<K2UncertaintySafetyReceiptV1> {
@@ -248,17 +421,38 @@ pub fn run_self_formed_safety_process_v1() -> K2CompositionResultV1<()> {
         .take((K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 + 1) as u64)
         .read_to_end(&mut input)
         .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_safety_stdin"))?;
-    let request: K2UncertaintySafetyRequestV1 = uncertainty_decode_v1(&input)?;
     let executable = std::env::current_exe()
         .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_safety"))?;
-    if composition_sha256_file_v1(&executable)? != request.safety_executable_sha256 {
+    let schema = uncertainty_decode_v1::<serde_json::Value>(&input)?
+        .get("schema")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(K2CompositionErrorV1::Invalid(
+            "self_formed_safety_schema_missing",
+        ))?
+        .to_owned();
+    let output = if schema == K2_UNCERTAINTY_SAFETY_REQUEST_SCHEMA_V1 {
+        let request: K2UncertaintySafetyRequestV1 = uncertainty_decode_v1(&input)?;
+        if composition_sha256_file_v1(&executable)? != request.safety_executable_sha256 {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_safety_executable_mismatch",
+            ));
+        }
+        uncertainty_bytes_v1(&verify_self_formed_private_safety_v1(&request)?)?
+    } else if schema == K2_UNCERTAINTY_CONFIRM_SAFETY_REQUEST_SCHEMA_V1 {
+        let request: K2UncertaintyConfirmSafetyRequestV1 = uncertainty_decode_v1(&input)?;
+        if composition_sha256_file_v1(&executable)? != request.safety_executable_sha256 {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_safety_executable_mismatch",
+            ));
+        }
+        uncertainty_bytes_v1(&verify_self_formed_confirm_safety_v1(&request)?)?
+    } else {
         return Err(K2CompositionErrorV1::Invalid(
-            "self_formed_safety_executable_mismatch",
+            "self_formed_safety_schema_invalid",
         ));
-    }
-    let receipt = verify_self_formed_private_safety_v1(&request)?;
+    };
     std::io::stdout()
-        .write_all(&uncertainty_bytes_v1(&receipt)?)
+        .write_all(&output)
         .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_safety_stdout"))
 }
 

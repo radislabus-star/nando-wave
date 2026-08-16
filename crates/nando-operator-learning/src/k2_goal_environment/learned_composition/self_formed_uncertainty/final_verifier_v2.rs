@@ -1,4 +1,6 @@
+use std::fs;
 use std::io::{Read, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use super::super::{
@@ -11,11 +13,14 @@ use super::final_verifier_induction::{independent_apply_manifest_v1, verify_indu
 use super::final_verifier_selection::verify_selection_v1;
 use super::final_verifier_v2_closure::verify_closure_v2;
 use super::{
-    K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V2, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+    K2_UNCERTAINTY_CASE_VERIFICATION_SCHEMA_V2,
+    K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_REQUEST_SCHEMA_V1,
+    K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2, K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
     K2UncertaintyBatchPrecommitV2, K2UncertaintyCasePreverificationV2,
-    K2UncertaintyCaseVerificationReceiptV2, K2UncertaintyFinalVerifierRequestV2,
-    K2UncertaintyPrivateSafetyDispositionV1, K2UncertaintyRawProbeDispositionV1,
-    K2UncertaintySyntacticModelV1, denied_authority_v1,
+    K2UncertaintyCaseVerificationReceiptV2, K2UncertaintyConfirmFinalTruthCaseV1,
+    K2UncertaintyConfirmFinalVerifierReceiptV1, K2UncertaintyConfirmFinalVerifierRequestV1,
+    K2UncertaintyFinalVerifierRequestV2, K2UncertaintyPrivateSafetyDispositionV1,
+    K2UncertaintyRawProbeDispositionV1, K2UncertaintySyntacticModelV1, denied_authority_v1,
     resolve_self_formed_final_verifier_material_v2, uncertainty_bytes_v1, uncertainty_decode_v1,
     uncertainty_root_v1,
 };
@@ -216,17 +221,84 @@ pub fn run_self_formed_final_verifier_process_v2() -> K2CompositionResultV1<()> 
         .take((K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 + 1) as u64)
         .read_to_end(&mut input)
         .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_final_verifier_v2_stdin"))?;
-    let request: K2UncertaintyFinalVerifierRequestV2 = uncertainty_decode_v1(&input)?;
     let executable = std::env::current_exe()
         .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_final_verifier_v2"))?;
-    if composition_sha256_file_v1(&executable)? != request.verifier_executable_sha256 {
+    let schema = uncertainty_decode_v1::<serde_json::Value>(&input)?
+        .get("schema")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(K2CompositionErrorV1::Invalid(
+            "self_formed_final_verifier_v2_schema_missing",
+        ))?
+        .to_owned();
+    let output = if schema == K2_UNCERTAINTY_FINAL_VERIFIER_REQUEST_SCHEMA_V2 {
+        let request: K2UncertaintyFinalVerifierRequestV2 = uncertainty_decode_v1(&input)?;
+        if composition_sha256_file_v1(&executable)? != request.verifier_executable_sha256 {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_final_verifier_v2_executable_mismatch",
+            ));
+        }
+        uncertainty_bytes_v1(&verify_self_formed_case_independently_v2(
+            &request,
+            Path::new("/evidence"),
+        )?)?
+    } else if schema == K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_REQUEST_SCHEMA_V1 {
+        let request: K2UncertaintyConfirmFinalVerifierRequestV1 = uncertainty_decode_v1(&input)?;
+        if composition_sha256_file_v1(&executable)? != request.verifier_executable_sha256 {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_final_verifier_executable_mismatch",
+            ));
+        }
+        let truth_path = Path::new("/private/final-truth.json");
+        let metadata = fs::symlink_metadata(truth_path)
+            .map_err(|_| K2CompositionErrorV1::Io("stat_self_formed_confirm_final_truth"))?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.permissions().mode() & 0o777 != 0o400
+            || metadata.len() > K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 as u64
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_final_truth_file_invalid",
+            ));
+        }
+        let truth: K2UncertaintyConfirmFinalTruthCaseV1 = uncertainty_decode_v1(
+            &fs::read(truth_path)
+                .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_confirm_final_truth"))?,
+        )?;
+        truth.validate()?;
+        let case_id = &request.probe_request.public_case.vocabulary.case_id_sha256;
+        if truth.final_truth_root_sha256 != request.expected_final_truth_root_sha256
+            || truth.private_case.case_id_sha256 != *case_id
+            || truth.private_case.public_case_root_sha256
+                != request.probe_request.public_case.public_case_root_sha256
+        {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_confirm_final_truth_binding_invalid",
+            ));
+        }
+        let legacy = K2UncertaintyFinalVerifierRequestV2::seal(
+            request.verifier_executable_sha256.clone(),
+            request.material,
+            request.probe_request,
+            request.probe_artifacts,
+            truth.private_case,
+            request.dispatch,
+            request.observation_vector,
+            request.case_journal_state,
+        )?;
+        let verification =
+            verify_self_formed_case_independently_v2(&legacy, Path::new("/evidence"))?;
+        uncertainty_bytes_v1(&K2UncertaintyConfirmFinalVerifierReceiptV1::seal(
+            request.request_root_sha256,
+            truth.final_truth_root_sha256,
+            verification,
+        )?)?
+    } else {
         return Err(K2CompositionErrorV1::Invalid(
-            "self_formed_final_verifier_v2_executable_mismatch",
+            "self_formed_final_verifier_v2_schema_invalid",
         ));
-    }
-    let receipt = verify_self_formed_case_independently_v2(&request, Path::new("/evidence"))?;
+    };
     std::io::stdout()
-        .write_all(&uncertainty_bytes_v1(&receipt)?)
+        .write_all(&output)
         .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_final_verifier_v2_stdout"))
 }
 

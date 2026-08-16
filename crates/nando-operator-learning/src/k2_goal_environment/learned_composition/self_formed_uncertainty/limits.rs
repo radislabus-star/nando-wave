@@ -123,6 +123,30 @@ pub const K2_UNCERTAINTY_CONFIRM_OWNER_REQUEST_SCHEMA_V1: &str =
     "nando.k2-self-formed-confirm-owner-request.v1";
 pub const K2_UNCERTAINTY_CONFIRM_OWNER_RECEIPT_SCHEMA_V1: &str =
     "nando.k2-self-formed-confirm-owner-receipt.v1";
+pub const K2_UNCERTAINTY_PUBLIC_OWNER_SET_SCHEMA_V1: &str =
+    "nando.k2-self-formed-public-owner-set.v1";
+pub const K2_UNCERTAINTY_PUBLIC_COORDINATOR_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-public-coordinator-request.v1";
+pub const K2_UNCERTAINTY_PUBLIC_PREPARED_CASE_SCHEMA_V1: &str =
+    "nando.k2-self-formed-public-prepared-case.v1";
+pub const K2_UNCERTAINTY_PUBLIC_CASE_ARTIFACT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-public-case-artifact.v1";
+pub const K2_UNCERTAINTY_PUBLIC_COMPONENT_ARTIFACT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-public-component-artifact.v1";
+pub const K2_UNCERTAINTY_PUBLIC_PRECOMMIT_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-public-precommit-receipt.v1";
+pub const K2_UNCERTAINTY_PRIVATE_RESOLVER_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-private-resolver-request.v1";
+pub const K2_UNCERTAINTY_PRIVATE_RESOLVER_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-private-resolver-receipt.v1";
+pub const K2_UNCERTAINTY_CONFIRM_SAFETY_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-safety-request.v1";
+pub const K2_UNCERTAINTY_CONFIRM_SAFETY_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-safety-receipt.v1";
+pub const K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-final-verifier-request.v1";
+pub const K2_UNCERTAINTY_CONFIRM_FINAL_VERIFIER_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-final-verifier-receipt.v1";
 pub const K2_UNCERTAINTY_LEARNER_RESPONSE_SCHEMA_V1: &str =
     "nando.k2-self-formed-learner-response.v1";
 pub const K2_UNCERTAINTY_PROBE_REQUEST_SCHEMA_V1: &str = "nando.k2-self-formed-probe-request.v1";
