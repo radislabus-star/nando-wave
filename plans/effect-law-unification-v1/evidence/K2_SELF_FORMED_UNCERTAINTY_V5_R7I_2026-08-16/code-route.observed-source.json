@@ -1,0 +1,298 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "nodes": [
+    {
+      "id": "public_input",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_model.rs",
+        "line": 182,
+        "contains": "self.public_batch.validate()?;"
+      }
+    },
+    {
+      "id": "public_coordinator",
+      "role": "orchestrator",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+        "line": 30,
+        "contains": "pub fn execute_self_formed_public_coordinator_v1("
+      }
+    },
+    {
+      "id": "all_case_receipt",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+        "line": 245,
+        "contains": "publish_self_formed_public_precommit_v1(output_root, &receipt)?;"
+      }
+    },
+    {
+      "id": "resolver_request",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 156,
+        "contains": "let resolver_request = K2UncertaintyPrivateResolverRequestV1::seal("
+      }
+    },
+    {
+      "id": "private_resolver",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_private_resolver.rs",
+        "line": 196,
+        "contains": "pub fn resolve_self_formed_private_effect_v1("
+      }
+    },
+    {
+      "id": "resolver_receipt",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 183,
+        "contains": "let resolver_receipt: K2UncertaintyPrivateResolverReceiptV1 = run_sandbox("
+      }
+    },
+    {
+      "id": "safety_owner",
+      "role": "authorization_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/safety.rs",
+        "line": 292,
+        "contains": "pub fn verify_self_formed_confirm_safety_v1("
+      }
+    },
+    {
+      "id": "dispatch_journal",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 235,
+        "contains": "let mut journal = K2UncertaintyCaseJournalV2::create(&case_journal_root, dispatch.clone())"
+      }
+    },
+    {
+      "id": "worker",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 276,
+        "contains": "let worker: K2InquiryWorkerOutcomeV1 = run_sandbox("
+      }
+    },
+    {
+      "id": "completed_workspace",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 283,
+        "contains": "let observer_mounts = ["
+      }
+    },
+    {
+      "id": "observer",
+      "role": "observer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 299,
+        "contains": "let observation: K2InquiryObservationReceiptV1 = run_sandbox("
+      }
+    },
+    {
+      "id": "observation_vector",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 327,
+        "contains": "let observation_vector = K2UncertaintyObservationVectorV2::seal(&dispatch, executions)"
+      }
+    },
+    {
+      "id": "final_verifier",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier_v2.rs",
+        "line": 28,
+        "contains": "pub fn verify_self_formed_case_independently_v2("
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "public-input-coordinator",
+      "from": "public_input",
+      "relation": "calls",
+      "to": "public_coordinator",
+      "events": ["prepare_public"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+        "line": 34,
+        "contains": "request.validate()?;"
+      }
+    },
+    {
+      "id": "coordinator-precommit",
+      "from": "public_coordinator",
+      "relation": "delegates",
+      "to": "all_case_receipt",
+      "events": ["prepare_public"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+        "line": 245,
+        "contains": "publish_self_formed_public_precommit_v1(output_root, &receipt)?;"
+      }
+    },
+    {
+      "id": "request-resolver",
+      "from": "resolver_request",
+      "relation": "calls",
+      "to": "private_resolver",
+      "events": ["resolve_private"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 183,
+        "contains": "let resolver_receipt: K2UncertaintyPrivateResolverReceiptV1 = run_sandbox("
+      }
+    },
+    {
+      "id": "resolver-receipt",
+      "from": "private_resolver",
+      "relation": "delegates",
+      "to": "resolver_receipt",
+      "events": ["resolve_private"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_private_resolver.rs",
+        "line": 238,
+        "contains": "let receipt = K2UncertaintyPrivateResolverReceiptV1 {"
+      }
+    },
+    {
+      "id": "receipt-safety",
+      "from": "resolver_receipt",
+      "relation": "passes_to",
+      "to": "safety_owner",
+      "events": ["authorize_dispatch"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 197,
+        "contains": "let safety_request = K2UncertaintyConfirmSafetyRequestV1::seal("
+      }
+    },
+    {
+      "id": "safety-worker",
+      "from": "safety_owner",
+      "relation": "authorizes",
+      "to": "worker",
+      "events": ["authorize_dispatch"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 223,
+        "contains": "let dispatch = prepare_self_formed_confirm_plan_dispatch_v1("
+      }
+    },
+    {
+      "id": "dispatch-worker",
+      "from": "dispatch_journal",
+      "relation": "calls",
+      "to": "worker",
+      "events": ["execute_probe"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 261,
+        "contains": "let permit = journal"
+      }
+    },
+    {
+      "id": "worker-observer",
+      "from": "worker",
+      "relation": "calls",
+      "to": "observer",
+      "events": ["execute_probe"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 299,
+        "contains": "let observation: K2InquiryObservationReceiptV1 = run_sandbox("
+      }
+    },
+    {
+      "id": "worker-observation",
+      "from": "completed_workspace",
+      "relation": "observes",
+      "to": "observer",
+      "events": ["freeze_observation"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 327,
+        "contains": "let observation_vector = K2UncertaintyObservationVectorV2::seal(&dispatch, executions)"
+      }
+    },
+    {
+      "id": "vector-final-proof",
+      "from": "observation_vector",
+      "relation": "proves",
+      "to": "final_verifier",
+      "events": ["verify_final"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs",
+        "line": 370,
+        "contains": "let final_receipt: K2UncertaintyConfirmFinalVerifierReceiptV1 = run_sandbox("
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "public-precommit-execution",
+      "event": "prepare_public",
+      "kind": "execution",
+      "entry": "public_input",
+      "terminal": "all_case_receipt",
+      "required_roles": ["interface", "orchestrator", "evidence_owner"],
+      "path_cardinality": [{"from": "public_input", "to": "all_case_receipt", "min": 1, "max": 1}]
+    },
+    {
+      "id": "private-resolution-execution",
+      "event": "resolve_private",
+      "kind": "execution",
+      "entry": "resolver_request",
+      "terminal": "resolver_receipt",
+      "required_roles": ["interface", "producer"],
+      "path_cardinality": [{"from": "resolver_request", "to": "resolver_receipt", "min": 1, "max": 1}]
+    },
+    {
+      "id": "safety-dispatch-authority",
+      "event": "authorize_dispatch",
+      "kind": "authority",
+      "entry": "resolver_receipt",
+      "terminal": "worker",
+      "required_roles": ["interface", "authorization_owner", "mutation_owner"]
+    },
+    {
+      "id": "worker-observer-execution",
+      "event": "execute_probe",
+      "kind": "execution",
+      "entry": "dispatch_journal",
+      "terminal": "observer",
+      "required_roles": ["evidence_owner", "mutation_owner", "observer"],
+      "path_cardinality": [{"from": "dispatch_journal", "to": "observer", "min": 1, "max": 1}]
+    },
+    {
+      "id": "observation-freeze-proof",
+      "event": "freeze_observation",
+      "kind": "observation",
+      "entry": "completed_workspace",
+      "terminal": "observer",
+      "required_roles": ["evidence_owner", "observer"]
+    },
+    {
+      "id": "final-verification-proof",
+      "event": "verify_final",
+      "kind": "proof",
+      "entry": "observation_vector",
+      "terminal": "final_verifier",
+      "required_roles": ["evidence_owner", "proof_owner"]
+    }
+  ]
+}

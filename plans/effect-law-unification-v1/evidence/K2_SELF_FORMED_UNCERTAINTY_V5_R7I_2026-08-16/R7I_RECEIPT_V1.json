@@ -1,0 +1,114 @@
+{
+  "schema": "nando.k2-self-formed-uncertainty-v5-r7i-result.v1",
+  "status": "R7I_PASS_COMPONENT_ROUTE_FROZEN_NO_SCIENTIFIC_ATTEMPT",
+  "recorded_at": "2026-08-16T14:18:30+03:00",
+  "branch": "research/k2-self-formed-uncertainty-v1-20260815",
+  "implementation": {
+    "commit": "3147df774e154e815a435f56658d1c841d841bc7",
+    "tree": "d0577a57f2b377d33ffb5eebf1e80bf50aa0d020",
+    "parent_commit": "746997cbe1a5ecfed1c2f7105252895481e95c3a",
+    "remote_checkout": "/home/e/build/nando-wave-k2-self-formed-r7i-final",
+    "cargo_target": "/home/e/.cache/nando-wave-k2-active-inquiry-target"
+  },
+  "verification": {
+    "r7i_fresh_release": {
+      "passed": 2,
+      "failed": 0,
+      "seconds": 311.20,
+      "cases": 16,
+      "one_probe_plans": 8,
+      "two_probe_plans": 8,
+      "false_accepts": 0,
+      "log": "r7i-final-fresh-release.log",
+      "log_sha256": "85a1e68e1861fcce1a574413650c5d82eb615860db416f139689143247052637"
+    },
+    "legacy_v4_process": {
+      "passed": 1,
+      "failed": 0,
+      "seconds": 231.04,
+      "preverified_cases": 16,
+      "executed_cases": 16,
+      "log": "r7i-final-v4-process-release.log",
+      "log_sha256": "58f0677946658c8b38deb0712ba7aa7d99a56f7c110084e5e165236a3018e2e5"
+    },
+    "r7h_parity": {
+      "passed": 9,
+      "failed": 0,
+      "seconds": 40.33,
+      "log": "r7i-final-r7h-parity.log",
+      "log_sha256": "f87dbcf26a59e56953dfa00fd29dce751abe4450ad0ecdca8cccf0df059be310"
+    },
+    "r7g_parity": {
+      "passed": 3,
+      "failed": 0,
+      "seconds": 30.39,
+      "log": "r7i-final-r7g-parity.log",
+      "log_sha256": "312a53bdc4427980a86f179580c08f3462f7aa5772d26130731b49c93a8dd6e9"
+    },
+    "library_tests": {
+      "passed": 448,
+      "failed": 0,
+      "seconds": 4.53,
+      "log": "r7i-final-lib-tests.log",
+      "log_sha256": "e0b1ab80e79fe6d169fb510cdfd4c725efa9d85f2737a35627297f9f0bc062c6"
+    },
+    "all_targets_check": {
+      "verdict": "PASS",
+      "log": "r7i-final-check.log",
+      "log_sha256": "c5a182dc719fc7ba0db2511fdd26e09502b63435a0152a2145cf3b0d93408379"
+    },
+    "strict_clippy": {
+      "verdict": "PASS",
+      "log": "r7i-final-clippy.log",
+      "log_sha256": "3fa7f6c1a5f13ea3ea6cce470278647c843b741dba49fec9ca2aaedd9b458cc6"
+    },
+    "cargo_fmt_check": "PASS",
+    "git_diff_check": "PASS",
+    "exact_commit_worktree_clean": true,
+    "development_seed_sha256": "f8fde5ba0c466bf1d4570daf6326eb54522453dc8e006637906321c764cea138"
+  },
+  "structural_gates": {
+    "public_barrier": {
+      "verdict": "PASS",
+      "receipt_sha256": "0100b009b26e4f6a6b52343e56af0f6e3a210aa9928a82d45793359844cf2535"
+    },
+    "private_execution_proof": {
+      "verdict": "PASS",
+      "receipt_sha256": "beefddafa95343a77ee82f894dc6da8c9d6d42e1d2e194a397272026ceb97a8c"
+    },
+    "observed_source": {
+      "verdict": "PASS",
+      "verified_evidence": 23,
+      "expected_evidence": 23,
+      "issues": 0,
+      "receipt_sha256": "619689d6c1a2c4a2e9abbca9d1134950bbdfcf44bd8a2103a0ad2c08919d01b9"
+    },
+    "authority_ready": false
+  },
+  "scope": {
+    "changed_crate_files": 14,
+    "insertions": 3017,
+    "deletions": 31,
+    "maximum_new_file_lines": 621,
+    "files_outside_nando_operator_learning": 0,
+    "forbidden_network_serving_k1_ui_callsites": 0,
+    "production_service_routes": 0,
+    "natural_traffic_reads_or_writes": 0,
+    "deployment_effects": 0,
+    "production_service_mutations": 0
+  },
+  "claim_boundary": {
+    "public_coordinator": "APPLICATION_OWNED",
+    "private_resolver": "APPLICATION_OWNED",
+    "sandbox_mount_matrix": "ENFORCED",
+    "development_rehearsal_route": "PASS",
+    "outer_rehearsal_supervisor": "TEST_OWNED_AT_R7I",
+    "full_confirm_owner_dry_run": "REQUIRED_AT_R8B_AND_R9B",
+    "sealed_attempts": 0,
+    "confirm_nonce": "ABSENT",
+    "scientific_verdict": "ABSENT",
+    "natural_k2_authority": false,
+    "deployment_authority": false
+  },
+  "next_permitted_stage": "R7J"
+}

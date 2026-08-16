@@ -1,0 +1,264 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R7I_2026-08-16/code-route.observed-source.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815",
+  "node_count": 13,
+  "edge_count": 10,
+  "routes": [
+    {
+      "id": "public-precommit-execution",
+      "event": "prepare_public",
+      "kind": "execution",
+      "entry": "public_input",
+      "via": [],
+      "terminal": "all_case_receipt",
+      "path_count": 1,
+      "paths": [
+        [
+          "public_input",
+          "public_coordinator",
+          "all_case_receipt"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "all_case_receipt"
+        ],
+        "orchestrator": [
+          "public_coordinator"
+        ],
+        "interface": [
+          "public_input"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "public_input",
+          "to": "all_case_receipt",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "public_input",
+              "public_coordinator",
+              "all_case_receipt"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "private-resolution-execution",
+      "event": "resolve_private",
+      "kind": "execution",
+      "entry": "resolver_request",
+      "via": [],
+      "terminal": "resolver_receipt",
+      "path_count": 1,
+      "paths": [
+        [
+          "resolver_request",
+          "private_resolver",
+          "resolver_receipt"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "private_resolver"
+        ],
+        "interface": [
+          "resolver_receipt",
+          "resolver_request"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "resolver_request",
+          "to": "resolver_receipt",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "resolver_request",
+              "private_resolver",
+              "resolver_receipt"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "safety-dispatch-authority",
+      "event": "authorize_dispatch",
+      "kind": "authority",
+      "entry": "resolver_receipt",
+      "via": [],
+      "terminal": "worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "resolver_receipt",
+          "safety_owner",
+          "worker"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "resolver_receipt"
+        ],
+        "authorization_owner": [
+          "safety_owner"
+        ],
+        "mutation_owner": [
+          "worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "worker-observer-execution",
+      "event": "execute_probe",
+      "kind": "execution",
+      "entry": "dispatch_journal",
+      "via": [],
+      "terminal": "observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "dispatch_journal",
+          "worker",
+          "observer"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "dispatch_journal"
+        ],
+        "observer": [
+          "observer"
+        ],
+        "mutation_owner": [
+          "worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "dispatch_journal",
+          "to": "observer",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "dispatch_journal",
+              "worker",
+              "observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "observation-freeze-proof",
+      "event": "freeze_observation",
+      "kind": "observation",
+      "entry": "completed_workspace",
+      "via": [],
+      "terminal": "observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "completed_workspace",
+          "observer"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "completed_workspace"
+        ],
+        "observer": [
+          "observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "final-verification-proof",
+      "event": "verify_final",
+      "kind": "proof",
+      "entry": "observation_vector",
+      "via": [],
+      "terminal": "final_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "observation_vector",
+          "final_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "final_verifier"
+        ],
+        "evidence_owner": [
+          "observation_vector"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "authorize_dispatch": {
+      "candidate_rank_owner": [],
+      "mutation_owner": [
+        "worker"
+      ],
+      "render_owner": [],
+      "evidence_owner": [],
+      "authorization_owner": [
+        "safety_owner"
+      ],
+      "display_rank_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 23,
+    "verified": 23,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}
