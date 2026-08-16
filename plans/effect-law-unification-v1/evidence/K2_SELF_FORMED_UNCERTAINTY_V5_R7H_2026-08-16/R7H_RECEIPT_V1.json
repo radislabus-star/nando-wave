@@ -1,0 +1,99 @@
+{
+  "schema": "nando.k2-self-formed-uncertainty-v5-r7h-result.v1",
+  "status": "R7H_PASS_R7H_FROZEN_NO_SCIENTIFIC_ATTEMPT",
+  "recorded_at": "2026-08-16T06:40:13+03:00",
+  "branch": "research/k2-self-formed-uncertainty-v1-20260815",
+  "implementation": {
+    "commit": "412344e38b26419624d078c38063b768acd8da39",
+    "tree": "dadccd4d19515059d428050d4fd9bb29c2a65b60",
+    "parent_commit": "0b50b51431a05d864daa8a16ff2903bb36be13b0",
+    "remote_checkout": "/home/e/build/nando-wave-k2-self-formed-r2",
+    "cargo_target": "/home/e/.cache/nando-wave-k2-active-inquiry-target"
+  },
+  "verification": {
+    "r7h_targeted": {
+      "passed": 9,
+      "failed": 0,
+      "seconds": 30.31,
+      "remote_log": "/home/e/.cache/nando-wave-k2-active-inquiry-target/r7h-targeted-post-split.log",
+      "log_sha256": "5d5197615219da45c41e9ae7a5e17114bac4a4e9860c07dde36516088e25c0b8"
+    },
+    "r7g_development_parity": {
+      "passed": 3,
+      "failed": 0,
+      "seconds": 30.53,
+      "remote_log": "/home/e/.cache/nando-wave-k2-active-inquiry-target/r7h-r7g-parity-post-split.log",
+      "log_sha256": "89c606e3f98fab1b675c98605a4d315c6d2cf8e810f09219f08d84e9aa9a9fff"
+    },
+    "release_process_regression": {
+      "passed": 1,
+      "failed": 0,
+      "seconds": 200.28,
+      "preverified_cases": 16,
+      "executed_cases": 16,
+      "remote_log": "/home/e/.cache/nando-wave-k2-active-inquiry-target/r7h-process-release-final.log",
+      "log_sha256": "db34e9cf77511e15c797caaaadfa328a8caececd0ff61b09b30ae12984890254"
+    },
+    "strict_clippy": {
+      "verdict": "PASS",
+      "remote_log": "/home/e/.cache/nando-wave-k2-active-inquiry-target/r7h-clippy-post-split.log",
+      "log_sha256": "359923a78580ab84a030ad33279a2c14305fabd380f8ba2f79ea31fd472ac244"
+    },
+    "cargo_fmt_check": "PASS",
+    "git_diff_check": "PASS",
+    "development_seed_sha256": "f8fde5ba0c466bf1d4570daf6326eb54522453dc8e006637906321c764cea138"
+  },
+  "structural_gates": {
+    "authorization_attempt": {
+      "verdict": "PASS",
+      "receipt_sha256": "d37e97d4db8e81e1fe3bc07b18dc1b228d2d319f83ab96203ade78f74f6b53b6"
+    },
+    "nonce_dispatch": {
+      "verdict": "PASS",
+      "receipt_sha256": "66bcef599bb363f6dddac9ab72670717409fbeff43f00e3187d43a18871508d1"
+    },
+    "restart": {
+      "verdict": "PASS",
+      "receipt_sha256": "f8b83bdfdb52311239fb64625db9a377c76e3adbc858a6a759015588fa3f0121"
+    },
+    "split_rehearsal": {
+      "verdict": "PASS",
+      "receipt_sha256": "c951166b52c519c7e14a7536890a61e1fe37d4aea3ab6f8306f82da296e0b747"
+    },
+    "observed_source": {
+      "verdict": "PASS",
+      "verified_evidence": 19,
+      "expected_evidence": 19,
+      "issues": 0,
+      "receipt_sha256": "cc11be9db77c8bc3b6f8b6872f49a8ed7d21be458fbaab3218fcfd6f20f4225c"
+    },
+    "authority_ready": false
+  },
+  "scope": {
+    "changed_crate_files": 13,
+    "files_outside_nando_operator_learning": 0,
+    "forbidden_network_serving_k1_ui_callsites": 0,
+    "new_production_service_routes": 0,
+    "natural_traffic_reads_or_writes": 0,
+    "deployment_effects": 0,
+    "production_service_mutations": 0,
+    "maximum_new_production_file_lines": 631,
+    "maximum_new_test_file_lines": 663
+  },
+  "authority": {
+    "real_authorization_slot_claims": 0,
+    "real_confirm_nonce_present": false,
+    "sealed_scientific_attempts": 0,
+    "maximum_sealed_scientific_attempts": 1,
+    "scientific_verdict_present": false,
+    "natural_k2_authority": false,
+    "k1_registry_mutated": false,
+    "phase_memory_mutated": false,
+    "law_certificate_issued": false,
+    "package_activated": false,
+    "product_authority": false,
+    "deployment_authority": false
+  },
+  "next_stage": "R7I_PUBLIC_PRECOMMIT_PRIVATE_EXECUTION",
+  "r7_subdivision_cap": "R7K"
+}

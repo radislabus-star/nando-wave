@@ -1,0 +1,454 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k2-v5-r7h-authorization-attempt",
+  "domain": "general",
+  "complexity_score": 17,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.375,
+      "c2": 0.375,
+      "c3": 0.375
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 6,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.5781,
+      "c2": 0.5849,
+      "c3": 0.5736
+    },
+    "source_self_score": 0.5789,
+    "stable": [
+      "c1",
+      "c2",
+      "c3"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "attempt-owner": "attempt-owner",
+      "exact-root-owner": "exact-root-owner",
+      "slot-owner": "slot-owner"
+    },
+    "scores": {
+      "attempt-owner": 1.0,
+      "exact-root-owner": 1.0,
+      "slot-owner": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "attempt-owner": 1,
+      "exact-root-owner": 1,
+      "slot-owner": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.5789,
+      "norm": 55.5698,
+      "triads": 3
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "attempt-owner": "attempt-owner",
+      "exact-root-owner": "exact-root-owner",
+      "slot-owner": "slot-owner"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "attempt-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "exact-root-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "slot-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "attempt-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "exact-root-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "slot-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "attempt-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "attempt-owner",
+        "exact_source_groups": [
+          "attempt-owner"
+        ]
+      },
+      "exact-root-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "exact-root-owner",
+        "exact_source_groups": [
+          "exact-root-owner"
+        ]
+      },
+      "slot-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "slot-owner",
+        "exact_source_groups": [
+          "slot-owner"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "attempt-owner": {
+        "attempt-owner": 1.0,
+        "exact-root-owner": -0.0078,
+        "slot-owner": 0.0039
+      },
+      "exact-root-owner": {
+        "attempt-owner": -0.0078,
+        "exact-root-owner": 1.0,
+        "slot-owner": 0.0117
+      },
+      "slot-owner": {
+        "attempt-owner": 0.0039,
+        "exact-root-owner": 0.0117,
+        "slot-owner": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "attempt-owner": {
+          "gravity": 1.0,
+          "owner": "attempt-owner",
+          "owners": {
+            "attempt-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "exact-root-owner": {
+          "gravity": 1.0,
+          "owner": "exact-root-owner",
+          "owners": {
+            "exact-root-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "slot-owner": {
+          "gravity": 1.0,
+          "owner": "slot-owner",
+          "owners": {
+            "slot-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "attempt-start": {
+          "gravity": 1.0,
+          "owner": "attempt-owner",
+          "owners": {
+            "attempt-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "authorization": {
+          "gravity": 1.0,
+          "owner": "exact-root-owner",
+          "owners": {
+            "exact-root-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "slot-ledger": {
+          "gravity": 1.0,
+          "owner": "slot-owner",
+          "owners": {
+            "slot-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "attempt-start": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "confirm_owner.rs:51-64",
+            "k2_self_formed_uncertainty_preregistration_v5.md:141"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "attempt-owner"
+          ],
+          "scopes": [
+            "attempt-start"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "authorization": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "confirm_authorization.rs:94-147",
+            "k2_self_formed_uncertainty_preregistration_v5.md:61"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "exact-root-owner"
+          ],
+          "scopes": [
+            "authorization"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "slot-ledger": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "confirm_authorization.rs:283-335",
+            "k2_self_formed_uncertainty_preregistration_v5.md:88"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "slot-owner"
+          ],
+          "scopes": [
+            "slot-ledger"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "attempt-start": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authorization": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "slot-ledger": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "attempt-start": {
+          "attempt-start": 1.0,
+          "authorization": -0.0078,
+          "slot-ledger": 0.0039
+        },
+        "authorization": {
+          "attempt-start": -0.0078,
+          "authorization": 1.0,
+          "slot-ledger": 0.0117
+        },
+        "slot-ledger": {
+          "attempt-start": 0.0039,
+          "authorization": 0.0117,
+          "slot-ledger": 1.0
+        }
+      },
+      "source": {
+        "attempt-start": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authorization": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "slot-ledger": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "attempt-owner": 1,
+      "exact-root-owner": 1,
+      "slot-owner": 1
+    },
+    "stable_groups": [
+      "attempt-owner",
+      "exact-root-owner",
+      "slot-owner"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/k2-v5-r7h-authorization-attempt.trace.json"
+}

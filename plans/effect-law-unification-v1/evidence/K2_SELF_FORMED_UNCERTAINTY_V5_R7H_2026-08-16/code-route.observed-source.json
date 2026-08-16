@@ -1,0 +1,264 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "nodes": [
+    {
+      "id": "authorization_receipt",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_authorization.rs",
+        "line": 79,
+        "contains": "pub struct K2UncertaintyR10AuthorizationReceiptV1 {"
+      }
+    },
+    {
+      "id": "slot_claim_owner",
+      "role": "authorization_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_authorization.rs",
+        "line": 283,
+        "contains": "pub fn claim("
+      }
+    },
+    {
+      "id": "slot_ledger",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_authorization.rs",
+        "line": 231,
+        "contains": "pub struct K2UncertaintyAuthorizationSlotLedgerV1 {"
+      }
+    },
+    {
+      "id": "confirm_owner",
+      "role": "orchestrator",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+        "line": 35,
+        "contains": "pub fn execute_self_formed_confirm_owner_v1("
+      }
+    },
+    {
+      "id": "attempt_journal",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+        "line": 173,
+        "contains": "pub fn append("
+      }
+    },
+    {
+      "id": "nonce_store",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_nonce.rs",
+        "line": 77,
+        "contains": "pub fn persist_retained_confirm_nonce_v1("
+      }
+    },
+    {
+      "id": "generator",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/generator.rs",
+        "line": 170,
+        "contains": "pub fn run_self_formed_generator_process_v1() -> K2CompositionResultV1<()> {"
+      }
+    },
+    {
+      "id": "split_store",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+        "line": 25,
+        "contains": "pub fn publish_confirm_generator_split_v1("
+      }
+    },
+    {
+      "id": "restart_projector",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+        "line": 232,
+        "contains": "pub fn recover_after_restart("
+      }
+    },
+    {
+      "id": "nonce_undispatched_evidence",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_model.rs",
+        "line": 208,
+        "contains": "NonceCommittedUndispatched,"
+      }
+    },
+    {
+      "id": "generator_indeterminate_evidence",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_model.rs",
+        "line": 209,
+        "contains": "GeneratorResultIndeterminate,"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "authority-receipt-claim",
+      "from": "authorization_receipt",
+      "relation": "passes_to",
+      "to": "slot_claim_owner",
+      "events": ["claim_slot"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_authorization.rs",
+        "line": 288,
+        "contains": "receipt.validate()?;"
+      }
+    },
+    {
+      "id": "authority-claim-ledger",
+      "from": "slot_claim_owner",
+      "relation": "authorizes",
+      "to": "slot_ledger",
+      "events": ["claim_slot"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_authorization.rs",
+        "line": 324,
+        "contains": "link_unique_v1("
+      }
+    },
+    {
+      "id": "execution-owner-journal",
+      "from": "confirm_owner",
+      "relation": "calls",
+      "to": "attempt_journal",
+      "events": ["freeze_attempt"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+        "line": 61,
+        "contains": "let mut journal = K2UncertaintyConfirmAttemptJournalV1::create_exclusive("
+      }
+    },
+    {
+      "id": "execution-owner-nonce",
+      "from": "confirm_owner",
+      "relation": "calls",
+      "to": "nonce_store",
+      "events": ["commit_nonce"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+        "line": 199,
+        "contains": "let nonce_receipt = persist_retained_confirm_nonce_v1(attempt_root, &nonce.0)?;"
+      }
+    },
+    {
+      "id": "execution-owner-generator",
+      "from": "confirm_owner",
+      "relation": "calls",
+      "to": "generator",
+      "events": ["dispatch_generator"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+        "line": 242,
+        "contains": "let (response_bytes, pipe_receipt) = dispatch_self_formed_generator_once_v1("
+      }
+    },
+    {
+      "id": "authority-generator-split",
+      "from": "generator",
+      "relation": "produces_for",
+      "to": "split_store",
+      "events": ["publish_split"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+        "line": 256,
+        "contains": "let split = publish_confirm_generator_split_v1("
+      }
+    },
+    {
+      "id": "proof-restart-undispatched",
+      "from": "nonce_undispatched_evidence",
+      "relation": "proves",
+      "to": "restart_projector",
+      "events": ["restart_pre_dispatch"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+        "line": 282,
+        "contains": "K2UncertaintyConfirmAttemptEventKindV1::NonceCommittedUndispatched,"
+      }
+    },
+    {
+      "id": "proof-restart-indeterminate",
+      "from": "generator_indeterminate_evidence",
+      "relation": "proves",
+      "to": "restart_projector",
+      "events": ["restart_post_dispatch"],
+      "evidence": {
+        "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+        "line": 299,
+        "contains": "K2UncertaintyConfirmAttemptEventKindV1::GeneratorResultIndeterminate,"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "slot-claim-authority",
+      "event": "claim_slot",
+      "kind": "authority",
+      "entry": "authorization_receipt",
+      "terminal": "slot_ledger",
+      "required_roles": ["interface", "authorization_owner", "mutation_owner"]
+    },
+    {
+      "id": "attempt-freeze-execution",
+      "event": "freeze_attempt",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "terminal": "attempt_journal",
+      "required_roles": ["orchestrator", "evidence_owner"],
+      "path_cardinality": [{"from": "confirm_owner", "to": "attempt_journal", "min": 1, "max": 1}]
+    },
+    {
+      "id": "nonce-persistence-execution",
+      "event": "commit_nonce",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "terminal": "nonce_store",
+      "required_roles": ["orchestrator", "mutation_owner"],
+      "path_cardinality": [{"from": "confirm_owner", "to": "nonce_store", "min": 1, "max": 1}]
+    },
+    {
+      "id": "generator-one-shot-execution",
+      "event": "dispatch_generator",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "terminal": "generator",
+      "required_roles": ["orchestrator", "producer"],
+      "path_cardinality": [{"from": "confirm_owner", "to": "generator", "min": 1, "max": 1}]
+    },
+    {
+      "id": "split-publication-authority",
+      "event": "publish_split",
+      "kind": "authority",
+      "entry": "generator",
+      "terminal": "split_store",
+      "required_roles": ["producer", "evidence_owner"]
+    },
+    {
+      "id": "restart-pre-dispatch-proof",
+      "event": "restart_pre_dispatch",
+      "kind": "proof",
+      "entry": "nonce_undispatched_evidence",
+      "terminal": "restart_projector",
+      "required_roles": ["evidence_owner", "proof_owner"]
+    },
+    {
+      "id": "restart-post-dispatch-proof",
+      "event": "restart_post_dispatch",
+      "kind": "proof",
+      "entry": "generator_indeterminate_evidence",
+      "terminal": "restart_projector",
+      "required_roles": ["evidence_owner", "proof_owner"]
+    }
+  ]
+}

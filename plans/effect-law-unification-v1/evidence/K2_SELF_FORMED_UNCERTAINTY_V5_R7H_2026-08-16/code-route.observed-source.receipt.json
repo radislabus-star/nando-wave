@@ -1,0 +1,286 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R7H_2026-08-16/code-route.observed-source.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815",
+  "node_count": 11,
+  "edge_count": 8,
+  "routes": [
+    {
+      "id": "slot-claim-authority",
+      "event": "claim_slot",
+      "kind": "authority",
+      "entry": "authorization_receipt",
+      "via": [],
+      "terminal": "slot_ledger",
+      "path_count": 1,
+      "paths": [
+        [
+          "authorization_receipt",
+          "slot_claim_owner",
+          "slot_ledger"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "authorization_receipt"
+        ],
+        "authorization_owner": [
+          "slot_claim_owner"
+        ],
+        "mutation_owner": [
+          "slot_ledger"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "attempt-freeze-execution",
+      "event": "freeze_attempt",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "attempt_journal",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "attempt_journal"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "attempt_journal"
+        ],
+        "orchestrator": [
+          "confirm_owner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "attempt_journal",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "attempt_journal"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nonce-persistence-execution",
+      "event": "commit_nonce",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "nonce_store",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "nonce_store"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "confirm_owner"
+        ],
+        "mutation_owner": [
+          "nonce_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "nonce_store",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "nonce_store"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "generator-one-shot-execution",
+      "event": "dispatch_generator",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "generator",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "generator"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "confirm_owner"
+        ],
+        "producer": [
+          "generator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "generator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "generator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "split-publication-authority",
+      "event": "publish_split",
+      "kind": "authority",
+      "entry": "generator",
+      "via": [],
+      "terminal": "split_store",
+      "path_count": 1,
+      "paths": [
+        [
+          "generator",
+          "split_store"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "generator"
+        ],
+        "evidence_owner": [
+          "split_store"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "restart-pre-dispatch-proof",
+      "event": "restart_pre_dispatch",
+      "kind": "proof",
+      "entry": "nonce_undispatched_evidence",
+      "via": [],
+      "terminal": "restart_projector",
+      "path_count": 1,
+      "paths": [
+        [
+          "nonce_undispatched_evidence",
+          "restart_projector"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "nonce_undispatched_evidence"
+        ],
+        "proof_owner": [
+          "restart_projector"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "restart-post-dispatch-proof",
+      "event": "restart_post_dispatch",
+      "kind": "proof",
+      "entry": "generator_indeterminate_evidence",
+      "via": [],
+      "terminal": "restart_projector",
+      "path_count": 1,
+      "paths": [
+        [
+          "generator_indeterminate_evidence",
+          "restart_projector"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "generator_indeterminate_evidence"
+        ],
+        "proof_owner": [
+          "restart_projector"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "claim_slot": {
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "slot_claim_owner"
+      ],
+      "evidence_owner": [],
+      "candidate_rank_owner": [],
+      "mutation_owner": [
+        "slot_ledger"
+      ]
+    },
+    "publish_split": {
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "split_store"
+      ],
+      "candidate_rank_owner": [],
+      "mutation_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 19,
+    "verified": 19,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}
