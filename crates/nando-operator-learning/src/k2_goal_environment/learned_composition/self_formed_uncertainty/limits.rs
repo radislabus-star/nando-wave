@@ -89,6 +89,40 @@ pub const K2_UNCERTAINTY_CONFIRM_GENERATOR_REQUEST_SCHEMA_V1: &str =
     "nando.k2-self-formed-confirm-generator-request.v1";
 pub const K2_UNCERTAINTY_CONFIRM_GENERATOR_RESPONSE_SCHEMA_V1: &str =
     "nando.k2-self-formed-confirm-generator-response.v1";
+pub const K2_UNCERTAINTY_R10_AUTHORIZATION_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-r10-authorization-receipt.v1";
+pub const K2_UNCERTAINTY_AUTHORIZATION_SLOT_KEY_SCHEMA_V1: &str =
+    "nando.k2-self-formed-authorization-slot-key.v1";
+pub const K2_UNCERTAINTY_AUTHORIZATION_SLOT_CLAIM_SCHEMA_V1: &str =
+    "nando.k2-self-formed-authorization-slot-claim.v1";
+pub const K2_UNCERTAINTY_CONFIRM_ATTEMPT_DESCRIPTOR_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-attempt-descriptor.v1";
+pub const K2_UNCERTAINTY_CONFIRM_ATTEMPT_EVENT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-attempt-event.v1";
+pub const K2_UNCERTAINTY_CONFIRM_ATTEMPT_JOURNAL_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-attempt-journal.v1";
+pub const K2_UNCERTAINTY_CLASSIFIED_PATH_SCHEMA_V1: &str =
+    "nando.k2-self-formed-classified-path.v1";
+pub const K2_UNCERTAINTY_CONFIRM_PUBLIC_DENOMINATOR_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-public-denominator.v1";
+pub const K2_UNCERTAINTY_CONFIRM_RESOLVER_TABLE_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-resolver-table.v1";
+pub const K2_UNCERTAINTY_CONFIRM_FINAL_TRUTH_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-final-truth.v1";
+pub const K2_UNCERTAINTY_CONFIRM_STORED_ARTIFACT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-stored-artifact.v1";
+pub const K2_UNCERTAINTY_CONFIRM_PRIVATE_SPLIT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-private-split.v1";
+pub const K2_UNCERTAINTY_CONFIRM_SPLIT_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-split-receipt.v1";
+pub const K2_UNCERTAINTY_CONFIRM_NONCE_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-nonce-receipt.v1";
+pub const K2_UNCERTAINTY_CONFIRM_PIPE_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-pipe-receipt.v1";
+pub const K2_UNCERTAINTY_CONFIRM_OWNER_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-owner-request.v1";
+pub const K2_UNCERTAINTY_CONFIRM_OWNER_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-confirm-owner-receipt.v1";
 pub const K2_UNCERTAINTY_LEARNER_RESPONSE_SCHEMA_V1: &str =
     "nando.k2-self-formed-learner-response.v1";
 pub const K2_UNCERTAINTY_PROBE_REQUEST_SCHEMA_V1: &str = "nando.k2-self-formed-probe-request.v1";

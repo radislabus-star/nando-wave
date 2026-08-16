@@ -1,7 +1,8 @@
 //! Generated-only self-formed semantic uncertainty experiment.
 //!
 //! This route has no natural, K1, product, certificate, phase, service, or
-//! deployment authority. The confirm nonce is deliberately outside this module.
+//! deployment authority. The Confirm nonce owner remains inert unless an exact
+//! successor authorization and globally claimed slot are supplied.
 
 mod artifact_store;
 mod batch_journal;
@@ -12,7 +13,15 @@ mod closure_plan;
 mod closure_planner_process;
 mod closure_verifier;
 mod closure_verifier_model;
+mod confirm_artifact_model;
+mod confirm_artifacts;
+mod confirm_attempt_journal;
+mod confirm_attempt_model;
+mod confirm_authorization;
 mod confirm_generator_model;
+mod confirm_nonce;
+mod confirm_owner;
+mod confirm_owner_model;
 mod development_freeze;
 mod dispatch_v2;
 mod dispatch_v2_model;
@@ -51,7 +60,15 @@ pub use closure_plan::*;
 pub use closure_planner_process::*;
 pub use closure_verifier::*;
 pub use closure_verifier_model::*;
+pub use confirm_artifact_model::*;
+pub use confirm_artifacts::*;
+pub use confirm_attempt_journal::*;
+pub use confirm_attempt_model::*;
+pub use confirm_authorization::*;
 pub use confirm_generator_model::*;
+pub use confirm_nonce::*;
+pub use confirm_owner::*;
+pub use confirm_owner_model::*;
 pub use development_freeze::*;
 pub use dispatch_v2::*;
 pub use dispatch_v2_model::*;
