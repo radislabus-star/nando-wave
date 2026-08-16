@@ -1,0 +1,320 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "v5-terminal-cleanup-route-terminal-verdict",
+  "domain": "code",
+  "complexity_score": 10,
+  "mandatory_gate": false,
+  "limits": [],
+  "stable_triads": [
+    "c4",
+    "c5"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c4",
+      "c5"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c4": 0.5,
+      "c5": 0.5
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 4,
+    "missing_triads": [
+      "t4",
+      "t5",
+      "c4",
+      "c5"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c4": 0.703,
+      "c5": 0.703
+    },
+    "source_self_score": 0.703,
+    "stable": [
+      "c4",
+      "c5"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "terminal-input-owner": "terminal-input-owner",
+      "terminal-predicate-owner": "terminal-predicate-owner"
+    },
+    "scores": {
+      "terminal-input-owner": 1.0,
+      "terminal-predicate-owner": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "terminal-input-owner": 1,
+      "terminal-predicate-owner": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.703,
+      "norm": 44.9889,
+      "triads": 2
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "terminal-input-owner": "terminal-input-owner",
+      "terminal-predicate-owner": "terminal-predicate-owner"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "terminal-input-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-predicate-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "terminal-input-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "terminal-predicate-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "terminal-input-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-input-owner",
+        "exact_source_groups": [
+          "terminal-input-owner"
+        ]
+      },
+      "terminal-predicate-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-predicate-owner",
+        "exact_source_groups": [
+          "terminal-predicate-owner"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "terminal-input-owner": {
+        "terminal-input-owner": 1.0,
+        "terminal-predicate-owner": -0.0117
+      },
+      "terminal-predicate-owner": {
+        "terminal-input-owner": -0.0117,
+        "terminal-predicate-owner": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "terminal-input-owner": {
+          "gravity": 1.0,
+          "owner": "sealed terminal evaluator",
+          "owners": {
+            "sealed terminal evaluator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "terminal-predicate-owner": {
+          "gravity": 1.0,
+          "owner": "terminal-predicate-owner",
+          "owners": {
+            "terminal-predicate-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "terminal-verdict": {
+          "gravity": 0.5,
+          "owner": "sealed terminal evaluator",
+          "owners": {
+            "sealed terminal evaluator": 2,
+            "terminal-predicate-owner": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "terminal-verdict": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:406",
+            "k2_self_formed_uncertainty_preregistration_v5.md:420",
+            "v5 r7j terminal-input candidate",
+            "v5 r7j terminal-predicate candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "sealed terminal evaluator",
+            "terminal-predicate-owner"
+          ],
+          "scopes": [
+            "terminal-verdict"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "terminal-verdict": {
+          "norm": 44.9889,
+          "self_coherence": 0.703,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "terminal-verdict": {
+          "terminal-verdict": 1.0
+        }
+      },
+      "source": {
+        "terminal-verdict": {
+          "norm": 44.9889,
+          "self_coherence": 0.703,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "terminal-input-owner": 1,
+      "terminal-predicate-owner": 1
+    },
+    "stable_groups": [
+      "terminal-input-owner",
+      "terminal-predicate-owner"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/v5-terminal-cleanup-route-terminal-verdict.trace.json"
+}

@@ -1,0 +1,1269 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "VETO",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": false,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/nanda-v5-code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 36,
+  "edge_count": 37,
+  "routes": [
+    {
+      "id": "authorization-authority",
+      "event": "authorize",
+      "kind": "authority",
+      "entry": "authorization_input",
+      "via": [],
+      "terminal": "authorization_slot_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "authorization_input",
+          "authorization_slot_owner"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "authorization_input"
+        ],
+        "authorization_owner": [
+          "authorization_slot_owner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "slot-claim-authority",
+      "event": "claim_slot",
+      "kind": "authority",
+      "entry": "authorization_slot_owner",
+      "via": [],
+      "terminal": "slot_ledger",
+      "path_count": 1,
+      "paths": [
+        [
+          "authorization_slot_owner",
+          "slot_ledger"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "authorization_slot_owner"
+        ],
+        "mutation_owner": [
+          "slot_ledger"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "confirm-generator-execution",
+      "event": "generate_confirm",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "generator",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "generator"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "confirm_owner"
+        ],
+        "producer": [
+          "generator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "generator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "generator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rehearsal-generator-execution",
+      "event": "generate_rehearsal",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "generator",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "generator"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "confirm_owner"
+        ],
+        "producer": [
+          "generator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "generator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "generator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "generated-public-authority",
+      "event": "publish_generated",
+      "kind": "authority",
+      "entry": "generator",
+      "via": [],
+      "terminal": "public_batch",
+      "path_count": 1,
+      "paths": [
+        [
+          "generator",
+          "public_batch"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "generator"
+        ],
+        "evidence_owner": [
+          "public_batch"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "public-coordinator-execution",
+      "event": "public_prepare",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "public_coordinator",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "public_coordinator"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "confirm_owner",
+          "public_coordinator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "public_coordinator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "public_coordinator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "learner-execution",
+      "event": "induce_models",
+      "kind": "execution",
+      "entry": "public_coordinator",
+      "via": [],
+      "terminal": "learner",
+      "path_count": 1,
+      "paths": [
+        [
+          "public_coordinator",
+          "learner"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "learner"
+        ],
+        "orchestrator": [
+          "public_coordinator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "public_coordinator",
+          "to": "learner",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "public_coordinator",
+              "learner"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "model-evidence-authority",
+      "event": "publish_models",
+      "kind": "authority",
+      "entry": "learner",
+      "via": [],
+      "terminal": "model_sets",
+      "path_count": 1,
+      "paths": [
+        [
+          "learner",
+          "model_sets"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "learner"
+        ],
+        "evidence_owner": [
+          "model_sets"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "frontier-execution",
+      "event": "enumerate_frontier",
+      "kind": "execution",
+      "entry": "public_coordinator",
+      "via": [],
+      "terminal": "probe_enumerator",
+      "path_count": 1,
+      "paths": [
+        [
+          "public_coordinator",
+          "probe_enumerator"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "probe_enumerator"
+        ],
+        "orchestrator": [
+          "public_coordinator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "public_coordinator",
+          "to": "probe_enumerator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "public_coordinator",
+              "probe_enumerator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "frontier-evidence-authority",
+      "event": "publish_frontier",
+      "kind": "authority",
+      "entry": "probe_enumerator",
+      "via": [],
+      "terminal": "frontier",
+      "path_count": 1,
+      "paths": [
+        [
+          "probe_enumerator",
+          "frontier"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "frontier"
+        ],
+        "producer": [
+          "probe_enumerator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "first-ranking-authority",
+      "event": "rank_first",
+      "kind": "authority",
+      "entry": "frontier",
+      "via": [],
+      "terminal": "predecessor_selector",
+      "path_count": 1,
+      "paths": [
+        [
+          "frontier",
+          "predecessor_selector"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "frontier"
+        ],
+        "candidate_rank_owner": [
+          "predecessor_selector"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "closure-ranking-authority",
+      "event": "rank_closure",
+      "kind": "authority",
+      "entry": "frontier",
+      "via": [],
+      "terminal": "closure_planner",
+      "path_count": 1,
+      "paths": [
+        [
+          "frontier",
+          "closure_planner"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "closure_planner"
+        ],
+        "evidence_owner": [
+          "frontier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "baseline-ranking-authority",
+      "event": "rank_baselines",
+      "kind": "authority",
+      "entry": "frontier",
+      "via": [],
+      "terminal": "baseline_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "frontier",
+          "baseline_owner"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "baseline_owner"
+        ],
+        "evidence_owner": [
+          "frontier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "first-preverification",
+      "event": "preverify_first",
+      "kind": "proof",
+      "entry": "predecessor_selector",
+      "via": [],
+      "terminal": "selection_preverifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "predecessor_selector",
+          "selection_preverifier"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "predecessor_selector"
+        ],
+        "proof_owner": [
+          "selection_preverifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "closure-preverification",
+      "event": "preverify_closure",
+      "kind": "proof",
+      "entry": "closure_planner",
+      "via": [],
+      "terminal": "closure_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "closure_planner",
+          "closure_verifier"
+        ]
+      ],
+      "role_owners": {
+        "candidate_rank_owner": [
+          "closure_planner"
+        ],
+        "proof_owner": [
+          "closure_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "first-barrier-authority",
+      "event": "commit_first",
+      "kind": "authority",
+      "entry": "predecessor_selector",
+      "via": [],
+      "terminal": "all_cases_barrier",
+      "path_count": 1,
+      "paths": [
+        [
+          "predecessor_selector",
+          "all_cases_barrier"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "all_cases_barrier"
+        ],
+        "candidate_rank_owner": [
+          "predecessor_selector"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "closure-barrier-authority",
+      "event": "commit_closure",
+      "kind": "authority",
+      "entry": "closure_planner",
+      "via": [],
+      "terminal": "all_cases_barrier",
+      "path_count": 1,
+      "paths": [
+        [
+          "closure_planner",
+          "all_cases_barrier"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "all_cases_barrier"
+        ],
+        "candidate_rank_owner": [
+          "closure_planner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "baseline-barrier-authority",
+      "event": "commit_baselines",
+      "kind": "authority",
+      "entry": "baseline_owner",
+      "via": [],
+      "terminal": "all_cases_barrier",
+      "path_count": 1,
+      "paths": [
+        [
+          "baseline_owner",
+          "all_cases_barrier"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "all_cases_barrier"
+        ],
+        "candidate_rank_owner": [
+          "baseline_owner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "resolver-execution",
+      "event": "resolve_step",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "private_resolver",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "private_resolver"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "confirm_owner"
+        ],
+        "producer": [
+          "private_resolver"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "private_resolver",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "private_resolver"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resolved-effect-authority",
+      "event": "publish_effect",
+      "kind": "authority",
+      "entry": "private_resolver",
+      "via": [],
+      "terminal": "resolved_effect",
+      "path_count": 1,
+      "paths": [
+        [
+          "private_resolver",
+          "resolved_effect"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "private_resolver"
+        ],
+        "evidence_owner": [
+          "resolved_effect"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "safety-authority",
+      "event": "authorize_effect",
+      "kind": "authority",
+      "entry": "resolved_effect",
+      "via": [],
+      "terminal": "worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "resolved_effect",
+          "safety_verifier",
+          "worker"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "resolved_effect"
+        ],
+        "authorization_owner": [
+          "safety_verifier"
+        ],
+        "mutation_owner": [
+          "worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "worker-execution",
+      "event": "execute_step",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "worker",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "worker"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "confirm_owner"
+        ],
+        "mutation_owner": [
+          "worker"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "worker",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "worker"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "post-state-observation",
+      "event": "observe_step",
+      "kind": "observation",
+      "entry": "post_state",
+      "via": [],
+      "terminal": "observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "post_state",
+          "observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "observer"
+        ],
+        "evidence_owner": [
+          "post_state"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "case-final-proof",
+      "event": "verify_case",
+      "kind": "proof",
+      "entry": "observer",
+      "via": [],
+      "terminal": "final_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "observer",
+          "final_verifier"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "final_verifier"
+        ],
+        "observer": [
+          "observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "oracle-baseline-proof",
+      "event": "evaluate_oracle_baselines",
+      "kind": "proof",
+      "entry": "final_truth",
+      "via": [],
+      "terminal": "oracle_baseline_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "final_truth",
+          "oracle_baseline_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "final_truth"
+        ],
+        "proof_owner": [
+          "oracle_baseline_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "attempt-control-proof",
+      "event": "evaluate_controls",
+      "kind": "proof",
+      "entry": "attempt_journal",
+      "via": [],
+      "terminal": "control_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "attempt_journal",
+          "control_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "attempt_journal"
+        ],
+        "proof_owner": [
+          "control_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "terminal-final-proof",
+      "event": "terminal_final_input",
+      "kind": "proof",
+      "entry": "final_verifier",
+      "via": [],
+      "terminal": "terminal_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "final_verifier",
+          "terminal_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "final_verifier",
+          "terminal_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "terminal-oracle-proof",
+      "event": "terminal_oracle_input",
+      "kind": "proof",
+      "entry": "oracle_baseline_evaluator",
+      "via": [],
+      "terminal": "terminal_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "oracle_baseline_evaluator",
+          "terminal_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "oracle_baseline_evaluator",
+          "terminal_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "terminal-control-proof",
+      "event": "terminal_control_input",
+      "kind": "proof",
+      "entry": "control_evaluator",
+      "via": [],
+      "terminal": "terminal_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "control_evaluator",
+          "terminal_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "control_evaluator",
+          "terminal_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "terminal-result-proof",
+      "event": "publish_terminal",
+      "kind": "proof",
+      "entry": "terminal_evaluator",
+      "via": [],
+      "terminal": "sealed_verdict",
+      "path_count": 1,
+      "paths": [
+        [
+          "terminal_evaluator",
+          "sealed_verdict"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "sealed_verdict"
+        ],
+        "proof_owner": [
+          "terminal_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "cleanup-authorization",
+      "event": "authorize_cleanup",
+      "kind": "authority",
+      "entry": "sealed_verdict",
+      "via": [],
+      "terminal": "cleanup_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "sealed_verdict",
+          "cleanup_authorizer",
+          "cleanup_owner"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "cleanup_authorizer"
+        ],
+        "mutation_owner": [
+          "cleanup_owner"
+        ],
+        "evidence_owner": [
+          "sealed_verdict"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "cleanup-execution",
+      "event": "execute_cleanup",
+      "kind": "execution",
+      "entry": "confirm_owner",
+      "via": [],
+      "terminal": "cleanup_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "confirm_owner",
+          "cleanup_owner"
+        ]
+      ],
+      "role_owners": {
+        "mutation_owner": [
+          "cleanup_owner"
+        ],
+        "orchestrator": [
+          "confirm_owner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "confirm_owner",
+          "to": "cleanup_owner",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "confirm_owner",
+              "cleanup_owner"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup-proof",
+      "event": "verify_cleanup",
+      "kind": "proof",
+      "entry": "cleanup_state",
+      "via": [],
+      "terminal": "cleanup_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "cleanup_state",
+          "cleanup_verifier"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "cleanup_state"
+        ],
+        "proof_owner": [
+          "cleanup_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "cleanup-receipt-proof",
+      "event": "publish_cleanup_receipt",
+      "kind": "proof",
+      "entry": "cleanup_verifier",
+      "via": [],
+      "terminal": "cleanup_receipt",
+      "path_count": 1,
+      "paths": [
+        [
+          "cleanup_verifier",
+          "cleanup_receipt"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "cleanup_receipt"
+        ],
+        "proof_owner": [
+          "cleanup_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "result-verdict-authority",
+      "event": "bind_result_verdict",
+      "kind": "authority",
+      "entry": "sealed_verdict",
+      "via": [],
+      "terminal": "result_publisher",
+      "path_count": 1,
+      "paths": [
+        [
+          "sealed_verdict",
+          "result_publisher"
+        ]
+      ],
+      "role_owners": {
+        "render_owner": [
+          "result_publisher"
+        ],
+        "evidence_owner": [
+          "sealed_verdict"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    },
+    {
+      "id": "result-cleanup-authority",
+      "event": "bind_result_cleanup",
+      "kind": "authority",
+      "entry": "cleanup_receipt",
+      "via": [],
+      "terminal": "result_publisher",
+      "path_count": 1,
+      "paths": [
+        [
+          "cleanup_receipt",
+          "result_publisher"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "cleanup_receipt"
+        ],
+        "render_owner": [
+          "result_publisher"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": []
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "authorize": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "authorization_slot_owner"
+      ],
+      "evidence_owner": [],
+      "mutation_owner": []
+    },
+    "claim_slot": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "authorization_slot_owner"
+      ],
+      "evidence_owner": [],
+      "mutation_owner": [
+        "slot_ledger"
+      ]
+    },
+    "publish_generated": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "public_batch"
+      ],
+      "mutation_owner": []
+    },
+    "publish_models": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "model_sets"
+      ],
+      "mutation_owner": []
+    },
+    "publish_frontier": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "frontier"
+      ],
+      "mutation_owner": []
+    },
+    "rank_first": {
+      "candidate_rank_owner": [
+        "predecessor_selector"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "frontier"
+      ],
+      "mutation_owner": []
+    },
+    "rank_closure": {
+      "candidate_rank_owner": [
+        "closure_planner"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "frontier"
+      ],
+      "mutation_owner": []
+    },
+    "rank_baselines": {
+      "candidate_rank_owner": [
+        "baseline_owner"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "frontier"
+      ],
+      "mutation_owner": []
+    },
+    "commit_first": {
+      "candidate_rank_owner": [
+        "predecessor_selector"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "all_cases_barrier"
+      ],
+      "evidence_owner": [],
+      "mutation_owner": []
+    },
+    "commit_closure": {
+      "candidate_rank_owner": [
+        "closure_planner"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "all_cases_barrier"
+      ],
+      "evidence_owner": [],
+      "mutation_owner": []
+    },
+    "commit_baselines": {
+      "candidate_rank_owner": [
+        "baseline_owner"
+      ],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "all_cases_barrier"
+      ],
+      "evidence_owner": [],
+      "mutation_owner": []
+    },
+    "publish_effect": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "resolved_effect"
+      ],
+      "mutation_owner": []
+    },
+    "authorize_effect": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "safety_verifier"
+      ],
+      "evidence_owner": [
+        "resolved_effect"
+      ],
+      "mutation_owner": [
+        "worker"
+      ]
+    },
+    "authorize_cleanup": {
+      "candidate_rank_owner": [],
+      "render_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "cleanup_authorizer"
+      ],
+      "evidence_owner": [
+        "sealed_verdict"
+      ],
+      "mutation_owner": [
+        "cleanup_owner"
+      ]
+    },
+    "bind_result_verdict": {
+      "candidate_rank_owner": [],
+      "render_owner": [
+        "result_publisher"
+      ],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "sealed_verdict"
+      ],
+      "mutation_owner": []
+    },
+    "bind_result_cleanup": {
+      "candidate_rank_owner": [],
+      "render_owner": [
+        "result_publisher"
+      ],
+      "display_rank_owner": [],
+      "authorization_owner": [],
+      "evidence_owner": [
+        "cleanup_receipt"
+      ],
+      "mutation_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [
+    {
+      "code": "proof_relation_role_mismatch",
+      "message": "proves must terminate at a proof_owner",
+      "edge": "prove-terminal-verdict",
+      "target_role": "evidence_owner"
+    },
+    {
+      "code": "proof_relation_role_mismatch",
+      "message": "proves must terminate at a proof_owner",
+      "edge": "prove-cleanup-receipt",
+      "target_role": "evidence_owner"
+    }
+  ],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

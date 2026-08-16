@@ -1,0 +1,1191 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-self-formed-uncertainty-r7f-v5-confirm-execution",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "architecture-canon",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/ARCHITECTURE_CANON.md",
+      "expect": {
+        "size_bytes": 93192,
+        "sha256": "8c44515cc368ee5cabf19d04ea8443c0a3f919527707f7899666f2c01e7bc0a0",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "cargo-lock",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/Cargo.lock",
+      "expect": {
+        "size_bytes": 39973,
+        "sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "operator-learning-manifest",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/Cargo.toml",
+      "expect": {
+        "size_bytes": 663,
+        "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "predecessor-selector",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "expect": {
+        "size_bytes": 9922,
+        "sha256": "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "uncertainty-mod",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "expect": {
+        "size_bytes": 1821,
+        "sha256": "e91854685e8dc833610716f464d07e9d7afe4e71b6984dcfee6aea389d4f0cdc",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "generator-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/generator.rs",
+      "expect": {
+        "size_bytes": 20185,
+        "sha256": "8e74235d1650dcb5a8196f7bb5090bd336f479c807d1c552f42aa2d4b1536b9d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "generator-model",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/generator_model.rs",
+      "expect": {
+        "size_bytes": 16146,
+        "sha256": "dc5289e5f138d887922fe316b61350618bc9aa95956d951d7b02718774d5f53e",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "vocabulary-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/vocabulary.rs",
+      "expect": {
+        "size_bytes": 16583,
+        "sha256": "e0de302661250912dedbf5f7a661be5b4b2dda28ce24e2709bfc839539c50efe",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "support-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/support.rs",
+      "expect": {
+        "size_bytes": 11510,
+        "sha256": "0ca6b4ddad1dfcf6836d2263bffee354098bdfca3e56811f949368896d8fca8d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "batch-journal",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/batch_journal.rs",
+      "expect": {
+        "size_bytes": 15570,
+        "sha256": "9b910aff546c20c41ae8196df406b09b0430ac37ecedd35d5491a0c08f80b30d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "case-journal-v2",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/case_journal_v2.rs",
+      "expect": {
+        "size_bytes": 26438,
+        "sha256": "8a89295f18fab95cf1a46b2a59295cbdb0c0501047c212a4fa41a9901c198076",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "precommit-v2",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/precommit_v2.rs",
+      "expect": {
+        "size_bytes": 14995,
+        "sha256": "7dea61e088631cc1fd447055305dde7d4d9950221f19db936e11455e550e146d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "closure-source",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/closure.rs",
+      "expect": {
+        "size_bytes": 7034,
+        "sha256": "ae463839c87be43ec69c126516f459973fc5e0729c92c5930ef5ca98203b2a32",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "closure-model",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/closure_model.rs",
+      "expect": {
+        "size_bytes": 23699,
+        "sha256": "a9736e0eca78bf9d82cc1a518e4e6c7828ac74b88377cd4c603cc23760b7c8dd",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "closure-plan",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/closure_plan.rs",
+      "expect": {
+        "size_bytes": 12092,
+        "sha256": "8b950877b858cee685506efb6fed4fbe4d216fa3649ca12eae7c00d98aac2de6",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "closure-verifier",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/closure_verifier.rs",
+      "expect": {
+        "size_bytes": 15023,
+        "sha256": "5f14520970a6e2c13e3ac9532d283fab1ad46b74de14d33ebf5b1d0272759307",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "final-verifier-v2",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier_v2.rs",
+      "expect": {
+        "size_bytes": 13239,
+        "sha256": "381599922a31a111873479e0ad6a84e7fab3716ee1ac06df47584e94345cc82e",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "process-test",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_process_v1.rs",
+      "expect": {
+        "size_bytes": 33454,
+        "sha256": "11a866a2062599878460898300891f91de5673e0a8655cf98f251542f4e5a48b",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "controls-test",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_controls_v1.rs",
+      "expect": {
+        "size_bytes": 1392,
+        "sha256": "b5adcd8312f574993815b4c0e4412ee08890061abacbd548fc83e13303c1def2",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "prereg-v2",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2.md",
+      "expect": {
+        "size_bytes": 35757,
+        "sha256": "7875d8809b9340774170d2468b07302e17e503712728173b6efb699f9b768a95",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "prereg-v3",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V3.md",
+      "expect": {
+        "size_bytes": 7784,
+        "sha256": "79b50fb11ed01a246f18882afd5cd27025cbd9d05898585675bd11f3a2c611f8",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "prereg-v4",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V4.md",
+      "expect": {
+        "size_bytes": 14994,
+        "sha256": "1c40f6bb696257e4add212f7d2d8edadf30fefb20b0ed2507a6c6b0dadb051ce",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "prereg-v5",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md",
+      "expect": {
+        "size_bytes": 24952,
+        "sha256": "075275b140c00b8e26bfbccebd014136bd39a0d7b23ae83f6d8292bd6d6b776d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "prereg-v5-critique",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5_CRITIQUE_V2.md",
+      "expect": {
+        "size_bytes": 5803,
+        "sha256": "74294be682540079ba174b3eacb9b50ac78bdcf2abe64e80304eee299b930e7f",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "v5-blueprint",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_IMPLEMENTATION_BLUEPRINT.md",
+      "expect": {
+        "size_bytes": 7142,
+        "sha256": "eabeeefa9417bcbe1723b8070c4cac3e921c5aa889b5fdb82e956df029a047ef",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "r10-discrepancy",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_R10_PREATTEMPT_DISCREPANCY_2026-08-16.md",
+      "expect": {
+        "size_bytes": 4403,
+        "sha256": "62ccb45926280fb15e6764669cc056b23dcda3cbdd2e1c421b1ac62aaaac04f9",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "old-r9-receipt",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_R9_2026-08-15/R9_RECEIPT_V1.json",
+      "expect": {
+        "size_bytes": 2763,
+        "sha256": "cf33660756bf6c96303eeec405e2c7be82315ea08b3aba1ac6ba061b928d8789",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "old-r9-executable-manifest",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_R9_2026-08-15/EXECUTABLE_MANIFEST_V1.json",
+      "expect": {
+        "size_bytes": 1924,
+        "sha256": "27e7960467d7d00ba43c019d8eacfd5c115ac8e5424ce10aa29afa0302bfca59",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "v5-code-route-receipt",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/nanda-v5-code-route.design.receipt.json",
+      "expect": {
+        "size_bytes": 26962,
+        "sha256": "33addab102724acdc0b1b1f5f627feac44a366b3efabff5e36a04150f6b061f5",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "v5-owner-routes",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/OWNER_ROUTE_AGGREGATE_V2.json",
+      "expect": {
+        "size_bytes": 8146,
+        "sha256": "91d39235dee54215e508de3721a832234cbeb340488a5d5b4d906fbfb76696db",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "production-serving",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs",
+      "expect": {
+        "size_bytes": 457899,
+        "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "production-dashboard",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "expect": {
+        "size_bytes": 28960,
+        "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c",
+        "mode": "0664"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "read-v5-frozen-baselines",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "add-confirm-wire-and-generator-modules",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "modify-development-generator-with-parity",
+        "kind": "source_file_modify"
+      },
+      {
+        "id": "add-authorization-slot-and-attempt-journal",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "add-owner-specific-process-modules",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "add-thin-owner-binaries",
+        "kind": "source_file_create"
+      },
+      {
+        "id": "add-v5-contract-and-fault-tests",
+        "kind": "test_file_create"
+      },
+      {
+        "id": "modify-development-process-test-for-rehearsal",
+        "kind": "test_file_modify"
+      },
+      {
+        "id": "write-development-rehearsal-journal",
+        "kind": "test_lab_journal_write"
+      },
+      {
+        "id": "create-disposable-rehearsal-workspaces",
+        "kind": "test_fixture_write"
+      },
+      {
+        "id": "spawn-isolated-rehearsal-processes",
+        "kind": "isolated_test_process_spawn"
+      },
+      {
+        "id": "remove-disposable-rehearsal-workspaces",
+        "kind": "test_fixture_cleanup"
+      },
+      {
+        "id": "write-r8b-owner-route-and-quality-receipts",
+        "kind": "append_only_evidence_write"
+      },
+      {
+        "id": "freeze-r9b-source-executable-test-roots",
+        "kind": "append_only_freeze_receipt_write"
+      }
+    ],
+    "forbidden": [
+      "confirm_nonce_interaction",
+      "confirm_seed_read",
+      "sealed_scientific_execution",
+      "generated_traffic",
+      "synthetic_fixture",
+      "experiment_network_access",
+      "natural_traffic_read",
+      "natural_traffic_write",
+      "production_state_mount",
+      "production_write",
+      "service_control",
+      "dashboard_change",
+      "deployment",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "bundle_activation",
+      "phase_memory_mutation",
+      "package_activation",
+      "natural_k2_authority"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "frozen-predecessor-selector",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "sha256": "733b9b59fdfd7e2b5ed68461da89a27c84f04ade2e4e51ae5243dbb7175ef390",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "confirm_nonce_interaction",
+          "regex": "(confirm_nonce|NONCE_COMMITTED|run_sealed_attempt)"
+        }
+      ]
+    },
+    {
+      "id": "existing-generator-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/generator.rs",
+      "sha256": "8e74235d1650dcb5a8196f7bb5090bd336f479c807d1c552f42aa2d4b1536b9d",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "service_control",
+          "regex": "(systemctl|service\\s+(start|stop|restart))"
+        },
+        {
+          "effect": "deployment",
+          "regex": "(deploy_remote|deployment-receipt)"
+        },
+        {
+          "effect": "natural_traffic_read",
+          "regex": "(ordinary_traffic|provider_capture|natural_traffic)"
+        },
+        {
+          "effect": "bundle_activation",
+          "regex": "(activate_bundle|bundle_activated\\s*:\\s*true)"
+        },
+        {
+          "effect": "confirm_seed_read",
+          "regex": "(read_confirm_seed|confirm_seed_reader)"
+        },
+        {
+          "effect": "dashboard_change",
+          "regex": "(live_dashboard|control_page|dashboard_html)"
+        },
+        {
+          "effect": "generated_traffic",
+          "regex": "(generated_traffic_as_evidence|/v[12]/responses|chat/completions)"
+        },
+        {
+          "effect": "law_certificate_issue",
+          "regex": "(issue_law_certificate|law_certificate_issued\\s*:\\s*true)"
+        },
+        {
+          "effect": "natural_traffic_write",
+          "regex": "(write_natural_traffic|natural_traffic_writer)"
+        },
+        {
+          "effect": "package_activation",
+          "regex": "(activate_package|package_activated\\s*:\\s*true)"
+        },
+        {
+          "effect": "phase_memory_mutation",
+          "regex": "(mutate_phase_memory|phase_memory_mutated\\s*:\\s*true)"
+        },
+        {
+          "effect": "sealed_scientific_execution",
+          "regex": "(run_sealed_attempt|execute_confirm_batch)"
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "(synthetic_fixture_as_science|fixture_counts_as_science)"
+        }
+      ]
+    },
+    {
+      "id": "existing-batch-journal-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/batch_journal.rs",
+      "sha256": "9b910aff546c20c41ae8196df406b09b0430ac37ecedd35d5491a0c08f80b30d",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_state_mount",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave|/run/secrets|/\\.ssh)"
+        },
+        {
+          "effect": "k1_registry_mutation",
+          "regex": "(EpistemicRegistry|K1Vocabulary|LawCertificate)"
+        }
+      ]
+    },
+    {
+      "id": "existing-final-verifier-v2-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/final_verifier_v2.rs",
+      "sha256": "381599922a31a111873479e0ad6a84e7fab3716ee1ac06df47584e94345cc82e",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "natural_traffic_read",
+          "regex": "(ordinary_traffic|provider_capture|natural_traffic)"
+        },
+        {
+          "effect": "k1_registry_mutation",
+          "regex": "(EpistemicRegistry|K1Vocabulary|LawCertificate)"
+        },
+        {
+          "effect": "natural_k2_authority",
+          "regex": "natural_k2_authority\\s*:\\s*true"
+        }
+      ]
+    },
+    {
+      "id": "existing-process-test-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_process_v1.rs",
+      "sha256": "11a866a2062599878460898300891f91de5673e0a8655cf98f251542f4e5a48b",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_state_mount",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave|/run/secrets|/\\.ssh)"
+        },
+        {
+          "effect": "confirm_nonce_interaction",
+          "regex": "(NONCE_COMMITTED|GENERATOR_DISPATCHED|run_sealed_attempt)"
+        }
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "V5_PAPER_GATED",
+    "terminal_states": [
+      "R7G_FAILED",
+      "R7H_FAILED",
+      "R7I_FAILED",
+      "R7J_FAILED",
+      "R7K_FAILED",
+      "R8B_FAILED",
+      "R9B_FAILED",
+      "STOP_AT_R10B"
+    ],
+    "steps": [
+      {
+        "id": "r7g-split-aware-generator",
+        "from": "V5_PAPER_GATED",
+        "to": "R7G_FROZEN",
+        "mutates": true,
+        "failure_state": "R7G_FAILED",
+        "cleanup": "remove unpublished Confirm modules and wrappers; preserve exact Development and paper baselines",
+        "preserves": [
+          "architecture",
+          "selector",
+          "v2-paper",
+          "v3-paper",
+          "v4-paper",
+          "old-r9",
+          "r10-discrepancy",
+          "production-serving",
+          "production-dashboard"
+        ],
+        "test_id": "fault-r7g-rollback"
+      },
+      {
+        "id": "r7h-authorization-nonce-journal",
+        "from": "R7G_FROZEN",
+        "to": "R7H_FROZEN",
+        "mutates": true,
+        "failure_state": "R7H_FAILED",
+        "cleanup": "preserve named failure receipts; remove only unpublished test temps; create no authorization slot or CSPRNG nonce",
+        "preserves": [
+          "architecture",
+          "selector",
+          "v2-paper",
+          "v3-paper",
+          "v4-paper",
+          "old-r9",
+          "r10-discrepancy",
+          "v5-paper",
+          "production-serving",
+          "production-dashboard"
+        ],
+        "test_id": "fault-r7h-rollback"
+      },
+      {
+        "id": "r7i-process-topology",
+        "from": "R7H_FROZEN",
+        "to": "R7I_FROZEN",
+        "mutates": true,
+        "failure_state": "R7I_FAILED",
+        "cleanup": "preserve route failures and exact journal prefixes; remove disposable rehearsal sandboxes only after observation census",
+        "preserves": [
+          "architecture",
+          "selector",
+          "old-r9",
+          "r10-discrepancy",
+          "v5-paper",
+          "structural-routes",
+          "production-serving",
+          "production-dashboard"
+        ],
+        "test_id": "fault-r7i-rollback"
+      },
+      {
+        "id": "r7j-independent-evaluators",
+        "from": "R7I_FROZEN",
+        "to": "R7J_FROZEN",
+        "mutates": true,
+        "failure_state": "R7J_FAILED",
+        "cleanup": "preserve oracle control and terminal failures; remove unpublished aggregate temps; emit no scientific verdict",
+        "preserves": [
+          "architecture",
+          "selector",
+          "old-r9",
+          "r10-discrepancy",
+          "v5-paper",
+          "structural-routes",
+          "production-serving",
+          "production-dashboard"
+        ],
+        "test_id": "fault-r7j-rollback"
+      },
+      {
+        "id": "r7k-cleanup-controls-restart",
+        "from": "R7J_FROZEN",
+        "to": "R7K_FROZEN",
+        "mutates": true,
+        "failure_state": "R7K_FAILED",
+        "cleanup": "preserve all fault receipts and retained rehearsal evidence; remove only classified disposable rehearsal paths",
+        "preserves": [
+          "architecture",
+          "selector",
+          "old-r9",
+          "r10-discrepancy",
+          "v5-paper",
+          "structural-routes",
+          "production-serving",
+          "production-dashboard"
+        ],
+        "test_id": "fault-r7k-rollback"
+      },
+      {
+        "id": "r8b-full-nonsealed-gates",
+        "from": "R7K_FROZEN",
+        "to": "R8B_FROZEN",
+        "mutates": true,
+        "failure_state": "R8B_FAILED",
+        "cleanup": "preserve individual remote suite resource and structural receipts; remove unpublished aggregate temp only",
+        "preserves": [
+          "architecture",
+          "selector",
+          "old-r9",
+          "r10-discrepancy",
+          "v5-paper",
+          "structural-routes",
+          "production-serving",
+          "production-dashboard"
+        ],
+        "test_id": "fault-r8b-receipt-publish"
+      },
+      {
+        "id": "r9b-successor-freeze",
+        "from": "R8B_FROZEN",
+        "to": "STOP_AT_R10B",
+        "mutates": true,
+        "failure_state": "R9B_FAILED",
+        "cleanup": "preserve source executable test and DevelopmentRehearsal roots; remove unpublished freeze temp; keep sealed attempts zero and nonce absent",
+        "preserves": [
+          "architecture",
+          "selector",
+          "old-r9",
+          "r10-discrepancy",
+          "v5-paper",
+          "structural-routes",
+          "production-serving",
+          "production-dashboard"
+        ],
+        "test_id": "fault-r9b-freeze-publish"
+      }
+    ]
+  },
+  "preserved_artifacts": [
+    {
+      "id": "architecture",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/ARCHITECTURE_CANON.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "architecture-canon"
+    },
+    {
+      "id": "selector",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/active_inquiry/selector.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "predecessor-selector"
+    },
+    {
+      "id": "v2-paper",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V2.md",
+      "policy": "immutable_historical_contract",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "prereg-v2"
+    },
+    {
+      "id": "v3-paper",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V3.md",
+      "policy": "immutable_historical_contract",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "prereg-v3"
+    },
+    {
+      "id": "v4-paper",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V4.md",
+      "policy": "immutable_historical_contract",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "prereg-v4"
+    },
+    {
+      "id": "v5-paper",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md",
+      "policy": "immutable_after_preflight",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "prereg-v5"
+    },
+    {
+      "id": "old-r9",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_R9_2026-08-15/R9_RECEIPT_V1.json",
+      "policy": "immutable_superseded_evidence",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "old-r9-receipt"
+    },
+    {
+      "id": "r10-discrepancy",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_R10_PREATTEMPT_DISCREPANCY_2026-08-16.md",
+      "policy": "immutable_failed_preattempt_evidence",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "r10-discrepancy"
+    },
+    {
+      "id": "structural-routes",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/OWNER_ROUTE_AGGREGATE_V2.json",
+      "policy": "immutable_structural_coherence_evidence",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "v5-owner-routes"
+    },
+    {
+      "id": "production-serving",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "production-serving"
+    },
+    {
+      "id": "production-dashboard",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "production-dashboard"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "development-inner-root-parity",
+      "producer": "successor split-aware generator Development inner payload",
+      "consumer": "historical R9 Development behavior oracle",
+      "comparison": "public batch private batch denominator and every transitive case root exact",
+      "test_id": "development-inner-root-parity"
+    },
+    {
+      "id": "development-identity-rebinding",
+      "producer": "successor generator executable identity",
+      "consumer": "independent request and outer-response reconstruction",
+      "comparison": "only generator executable hash changes identity-bound roots",
+      "test_id": "development-identity-rebinding"
+    },
+    {
+      "id": "confirm-schema-separation",
+      "producer": "closed Confirm request and response types",
+      "consumer": "split-aware generator dispatcher",
+      "comparison": "exact schema dispatch with no Development optional-field change",
+      "test_id": "confirm-schema-separation"
+    },
+    {
+      "id": "slot-global-uniqueness",
+      "producer": "experiment freeze tuple and authorization receipt",
+      "consumer": "append-only slot ledger",
+      "comparison": "one claimed slot per experiment freeze tuple across receipt identities and restarts",
+      "test_id": "slot-global-key-parity"
+    },
+    {
+      "id": "nonce-pipe-parity",
+      "producer": "in-memory Confirm request after NONCE_COMMITTED",
+      "consumer": "one generator anonymous stdin pipe",
+      "comparison": "request root executable root one send and nonce absent from argv env paths logs and persisted requests",
+      "test_id": "nonce-pipe-parity"
+    },
+    {
+      "id": "generator-split-parity",
+      "producer": "validated Confirm generator response",
+      "consumer": "public denominator resolver and final-truth artifact files",
+      "comparison": "all roots bytes modes counts and private-public exclusions",
+      "test_id": "generator-split-parity"
+    },
+    {
+      "id": "closure-planner-verifier-parity",
+      "producer": "distinct closure planner",
+      "consumer": "independent closure verifier",
+      "comparison": "complete membership ranking disposition and selected second probe",
+      "test_id": "closure-planner-verifier-parity"
+    },
+    {
+      "id": "all-case-barrier-parity",
+      "producer": "sixteen public preparation and preverification roots",
+      "consumer": "private launch guard",
+      "comparison": "one complete precommit root and zero private mounts before it",
+      "test_id": "all-case-barrier-parity"
+    },
+    {
+      "id": "resolver-safety-parity",
+      "producer": "one-case one-ordinal resolver receipt",
+      "consumer": "independent closed-schema safety verifier",
+      "comparison": "one selected action effect no alternatives and exact plan identity",
+      "test_id": "resolver-safety-parity"
+    },
+    {
+      "id": "worker-observer-parity",
+      "producer": "isolated worker post-state",
+      "consumer": "read-only observer",
+      "comparison": "workspace identity initial manifest ordinal and exact outcome root",
+      "test_id": "worker-observer-parity"
+    },
+    {
+      "id": "oracle-independence-parity",
+      "producer": "complete independent one-or-two-probe evaluator",
+      "consumer": "terminal oracle receipt reader",
+      "comparison": "all plans actual residual classes rank and zero closure or final-elimination imports",
+      "test_id": "oracle-independence-parity"
+    },
+    {
+      "id": "control-denominator-parity",
+      "producer": "static rehearsal and sealed control evaluator modes",
+      "consumer": "terminal control reader",
+      "comparison": "32 plus 4 plus 16 static separate from 12 rehearsal and 12 attempt-bound controls",
+      "test_id": "control-denominator-parity"
+    },
+    {
+      "id": "terminal-schema-parity",
+      "producer": "rehearsal and sealed terminal requests",
+      "consumer": "one terminal evaluator executable",
+      "comparison": "rehearsal cannot emit science and sealed PASS requires every conjunct",
+      "test_id": "terminal-schema-parity"
+    },
+    {
+      "id": "cleanup-authority-parity",
+      "producer": "frozen verdict and classified path manifest",
+      "consumer": "cleanup authorizer then cleanup owner",
+      "comparison": "authorizer cannot delete and owner cannot expand classified deletion set",
+      "test_id": "cleanup-authority-parity"
+    },
+    {
+      "id": "cleanup-verifier-parity",
+      "producer": "post-cleanup entire attempt tree",
+      "consumer": "read-only cleanup verifier",
+      "comparison": "retained bytes modes before-after manifests and zero disposable or unclassified residue",
+      "test_id": "cleanup-verifier-parity"
+    },
+    {
+      "id": "result-publication-parity",
+      "producer": "frozen science verdict plus CLEANUP_FROZEN receipt",
+      "consumer": "result publisher",
+      "comparison": "both exact roots required and no narrative override",
+      "test_id": "result-publication-parity"
+    },
+    {
+      "id": "r9b-freeze-parity",
+      "producer": "local source test and paper roots",
+      "consumer": "remote executable DevelopmentRehearsal and suite roots",
+      "comparison": "exact commit manifests receipts nonce absent and sealed attempts zero",
+      "test_id": "r9b-freeze-parity"
+    }
+  ],
+  "runtime_comparisons": [],
+  "invariants": [
+    {
+      "id": "development-wire-preserved",
+      "statement": "existing Development request response and inner behavior remain exact except identity-only outer-root rebinding",
+      "test_id": "development-inner-root-parity"
+    },
+    {
+      "id": "confirm-wire-disjoint",
+      "statement": "Confirm uses separate closed top-level schemas and disjoint domain separators",
+      "test_id": "confirm-schema-separation"
+    },
+    {
+      "id": "global-one-shot",
+      "statement": "one freeze tuple can claim one slot regardless of authorization receipt identity directory deletion or restart",
+      "test_id": "slot-global-uniqueness"
+    },
+    {
+      "id": "nonce-private",
+      "statement": "nonce bytes exist only in retained 0400 artifact bounded memory and one anonymous pipe",
+      "test_id": "nonce-pipe-parity"
+    },
+    {
+      "id": "dispatch-no-replay",
+      "statement": "GENERATOR_DISPATCHED precedes pipe bytes and every later incomplete prefix is indeterminate without rerun",
+      "test_id": "generator-dispatch-no-replay"
+    },
+    {
+      "id": "split-public-private",
+      "statement": "public coordinator receives no resolver table final truth nonce or private split receipt",
+      "test_id": "generator-split-parity"
+    },
+    {
+      "id": "complete-public-precommit",
+      "statement": "all sixteen model frontier selection baseline and verification dispositions freeze before private execution",
+      "test_id": "all-case-barrier-parity"
+    },
+    {
+      "id": "closure-rank-proof-separated",
+      "statement": "closure planner ranks and closure verifier proves with distinct executables",
+      "test_id": "closure-planner-verifier-parity"
+    },
+    {
+      "id": "resolver-bounded",
+      "statement": "each resolver invocation can expose one selected effect and no alternative mapping or truth label",
+      "test_id": "resolver-safety-parity"
+    },
+    {
+      "id": "dispatch-fail-closed",
+      "statement": "unmatched durable worker dispatch cannot redispatch invent an outcome or update models",
+      "test_id": "dispatch-without-observation"
+    },
+    {
+      "id": "observer-independent",
+      "statement": "observer opens completed workspace read-only after worker exit and exact parity precedes learning",
+      "test_id": "worker-observer-parity"
+    },
+    {
+      "id": "oracle-complete",
+      "statement": "oracle enumerates every valid ordered plan of length one or two after reveal",
+      "test_id": "oracle-independence-parity"
+    },
+    {
+      "id": "controls-not-merged",
+      "statement": "static rehearsal and attempt control receipts keep distinct denominators and roots",
+      "test_id": "control-denominator-parity"
+    },
+    {
+      "id": "rehearsal-not-science",
+      "statement": "DevelopmentRehearsal has zero slots nonces and sealed attempts and cannot emit scientific PASS",
+      "test_id": "terminal-schema-parity"
+    },
+    {
+      "id": "terminal-conjunctive",
+      "statement": "sealed PASS has no score default vote or narrative override",
+      "test_id": "terminal-schema-parity"
+    },
+    {
+      "id": "cleanup-roles-separated",
+      "statement": "terminal proof cleanup authorization deletion verification and result publication have distinct owners",
+      "test_id": "cleanup-authority-parity"
+    },
+    {
+      "id": "failure-evidence-symmetric",
+      "statement": "FAIL and INDETERMINATE retain the same protected evidence classes as PASS",
+      "test_id": "cleanup-verifier-parity"
+    },
+    {
+      "id": "authority-denied",
+      "statement": "all artifacts deny K1 Natural K2 product package certificate phase and deployment authority",
+      "test_id": "authority-boundary-parity"
+    },
+    {
+      "id": "production-immutable",
+      "statement": "serving dashboard connector services natural traffic and production state are untouched",
+      "test_id": "production-source-parity"
+    },
+    {
+      "id": "stop-before-nonce",
+      "statement": "R9B ends with nonce absent sealed attempts zero and requires fresh exact-root user authorization",
+      "test_id": "r9b-freeze-parity"
+    }
+  ],
+  "tests": [
+    {
+      "id": "fault-r7g-rollback",
+      "kind": "fault_injection",
+      "expected": "R7G_FAILED restores exact Development source baselines and leaves no published Confirm module set"
+    },
+    {
+      "id": "fault-r7h-rollback",
+      "kind": "fault_injection",
+      "expected": "R7H_FAILED preserves named paper and test failures with no real slot claim CSPRNG nonce or sealed attempt"
+    },
+    {
+      "id": "fault-r7i-rollback",
+      "kind": "fault_injection",
+      "expected": "R7I_FAILED preserves exact legal rehearsal journal prefixes and removes only observed disposable sandboxes"
+    },
+    {
+      "id": "fault-r7j-rollback",
+      "kind": "fault_injection",
+      "expected": "R7J_FAILED preserves comparator control and terminal failures without scientific result publication"
+    },
+    {
+      "id": "fault-r7k-rollback",
+      "kind": "fault_injection",
+      "expected": "R7K_FAILED retains protected evidence and deletes only classified disposable rehearsal paths"
+    },
+    {
+      "id": "fault-r8b-receipt-publish",
+      "kind": "fault_injection",
+      "expected": "R8B_FAILED preserves individual remote gate receipts and removes only unpublished aggregate temp"
+    },
+    {
+      "id": "fault-r9b-freeze-publish",
+      "kind": "fault_injection",
+      "expected": "R9B_FAILED preserves all frozen inputs removes unpublished freeze temp and records no nonce or sealed attempt"
+    },
+    {
+      "id": "development-inner-root-parity",
+      "kind": "parity",
+      "expected": "successor Development public private denominator and case roots equal frozen historical roots"
+    },
+    {
+      "id": "development-identity-rebinding",
+      "kind": "parity",
+      "expected": "independent reconstruction confirms generator executable identity is the only outer request response root change"
+    },
+    {
+      "id": "confirm-schema-separation",
+      "kind": "parity",
+      "expected": "closed dispatch accepts exact Development or Confirm schema and rejects unknown mixed or coerced objects"
+    },
+    {
+      "id": "slot-global-uniqueness",
+      "kind": "fault_injection",
+      "expected": "second receipt claim directory or nonce for one freeze tuple returns exact rejection across restart"
+    },
+    {
+      "id": "nonce-pipe-parity",
+      "kind": "parity",
+      "expected": "sealed-only harness proves one anonymous send and zero nonce bytes in forbidden channels without creating a real nonce"
+    },
+    {
+      "id": "nonce-created-uncommitted",
+      "kind": "fault_injection",
+      "expected": "every crash after nonce file publication before commit projects retained hash and terminal indeterminate without dispatch"
+    },
+    {
+      "id": "generator-dispatch-no-replay",
+      "kind": "fault_injection",
+      "expected": "every crash at or after GENERATOR_DISPATCHED projects indeterminate and generator invocation count remains one"
+    },
+    {
+      "id": "generator-split-parity",
+      "kind": "parity",
+      "expected": "public denominator sixteen resolver sixteen truth nonce and private receipt classes match exact roots modes and exclusions"
+    },
+    {
+      "id": "partial-split-publication",
+      "kind": "fault_injection",
+      "expected": "partial split files remain failure evidence CASES_GENERATED is absent and generator is not rerun"
+    },
+    {
+      "id": "closure-planner-verifier-parity",
+      "kind": "parity",
+      "expected": "distinct binaries agree on complete second-probe membership ranking disposition and winner"
+    },
+    {
+      "id": "all-case-barrier-parity",
+      "kind": "parity",
+      "expected": "all sixteen public dispositions and verifier roots freeze before any private mount or worker"
+    },
+    {
+      "id": "private-before-precommit",
+      "kind": "fault_injection",
+      "expected": "resolver or truth access before global precommit returns the exact named rejection"
+    },
+    {
+      "id": "resolver-safety-parity",
+      "kind": "parity",
+      "expected": "closed resolver output contains one selected action effect and independent safety binds exact plan ordinal"
+    },
+    {
+      "id": "dispatch-without-observation",
+      "kind": "fault_injection",
+      "expected": "durable dispatch without observation freezes indeterminate and forbids redispatch model update and early cleanup"
+    },
+    {
+      "id": "worker-observer-parity",
+      "kind": "parity",
+      "expected": "worker and read-only observer agree on workspace initial manifest ordinal and exact post-state"
+    },
+    {
+      "id": "oracle-independence-parity",
+      "kind": "parity",
+      "expected": "independent evaluator exhausts all valid one-or-two-probe plans and dependency scan finds no forbidden planner helpers"
+    },
+    {
+      "id": "control-denominator-parity",
+      "kind": "parity",
+      "expected": "32 4 16 static 12 rehearsal and 12 sealed controls remain separately rooted with exact dispositions"
+    },
+    {
+      "id": "terminal-schema-parity",
+      "kind": "parity",
+      "expected": "rehearsal emits only readiness disposition and sealed evaluator requires every exact conjunct"
+    },
+    {
+      "id": "cleanup-authority-parity",
+      "kind": "parity",
+      "expected": "verdict and classification roots authorize exactly one bounded deletion owner without proof-role mutation"
+    },
+    {
+      "id": "cleanup-verifier-parity",
+      "kind": "parity",
+      "expected": "read-only verifier proves all retained bytes modes and zero disposable or unclassified residue"
+    },
+    {
+      "id": "cleanup-interruption",
+      "kind": "fault_injection",
+      "expected": "interrupted cleanup preserves science verdict retained evidence and projects operationally incomplete without rerun"
+    },
+    {
+      "id": "result-publication-parity",
+      "kind": "parity",
+      "expected": "publisher rejects missing foreign or non-CLEANUP_FROZEN receipt and joins only two exact roots"
+    },
+    {
+      "id": "authority-boundary-parity",
+      "kind": "parity",
+      "expected": "authority false and no K1 Natural K2 product certificate package phase or deployment effect"
+    },
+    {
+      "id": "production-source-parity",
+      "kind": "parity",
+      "expected": "serving and dashboard SHA-256 remain exact and no production service state or traffic is touched"
+    },
+    {
+      "id": "executable-manifest-completeness",
+      "kind": "parity",
+      "expected": "every V5 owner executable appears exactly once with unique hash and successful self-hash check"
+    },
+    {
+      "id": "development-rehearsal-process",
+      "kind": "parity",
+      "expected": "exact owner topology completes DevelopmentRehearsal cleanup with zero slot nonce and sealed attempts"
+    },
+    {
+      "id": "full-remote-quality-gates",
+      "kind": "parity",
+      "expected": "focused full crate fmt strict Clippy resource structural and process suites pass remotely with 20 jobs"
+    },
+    {
+      "id": "r9b-freeze-parity",
+      "kind": "parity",
+      "expected": "R9B binds exact successor commit source executable tests gates rehearsal and cleanup roots then stops"
+    },
+    {
+      "id": "slot-global-key-parity",
+      "kind": "parity",
+      "expected": "authorization and ledger owners derive the same experiment freeze tuple key from canonical bytes"
+    }
+  ]
+}

@@ -1,0 +1,370 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "v5-public-precommit-route-all-case-barrier",
+  "domain": "code",
+  "complexity_score": 14,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c6",
+    "c7",
+    "c8"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c6": 0.3333,
+      "c7": 0.3333,
+      "c8": 0.3333
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 6,
+    "missing_triads": [
+      "t6",
+      "t7",
+      "t8",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c6": 0.5874,
+      "c7": 0.5974,
+      "c8": 0.5741
+    },
+    "source_self_score": 0.5863,
+    "stable": [
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "barrier-order-owner": "barrier-order-owner",
+      "barrier-root-owner": "barrier-root-owner",
+      "coordinator-lifecycle-owner": "coordinator-lifecycle-owner"
+    },
+    "scores": {
+      "barrier-order-owner": 1.0,
+      "barrier-root-owner": 1.0,
+      "coordinator-lifecycle-owner": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "barrier-order-owner": 1,
+      "barrier-root-owner": 1,
+      "coordinator-lifecycle-owner": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.5863,
+      "norm": 56.285,
+      "triads": 3
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "barrier-order-owner": "barrier-order-owner",
+      "barrier-root-owner": "barrier-root-owner",
+      "coordinator-lifecycle-owner": "coordinator-lifecycle-owner"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "barrier-order-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "barrier-root-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "coordinator-lifecycle-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "barrier-order-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "barrier-root-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "coordinator-lifecycle-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "barrier-order-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "barrier-order-owner",
+        "exact_source_groups": [
+          "barrier-order-owner"
+        ]
+      },
+      "barrier-root-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "barrier-root-owner",
+        "exact_source_groups": [
+          "barrier-root-owner"
+        ]
+      },
+      "coordinator-lifecycle-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "coordinator-lifecycle-owner",
+        "exact_source_groups": [
+          "coordinator-lifecycle-owner"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "barrier-order-owner": {
+        "barrier-order-owner": 1.0,
+        "barrier-root-owner": 0.0371,
+        "coordinator-lifecycle-owner": 0.0137
+      },
+      "barrier-root-owner": {
+        "barrier-order-owner": 0.0371,
+        "barrier-root-owner": 1.0,
+        "coordinator-lifecycle-owner": -0.0039
+      },
+      "coordinator-lifecycle-owner": {
+        "barrier-order-owner": 0.0137,
+        "barrier-root-owner": -0.0039,
+        "coordinator-lifecycle-owner": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "barrier-order-owner": {
+          "gravity": 1.0,
+          "owner": "barrier-order-owner",
+          "owners": {
+            "barrier-order-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "barrier-root-owner": {
+          "gravity": 1.0,
+          "owner": "barrier-root-owner",
+          "owners": {
+            "barrier-root-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "coordinator-lifecycle-owner": {
+          "gravity": 1.0,
+          "owner": "coordinator-lifecycle-owner",
+          "owners": {
+            "coordinator-lifecycle-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "all-case-barrier": {
+          "gravity": 0.3333,
+          "owner": "barrier-order-owner",
+          "owners": {
+            "barrier-order-owner": 2,
+            "barrier-root-owner": 2,
+            "coordinator-lifecycle-owner": 2
+          },
+          "support": 2,
+          "total": 6
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "all-case-barrier": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:310 all-case root",
+            "k2_self_formed_uncertainty_preregistration_v5.md:310 private-mount order",
+            "k2_self_formed_uncertainty_preregistration_v5.md:312",
+            "v5 r7i barrier candidate",
+            "v5 r7i lifecycle candidate",
+            "v5 r7i private-launch candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "barrier-order-owner",
+            "barrier-root-owner",
+            "coordinator-lifecycle-owner"
+          ],
+          "scopes": [
+            "all-case-barrier"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "all-case-barrier": {
+          "norm": 56.285,
+          "self_coherence": 0.5863,
+          "triads": 3
+        }
+      },
+      "interference_matrix": {
+        "all-case-barrier": {
+          "all-case-barrier": 1.0
+        }
+      },
+      "source": {
+        "all-case-barrier": {
+          "norm": 56.285,
+          "self_coherence": 0.5863,
+          "triads": 3
+        }
+      }
+    },
+    "source_group_sizes": {
+      "barrier-order-owner": 1,
+      "barrier-root-owner": 1,
+      "coordinator-lifecycle-owner": 1
+    },
+    "stable_groups": [
+      "barrier-order-owner",
+      "barrier-root-owner",
+      "coordinator-lifecycle-owner"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/v5-public-precommit-route-all-case-barrier.trace.json"
+}

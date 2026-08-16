@@ -1,0 +1,422 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "v5-public-precommit-route-frozen-selection",
+  "domain": "code",
+  "complexity_score": 18,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c4",
+    "c5",
+    "c9",
+    "c11"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c4",
+      "c5",
+      "c9",
+      "c11"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c11": 0.25,
+      "c4": 0.25,
+      "c5": 0.25,
+      "c9": 0.25
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 8,
+    "missing_triads": [
+      "t4",
+      "t5",
+      "t9",
+      "t11",
+      "c4",
+      "c5",
+      "c9",
+      "c11"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c11": 0.5183,
+      "c4": 0.5042,
+      "c5": 0.4841,
+      "c9": 0.4379
+    },
+    "source_self_score": 0.4861,
+    "stable": [
+      "c4",
+      "c5",
+      "c9",
+      "c11"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "closure-planner-owner": "closure-planner-owner",
+      "immutability-owner": "immutability-owner",
+      "preverification-owner": "preverification-owner",
+      "selector-owner": "selector-owner"
+    },
+    "scores": {
+      "closure-planner-owner": 1.0,
+      "immutability-owner": 1.0,
+      "preverification-owner": 1.0,
+      "selector-owner": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "closure-planner-owner": 1,
+      "immutability-owner": 1,
+      "preverification-owner": 1,
+      "selector-owner": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.4861,
+      "norm": 62.2254,
+      "triads": 4
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "closure-planner-owner": "closure-planner-owner",
+      "immutability-owner": "immutability-owner",
+      "preverification-owner": "preverification-owner",
+      "selector-owner": "selector-owner"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "closure-planner-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "immutability-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "preverification-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "selector-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "closure-planner-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "immutability-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "preverification-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "selector-owner": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "closure-planner-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "closure-planner-owner",
+        "exact_source_groups": [
+          "closure-planner-owner"
+        ]
+      },
+      "immutability-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "immutability-owner",
+        "exact_source_groups": [
+          "immutability-owner"
+        ]
+      },
+      "preverification-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "preverification-owner",
+        "exact_source_groups": [
+          "preverification-owner"
+        ]
+      },
+      "selector-owner": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "selector-owner",
+        "exact_source_groups": [
+          "selector-owner"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "closure-planner-owner": {
+        "closure-planner-owner": 1.0,
+        "immutability-owner": -0.0449,
+        "preverification-owner": 0.0,
+        "selector-owner": 0.0527
+      },
+      "immutability-owner": {
+        "closure-planner-owner": -0.0449,
+        "immutability-owner": 1.0,
+        "preverification-owner": -0.0449,
+        "selector-owner": -0.0586
+      },
+      "preverification-owner": {
+        "closure-planner-owner": 0.0,
+        "immutability-owner": -0.0449,
+        "preverification-owner": 1.0,
+        "selector-owner": -0.0137
+      },
+      "selector-owner": {
+        "closure-planner-owner": 0.0527,
+        "immutability-owner": -0.0586,
+        "preverification-owner": -0.0137,
+        "selector-owner": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "closure-planner-owner": {
+          "gravity": 1.0,
+          "owner": "distinct closure planner",
+          "owners": {
+            "distinct closure planner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "immutability-owner": {
+          "gravity": 1.0,
+          "owner": "immutability-owner",
+          "owners": {
+            "immutability-owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "preverification-owner": {
+          "gravity": 1.0,
+          "owner": "independent selection verifier",
+          "owners": {
+            "independent selection verifier": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "selector-owner": {
+          "gravity": 1.0,
+          "owner": "predecessor and closure owners",
+          "owners": {
+            "predecessor and closure owners": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "frozen-selection": {
+          "gravity": 0.25,
+          "owner": "distinct closure planner",
+          "owners": {
+            "distinct closure planner": 2,
+            "immutability-owner": 2,
+            "independent selection verifier": 2,
+            "predecessor and closure owners": 2
+          },
+          "support": 2,
+          "total": 8
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "frozen-selection": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:220 closure-planner owner",
+            "k2_self_formed_uncertainty_preregistration_v5.md:305",
+            "k2_self_formed_uncertainty_preregistration_v5.md:309",
+            "k2_self_formed_uncertainty_preregistration_v5.md:354",
+            "v5 r7i closure-planner candidate",
+            "v5 r7i immutability candidate",
+            "v5 r7i preverification candidate",
+            "v5 r7i selection candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "distinct closure planner",
+            "immutability-owner",
+            "independent selection verifier",
+            "predecessor and closure owners"
+          ],
+          "scopes": [
+            "frozen-selection"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "frozen-selection": {
+          "norm": 62.2254,
+          "self_coherence": 0.4861,
+          "triads": 4
+        }
+      },
+      "interference_matrix": {
+        "frozen-selection": {
+          "frozen-selection": 1.0
+        }
+      },
+      "source": {
+        "frozen-selection": {
+          "norm": 62.2254,
+          "self_coherence": 0.4861,
+          "triads": 4
+        }
+      }
+    },
+    "source_group_sizes": {
+      "closure-planner-owner": 1,
+      "immutability-owner": 1,
+      "preverification-owner": 1,
+      "selector-owner": 1
+    },
+    "stable_groups": [
+      "closure-planner-owner",
+      "immutability-owner",
+      "preverification-owner",
+      "selector-owner"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/v5-public-precommit-route-frozen-selection.trace.json"
+}

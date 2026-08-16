@@ -1,0 +1,1160 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "k2-v5-terminal-cleanup",
+  "domain": "code",
+  "complexity_score": 66,
+  "mandatory_gate": true,
+  "limits": [
+    "routes target limit exceeded: 9>8"
+  ],
+  "stable_triads": [
+    "c4",
+    "c5",
+    "c6",
+    "c8",
+    "c9",
+    "c10",
+    "c11"
+  ],
+  "weak_triads": [
+    "c1",
+    "c12",
+    "c2",
+    "c3",
+    "c7"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.0833,
+      "c10": 0.0833,
+      "c11": 0.0833,
+      "c12": 0.0833,
+      "c2": 0.0833,
+      "c3": 0.0833,
+      "c4": 0.0833,
+      "c5": 0.0833,
+      "c6": 0.0833,
+      "c7": 0.0833,
+      "c8": 0.0833,
+      "c9": 0.0833
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 24,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.2448,
+      "c10": 0.3045,
+      "c11": 0.2953,
+      "c12": 0.2609,
+      "c2": 0.254,
+      "c3": 0.2666,
+      "c4": 0.2838,
+      "c5": 0.3126,
+      "c6": 0.3045,
+      "c7": 0.2701,
+      "c8": 0.2988,
+      "c9": 0.3034
+    },
+    "source_self_score": 0.2833,
+    "stable": [
+      "c4",
+      "c5",
+      "c6",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "weak": [
+      "c1",
+      "c2",
+      "c3",
+      "c7",
+      "c12"
+    ],
+    "weak_details": {
+      "c1": {
+        "nearest_source": "t1",
+        "nearest_source_score": 1.0,
+        "score": 0.2448,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c12": {
+        "nearest_source": "t12",
+        "nearest_source_score": 1.0,
+        "score": 0.2609,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c2": {
+        "nearest_source": "t2",
+        "nearest_source_score": 1.0,
+        "score": 0.254,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c3": {
+        "nearest_source": "t3",
+        "nearest_source_score": 1.0,
+        "score": 0.2666,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c7": {
+        "nearest_source": "t7",
+        "nearest_source_score": 1.0,
+        "score": 0.2701,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "baseline-separation": "baseline-separation",
+      "cleanup-proof": "cleanup-proof",
+      "control-readiness": "control-readiness",
+      "oracle-proof": "oracle-proof",
+      "path-cleanup": "path-cleanup",
+      "terminal-verdict": "terminal-verdict"
+    },
+    "scores": {
+      "baseline-separation": 1.0,
+      "cleanup-proof": 1.0,
+      "control-readiness": 1.0,
+      "oracle-proof": 1.0,
+      "path-cleanup": 1.0,
+      "terminal-verdict": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "baseline-separation": 1,
+      "cleanup-proof": 3,
+      "control-readiness": 2,
+      "oracle-proof": 2,
+      "path-cleanup": 2,
+      "terminal-verdict": 2
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.2833,
+      "norm": 108.775,
+      "triads": 12
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "baseline-separation": "baseline-separation",
+      "cleanup-proof": "cleanup-proof",
+      "control-readiness": "control-readiness",
+      "oracle-proof": "oracle-proof",
+      "path-cleanup": "path-cleanup",
+      "terminal-verdict": "terminal-verdict"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "baseline-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "cleanup-proof": {
+          "norm": 55.7853,
+          "self_coherence": 0.5811,
+          "triads": 3
+        },
+        "control-readiness": {
+          "norm": 45.6946,
+          "self_coherence": 0.714,
+          "triads": 2
+        },
+        "oracle-proof": {
+          "norm": 45.1221,
+          "self_coherence": 0.705,
+          "triads": 2
+        },
+        "path-cleanup": {
+          "norm": 46.9468,
+          "self_coherence": 0.7335,
+          "triads": 2
+        },
+        "terminal-verdict": {
+          "norm": 44.9889,
+          "self_coherence": 0.703,
+          "triads": 2
+        }
+      },
+      "source": {
+        "baseline-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "cleanup-proof": {
+          "norm": 55.7853,
+          "self_coherence": 0.5811,
+          "triads": 3
+        },
+        "control-readiness": {
+          "norm": 45.6946,
+          "self_coherence": 0.714,
+          "triads": 2
+        },
+        "oracle-proof": {
+          "norm": 45.1221,
+          "self_coherence": 0.705,
+          "triads": 2
+        },
+        "path-cleanup": {
+          "norm": 46.9468,
+          "self_coherence": 0.7335,
+          "triads": 2
+        },
+        "terminal-verdict": {
+          "norm": 44.9889,
+          "self_coherence": 0.703,
+          "triads": 2
+        }
+      }
+    },
+    "group_links": {
+      "baseline-separation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "baseline-separation",
+        "exact_source_groups": [
+          "baseline-separation"
+        ]
+      },
+      "cleanup-proof": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "cleanup-proof",
+        "exact_source_groups": [
+          "cleanup-proof"
+        ]
+      },
+      "control-readiness": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "control-readiness",
+        "exact_source_groups": [
+          "control-readiness"
+        ]
+      },
+      "oracle-proof": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "oracle-proof",
+        "exact_source_groups": [
+          "oracle-proof"
+        ]
+      },
+      "path-cleanup": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "path-cleanup",
+        "exact_source_groups": [
+          "path-cleanup"
+        ]
+      },
+      "terminal-verdict": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "terminal-verdict",
+        "exact_source_groups": [
+          "terminal-verdict"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "baseline-separation": {
+        "baseline-separation": 1.0,
+        "cleanup-proof": 0.0067,
+        "control-readiness": -0.0274,
+        "oracle-proof": -0.0512,
+        "path-cleanup": 0.02,
+        "terminal-verdict": -0.0167
+      },
+      "cleanup-proof": {
+        "baseline-separation": 0.0067,
+        "cleanup-proof": 1.0,
+        "control-readiness": 0.0078,
+        "oracle-proof": -0.0278,
+        "path-cleanup": -0.042,
+        "terminal-verdict": 0.0128
+      },
+      "control-readiness": {
+        "baseline-separation": -0.0274,
+        "cleanup-proof": 0.0078,
+        "control-readiness": 1.0,
+        "oracle-proof": -0.0058,
+        "path-cleanup": -0.0373,
+        "terminal-verdict": 0.0117
+      },
+      "oracle-proof": {
+        "baseline-separation": -0.0512,
+        "cleanup-proof": -0.0278,
+        "control-readiness": -0.0058,
+        "oracle-proof": 1.0,
+        "path-cleanup": -0.0264,
+        "terminal-verdict": -0.0433
+      },
+      "path-cleanup": {
+        "baseline-separation": 0.02,
+        "cleanup-proof": -0.042,
+        "control-readiness": -0.0373,
+        "oracle-proof": -0.0264,
+        "path-cleanup": 1.0,
+        "terminal-verdict": 0.0511
+      },
+      "terminal-verdict": {
+        "baseline-separation": -0.0167,
+        "cleanup-proof": 0.0128,
+        "control-readiness": 0.0117,
+        "oracle-proof": -0.0433,
+        "path-cleanup": 0.0511,
+        "terminal-verdict": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [
+        {
+          "center": "cleanup-proof",
+          "group": "cleanup-proof",
+          "kind": "owner_conflict",
+          "owners": [
+            "cleanup-proof",
+            "independent cleanup verifier",
+            "overall pass publication"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "bounded oracle evaluator",
+          "group": "oracle-proof",
+          "kind": "owner_conflict",
+          "owners": [
+            "bounded oracle evaluator",
+            "oracle evaluator"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "cleanup owner",
+          "group": "path-cleanup",
+          "kind": "owner_conflict",
+          "owners": [
+            "cleanup owner",
+            "terminal owner"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        },
+        {
+          "center": "sealed terminal evaluator",
+          "group": "terminal-verdict",
+          "kind": "owner_conflict",
+          "owners": [
+            "sealed terminal evaluator",
+            "terminal-verdict"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        }
+      ],
+      "group_centers": {
+        "baseline-separation": {
+          "gravity": 1.0,
+          "owner": "four frozen baseline policies",
+          "owners": {
+            "four frozen baseline policies": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "cleanup-proof": {
+          "gravity": 0.3333,
+          "owner": "cleanup-proof",
+          "owners": {
+            "cleanup-proof": 2,
+            "independent cleanup verifier": 2,
+            "overall pass publication": 2
+          },
+          "support": 2,
+          "total": 6
+        },
+        "control-readiness": {
+          "gravity": 1.0,
+          "owner": "control-readiness",
+          "owners": {
+            "control-readiness": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "oracle-proof": {
+          "gravity": 0.5,
+          "owner": "bounded oracle evaluator",
+          "owners": {
+            "bounded oracle evaluator": 2,
+            "oracle evaluator": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "path-cleanup": {
+          "gravity": 0.5,
+          "owner": "cleanup owner",
+          "owners": {
+            "cleanup owner": 2,
+            "terminal owner": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "terminal-verdict": {
+          "gravity": 0.5,
+          "owner": "sealed terminal evaluator",
+          "owners": {
+            "sealed terminal evaluator": 2,
+            "terminal-verdict": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      },
+      "route_centers": {
+        "accounting": {
+          "gravity": 1.0,
+          "owner": "control-readiness",
+          "owners": {
+            "control-readiness": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "authority": {
+          "gravity": 1.0,
+          "owner": "control-readiness",
+          "owners": {
+            "control-readiness": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "cleanup": {
+          "gravity": 1.0,
+          "owner": "cleanup owner",
+          "owners": {
+            "cleanup owner": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "comparison": {
+          "gravity": 1.0,
+          "owner": "four frozen baseline policies",
+          "owners": {
+            "four frozen baseline policies": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "dependency": {
+          "gravity": 1.0,
+          "owner": "oracle evaluator",
+          "owners": {
+            "oracle evaluator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "information boundary": {
+          "gravity": 1.0,
+          "owner": "sealed terminal evaluator",
+          "owners": {
+            "sealed terminal evaluator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "persistence": {
+          "gravity": 1.0,
+          "owner": "cleanup-proof",
+          "owners": {
+            "cleanup-proof": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 0.3333,
+          "owner": "bounded oracle evaluator",
+          "owners": {
+            "bounded oracle evaluator": 2,
+            "independent cleanup verifier": 2,
+            "terminal-verdict": 2
+          },
+          "support": 2,
+          "total": 6
+        },
+        "temporal": {
+          "gravity": 0.5,
+          "owner": "overall pass publication",
+          "owners": {
+            "overall pass publication": 2,
+            "terminal owner": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "cleanup-proof"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "oracle-proof"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "path-cleanup"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "terminal-verdict"
+      }
+    ],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "accounting": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:485",
+            "v5 r7j control candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "control-readiness"
+          ],
+          "scopes": [
+            "accounting"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:453",
+            "v5 r7j rehearsal candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "control-readiness"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "cleanup": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:546 bounded deletion",
+            "v5 r7k deletion candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "cleanup owner"
+          ],
+          "scopes": [
+            "cleanup"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "comparison": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:379",
+            "v5 r7j baseline candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "four frozen baseline policies"
+          ],
+          "scopes": [
+            "comparison"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "dependency": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:374",
+            "v5 r7j dependency candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "oracle evaluator"
+          ],
+          "scopes": [
+            "dependency"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "information boundary": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:406",
+            "v5 r7j terminal-input candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "sealed terminal evaluator"
+          ],
+          "scopes": [
+            "information boundary"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "persistence": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:551",
+            "v5 r7k retention candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "cleanup-proof"
+          ],
+          "scopes": [
+            "persistence"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:353",
+            "k2_self_formed_uncertainty_preregistration_v5.md:420",
+            "k2_self_formed_uncertainty_preregistration_v5.md:546 verifier census",
+            "v5 r7j oracle candidate",
+            "v5 r7j terminal-predicate candidate",
+            "v5 r7k cleanup-proof candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "bounded oracle evaluator",
+            "independent cleanup verifier",
+            "terminal-verdict"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        },
+        "temporal": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:459",
+            "k2_self_formed_uncertainty_preregistration_v5.md:537",
+            "v5 r7k claim candidate",
+            "v5 r7k classification candidate"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "overall pass publication",
+            "terminal owner"
+          ],
+          "scopes": [
+            "temporal"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "accounting": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "cleanup": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "comparison": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "dependency": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "information boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "persistence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 54.037,
+          "self_coherence": 0.5629,
+          "triads": 3
+        },
+        "temporal": {
+          "norm": 45.2548,
+          "self_coherence": 0.7071,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "accounting": {
+          "accounting": 1.0,
+          "authority": 0.0195,
+          "cleanup": 0.0078,
+          "comparison": -0.0078,
+          "dependency": -0.0469,
+          "information boundary": 0.002,
+          "persistence": 0.043,
+          "proof": 0.0243,
+          "temporal": -0.0166
+        },
+        "authority": {
+          "accounting": 0.0195,
+          "authority": 1.0,
+          "cleanup": -0.0313,
+          "comparison": -0.0313,
+          "dependency": 0.0039,
+          "information boundary": -0.0332,
+          "persistence": -0.0273,
+          "proof": 0.0359,
+          "temporal": -0.0304
+        },
+        "cleanup": {
+          "accounting": 0.0078,
+          "authority": -0.0313,
+          "cleanup": 1.0,
+          "comparison": 0.0313,
+          "dependency": -0.0117,
+          "information boundary": -0.0098,
+          "persistence": -0.0352,
+          "proof": 0.0243,
+          "temporal": 0.0276
+        },
+        "comparison": {
+          "accounting": -0.0078,
+          "authority": -0.0313,
+          "cleanup": 0.0313,
+          "comparison": 1.0,
+          "dependency": -0.0234,
+          "information boundary": -0.0215,
+          "persistence": -0.0195,
+          "proof": -0.0127,
+          "temporal": 0.0
+        },
+        "dependency": {
+          "accounting": -0.0469,
+          "authority": 0.0039,
+          "cleanup": -0.0117,
+          "comparison": -0.0234,
+          "dependency": 1.0,
+          "information boundary": -0.0059,
+          "persistence": -0.0195,
+          "proof": 0.0035,
+          "temporal": -0.0276
+        },
+        "information boundary": {
+          "accounting": 0.002,
+          "authority": -0.0332,
+          "cleanup": -0.0098,
+          "comparison": -0.0215,
+          "dependency": -0.0059,
+          "information boundary": 1.0,
+          "persistence": -0.002,
+          "proof": -0.0162,
+          "temporal": 0.0442
+        },
+        "persistence": {
+          "accounting": 0.043,
+          "authority": -0.0273,
+          "cleanup": -0.0352,
+          "comparison": -0.0195,
+          "dependency": -0.0195,
+          "information boundary": -0.002,
+          "persistence": 1.0,
+          "proof": -0.0289,
+          "temporal": -0.0028
+        },
+        "proof": {
+          "accounting": 0.0243,
+          "authority": 0.0359,
+          "cleanup": 0.0243,
+          "comparison": -0.0127,
+          "dependency": 0.0035,
+          "information boundary": -0.0162,
+          "persistence": -0.0289,
+          "proof": 1.0,
+          "temporal": 0.0114
+        },
+        "temporal": {
+          "accounting": -0.0166,
+          "authority": -0.0304,
+          "cleanup": 0.0276,
+          "comparison": 0.0,
+          "dependency": -0.0276,
+          "information boundary": 0.0442,
+          "persistence": -0.0028,
+          "proof": 0.0114,
+          "temporal": 1.0
+        }
+      },
+      "source": {
+        "accounting": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "cleanup": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "comparison": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "dependency": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "information boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "persistence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 54.037,
+          "self_coherence": 0.5629,
+          "triads": 3
+        },
+        "temporal": {
+          "norm": 45.2548,
+          "self_coherence": 0.7071,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "baseline-separation": 1,
+      "cleanup-proof": 3,
+      "control-readiness": 2,
+      "oracle-proof": 2,
+      "path-cleanup": 2,
+      "terminal-verdict": 2
+    },
+    "stable_groups": [
+      "baseline-separation",
+      "cleanup-proof",
+      "control-readiness",
+      "oracle-proof",
+      "path-cleanup",
+      "terminal-verdict"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 4,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 4,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "cleanup-proof"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "oracle-proof"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "path-cleanup"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "terminal-verdict"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 4,
+    "repair_queue": [
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "cleanup-proof"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "oracle-proof"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "path-cleanup"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "terminal-verdict"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate triad has weak composite-mode support.",
+    "Task exceeds target or hard limits and should be split."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\nRecheck or remove weak candidate triads:\n- c1: score=0.2448, nearest_source=t1, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c12: score=0.2609, nearest_source=t12, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c2: score=0.254, nearest_source=t2, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c3: score=0.2666, nearest_source=t3, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c7: score=0.2701, nearest_source=t7, why=candidate triad does not resonate with the composite source memory above the stability threshold\nSplit the task before retrying:\n- routes target limit exceeded: 9>8",
+  "trace_path": "/tmp/nanda-structural-gate/k2-v5-terminal-cleanup.trace.json"
+}

@@ -1,0 +1,150 @@
+{
+  "schema": "nando.k2-self-formed-uncertainty-v5-owner-route-aggregate.v1",
+  "families": 4,
+  "required_routes": 20,
+  "passes": 20,
+  "authority_ready": false,
+  "claim_boundary": "STRUCTURAL_COHERENCE_ONLY",
+  "routes": [
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-authorization-nonce-generator-route-authorization.receipt.json",
+      "sha256": "23aefa1d46a4446650fdb88a32d722b62fc2d1c6a0ee8bcb9e5219d2dde3f1d5",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-authorization-nonce-generator-route-generator-dispatch.receipt.json",
+      "sha256": "2c3602f4db65001ad1aadd57d53becff6adca8f81fad580f1042de7bf98e9ea7",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-authorization-nonce-generator-route-generator-split.receipt.json",
+      "sha256": "bbaa2d36e370664ec64c9938ebbc34b948cae72ef0a59813febc5ad745e80329",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-authorization-nonce-generator-route-nonce-commit.receipt.json",
+      "sha256": "e110fcfbaaa3e0814519728f262522a1402343f6ac7afa9472483839ed4de870",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-authorization-nonce-generator-route-slot-ledger.receipt.json",
+      "sha256": "5204befb001c561cb2024c0fda698ff1af39458d219554a6a12673fee87356fe",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-private-execution-proof-route-final-proof.receipt.json",
+      "sha256": "21163b2b747c36c51b8ca8b5bd9383ae3b1aacdd8c4c85fca071fdee592f019e",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-private-execution-proof-route-observation-parity.receipt.json",
+      "sha256": "5823135bf67a82940deed7646769d5182600975317ff1983cffb8ead7b201d7b",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-private-execution-proof-route-resolver-route.receipt.json",
+      "sha256": "04e758dc4d2012c6dd2f1af43e59666029dac04ad06c3ae01bb02a569334210d",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-private-execution-proof-route-safe-execution.receipt.json",
+      "sha256": "414cdc808b3c856e4a47e004a31cc3506fee47796a440271e7b90bd5b40192ad",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-private-execution-proof-route-supervisor-handoff.receipt.json",
+      "sha256": "0dfa8d012593ca669ce1fd0dd6f516975643c67914e3390f68a8b4a514439e6c",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-public-precommit-route-all-case-barrier.receipt.json",
+      "sha256": "b9d2d5eecf09df9fa366ddc59fd633d369248cd5fa687d51b4f90696a20a9394",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-public-precommit-route-frozen-selection.receipt.json",
+      "sha256": "53507572c77c9243e87a85246ebe544a41c2175f4f3f3943bdd5424114c50c89",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-public-precommit-route-public-input.receipt.json",
+      "sha256": "b5878c7d941f1216d8e62122890e1488073bc81c7c341c331476fe21a11a9b9c",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-public-precommit-route-public-preparation.receipt.json",
+      "sha256": "a12cc975dc55d9a01827b2b1a427a62fac8a4ddd7a25c554726bb1b63adaddc3",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-terminal-cleanup-route-baseline-comparison.receipt.json",
+      "sha256": "7433dd30028a9c30f00bad0bbc879266df5d6d9ff3a6f1ad5bb02291ddf4c7c7",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-terminal-cleanup-route-cleanup-proof.receipt.json",
+      "sha256": "fd87fe1e3870d971ed0602123dfc0142bba3460dec5755ff18eefd3f6b40aab6",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-terminal-cleanup-route-control-readiness.receipt.json",
+      "sha256": "736202cb75954759bbbfbc782c5052e734a025ac495949c588e0e873c28ab86f",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-terminal-cleanup-route-oracle-proof.receipt.json",
+      "sha256": "c0ca50a8a3f559db63a1fe1b3cdc0013893bc42a6b175cec64344c48be58a7e4",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-terminal-cleanup-route-path-cleanup.receipt.json",
+      "sha256": "c3a517f507d6868e85cd7d490a69fa8b2b28f810857ab5e3a42b7c65a335abbf",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    },
+    {
+      "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_PREFLIGHT/owner-routes/nanda-task-v5-terminal-cleanup-route-terminal-verdict.receipt.json",
+      "sha256": "f410bbe7b804928fca6fad3e96845bfc757bc69de452e7720abecc95a9673085",
+      "verdict": "PASS",
+      "authority_ready": false,
+      "repair_count": 0
+    }
+  ]
+}
