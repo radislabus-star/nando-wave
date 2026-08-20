@@ -43,6 +43,11 @@ pub const K2_UNCERTAINTY_MAX_PLAN_COST_UNITS_V1: u64 = 20;
 pub const K2_UNCERTAINTY_FRONTIER_PAGE_PROBES_V1: usize = 32;
 pub const K2_SELF_FORMED_UNCERTAINTY_CAPABILITY_PASS_V1: &str =
     "K2_SELF_FORMED_UNCERTAINTY_CAPABILITY_PASS";
+pub const K2_UNCERTAINTY_ORACLE_MAX_PLANS_PER_CASE_V1: u64 = 3_211_264;
+pub const K2_UNCERTAINTY_SUCCESSOR_STATIC_LEGACY_CONTROLS_V1: usize = 32;
+pub const K2_UNCERTAINTY_SUCCESSOR_STATIC_V3_CONTROLS_V1: usize = 4;
+pub const K2_UNCERTAINTY_SUCCESSOR_STATIC_V4_CONTROLS_V1: usize = 16;
+pub const K2_UNCERTAINTY_V5_CONTROLS_V1: usize = 12;
 
 pub const K2_UNCERTAINTY_VOCABULARY_SCHEMA_V1: &str = "nando.k2-self-formed-domain-vocabulary.v1";
 pub const K2_UNCERTAINTY_PATH_ATOM_SCHEMA_V1: &str = "nando.k2-self-formed-path-atom.v1";
@@ -211,6 +216,44 @@ pub const K2_UNCERTAINTY_FINAL_VERIFIER_ARTIFACT_SCHEMA_V2: &str =
     "nando.k2-self-formed-final-verifier-artifact.v2";
 pub const K2_UNCERTAINTY_FINAL_VERIFIER_MATERIAL_SCHEMA_V2: &str =
     "nando.k2-self-formed-final-verifier-material.v2";
+pub const K2_UNCERTAINTY_ORACLE_DESCRIPTOR_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-descriptor.v1";
+pub const K2_UNCERTAINTY_ORACLE_PUBLIC_BINDINGS_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-public-bindings.v1";
+pub const K2_UNCERTAINTY_ORACLE_EVIDENCE_ENTRY_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-evidence-entry.v1";
+pub const K2_UNCERTAINTY_ORACLE_EVIDENCE_MANIFEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-evidence-manifest.v1";
+pub const K2_UNCERTAINTY_ORACLE_FRONTIER_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-frontier-receipt.v1";
+pub const K2_UNCERTAINTY_ORACLE_PLAN_RESULT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-plan-result.v1";
+pub const K2_UNCERTAINTY_ORACLE_ENUMERATION_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-enumeration.v1";
+pub const K2_UNCERTAINTY_ORACLE_BASELINE_RESULT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-baseline-result.v1";
+pub const K2_UNCERTAINTY_ORACLE_CASE_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-case-receipt.v1";
+pub const K2_UNCERTAINTY_ORACLE_BASELINE_AGGREGATE_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-baseline-aggregate.v1";
+pub const K2_UNCERTAINTY_ORACLE_BATCH_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-oracle-batch-receipt.v1";
+pub const K2_UNCERTAINTY_CONTROL_PROCESS_OUTCOME_SCHEMA_V1: &str =
+    "nando.k2-self-formed-control-process-outcome.v1";
+pub const K2_UNCERTAINTY_CONTROL_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-control-request.v1";
+pub const K2_UNCERTAINTY_CONTROL_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-control-receipt.v1";
+pub const K2_UNCERTAINTY_ROUTE_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-evaluation-route-receipt.v1";
+pub const K2_UNCERTAINTY_RESOURCE_MEASUREMENTS_SCHEMA_V1: &str =
+    "nando.k2-self-formed-resource-measurements.v1";
+pub const K2_UNCERTAINTY_DEVELOPMENT_TERMINAL_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-development-terminal-request.v1";
+pub const K2_UNCERTAINTY_SEALED_TERMINAL_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-sealed-terminal-request.v1";
+pub const K2_UNCERTAINTY_TERMINAL_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-terminal-receipt.v1";
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
     6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 

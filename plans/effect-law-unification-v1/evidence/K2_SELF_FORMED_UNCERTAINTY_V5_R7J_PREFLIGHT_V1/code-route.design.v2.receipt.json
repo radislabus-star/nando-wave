@@ -1,0 +1,253 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R7J_PREFLIGHT_V1/code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 12,
+  "edge_count": 7,
+  "routes": [
+    {
+      "id": "case-evidence-observation",
+      "event": "validate_case",
+      "kind": "observation",
+      "entry": "case_evidence_tree",
+      "via": [],
+      "terminal": "manifest_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "case_evidence_tree",
+          "manifest_validator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "case_evidence_tree"
+        ],
+        "observer": [
+          "manifest_validator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "case_evidence_tree",
+          "to": "manifest_validator",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "case_evidence_tree",
+              "manifest_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oracle-case-execution",
+      "event": "evaluate_case",
+      "kind": "execution",
+      "entry": "case_descriptor",
+      "via": [],
+      "terminal": "oracle_baseline_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "case_descriptor",
+          "manifest_validator",
+          "frontier_reconstructor",
+          "oracle_baseline_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "case_descriptor"
+        ],
+        "candidate_rank_owner": [
+          "frontier_reconstructor"
+        ],
+        "observer": [
+          "manifest_validator"
+        ],
+        "proof_owner": [
+          "oracle_baseline_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "case_descriptor",
+          "to": "oracle_baseline_evaluator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "case_descriptor",
+              "manifest_validator",
+              "frontier_reconstructor",
+              "oracle_baseline_evaluator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oracle-batch-proof",
+      "event": "evaluate_batch",
+      "kind": "proof",
+      "entry": "case_evidence_tree",
+      "via": [],
+      "terminal": "oracle_baseline_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "case_evidence_tree",
+          "oracle_baseline_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "case_evidence_tree"
+        ],
+        "proof_owner": [
+          "oracle_baseline_evaluator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "case_evidence_tree",
+          "to": "oracle_baseline_evaluator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "case_evidence_tree",
+              "oracle_baseline_evaluator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "control-proof",
+      "event": "evaluate_controls",
+      "kind": "proof",
+      "entry": "control_process_outcomes",
+      "via": [],
+      "terminal": "control_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "control_process_outcomes",
+          "control_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "control_evaluator"
+        ],
+        "evidence_owner": [
+          "control_process_outcomes"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "control_process_outcomes",
+          "to": "control_evaluator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "control_process_outcomes",
+              "control_evaluator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terminal-proof",
+      "event": "evaluate_terminal",
+      "kind": "proof",
+      "entry": "terminal_receipt_set",
+      "via": [],
+      "terminal": "terminal_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "terminal_receipt_set",
+          "terminal_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "terminal_evaluator"
+        ],
+        "evidence_owner": [
+          "terminal_receipt_set"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "terminal_receipt_set",
+          "to": "terminal_evaluator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "terminal_receipt_set",
+              "terminal_evaluator"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {},
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}
