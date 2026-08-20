@@ -1,0 +1,86 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id": "r8b_request", "role": "interface"},
+    {"id": "r8b_runner", "role": "orchestrator"},
+    {"id": "confirm_owner", "role": "producer"},
+    {"id": "static_control_runner", "role": "producer"},
+    {"id": "static_control_outcomes", "role": "evidence_owner"},
+    {"id": "control_evaluator", "role": "proof_owner"},
+    {"id": "linked_route_receipts", "role": "evidence_owner"},
+    {"id": "resource_observer", "role": "observer"},
+    {"id": "aggregate_inputs", "role": "evidence_owner"},
+    {"id": "aggregate_authorizer", "role": "authorization_owner"},
+    {"id": "evidence_publisher", "role": "mutation_owner"},
+    {"id": "r8b_packet", "role": "evidence_owner"}
+  ],
+  "edges": [
+    {"id": "exec-request-runner-linked", "from": "r8b_request", "relation": "calls", "to": "r8b_runner", "events": ["run_linked_route"]},
+    {"id": "exec-runner-confirm-owner", "from": "r8b_runner", "relation": "delegates", "to": "confirm_owner", "events": ["run_linked_route"]},
+    {"id": "exec-request-runner-static", "from": "r8b_request", "relation": "calls", "to": "r8b_runner", "events": ["run_static_controls"]},
+    {"id": "exec-runner-static-control", "from": "r8b_runner", "relation": "delegates", "to": "static_control_runner", "events": ["run_static_controls"]},
+    {"id": "proof-static-control", "from": "static_control_outcomes", "relation": "proves", "to": "control_evaluator", "events": ["evaluate_static_controls"]},
+    {"id": "observe-linked-route", "from": "linked_route_receipts", "relation": "observes", "to": "resource_observer", "events": ["measure_linked_route"]},
+    {"id": "authority-aggregate-inputs", "from": "aggregate_inputs", "relation": "passes_to", "to": "aggregate_authorizer", "events": ["publish_packet"]},
+    {"id": "authority-authorizer-publisher", "from": "aggregate_authorizer", "relation": "authorizes", "to": "evidence_publisher", "events": ["publish_packet"]},
+    {"id": "exec-request-runner-publish", "from": "r8b_request", "relation": "calls", "to": "r8b_runner", "events": ["publish_packet"]},
+    {"id": "exec-runner-publisher", "from": "r8b_runner", "relation": "delegates", "to": "evidence_publisher", "events": ["publish_packet"]}
+  ],
+  "routes": [
+    {
+      "id": "linked-route-execution",
+      "event": "run_linked_route",
+      "kind": "execution",
+      "entry": "r8b_request",
+      "terminal": "confirm_owner",
+      "required_roles": ["interface", "orchestrator", "producer"],
+      "path_cardinality": [{"from": "r8b_request", "to": "confirm_owner", "min": 1, "max": 1}]
+    },
+    {
+      "id": "static-control-execution",
+      "event": "run_static_controls",
+      "kind": "execution",
+      "entry": "r8b_request",
+      "terminal": "static_control_runner",
+      "required_roles": ["interface", "orchestrator", "producer"],
+      "path_cardinality": [{"from": "r8b_request", "to": "static_control_runner", "min": 1, "max": 1}]
+    },
+    {
+      "id": "static-control-proof",
+      "event": "evaluate_static_controls",
+      "kind": "proof",
+      "entry": "static_control_outcomes",
+      "terminal": "control_evaluator",
+      "required_roles": ["evidence_owner", "proof_owner"],
+      "path_cardinality": [{"from": "static_control_outcomes", "to": "control_evaluator", "min": 1, "max": 1}]
+    },
+    {
+      "id": "linked-resource-observation",
+      "event": "measure_linked_route",
+      "kind": "observation",
+      "entry": "linked_route_receipts",
+      "terminal": "resource_observer",
+      "required_roles": ["evidence_owner", "observer"],
+      "path_cardinality": [{"from": "linked_route_receipts", "to": "resource_observer", "min": 1, "max": 1}]
+    },
+    {
+      "id": "aggregate-authorization",
+      "event": "publish_packet",
+      "kind": "authority",
+      "entry": "aggregate_inputs",
+      "terminal": "evidence_publisher",
+      "required_roles": ["evidence_owner", "authorization_owner", "mutation_owner"],
+      "path_cardinality": [{"from": "aggregate_inputs", "to": "evidence_publisher", "min": 1, "max": 1}]
+    },
+    {
+      "id": "packet-publication-execution",
+      "event": "publish_packet",
+      "kind": "execution",
+      "entry": "r8b_request",
+      "terminal": "evidence_publisher",
+      "required_roles": ["interface", "orchestrator", "mutation_owner"],
+      "path_cardinality": [{"from": "r8b_request", "to": "evidence_publisher", "min": 1, "max": 1}]
+    }
+  ]
+}

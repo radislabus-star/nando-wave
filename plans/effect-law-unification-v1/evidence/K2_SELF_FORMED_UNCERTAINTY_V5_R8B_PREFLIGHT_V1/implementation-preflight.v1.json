@@ -1,0 +1,100 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-self-formed-uncertainty-r8b-v1",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {"id":"r8b-contract-v2","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V2.md","expect":{"size_bytes":10437,"sha256":"3867d384d85ecebd99371547d44289e01de1bb60b6ea2bc45609b1ac6e2adb5f","mode":"0664"}},
+    {"id":"v5-preregistration","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md","expect":{"size_bytes":24952,"sha256":"075275b140c00b8e26bfbccebd014136bd39a0d7b23ae83f6d8292bd6d6b776d","mode":"0664"}},
+    {"id":"r8b-unlock","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_UNLOCK_2026-08-20.md","expect":{"size_bytes":2960,"sha256":"c5a7c02324c074f600c6128a6650adeeeafeb1b26e091a8b54f0aadf4f62c0d8","mode":"0664"}},
+    {"id":"r7k-result","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_RESULT_2026-08-20.md","expect":{"size_bytes":6796,"sha256":"765c8ebe5a4c94d00f2282ff45ef3bc3edd6210edbc0111a37f2eedf48c01c15","mode":"0664"}},
+    {"id":"confirm-owner","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs","expect":{"size_bytes":23258,"sha256":"aa742715cd3ae522d9d2cbb3b7c0695d6f5aa34be95242204b8c6bb88e88f751","mode":"0664"}},
+    {"id":"control-evaluator","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs","expect":{"size_bytes":5148,"sha256":"b04e9fdea3458547000b6c180108890ed7a1708f0b0308688371d90bb4f78e03","mode":"0664"}},
+    {"id":"terminal-evaluator","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs","expect":{"size_bytes":7353,"sha256":"591e6df3af110094d99329164b24187f66b477d284eddeb68c3ae796c267b1ee","mode":"0664"}},
+    {"id":"cleanup-owner","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs","expect":{"size_bytes":19687,"sha256":"5bd4380f457482607cc95b1e0c71827be05480fba8aca106ffed53ac6d175e45","mode":"0664"}},
+    {"id":"cleanup-verifier","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup_verifier.rs","expect":{"size_bytes":20483,"sha256":"6595ea0f4e530c0fc7697efe0ab215f0ea6c114302180f6f4b1f5fdc6af95bcd","mode":"0664"}},
+    {"id":"r7h-route","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7h_v1.rs","expect":{"size_bytes":26253,"sha256":"201d793e165d03a3d2d61f1856820fdf443a3f527f6919b37a5d96d60420751c","mode":"0664"}},
+    {"id":"r7i-route","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7i_v1.rs","expect":{"size_bytes":24906,"sha256":"a6c5f21b87f9c90f1edfce75e84f5dc622e699b3a77693d1e843fd368529955d","mode":"0664"}},
+    {"id":"r7j-route","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs","expect":{"size_bytes":50397,"sha256":"95419ac45cd34db4c04a32064bac7cce0bd0a035ad18627c8efe637bd371f1bf","mode":"0664"}},
+    {"id":"r7k-route","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs","expect":{"size_bytes":46526,"sha256":"d126babdb9d496b750b50a0f35f694abd10579cb4d04a9c260c4e19465d63c67","mode":"0664"}},
+    {"id":"production-serving","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs","expect":{"size_bytes":457899,"sha256":"06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949","mode":"0664"}},
+    {"id":"production-dashboard","kind":"file","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs","expect":{"size_bytes":28960,"sha256":"2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c","mode":"0664"}}
+  ],
+  "source_checks": [
+    {"id":"confirm-owner-source","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs","sha256":"aa742715cd3ae522d9d2cbb3b7c0695d6f5aa34be95242204b8c6bb88e88f751","forbidden_effect_patterns":[{"effect":"experiment_network_access","regex":"(TcpStream|UdpSocket|reqwest::|hyper::Client)"},{"effect":"production_write","regex":"(/var/lib/nando-wave|/etc/nando-wave)"},{"effect":"service_control","regex":"(systemctl|service\\s+(start|stop|restart))"},{"effect":"scientific_verdict_publication","regex":"K2_SELF_FORMED_UNCERTAINTY_CAPABILITY_PASS"}]},
+    {"id":"r7j-route-source","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs","sha256":"95419ac45cd34db4c04a32064bac7cce0bd0a035ad18627c8efe637bd371f1bf","forbidden_effect_patterns":[{"effect":"experiment_network_access","regex":"(TcpStream|UdpSocket|reqwest::|hyper::Client)"},{"effect":"production_write","regex":"(/var/lib/nando-wave|/etc/nando-wave)"},{"effect":"authorization_slot_claim","regex":"claim_authorization_slot"},{"effect":"sealed_scientific_execution","regex":"SealedAttemptV5"}]},
+    {"id":"r7k-route-source","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs","sha256":"d126babdb9d496b750b50a0f35f694abd10579cb4d04a9c260c4e19465d63c67","forbidden_effect_patterns":[{"effect":"experiment_network_access","regex":"(TcpStream|UdpSocket|reqwest::|hyper::Client)"},{"effect":"production_write","regex":"(/var/lib/nando-wave|/etc/nando-wave)"},{"effect":"natural_k2_authority","regex":"natural_k2_authority\\s*:\\s*true"},{"effect":"deployment","regex":"(deployment-receipt|deploy_remote)"}]}
+  ],
+  "side_effects": {
+    "planned": [
+      {"id":"add-linked-r8b-runner","kind":"test_file_add"},
+      {"id":"add-r8b-aggregate-authorizer","kind":"authority_denied_binary_add"},
+      {"id":"add-r8b-evidence-publisher","kind":"test_evidence_binary_add"},
+      {"id":"write-test-owned-remote-evidence","kind":"test_file_create"},
+      {"id":"append-r8b-receipts-and-result","kind":"append_only_evidence_write"}
+    ],
+    "forbidden": [
+      "generated_traffic","synthetic_fixture","natural_traffic_read","experiment_network_access",
+      "production_write","service_control","dashboard_change","deployment","k1_registry_mutation",
+      "law_certificate_issue","package_activation","phase_memory_mutation","authorization_slot_claim",
+      "confirm_nonce_create","sealed_scientific_execution","scientific_verdict_publication",
+      "control_evaluator_modify","terminal_evaluator_modify","cleanup_verifier_modify",
+      "r9b_execution","r10b_authorization","r11b_execution"
+    ]
+  },
+  "state_machine": {
+    "initial_state":"R8B_UNLOCKED_NOT_STARTED",
+    "terminal_states":["R8B_IMPLEMENTATION_FAILED","R8B_EXECUTION_FAILED","R8B_PUBLICATION_FAILED","R8B_FROZEN"],
+    "steps":[
+      {"id":"implement-r8b-owners","from":"R8B_UNLOCKED_NOT_STARTED","to":"R8B_IMPLEMENTATION_READY","mutates":true,"failure_state":"R8B_IMPLEMENTATION_FAILED","cleanup":"retain paper and failed diagnostics; revert no protected predecessor bytes; leave execution count zero","preserves":["r8b-contract-v2","v5-preregistration","r8b-unlock","r7k-result","confirm-owner","control-evaluator","terminal-evaluator","cleanup-owner","cleanup-verifier","production-serving","production-dashboard"],"test_id":"r8b-owner-source-parity"},
+      {"id":"execute-nonsealed-r8b","from":"R8B_IMPLEMENTATION_READY","to":"R8B_EXECUTION_COMPLETE","mutates":true,"failure_state":"R8B_EXECUTION_FAILED","cleanup":"retain individual immutable suite resource route and failure receipts; remove test-owned disposable runtime paths only","preserves":["v5-preregistration","r8b-unlock","r7k-result","production-serving","production-dashboard"],"test_id":"r8b-execution-fault-parity"},
+      {"id":"publish-r8b-packet","from":"R8B_EXECUTION_COMPLETE","to":"R8B_FROZEN","mutates":true,"failure_state":"R8B_PUBLICATION_FAILED","cleanup":"retain final renamed packet when present; otherwise remove only unpublished aggregate temp and retain all input receipts","preserves":["v5-preregistration","r8b-unlock","r7k-result","production-serving","production-dashboard"],"test_id":"r8b-publication-fault-parity"}
+    ]
+  },
+  "preserved_artifacts": [
+    {"id":"r8b-contract-v2","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V2.md","policy":"immutable_after_preflight","rollback_policy":"preserve_exact_baseline","baseline_check_id":"r8b-contract-v2"},
+    {"id":"v5-preregistration","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"v5-preregistration"},
+    {"id":"r8b-unlock","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_UNLOCK_2026-08-20.md","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"r8b-unlock"},
+    {"id":"r7k-result","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_RESULT_2026-08-20.md","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"r7k-result"},
+    {"id":"confirm-owner","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"confirm-owner"},
+    {"id":"control-evaluator","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"control-evaluator"},
+    {"id":"terminal-evaluator","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"terminal-evaluator"},
+    {"id":"cleanup-owner","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"cleanup-owner"},
+    {"id":"cleanup-verifier","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup_verifier.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"cleanup-verifier"},
+    {"id":"production-serving","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"production-serving"},
+    {"id":"production-dashboard","path":"/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs","policy":"immutable_bytes","rollback_policy":"preserve_exact_baseline","baseline_check_id":"production-dashboard"}
+  ],
+  "identity_contracts": [
+    {"id":"static-control-evaluator-parity","producer":"R8B static control runner measured outcomes","consumer":"unchanged control evaluator","comparison":"exact scope ID ordinal disposition tested commit and executable manifest roots","test_id":"r8b-static-control-parity"},
+    {"id":"linked-route-receipt-chain","producer":"21 manifest-bound route executables","consumer":"R8B aggregate authorizer","comparison":"one route ID and exact predecessor root chain with no library-call substitution","test_id":"r8b-linked-route-parity"},
+    {"id":"aggregate-publication-parity","producer":"R8B aggregate authorizer","consumer":"R8B evidence publisher","comparison":"exact authorization root payload path set modes and SHA-256","test_id":"r8b-publication-fault-parity"},
+    {"id":"remote-source-parity","producer":"local tested commit tree","consumer":"mini-PC clean checkout","comparison":"Git commit tree Cargo.lock and source SHA-256 identity","test_id":"r8b-remote-source-parity"},
+    {"id":"production-source-parity","producer":"pre-R8B production source bytes","consumer":"post-R8B production source bytes","comparison":"serving and dashboard SHA-256 exact","test_id":"r8b-production-source-parity"}
+  ],
+  "runtime_comparisons": [
+    {"id":"production-runtime-survival","source":"read-only pre/post mini-PC service snapshot","comparison":"exact_stable_projection","stable_fields":["transition_main_pid","transition_nrestarts","nginx_main_pid","nginx_nrestarts","connector_main_pid","connector_nrestarts","k1_registry_root","active_package_root","phase_memory_root","sealed_attempt_count"],"expected_to_change_fields":["ordinary_request_count","ordinary_input_tokens","uptime_seconds"],"observed_not_compared_fields":["snapshot_timestamp","active_connections"],"reason":"R8B is research-only while ordinary production traffic continues independently","test_id":"r8b-production-runtime-survival"}
+  ],
+  "invariants": [
+    {"id":"one-linked-route","statement":"one DevelopmentRehearsal route crosses all named process owners with one route ID","test_id":"r8b-linked-route-parity"},
+    {"id":"exact-control-denominators","statement":"static 32 plus 4 plus 16 and fresh rehearsal K1-K12 are separately measured and evaluated","test_id":"r8b-static-control-parity"},
+    {"id":"resource-descendants-covered","statement":"resource evidence includes the complete linked-route cgroup after compilation","test_id":"r8b-resource-cgroup"},
+    {"id":"authority-remains-zero","statement":"nonce slot claims sealed attempts scientific authority and deployment authority remain zero or false","test_id":"r8b-authority-census"},
+    {"id":"packet-publication-atomic","statement":"R8B_FROZEN exists only after complete authorized atomic publication","test_id":"r8b-publication-fault-parity"},
+    {"id":"production-immutable","statement":"production source and stable runtime projection remain exact","test_id":"r8b-production-runtime-survival"}
+  ],
+  "tests": [
+    {"id":"r8b-owner-source-parity","kind":"parity","expected":"all protected predecessor owner bytes remain exact"},
+    {"id":"r8b-static-control-parity","kind":"parity","expected":"32 4 and 16 measured controls pass unchanged evaluator with exact separate roots"},
+    {"id":"r8b-linked-route-parity","kind":"parity","expected":"one manifest-bound DevelopmentRehearsal request reaches terminal cleanup and result publication"},
+    {"id":"r8b-execution-fault-parity","kind":"fault_injection","expected":"every mutating transition failure retains evidence and produces no R8B_FROZEN"},
+    {"id":"r8b-publication-fault-parity","kind":"fault_injection","expected":"before-rename removes only temp and after-rename preserves one complete immutable packet"},
+    {"id":"r8b-resource-cgroup","kind":"runtime","expected":"MemoryPeak no more than 512 MiB zero swap zero OOM and route no more than 20 minutes"},
+    {"id":"r8b-authority-census","kind":"parity","expected":"nonce slot sealed scientific deployment K1 package and phase effects remain zero"},
+    {"id":"r8b-remote-source-parity","kind":"parity","expected":"local and remote tested source and executable manifests match"},
+    {"id":"r8b-production-source-parity","kind":"parity","expected":"production serving and dashboard bytes remain exact"},
+    {"id":"r8b-production-runtime-survival","kind":"runtime","expected":"stable service and authority fields remain exact while ordinary counters may advance"},
+    {"id":"r8b-full-package-suite","kind":"parity","expected":"full release package library integration and doc tests pass on mini-PC with 20 jobs"},
+    {"id":"r8b-structural-routes","kind":"parity","expected":"four owner-bounded routes and all-routes claim boundary pass with zero repairs"}
+  ]
+}

@@ -1,0 +1,529 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "r8b-controls",
+  "domain": "general",
+  "complexity_score": 30,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.25,
+      "c2": 0.25,
+      "c3": 0.25,
+      "c4": 0.25,
+      "c5": 0.25
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 10,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.4111,
+      "c2": 0.4396,
+      "c3": 0.4361,
+      "c4": 0.4539,
+      "c5": 0.4494
+    },
+    "source_self_score": 0.438,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "control-claim": "control-claim",
+      "legacy-controls": "legacy-controls",
+      "rehearsal-controls": "rehearsal-controls",
+      "v3-controls": "v3-controls",
+      "v4-controls": "v4-controls"
+    },
+    "scores": {
+      "control-claim": 1.0,
+      "legacy-controls": 1.0,
+      "rehearsal-controls": 1.0,
+      "v3-controls": 1.0,
+      "v4-controls": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "control-claim": 1,
+      "legacy-controls": 1,
+      "rehearsal-controls": 1,
+      "v3-controls": 1,
+      "v4-controls": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.438,
+      "norm": 70.0857,
+      "triads": 5
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "control-claim": "control-claim",
+      "legacy-controls": "legacy-controls",
+      "rehearsal-controls": "rehearsal-controls",
+      "v3-controls": "v3-controls",
+      "v4-controls": "v4-controls"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "control-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "legacy-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rehearsal-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "v3-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "v4-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "control-claim": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "legacy-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "rehearsal-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "v3-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "v4-controls": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "control-claim": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "control-claim",
+        "exact_source_groups": [
+          "control-claim"
+        ]
+      },
+      "legacy-controls": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "legacy-controls",
+        "exact_source_groups": [
+          "legacy-controls"
+        ]
+      },
+      "rehearsal-controls": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "rehearsal-controls",
+        "exact_source_groups": [
+          "rehearsal-controls"
+        ]
+      },
+      "v3-controls": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "v3-controls",
+        "exact_source_groups": [
+          "v3-controls"
+        ]
+      },
+      "v4-controls": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "v4-controls",
+        "exact_source_groups": [
+          "v4-controls"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "control-claim": {
+        "control-claim": 1.0,
+        "legacy-controls": 0.0059,
+        "rehearsal-controls": -0.0215,
+        "v3-controls": 0.002,
+        "v4-controls": -0.002
+      },
+      "legacy-controls": {
+        "control-claim": 0.0059,
+        "legacy-controls": 1.0,
+        "rehearsal-controls": -0.0469,
+        "v3-controls": -0.0391,
+        "v4-controls": -0.0195
+      },
+      "rehearsal-controls": {
+        "control-claim": -0.0215,
+        "legacy-controls": -0.0469,
+        "rehearsal-controls": 1.0,
+        "v3-controls": 0.043,
+        "v4-controls": 0.0195
+      },
+      "v3-controls": {
+        "control-claim": 0.002,
+        "legacy-controls": -0.0391,
+        "rehearsal-controls": 0.043,
+        "v3-controls": 1.0,
+        "v4-controls": -0.043
+      },
+      "v4-controls": {
+        "control-claim": -0.002,
+        "legacy-controls": -0.0195,
+        "rehearsal-controls": 0.0195,
+        "v3-controls": -0.043,
+        "v4-controls": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "control-claim": {
+          "gravity": 1.0,
+          "owner": "control-claim",
+          "owners": {
+            "control-claim": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "legacy-controls": {
+          "gravity": 1.0,
+          "owner": "legacy-controls",
+          "owners": {
+            "legacy-controls": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "rehearsal-controls": {
+          "gravity": 1.0,
+          "owner": "rehearsal-controls",
+          "owners": {
+            "rehearsal-controls": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "v3-controls": {
+          "gravity": 1.0,
+          "owner": "v3-controls",
+          "owners": {
+            "v3-controls": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "v4-controls": {
+          "gravity": 1.0,
+          "owner": "v4-controls",
+          "owners": {
+            "v4-controls": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 1.0,
+          "owner": "control-claim",
+          "owners": {
+            "control-claim": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 0.25,
+          "owner": "legacy-controls",
+          "owners": {
+            "legacy-controls": 2,
+            "rehearsal-controls": 2,
+            "v3-controls": 2,
+            "v4-controls": 2
+          },
+          "support": 2,
+          "total": 8
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:499-508",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v2.md:165-174"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "control-claim"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_preregistration_v5.md:497-501",
+            "k2_self_formed_uncertainty_preregistration_v5.md:499-506",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v2.md:165-174",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v2.md:93-121"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "legacy-controls",
+            "rehearsal-controls",
+            "v3-controls",
+            "v4-controls"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 62.6099,
+          "self_coherence": 0.4891,
+          "triads": 4
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "proof": -0.008
+        },
+        "proof": {
+          "authority": -0.008,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 62.6099,
+          "self_coherence": 0.4891,
+          "triads": 4
+        }
+      }
+    },
+    "source_group_sizes": {
+      "control-claim": 1,
+      "legacy-controls": 1,
+      "rehearsal-controls": 1,
+      "v3-controls": 1,
+      "v4-controls": 1
+    },
+    "stable_groups": [
+      "control-claim",
+      "legacy-controls",
+      "rehearsal-controls",
+      "v3-controls",
+      "v4-controls"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md:497-501"
+    }
+  ],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 1,
+    "repair_queue": [
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md:497-501"
+      }
+    ],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/r8b-controls.trace.json"
+}

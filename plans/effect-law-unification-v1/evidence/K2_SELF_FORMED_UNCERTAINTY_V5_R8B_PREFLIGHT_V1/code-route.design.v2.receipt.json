@@ -1,0 +1,320 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V1/code-route.design.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "source_root": null,
+  "node_count": 12,
+  "edge_count": 10,
+  "routes": [
+    {
+      "id": "linked-route-execution",
+      "event": "run_linked_route",
+      "kind": "execution",
+      "entry": "r8b_request",
+      "via": [],
+      "terminal": "confirm_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "r8b_request",
+          "r8b_runner",
+          "confirm_owner"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "confirm_owner"
+        ],
+        "interface": [
+          "r8b_request"
+        ],
+        "orchestrator": [
+          "r8b_runner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "r8b_request",
+          "to": "confirm_owner",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "r8b_request",
+              "r8b_runner",
+              "confirm_owner"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "static-control-execution",
+      "event": "run_static_controls",
+      "kind": "execution",
+      "entry": "r8b_request",
+      "via": [],
+      "terminal": "static_control_runner",
+      "path_count": 1,
+      "paths": [
+        [
+          "r8b_request",
+          "r8b_runner",
+          "static_control_runner"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "r8b_request"
+        ],
+        "orchestrator": [
+          "r8b_runner"
+        ],
+        "producer": [
+          "static_control_runner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "r8b_request",
+          "to": "static_control_runner",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "r8b_request",
+              "r8b_runner",
+              "static_control_runner"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "static-control-proof",
+      "event": "evaluate_static_controls",
+      "kind": "proof",
+      "entry": "static_control_outcomes",
+      "via": [],
+      "terminal": "control_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "static_control_outcomes",
+          "control_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "control_evaluator"
+        ],
+        "evidence_owner": [
+          "static_control_outcomes"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "static_control_outcomes",
+          "to": "control_evaluator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "static_control_outcomes",
+              "control_evaluator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "linked-resource-observation",
+      "event": "measure_linked_route",
+      "kind": "observation",
+      "entry": "linked_route_receipts",
+      "via": [],
+      "terminal": "resource_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "linked_route_receipts",
+          "resource_observer"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "linked_route_receipts"
+        ],
+        "observer": [
+          "resource_observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "linked_route_receipts",
+          "to": "resource_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "linked_route_receipts",
+              "resource_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "aggregate-authorization",
+      "event": "publish_packet",
+      "kind": "authority",
+      "entry": "aggregate_inputs",
+      "via": [],
+      "terminal": "evidence_publisher",
+      "path_count": 1,
+      "paths": [
+        [
+          "aggregate_inputs",
+          "aggregate_authorizer",
+          "evidence_publisher"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "aggregate_authorizer"
+        ],
+        "evidence_owner": [
+          "aggregate_inputs"
+        ],
+        "mutation_owner": [
+          "evidence_publisher"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "aggregate_inputs",
+          "to": "evidence_publisher",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "aggregate_inputs",
+              "aggregate_authorizer",
+              "evidence_publisher"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packet-publication-execution",
+      "event": "publish_packet",
+      "kind": "execution",
+      "entry": "r8b_request",
+      "via": [],
+      "terminal": "evidence_publisher",
+      "path_count": 1,
+      "paths": [
+        [
+          "r8b_request",
+          "r8b_runner",
+          "evidence_publisher"
+        ]
+      ],
+      "role_owners": {
+        "mutation_owner": [
+          "evidence_publisher"
+        ],
+        "interface": [
+          "r8b_request"
+        ],
+        "orchestrator": [
+          "r8b_runner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "r8b_request",
+          "to": "evidence_publisher",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "r8b_request",
+              "r8b_runner",
+              "evidence_publisher"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "publish_packet": {
+      "mutation_owner": [
+        "evidence_publisher"
+      ],
+      "authorization_owner": [
+        "aggregate_authorizer"
+      ],
+      "render_owner": [],
+      "evidence_owner": [
+        "aggregate_inputs"
+      ],
+      "candidate_rank_owner": [],
+      "display_rank_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 0,
+    "verified": 0,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": false,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}
