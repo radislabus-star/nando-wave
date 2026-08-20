@@ -31,6 +31,11 @@ pub struct K2UncertaintyConfirmOwnerRequestV1 {
 }
 
 impl K2UncertaintyConfirmOwnerRequestV1 {
+    pub(crate) fn reseal_envelope_for_r7k_control_v1(&mut self) -> K2CompositionResultV1<()> {
+        self.request_root_sha256 = self.expected_root()?;
+        Ok(())
+    }
+
     pub fn development_rehearsal(
         descriptor: K2UncertaintyConfirmAttemptDescriptorV1,
         lab_root: String,

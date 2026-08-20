@@ -128,6 +128,10 @@ fn r7j_independently_reconstructs_oracle_baselines_controls_and_terminal() {
 
     let mut plan_lengths = Vec::new();
     let mut oracle_receipts = Vec::new();
+    let mut control_resolver_request = None;
+    let mut control_final_request = None;
+    let mut control_one_probe_descriptor = None;
+    let mut control_two_probe_descriptor = None;
     let mut maximum_case_wall_ms = 0_u64;
     let mut maximum_protocol_bytes = 0_u64;
     for artifact in &public_receipt.case_artifacts {
@@ -190,6 +194,9 @@ fn r7j_independently_reconstructs_oracle_baselines_controls_and_terminal() {
                 binaries.private_resolver.sha256.clone(),
             )
             .expect("private resolver request");
+            if control_resolver_request.is_none() {
+                control_resolver_request = Some(resolver_request.clone());
+            }
             let resolver_path = split_root.join(&resolver_artifact.relative_path);
             let resolver_mount = [K2UncertaintyConfirmDataMountV1 {
                 host_path: &resolver_path,
@@ -373,6 +380,9 @@ fn r7j_independently_reconstructs_oracle_baselines_controls_and_terminal() {
             truth_artifact.semantic_root_sha256.clone(),
         )
         .expect("Confirm final verifier request");
+        if plan.plan_length == 2 && control_final_request.is_none() {
+            control_final_request = Some(final_request.clone());
+        }
         let truth_path = split_root.join(&truth_artifact.relative_path);
         let final_mounts = [
             K2UncertaintyConfirmDataMountV1 {
@@ -451,6 +461,12 @@ fn r7j_independently_reconstructs_oracle_baselines_controls_and_terminal() {
             oracle_evaluator_executable_sha256: binaries.oracle.sha256.clone(),
         };
         descriptor.validate().expect("oracle descriptor");
+        if plan.plan_length == 1 && control_one_probe_descriptor.is_none() {
+            control_one_probe_descriptor = Some(descriptor.clone());
+        }
+        if plan.plan_length == 2 && control_two_probe_descriptor.is_none() {
+            control_two_probe_descriptor = Some(descriptor.clone());
+        }
         maximum_protocol_bytes = maximum_protocol_bytes.max(
             uncertainty_bytes_v1(&descriptor)
                 .expect("oracle descriptor bytes")
@@ -545,13 +561,35 @@ fn r7j_independently_reconstructs_oracle_baselines_controls_and_terminal() {
     let terminal_receipt: K2UncertaintyTerminalEvaluationReceiptV1 = run_process(
         &binaries.terminal.path,
         &K2UncertaintyTerminalProcessRequestV1::Development {
-            request: terminal_request,
+            request: terminal_request.clone(),
         },
     );
     assert_eq!(
         terminal_receipt.disposition,
         K2UncertaintyTerminalDispositionV1::DevelopmentRehearsalPass
     );
+    if environment.preserve {
+        persist_r7j_fixture_packet(
+            &environment.root.join("fixture-packet"),
+            R7jFixturePacket {
+                oracle_batch: &oracle_batch,
+                routes: &routes,
+                resources: &resources,
+                resolver_request: control_resolver_request
+                    .as_ref()
+                    .expect("R7J control resolver request"),
+                final_request: control_final_request
+                    .as_ref()
+                    .expect("R7J control final request"),
+                one_probe_descriptor: control_one_probe_descriptor
+                    .as_ref()
+                    .expect("R7J one-probe descriptor"),
+                two_probe_descriptor: control_two_probe_descriptor
+                    .as_ref()
+                    .expect("R7J two-probe descriptor"),
+            },
+        );
+    }
 
     let projection = K2UncertaintySealedProjectionV1::seal(
         experiment_root,
@@ -795,6 +833,66 @@ fn write_read_only(path: &Path, bytes: &[u8]) {
         .expect("create oracle evidence parent");
     fs::write(path, bytes).expect("write oracle evidence");
     fs::set_permissions(path, fs::Permissions::from_mode(0o400)).expect("chmod oracle evidence");
+}
+
+struct R7jFixturePacket<'a> {
+    oracle_batch: &'a K2UncertaintyOracleBaselineBatchReceiptV1,
+    routes: &'a [K2UncertaintyEvaluationRouteReceiptV1],
+    resources: &'a K2UncertaintyEvaluationResourceMeasurementsV1,
+    resolver_request: &'a K2UncertaintyPrivateResolverRequestV1,
+    final_request: &'a K2UncertaintyConfirmFinalVerifierRequestV1,
+    one_probe_descriptor: &'a K2UncertaintyOracleBaselineCaseDescriptorV1,
+    two_probe_descriptor: &'a K2UncertaintyOracleBaselineCaseDescriptorV1,
+}
+
+fn persist_r7j_fixture_packet(root_path: &Path, packet: R7jFixturePacket<'_>) {
+    fs::create_dir(root_path).expect("create fresh R7J fixture packet");
+    fs::set_permissions(root_path, fs::Permissions::from_mode(0o700))
+        .expect("chmod R7J fixture packet");
+    let mut manifest = BTreeMap::new();
+    for (relative_path, bytes) in [
+        (
+            "oracle-batch.json",
+            uncertainty_bytes_v1(packet.oracle_batch).expect("R7J packet oracle bytes"),
+        ),
+        (
+            "routes.json",
+            uncertainty_bytes_v1(&packet.routes).expect("R7J packet routes bytes"),
+        ),
+        (
+            "resources.json",
+            uncertainty_bytes_v1(packet.resources).expect("R7J packet resources bytes"),
+        ),
+        (
+            "resolver-request.json",
+            uncertainty_bytes_v1(packet.resolver_request)
+                .expect("R7J packet resolver request bytes"),
+        ),
+        (
+            "final-request.json",
+            uncertainty_bytes_v1(packet.final_request).expect("R7J packet final request bytes"),
+        ),
+        (
+            "one-probe-descriptor.json",
+            uncertainty_bytes_v1(packet.one_probe_descriptor)
+                .expect("R7J packet one-probe descriptor bytes"),
+        ),
+        (
+            "two-probe-descriptor.json",
+            uncertainty_bytes_v1(packet.two_probe_descriptor)
+                .expect("R7J packet two-probe descriptor bytes"),
+        ),
+    ] {
+        write_read_only(&root_path.join(relative_path), &bytes);
+        manifest.insert(
+            relative_path.to_owned(),
+            composition_sha256_bytes_v1(&bytes),
+        );
+    }
+    write_read_only(
+        &root_path.join("fixture-manifest.json"),
+        &uncertainty_bytes_v1(&manifest).expect("R7J packet manifest bytes"),
+    );
 }
 
 fn development_control_receipts(
@@ -1149,24 +1247,30 @@ fn owner(
 
 struct TestEnvironment {
     root: PathBuf,
+    preserve: bool,
 }
 
 impl TestEnvironment {
     fn new(label: &str) -> Self {
-        let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "nando-k2-self-formed-r7i-{label}-{}-{sequence}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&root).expect("create test root");
-        Self { root }
+        let persistent = std::env::var_os("NANDO_K2_R7J_PERSIST_FIXTURE_ROOT").map(PathBuf::from);
+        let preserve = persistent.is_some();
+        let root = persistent.unwrap_or_else(|| {
+            let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            std::env::temp_dir().join(format!(
+                "nando-k2-self-formed-r7i-{label}-{}-{sequence}",
+                std::process::id()
+            ))
+        });
+        fs::create_dir(&root).expect("create fresh R7J test root");
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).expect("chmod R7J test root");
+        Self { root, preserve }
     }
 }
 
 impl Drop for TestEnvironment {
     fn drop(&mut self) {
-        if std::thread::panicking() {
-            eprintln!("R7I failed fixture retained at {}", self.root.display());
+        if self.preserve || std::thread::panicking() {
+            eprintln!("R7J fixture retained at {}", self.root.display());
             return;
         }
         let _ = fs::remove_dir_all(&self.root);

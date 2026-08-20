@@ -254,6 +254,36 @@ pub const K2_UNCERTAINTY_SEALED_TERMINAL_REQUEST_SCHEMA_V1: &str =
     "nando.k2-self-formed-sealed-terminal-request.v1";
 pub const K2_UNCERTAINTY_TERMINAL_RECEIPT_SCHEMA_V1: &str =
     "nando.k2-self-formed-terminal-receipt.v1";
+pub const K2_UNCERTAINTY_CLEANUP_ENTRY_SCHEMA_V1: &str = "nando.k2-self-formed-cleanup-entry.v1";
+pub const K2_UNCERTAINTY_CLEANUP_PAGE_SCHEMA_V1: &str = "nando.k2-self-formed-cleanup-page.v1";
+pub const K2_UNCERTAINTY_CLEANUP_MANIFEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-cleanup-manifest.v1";
+pub const K2_UNCERTAINTY_CLEANUP_AUTH_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-cleanup-authorization-request.v1";
+pub const K2_UNCERTAINTY_CLEANUP_AUTH_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-cleanup-authorization-receipt.v1";
+pub const K2_UNCERTAINTY_CLEANUP_EVENT_SCHEMA_V1: &str = "nando.k2-self-formed-cleanup-event.v1";
+pub const K2_UNCERTAINTY_CLEANUP_OWNER_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-cleanup-owner-request.v1";
+pub const K2_UNCERTAINTY_CLEANUP_OWNER_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-cleanup-owner-receipt.v1";
+pub const K2_UNCERTAINTY_CLEANUP_VERIFY_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-cleanup-verify-request.v1";
+pub const K2_UNCERTAINTY_CLEANUP_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-cleanup-receipt.v1";
+pub const K2_UNCERTAINTY_DEVELOPMENT_RESULT_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-development-result-request.v1";
+pub const K2_UNCERTAINTY_DEVELOPMENT_RESULT_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-development-result-receipt.v1";
+pub const K2_UNCERTAINTY_SEALED_RESULT_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-sealed-result-request.v1";
+pub const K2_UNCERTAINTY_SEALED_RESULT_RECEIPT_SCHEMA_V1: &str =
+    "nando.k2-self-formed-sealed-result-receipt.v1";
+pub const K2_UNCERTAINTY_R7K_CONTROL_CASE_REQUEST_SCHEMA_V1: &str =
+    "nando.k2-self-formed-r7k-control-case-request.v1";
+pub const K2_UNCERTAINTY_CLEANUP_MAX_ENTRIES_V1: usize = 8_192;
+pub const K2_UNCERTAINTY_CLEANUP_PAGE_ENTRIES_V1: usize = 256;
+pub const K2_UNCERTAINTY_CLEANUP_MAX_PATH_BYTES_V1: usize = 4_096;
 pub const K2_UNCERTAINTY_BATCH_JOURNAL_EVENTS_V1: usize =
     6 + K2_UNCERTAINTY_CONFIRM_CASES_V1 * 3 + 3;
 

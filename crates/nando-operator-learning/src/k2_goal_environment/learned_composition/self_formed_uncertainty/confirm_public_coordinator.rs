@@ -9,6 +9,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use super::super::{
     K2CompositionErrorV1, K2CompositionResultV1, K2InquiryBaselineRequestV1, K2InquiryBaselinesV1,
     K2InquiryVerifierCommandV1, K2InquiryVerifierReceiptV1, composition_sha256_file_v1,
+    require_composition_root_v1,
 };
 use super::{
     K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1,
@@ -255,16 +256,31 @@ pub fn run_self_formed_public_coordinator_process_v1() -> K2CompositionResultV1<
     let request: K2UncertaintyPublicCoordinatorRequestV1 = uncertainty_decode_v1(&input)?;
     let executable = std::env::current_exe()
         .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_public_coordinator"))?;
-    if composition_sha256_file_v1(&executable)? != request.coordinator_executable_sha256 {
-        return Err(K2CompositionErrorV1::Invalid(
-            "self_formed_public_coordinator_executable_mismatch",
-        ));
-    }
+    require_self_formed_public_coordinator_manifest_binding_v1(
+        &executable,
+        Some(&request.coordinator_executable_sha256),
+    )?;
     let receipt =
         execute_self_formed_public_coordinator_v1(&request, Path::new(&request.output_root))?;
     std::io::stdout()
         .write_all(&uncertainty_bytes_v1(&receipt)?)
         .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_public_coordinator_stdout"))
+}
+
+pub fn require_self_formed_public_coordinator_manifest_binding_v1(
+    executable: &Path,
+    manifest_sha256: Option<&str>,
+) -> K2CompositionResultV1<()> {
+    let manifest_sha256 = manifest_sha256.ok_or(K2CompositionErrorV1::Invalid(
+        "self_formed_public_coordinator_manifest_entry_missing",
+    ))?;
+    require_composition_root_v1(manifest_sha256)?;
+    if composition_sha256_file_v1(executable)? != manifest_sha256 {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_public_coordinator_executable_mismatch",
+        ));
+    }
+    Ok(())
 }
 
 fn invoke_owner_v1<I, O>(

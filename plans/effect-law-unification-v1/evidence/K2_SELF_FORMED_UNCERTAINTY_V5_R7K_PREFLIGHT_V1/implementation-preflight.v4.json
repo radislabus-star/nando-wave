@@ -1,0 +1,177 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-self-formed-uncertainty-r7k-export-transport-v4",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "r7j-export-harness",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+      "expect": {"size_bytes": 49850, "sha256": "94461707b09e1bb81118fb3d3dad4591a25bc46c19d3502781f98dff2e371bfc", "mode": "0664"}
+    },
+    {
+      "id": "r7k-consumer-harness",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+      "expect": {"size_bytes": 41318, "sha256": "b41e235c7de7526a422deeb5dc7d304a41a162c9a2e3edf9accd1a824cf5c2ea", "mode": "0664"}
+    },
+    {
+      "id": "r7j-control-evaluator",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs",
+      "expect": {"size_bytes": 5148, "sha256": "b04e9fdea3458547000b6c180108890ed7a1708f0b0308688371d90bb4f78e03", "mode": "0664"}
+    },
+    {
+      "id": "r7j-terminal-evaluator",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs",
+      "expect": {"size_bytes": 7353, "sha256": "591e6df3af110094d99329164b24187f66b477d284eddeb68c3ae796c267b1ee", "mode": "0664"}
+    },
+    {
+      "id": "r7k-contract-v4",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_CONTRACT_V4.md",
+      "expect": {"size_bytes": 4233, "sha256": "f81d556239ec54aa52a633aa48ebb10e80ce8b524cbc963d44915c6d12fa66e2", "mode": "0664"}
+    },
+    {
+      "id": "r7k-v4-critique",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_CONTRACT_V4_CRITIQUE_V1.md",
+      "expect": {"size_bytes": 1948, "sha256": "9fe4cebd2ae14b997a233f117797b38a49ec9072535345abaa6b466211b7b550", "mode": "0664"}
+    },
+    {
+      "id": "r7k-v4-discrepancy",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_PREFLIGHT_DRIFT_2026-08-20.md",
+      "expect": {"size_bytes": 2185, "sha256": "a09e09dd392fee1dc64baa37e67e3916759a0815e8c95da0bdaeae9c1e2cf845", "mode": "0664"}
+    },
+    {
+      "id": "production-serving",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs",
+      "expect": {"size_bytes": 457899, "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949", "mode": "0664"}
+    },
+    {
+      "id": "production-dashboard",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs",
+      "expect": {"size_bytes": 28960, "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c", "mode": "0664"}
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {"id": "protect-r7j-export-directory", "kind": "test_file_modify"},
+      {"id": "validate-closed-r7j-export-manifest", "kind": "test_file_modify"},
+      {"id": "add-export-transport-negative-controls", "kind": "test_file_modify"},
+      {"id": "write-v4-gate-and-result-receipts", "kind": "append_only_evidence_write"}
+    ],
+    "forbidden": [
+      "control_evaluator_modify",
+      "terminal_evaluator_modify",
+      "oracle_decision_modify",
+      "r7j_denominator_modify",
+      "r7k_process_outcome_substitution",
+      "sealed_scientific_execution",
+      "scientific_verdict_publication",
+      "confirm_nonce_interaction",
+      "authorization_slot_claim",
+      "generated_traffic",
+      "synthetic_fixture",
+      "experiment_network_access",
+      "production_write",
+      "service_control",
+      "dashboard_change",
+      "deployment",
+      "k1_registry_mutation",
+      "natural_k2_authority",
+      "r8b_execution"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "r7j-export-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+      "sha256": "94461707b09e1bb81118fb3d3dad4591a25bc46c19d3502781f98dff2e371bfc",
+      "forbidden_effect_patterns": [
+        {"effect": "experiment_network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "sealed_scientific_execution", "regex": "(run_sealed_attempt|execute_r8b)"},
+        {"effect": "scientific_verdict_publication", "regex": "K2_SELF_FORMED_UNCERTAINTY_CAPABILITY_PASS"},
+        {"effect": "authorization_slot_claim", "regex": "claim_authorization_slot"},
+        {"effect": "confirm_nonce_interaction", "regex": "create_confirm_nonce"},
+        {"effect": "control_evaluator_modify", "regex": "pub fn evaluate_self_formed_controls_v1"},
+        {"effect": "dashboard_change", "regex": "(live_dashboard|control_page)"},
+        {"effect": "deployment", "regex": "(deployment-receipt|deploy_remote)"},
+        {"effect": "generated_traffic", "regex": "generated_traffic"},
+        {"effect": "k1_registry_mutation", "regex": "(EpistemicRegistry|LawCertificate)"},
+        {"effect": "oracle_decision_modify", "regex": "pub fn evaluate_self_formed_oracle"},
+        {"effect": "r7j_denominator_modify", "regex": "K2_UNCERTAINTY_V5_CONTROLS_V1\\s*="},
+        {"effect": "r7k_process_outcome_substitution", "regex": "K2UncertaintyControlProcessOutcomeV1\\s*\\{"},
+        {"effect": "service_control", "regex": "(systemctl|service\\s+(start|stop|restart))"},
+        {"effect": "synthetic_fixture", "regex": "synthetic_fixture"},
+        {"effect": "terminal_evaluator_modify", "regex": "pub fn evaluate_self_formed_terminal"}
+      ]
+    },
+    {
+      "id": "r7k-export-consumer-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+      "sha256": "b41e235c7de7526a422deeb5dc7d304a41a162c9a2e3edf9accd1a824cf5c2ea",
+      "forbidden_effect_patterns": [
+        {"effect": "experiment_network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "r8b_execution", "regex": "(run_r8b|execute_r8b)"},
+        {"effect": "natural_k2_authority", "regex": "natural_k2_authority\\s*:\\s*true"}
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "R7K_V3_EXPORT_DRIFT_QUARANTINED",
+    "terminal_states": ["R7K_V4_EXPORT_REPAIR_FAILED", "R7K_V4_EXPORT_TRANSPORT_READY"],
+    "steps": [
+      {
+        "id": "repair-export-transport",
+        "from": "R7K_V3_EXPORT_DRIFT_QUARANTINED",
+        "to": "R7K_V4_EXPORT_TRANSPORT_READY",
+        "mutates": true,
+        "failure_state": "R7K_V4_EXPORT_REPAIR_FAILED",
+        "cleanup": "preserve V3 diagnostic evidence; delete only test-owned temporary export roots; publish no R7K result",
+        "preserves": ["r7j-control-evaluator", "r7j-terminal-evaluator", "production-serving", "production-dashboard", "r7k-contract-v4"],
+        "test_id": "r7k-export-omission-negative"
+      }
+    ]
+  },
+  "preserved_artifacts": [
+    {"id": "r7j-control-evaluator", "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "r7j-control-evaluator"},
+    {"id": "r7j-terminal-evaluator", "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "r7j-terminal-evaluator"},
+    {"id": "production-serving", "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-transition-serving/src/lib.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "production-serving"},
+    {"id": "production-dashboard", "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/crates/nando-gateway-control/src/live_dashboard.rs", "policy": "immutable_bytes", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "production-dashboard"},
+    {"id": "r7k-contract-v4", "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_CONTRACT_V4.md", "policy": "immutable_after_preflight", "rollback_policy": "preserve_exact_baseline", "baseline_check_id": "r7k-contract-v4"}
+  ],
+  "identity_contracts": [
+    {"id": "export-manifest-parity", "producer": "R7J validated Development receipt exporter", "consumer": "R7K predecessor packet reader", "comparison": "exact closed path set regular-file mode and SHA-256 before decode", "test_id": "r7k-v4-export-transport-parity"},
+    {"id": "r7j-default-parity", "producer": "R7J no-export integration route", "consumer": "R7J result assertion", "comparison": "prior evaluator terminal denominator and disposition behavior unchanged", "test_id": "r7j-default-no-export-regression"},
+    {"id": "process-evidence-separation", "producer": "twelve newly launched R7K child processes", "consumer": "R7J control evaluator", "comparison": "no exported packet path can supply a K1-K12 outcome or log root", "test_id": "r7k-process-evidence-separation"},
+    {"id": "production-source-parity", "producer": "pre-repair production files", "consumer": "post-repair production files", "comparison": "serving and dashboard SHA-256 exact", "test_id": "production-source-parity"}
+  ],
+  "invariants": [
+    {"id": "packet-untrusted-before-validation", "statement": "no exported payload is decoded before exact manifest validation", "test_id": "r7k-v4-export-transport-parity"},
+    {"id": "export-is-development-only", "statement": "export mode transports only validated Development predecessor receipts", "test_id": "r7j-explicit-export-regression"},
+    {"id": "process-outcomes-are-fresh", "statement": "K1-K12 remain newly measured child process evidence", "test_id": "r7k-process-evidence-separation"},
+    {"id": "decision-owners-immutable", "statement": "R7J control and terminal evaluator bytes remain exact", "test_id": "r7j-owner-source-parity"},
+    {"id": "production-immutable", "statement": "production serving and dashboard bytes remain exact", "test_id": "production-source-parity"}
+  ],
+  "tests": [
+    {"id": "r7k-v4-export-transport-parity", "kind": "parity", "expected": "exact packet set modes and hashes pass before decode"},
+    {"id": "r7k-export-omission-negative", "kind": "fault_injection", "expected": "one missing manifested payload fails before decode"},
+    {"id": "r7k-export-substitution-negative", "kind": "fault_injection", "expected": "one changed payload hash fails before decode"},
+    {"id": "r7j-default-no-export-regression", "kind": "parity", "expected": "R7J passes with ephemeral cleanup and no persistent packet"},
+    {"id": "r7j-explicit-export-regression", "kind": "parity", "expected": "R7J passes then publishes one closed read-only packet"},
+    {"id": "r7k-process-evidence-separation", "kind": "parity", "expected": "R7K launches and measures exactly twelve independent child outcomes"},
+    {"id": "r7j-owner-source-parity", "kind": "parity", "expected": "control and terminal evaluator source hashes remain exact"},
+    {"id": "production-source-parity", "kind": "parity", "expected": "production serving and dashboard source hashes remain exact"},
+    {"id": "remote-quality-gates", "kind": "parity", "expected": "focused tests full regressions strict Clippy fmt diff and observed-source route gate pass on mini-PC"}
+  ],
+  "runtime_comparisons": []
+}

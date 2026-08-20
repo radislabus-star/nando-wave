@@ -1,0 +1,39 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "design",
+  "nodes": [
+    {"id":"development_control_request","role":"interface"},
+    {"id":"control_case_adapter","role":"orchestrator"},
+    {"id":"actual_owner_boundary","role":"producer"},
+    {"id":"control_process_outcomes","role":"evidence_owner"},
+    {"id":"control_evaluator","role":"proof_owner"},
+    {"id":"cleanup_inputs","role":"evidence_owner"},
+    {"id":"cleanup_authorizer","role":"authorization_owner"},
+    {"id":"cleanup_authorization","role":"producer"},
+    {"id":"cleanup_owner","role":"mutation_owner"},
+    {"id":"governed_tree","role":"evidence_owner"},
+    {"id":"cleanup_evidence","role":"evidence_owner"},
+    {"id":"cleanup_verifier","role":"proof_owner"},
+    {"id":"result_inputs","role":"evidence_owner"},
+    {"id":"result_publisher","role":"proof_owner"}
+  ],
+  "edges": [
+    {"id":"exec-control-adapter","from":"development_control_request","relation":"calls","to":"control_case_adapter","events":["run_control"]},
+    {"id":"exec-adapter-owner","from":"control_case_adapter","relation":"delegates","to":"actual_owner_boundary","events":["run_control"]},
+    {"id":"proof-control-outcomes","from":"control_process_outcomes","relation":"proves","to":"control_evaluator","events":["evaluate_controls"]},
+    {"id":"authority-cleanup-input","from":"cleanup_inputs","relation":"passes_to","to":"cleanup_authorizer","events":["authorize_cleanup"]},
+    {"id":"authority-cleanup-output","from":"cleanup_authorizer","relation":"authorizes","to":"cleanup_owner","events":["authorize_cleanup"]},
+    {"id":"exec-cleanup-authorization","from":"cleanup_authorization","relation":"calls","to":"cleanup_owner","events":["mutate_cleanup"]},
+    {"id":"exec-cleanup-tree","from":"cleanup_owner","relation":"delegates","to":"governed_tree","events":["mutate_cleanup"]},
+    {"id":"proof-cleanup-evidence","from":"cleanup_evidence","relation":"proves","to":"cleanup_verifier","events":["verify_cleanup"]},
+    {"id":"proof-result-inputs","from":"result_inputs","relation":"proves","to":"result_publisher","events":["publish_development_result"]}
+  ],
+  "routes": [
+    {"id":"development-control-execution","event":"run_control","kind":"execution","entry":"development_control_request","terminal":"actual_owner_boundary","required_roles":["interface","orchestrator","producer"],"path_cardinality":[{"from":"development_control_request","to":"actual_owner_boundary","min":1,"max":1}]},
+    {"id":"development-control-proof","event":"evaluate_controls","kind":"proof","entry":"control_process_outcomes","terminal":"control_evaluator","required_roles":["evidence_owner","proof_owner"],"path_cardinality":[{"from":"control_process_outcomes","to":"control_evaluator","min":1,"max":1}]},
+    {"id":"cleanup-authorization","event":"authorize_cleanup","kind":"authority","entry":"cleanup_inputs","terminal":"cleanup_owner","required_roles":["evidence_owner","authorization_owner","mutation_owner"],"path_cardinality":[{"from":"cleanup_inputs","to":"cleanup_owner","min":1,"max":1}]},
+    {"id":"cleanup-mutation","event":"mutate_cleanup","kind":"execution","entry":"cleanup_authorization","terminal":"governed_tree","required_roles":["producer","mutation_owner","evidence_owner"],"path_cardinality":[{"from":"cleanup_authorization","to":"governed_tree","min":1,"max":1}]},
+    {"id":"cleanup-proof","event":"verify_cleanup","kind":"proof","entry":"cleanup_evidence","terminal":"cleanup_verifier","required_roles":["evidence_owner","proof_owner"],"path_cardinality":[{"from":"cleanup_evidence","to":"cleanup_verifier","min":1,"max":1}]},
+    {"id":"development-result-proof","event":"publish_development_result","kind":"proof","entry":"result_inputs","terminal":"result_publisher","required_roles":["evidence_owner","proof_owner"],"path_cardinality":[{"from":"result_inputs","to":"result_publisher","min":1,"max":1}]}
+  ]
+}

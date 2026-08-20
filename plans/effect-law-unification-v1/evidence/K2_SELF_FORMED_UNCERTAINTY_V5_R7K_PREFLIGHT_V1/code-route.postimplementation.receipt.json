@@ -1,0 +1,315 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_PREFLIGHT_V1/code-route.observed-source.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815",
+  "node_count": 14,
+  "edge_count": 9,
+  "routes": [
+    {
+      "id": "development-control-execution",
+      "event": "run_control",
+      "kind": "execution",
+      "entry": "development_control_request",
+      "via": [],
+      "terminal": "actual_owner_boundary",
+      "path_count": 1,
+      "paths": [
+        [
+          "development_control_request",
+          "control_case_adapter",
+          "actual_owner_boundary"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "actual_owner_boundary"
+        ],
+        "orchestrator": [
+          "control_case_adapter"
+        ],
+        "interface": [
+          "development_control_request"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "development_control_request",
+          "to": "actual_owner_boundary",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "development_control_request",
+              "control_case_adapter",
+              "actual_owner_boundary"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "development-control-proof",
+      "event": "evaluate_controls",
+      "kind": "proof",
+      "entry": "control_process_outcomes",
+      "via": [],
+      "terminal": "control_evaluator",
+      "path_count": 1,
+      "paths": [
+        [
+          "control_process_outcomes",
+          "control_evaluator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "control_evaluator"
+        ],
+        "evidence_owner": [
+          "control_process_outcomes"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "control_process_outcomes",
+          "to": "control_evaluator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "control_process_outcomes",
+              "control_evaluator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup-authorization",
+      "event": "authorize_cleanup",
+      "kind": "authority",
+      "entry": "cleanup_inputs",
+      "via": [],
+      "terminal": "cleanup_owner",
+      "path_count": 1,
+      "paths": [
+        [
+          "cleanup_inputs",
+          "cleanup_authorizer",
+          "cleanup_owner"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "cleanup_authorizer"
+        ],
+        "evidence_owner": [
+          "cleanup_inputs"
+        ],
+        "mutation_owner": [
+          "cleanup_owner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "cleanup_inputs",
+          "to": "cleanup_owner",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "cleanup_inputs",
+              "cleanup_authorizer",
+              "cleanup_owner"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup-mutation",
+      "event": "mutate_cleanup",
+      "kind": "execution",
+      "entry": "cleanup_authorization",
+      "via": [],
+      "terminal": "governed_tree",
+      "path_count": 1,
+      "paths": [
+        [
+          "cleanup_authorization",
+          "cleanup_owner",
+          "governed_tree"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "cleanup_authorization"
+        ],
+        "mutation_owner": [
+          "cleanup_owner"
+        ],
+        "evidence_owner": [
+          "governed_tree"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "cleanup_authorization",
+          "to": "governed_tree",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "cleanup_authorization",
+              "cleanup_owner",
+              "governed_tree"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup-proof",
+      "event": "verify_cleanup",
+      "kind": "proof",
+      "entry": "cleanup_evidence",
+      "via": [],
+      "terminal": "cleanup_verifier",
+      "path_count": 1,
+      "paths": [
+        [
+          "cleanup_evidence",
+          "cleanup_verifier"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "cleanup_evidence"
+        ],
+        "proof_owner": [
+          "cleanup_verifier"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "cleanup_evidence",
+          "to": "cleanup_verifier",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "cleanup_evidence",
+              "cleanup_verifier"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "development-result-proof",
+      "event": "publish_development_result",
+      "kind": "proof",
+      "entry": "result_inputs",
+      "via": [],
+      "terminal": "result_publisher",
+      "path_count": 1,
+      "paths": [
+        [
+          "result_inputs",
+          "result_publisher"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "result_inputs"
+        ],
+        "proof_owner": [
+          "result_publisher"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "result_inputs",
+          "to": "result_publisher",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "result_inputs",
+              "result_publisher"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "authorize_cleanup": {
+      "evidence_owner": [
+        "cleanup_inputs"
+      ],
+      "mutation_owner": [
+        "cleanup_owner"
+      ],
+      "candidate_rank_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "cleanup_authorizer"
+      ],
+      "render_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 23,
+    "verified": 23,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

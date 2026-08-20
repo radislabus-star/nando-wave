@@ -2,7 +2,7 @@ use nando_operator_learning::{
     K2CompositionAuthorityBoundaryV1, K2CompositionErrorV1, K2UncertaintyBatchJournalEventKindV1,
     K2UncertaintyBatchJournalFaultV1, K2UncertaintyBatchJournalV1, K2UncertaintyDomainVocabularyV1,
     K2UncertaintyPublicCaseV1, K2UncertaintyResourceTerminalKindV1,
-    K2UncertaintyResourceTerminalV1, K2UncertaintySplitV1, K2UncertaintySupportSetV1,
+    K2UncertaintyResourceTerminalV1, K2UncertaintySplitV1,
 };
 
 use super::fixture::{R7Fixture, root_hash};
@@ -34,14 +34,8 @@ fn reject_development_evidence_in_confirm_packet(fixture: &R7Fixture) {
         development.content_atoms.clone(),
     )
     .expect("construct mixed confirm vocabulary");
-    let confirm_support = K2UncertaintySupportSetV1::seal(
-        confirm_vocabulary.case_id_sha256.clone(),
-        confirm_vocabulary.vocabulary_root_sha256.clone(),
-        fixture.public_case.support.observations.clone(),
-    )
-    .expect("construct mixed confirm support");
     assert_error(
-        K2UncertaintyPublicCaseV1::seal(confirm_vocabulary, confirm_support),
+        K2UncertaintyPublicCaseV1::seal(confirm_vocabulary, fixture.public_case.support.clone()),
         "self_formed_public_case_invalid",
     );
 }
@@ -260,7 +254,10 @@ fn execution_order(fixture: &R7Fixture) -> Vec<String> {
         .collect()
 }
 
+#[track_caller]
 fn assert_error<T>(result: Result<T, K2CompositionErrorV1>, code: &str) {
-    let error = result.err().expect("boundary control accepted");
+    let error = result
+        .err()
+        .unwrap_or_else(|| panic!("boundary control accepted; expected {code}"));
     assert!(error.to_string().contains(code), "wrong error: {error}");
 }

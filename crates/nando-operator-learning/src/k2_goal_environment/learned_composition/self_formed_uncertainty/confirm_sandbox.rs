@@ -91,6 +91,228 @@ pub struct K2UncertaintyConfirmDataMountV1<'a> {
     pub writable: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct K2UncertaintySandboxProcessOutcomeV1 {
+    pub normal_exit: bool,
+    pub exit_code: i32,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub timed_out: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum K2UncertaintyR7kCleanupGuestV1 {
+    Authorizer,
+    Owner,
+    Verifier,
+    ResultPublisher,
+}
+
+impl K2UncertaintyR7kCleanupGuestV1 {
+    const fn governed_access(self) -> Option<bool> {
+        match self {
+            Self::Authorizer | Self::ResultPublisher => None,
+            Self::Owner => Some(true),
+            Self::Verifier => Some(false),
+        }
+    }
+}
+
+pub fn run_self_formed_r7k_cleanup_sandbox_v1(
+    role: K2UncertaintyR7kCleanupGuestV1,
+    executable: &Path,
+    expected_executable_sha256: &str,
+    governed_root: Option<&Path>,
+    control_root: &Path,
+    input: &[u8],
+    cpu_seconds: u64,
+) -> K2CompositionResultV1<Vec<u8>> {
+    require_composition_root_v1(expected_executable_sha256)?;
+    if input.len() > K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 || !(1..=600).contains(&cpu_seconds) {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r7k_cleanup_sandbox_budget_invalid",
+        ));
+    }
+    validate_executable_v1(executable, expected_executable_sha256)?;
+    validate_r7k_cleanup_root_v1(control_root)?;
+    if role.governed_access().is_some() != governed_root.is_some() {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r7k_cleanup_sandbox_mount_matrix_invalid",
+        ));
+    }
+    if let Some(governed_root) = governed_root {
+        validate_r7k_cleanup_root_v1(governed_root)?;
+        let governed = fs::canonicalize(governed_root)
+            .map_err(|_| K2CompositionErrorV1::Io("canonicalize_r7k_governed_root"))?;
+        let control = fs::canonicalize(control_root)
+            .map_err(|_| K2CompositionErrorV1::Io("canonicalize_r7k_control_root"))?;
+        if governed == control || governed.starts_with(&control) || control.starts_with(&governed) {
+            return Err(K2CompositionErrorV1::Invalid(
+                "self_formed_r7k_cleanup_sandbox_roots_not_siblings",
+            ));
+        }
+    }
+
+    let mut command = Command::new(BWRAP_PATH_V1);
+    command.args([
+        "--unshare-all",
+        "--die-with-parent",
+        "--new-session",
+        "--cap-drop",
+        "ALL",
+        "--clearenv",
+    ]);
+    for path in ["/usr", "/lib", "/lib64"] {
+        if Path::new(path).exists() {
+            command.args(["--ro-bind", path, path]);
+        }
+    }
+    command.args([
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--dir",
+        "/nando",
+        "--dir",
+        "/nando/bin",
+        "--dir",
+        "/private",
+        "--ro-bind",
+    ]);
+    command.arg(executable).arg(PRIMARY_GUEST_EXECUTABLE_V1);
+    if let (Some(governed_root), Some(writable)) = (governed_root, role.governed_access()) {
+        command
+            .args(["--dir", "/governed"])
+            .arg(if writable { "--bind" } else { "--ro-bind" })
+            .arg(governed_root)
+            .arg("/governed");
+    }
+    command
+        .args(["--dir", "/control", "--bind"])
+        .arg(control_root)
+        .arg("/control")
+        .args(["--setenv", "HOME", "/tmp", "--setenv", "LANG", "C"])
+        .args(["--", PRLIMIT_PATH_V1])
+        .arg(format!("--cpu={cpu_seconds}:{cpu_seconds}"))
+        .arg(format!(
+            "--as={ADDRESS_SPACE_BYTES_V1}:{ADDRESS_SPACE_BYTES_V1}"
+        ))
+        .arg(format!("--nproc={MAX_PROCESSES_V1}:{MAX_PROCESSES_V1}"))
+        .arg(format!("--fsize={MAX_FILE_BYTES_V1}:{MAX_FILE_BYTES_V1}"))
+        .args(["--", PRIMARY_GUEST_EXECUTABLE_V1])
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    execute_child_v1(command, input, Duration::from_secs(cpu_seconds + 10))
+}
+
+fn validate_r7k_cleanup_root_v1(root: &Path) -> K2CompositionResultV1<()> {
+    let metadata = fs::symlink_metadata(root)
+        .map_err(|_| K2CompositionErrorV1::Io("stat_self_formed_r7k_cleanup_root"))?;
+    if !root.is_absolute()
+        || metadata.file_type().is_symlink()
+        || !metadata.is_dir()
+        || std::os::unix::fs::PermissionsExt::mode(&metadata.permissions()) & 0o7777 != 0o700
+    {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r7k_cleanup_sandbox_root_invalid",
+        ));
+    }
+    Ok(())
+}
+
+pub fn run_self_formed_r7k_control_sandbox_v1(
+    executable: &Path,
+    expected_executable_sha256: &str,
+    scratch_root: &Path,
+    input: &[u8],
+    argv: &[String],
+    environment: &[(String, String)],
+    cpu_seconds: u64,
+) -> K2CompositionResultV1<K2UncertaintySandboxProcessOutcomeV1> {
+    require_composition_root_v1(expected_executable_sha256)?;
+    if input.len() > K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 || !(1..=600).contains(&cpu_seconds) {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r7k_control_sandbox_budget_invalid",
+        ));
+    }
+    validate_executable_v1(executable, expected_executable_sha256)?;
+    let scratch_metadata = fs::symlink_metadata(scratch_root)
+        .map_err(|_| K2CompositionErrorV1::Io("stat_self_formed_r7k_control_scratch"))?;
+    if !scratch_root.is_absolute()
+        || scratch_metadata.file_type().is_symlink()
+        || !scratch_metadata.is_dir()
+        || environment
+            .iter()
+            .any(|(key, _)| key.is_empty() || key.contains('='))
+    {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r7k_control_sandbox_input_invalid",
+        ));
+    }
+
+    let mut command = Command::new(BWRAP_PATH_V1);
+    command.args([
+        "--unshare-all",
+        "--die-with-parent",
+        "--new-session",
+        "--cap-drop",
+        "ALL",
+        "--clearenv",
+    ]);
+    for path in ["/usr", "/lib", "/lib64"] {
+        if Path::new(path).exists() {
+            command.args(["--ro-bind", path, path]);
+        }
+    }
+    command.args([
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--dir",
+        "/nando",
+        "--dir",
+        "/nando/bin",
+        "--dir",
+        "/private",
+        "--dir",
+        "/scratch",
+        "--ro-bind",
+    ]);
+    command
+        .arg(executable)
+        .arg(PRIMARY_GUEST_EXECUTABLE_V1)
+        .args(["--bind"])
+        .arg(scratch_root)
+        .arg("/scratch")
+        .args(["--setenv", "HOME", "/tmp", "--setenv", "LANG", "C"]);
+    for (key, value) in environment {
+        command.args(["--setenv", key, value]);
+    }
+    command
+        .args(["--", PRLIMIT_PATH_V1])
+        .arg(format!("--cpu={cpu_seconds}:{cpu_seconds}"))
+        .arg(format!(
+            "--as={ADDRESS_SPACE_BYTES_V1}:{ADDRESS_SPACE_BYTES_V1}"
+        ))
+        .arg(format!("--nproc={MAX_PROCESSES_V1}:{MAX_PROCESSES_V1}"))
+        .arg(format!("--fsize={MAX_FILE_BYTES_V1}:{MAX_FILE_BYTES_V1}"))
+        .args(["--", PRIMARY_GUEST_EXECUTABLE_V1])
+        .args(argv)
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    execute_child_measured_v1(command, input, Duration::from_secs(cpu_seconds + 10))
+}
+
 pub fn run_self_formed_confirm_sandbox_v1(
     role: K2UncertaintyConfirmGuestExecutableV1,
     executable: &Path,
@@ -249,10 +471,32 @@ fn validate_data_mounts_v1(
 }
 
 fn execute_child_v1(
-    mut command: Command,
+    command: Command,
     input: &[u8],
     timeout: Duration,
 ) -> K2CompositionResultV1<Vec<u8>> {
+    let outcome = execute_child_measured_v1(command, input, timeout)?;
+    if !outcome.normal_exit || outcome.exit_code != 0 {
+        if std::env::var_os("NANDO_K2_CONFIRM_SANDBOX_DIAGNOSTICS").is_some() {
+            eprintln!(
+                "self_formed_confirm_sandbox_child_diagnostic:{}",
+                String::from_utf8_lossy(&outcome.stderr)
+            );
+        }
+        return Err(if outcome.stderr.is_empty() {
+            K2CompositionErrorV1::Invalid("self_formed_confirm_sandbox_child_failed")
+        } else {
+            K2CompositionErrorV1::Invalid("self_formed_confirm_sandbox_child_reported_error")
+        });
+    }
+    Ok(outcome.stdout)
+}
+
+fn execute_child_measured_v1(
+    mut command: Command,
+    input: &[u8],
+    timeout: Duration,
+) -> K2CompositionResultV1<K2UncertaintySandboxProcessOutcomeV1> {
     let mut child = command
         .spawn()
         .map_err(|_| K2CompositionErrorV1::Io("spawn_self_formed_confirm_sandbox"))?;
@@ -280,20 +524,13 @@ fn execute_child_v1(
     let stderr = stderr_thread
         .join()
         .map_err(|_| K2CompositionErrorV1::Io("join_self_formed_confirm_sandbox_stderr"))??;
-    if !status.success() {
-        if std::env::var_os("NANDO_K2_CONFIRM_SANDBOX_DIAGNOSTICS").is_some() {
-            eprintln!(
-                "self_formed_confirm_sandbox_child_diagnostic:{}",
-                String::from_utf8_lossy(&stderr)
-            );
-        }
-        return Err(if stderr.is_empty() {
-            K2CompositionErrorV1::Invalid("self_formed_confirm_sandbox_child_failed")
-        } else {
-            K2CompositionErrorV1::Invalid("self_formed_confirm_sandbox_child_reported_error")
-        });
-    }
-    Ok(stdout)
+    Ok(K2UncertaintySandboxProcessOutcomeV1 {
+        normal_exit: status.code().is_some(),
+        exit_code: status.code().unwrap_or(-1),
+        stdout,
+        stderr,
+        timed_out: false,
+    })
 }
 
 fn wait_child_v1(
