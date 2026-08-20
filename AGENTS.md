@@ -4,12 +4,14 @@ Before reading or changing miner, Wave, runtime, verifier, admission, storage,
 or economics code, read:
 
 ```text
-/home/ubu/projects/nando-wave/ARCHITECTURE_CANON.md
+./ARCHITECTURE_CANON.md
 ```
 
-That document is the architectural authority for this repository. Existing
-research notes and reports are supporting evidence; they do not override the
-canon silently.
+Resolve that path inside the current Git worktree. Never substitute a sibling
+checkout merely because it has a familiar absolute path; it may be on a stale
+commit or contain unrelated user changes. That document is the architectural
+authority for this repository. Existing research notes and reports are
+supporting evidence; they do not override the canon silently.
 
 ## Critical Grokking Warning
 

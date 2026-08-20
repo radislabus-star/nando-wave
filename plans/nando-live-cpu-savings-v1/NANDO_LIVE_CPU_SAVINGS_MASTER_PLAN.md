@@ -2,8 +2,8 @@
 
 Status: canonical execution plan.
 
-Revision: 2026-08-11, exact connected-motif live route plus preregistered
-Grounded Meaning S1C plan.
+Revision: 2026-08-20, exact connected-motif live route, preregistered Grounded
+Meaning route, and reviewer-corrected Wave/self-induced mechanism boundary.
 
 ```text
 PLAN_STRUCTURE_PASS        PASS
@@ -12,6 +12,7 @@ MOTIF V4/V6 BRANCH         IMPLEMENTATION PASS
 MOTIF V4/V6 LIVE           IMPLEMENTATION PASS
 AUTONOMOUS LAW #2          NOT PROVED
 NATURAL RAW PHASE CAUSAL   NOT PROVED
+ANSWER-BLIND CIRCUIT BIRTH PAPER GATED / NOT IMPLEMENTED
 K2 GROUNDED MEANING        NOT EVALUATED
 S1A TRANSITION PROJECTION  IMPLEMENTATION PASS
 S1B DECISION CENSUS        PASS / EMPTY_DECISION_SURFACE
@@ -308,6 +309,49 @@ anonymous verified deltas across independent surfaces
 
 Mechanism evidence cannot grant product or LawCertificate authority. Current
 natural Raw Phase causality remains `NOT PROVED`.
+
+### Actual-Wave And Self-Induced Boundary
+
+Source audit in
+`WAVE_SELF_INDUCED_BRIDGE_REVIEW_2026-08-20.md` confirms two implemented but
+currently separate routes:
+
+```text
+actual Wave route
+W1 surface -> W2 motifs -> W3/Dynamic Operator Field
+-> competing circuits -> phase coherence -> crystal
+
+current self-induced baseline
+surface + answer label -> answer-prefix grouping
+-> hand-built feature field -> modular delta -> induced class
+```
+
+The second route is a valid bounded baseline but is not evidence that the first
+route formed a new operator class without operator-identity help. Completed
+post-action truth remains legal teacher evidence. A stable answer prefix,
+renderer family, frame/schema/role/template ID, family-keyed map, global role
+ID, or complete caller-supplied circuit is forbidden as identity authority.
+
+The missing causal bridge is:
+
+```text
+independently verified partial transition fragments
+-> independently permuted local surface namespaces
+-> actual W1/W2 representations
+-> bounded new connected-circuit synthesis
+-> matched-marginal competing topologies
+-> cross-plane phase-coherence margin
+-> crystallized typed program
+-> exact-memory cleanup
+-> independent frozen-future verifier
+```
+
+Magnitude-only, no-phase, shuffled-phase, matched-random-phase, signed
+accumulator, sparse-motif and current answer-family learners receive matched
+information and budgets. A mechanism claim requires the full Wave to win the
+topology challenge while controls fail or tie and `ABSTAIN`, with zero false
+accepts. This experiment is a separate paper-only successor; it cannot rewrite
+the frozen R7J-R11 route.
 
 ## 5. Adaptive Natural-Surface Frontier
 
@@ -655,6 +699,9 @@ Heavy builds, archive scans, and scored experiments run only on the mini-PC.
 | Token savings are real | exact intent-level global denominator | UNKNOWN |
 | Money was saved | provider billing joined to avoided attempts | UNKNOWN |
 | Raw Phase caused transfer | causal ablations and heldout transfer | UNRESOLVED |
+| Self-induced learning used actual Wave circuit birth | linked W1/W2/Dynamic Operator Field trace with no identity channel | NOT PROVED |
+| Phase coherence selected topology rather than magnitude | matched-marginal topology challenge plus matched-capacity causal controls | NOT PROVED |
+| Operator identity was absent | leakage census over every grouping, feature, renderer and receipt field | NOT PROVED |
 
 ## 13. Implementation Ledger
 
@@ -679,6 +726,9 @@ As of the verified baseline:
 | Exact package CPU completion accounting | `IMPLEMENTATION_PASS`; ingress token denominator and verifier root bound |
 | Autonomous natural V6 generation | `IMPLEMENTATION_PASS` for scheduling and terminalization; Natural Law #2 remains `NOT PROVED` |
 | Raw Phase as sole natural synthesis path | `PARTIAL`; production causal route not proved |
+| Current answer-family self-induced learner | `BASELINE_PASS`; bounded induction with disclosed answer-family signal, not answer-blind circuit birth |
+| Actual Wave -> answer-blind self-induced bridge | `NOT IMPLEMENTED`; paper review only |
+| Matched-marginal phase-coherence challenge | `NOT EXECUTED` |
 | Natural Law #2 | `NOT PROVED` |
 | K1 minimum basis | `NO`, 1/3 |
 | S1A transition projection | `IMPLEMENTATION_PASS`; 1,866 / 12,854 across 19 lineages |
@@ -747,6 +797,21 @@ Next grounded-meaning route, paper-first:
     target being stable >=10% global current-epoch token savings and then
     progressively higher verified coverage.
 
+Separate mechanism-successor route, without modifying frozen R7J-R11:
+
+15. Freeze `ANSWER_BLIND_PHASE_COHERENT_OPERATOR_BIRTH_PREREGISTRATION_V1`
+    with an operator-identity leakage veto in its first claim boundary.
+16. Give every target and baseline the same typed truth signal, K0 primitives,
+    support/future split, candidate budget, probe budget and resource budget.
+17. Run matched-marginal topology challenges in which frequency, magnitude,
+    local pairs and program size are equal and only global binding differs.
+18. Require whole-circuit coherence, alpha-normalized cross-support law parity,
+    exact-memory cleanup, frozen-future typed execution, independent
+    verification and zero false accepts.
+19. Treat a causal-control failure as mechanism FAIL, not as permission to
+    rename ordinary associative induction as Wave grokking. Natural and product
+    claims remain separately gated even after a bounded mechanism PASS.
+
 ## 15. Milestone Gates
 
 ```text
@@ -786,6 +851,16 @@ M5 K2 GROUNDED MEANING
   no supplied DAG, family mapping, episode IDs, or latent authority
   independent natural future and MetaSkillPackage
   status: BLOCKED AT S1C
+
+M6 ANSWER-BLIND PHASE-COHERENT OPERATOR BIRTH
+  no operator-identity channel before circuit formation
+  no example contains a complete operator
+  matched-marginal target and decoy topologies
+  actual W1/W2/Dynamic Operator Field route
+  causal phase controls fail or tie and ABSTAIN
+  exact-memory cleanup + independent frozen future
+  crystallized typed execution + false accepts 0
+  status: PAPER REVIEW ONLY / NOT IMPLEMENTED
 ```
 
 Failure to broaden global verified coverage after Law #2 is a product stop
