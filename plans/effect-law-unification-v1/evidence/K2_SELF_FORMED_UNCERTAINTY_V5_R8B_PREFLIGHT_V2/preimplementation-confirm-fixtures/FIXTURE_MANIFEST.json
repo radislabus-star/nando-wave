@@ -1,0 +1,60 @@
+{
+  "schema": "nando.k2-self-formed-r8b-preimplementation-confirm-fixture-manifest.v1",
+  "status": "compatibility_fixture_only_no_scientific_or_product_authority",
+  "source_commit": "bdcae5351c7de75f325b0ebe752804066823cc38",
+  "tracked_product_source_diff_empty": true,
+  "build_checkout_had_untracked_probe_mount": true,
+  "cargo_lock_sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08",
+  "probe_source_sha256": "37925c0ce536d34d73bcb3d10be7dfdec67cce9d000c5a4989ebcfa2cc75c714",
+  "sha256sums_sha256": "b331bc19350a1f71bcfb4adb3c56bff15402dd6483641d4f1ef8d336577fd757",
+  "toolchain": {
+    "rustc": "1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "1.97.1 (c980f4866 2026-06-30)",
+    "host": "x86_64-unknown-linux-gnu",
+    "cargo_build_jobs": 20,
+    "locked": true,
+    "profile": "release"
+  },
+  "generation": {
+    "confirm_owner_attempts": 0,
+    "development_owner_attempts": 1,
+    "sealed_attempts": 0,
+    "authorization_slot_claims": 0,
+    "canonical_files": 41,
+    "typed_decode_reserialize_equal": 41,
+    "typed_decode_reserialize_failures": 0
+  },
+  "executables": {
+    "owner_sha256": "5f64862929593207fecf5767e6a10063e36a5c53dfcc31089c352d433f9f7b23",
+    "generator_sha256": "fa738e7023dfa1801aa9cc2ef3c6c83dcc6617b6d327079705d2b26b00c5bad4"
+  },
+  "confirm_generator_split": {
+    "request_root_sha256": "1b68af4f900821668ee9f4e06814f827463310be8a8fef8be96080dd21425038",
+    "response_root_sha256": "b032902338279cbe4f576d8890132f2d48161f569fbb608eb77e213465b6128f",
+    "public_batch_root_sha256": "67d09e169c050540a38b2c490b627d0d2247df441f503a837c224e6e06da0d94",
+    "private_batch_root_sha256": "030094217e2741c95ace11f61777fda986e742681cda98bb5befe897cacb8891",
+    "private_split_root_sha256": "4d27b70f0aff72afc4d7f5e35541e8fbeef9d5195e93b24aacf24423e37ee044",
+    "split_receipt_root_sha256": "2eea28ea1d44458558de0c5f4cb36f9a91ac6367c4d274bd2b9dfba2ac11fdbc",
+    "top_level_artifacts": 3,
+    "private_artifacts": 32,
+    "all_stored_artifact_fixtures": 35,
+    "stored_artifact_kinds": {
+      "public_batch": 1,
+      "public_denominator": 1,
+      "resolver_table": 16,
+      "final_truth": 16,
+      "private_split": 1
+    }
+  },
+  "historical_development_owner": {
+    "schema": "nando.k2-self-formed-confirm-owner-receipt.v1",
+    "mode": "development_rehearsal",
+    "receipt_root_sha256": "4ab6b2c8f526d30ffd21a6fb318463e4ce805073c6889956173ceec831242703",
+    "pipe_receipt_root_sha256": "30e2d23e8c8f0e8d2425bc55293b5f4ffa293e8df0b252886cf6204fe4e92666",
+    "generator_dispatch_count": 1,
+    "split_receipt_root_sha256": null,
+    "nonce_commitment_sha256": null,
+    "sealed_attempts": 0,
+    "denied_authority": true
+  }
+}

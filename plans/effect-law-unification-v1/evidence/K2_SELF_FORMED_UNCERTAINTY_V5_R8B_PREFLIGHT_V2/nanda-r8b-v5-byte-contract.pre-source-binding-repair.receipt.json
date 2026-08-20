@@ -1,0 +1,875 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "r8b-v5-byte-contract",
+  "domain": "general",
+  "complexity_score": 46,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1429,
+      "c2": 0.1429,
+      "c3": 0.1429,
+      "c4": 0.1429,
+      "c5": 0.1429,
+      "c6": 0.1429,
+      "c7": 0.1429,
+      "c8": 0.1429
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 16,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3474,
+      "c2": 0.369,
+      "c3": 0.346,
+      "c4": 0.3555,
+      "c5": 0.3514,
+      "c6": 0.3798,
+      "c7": 0.3785,
+      "c8": 0.3623
+    },
+    "source_self_score": 0.3612,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "artifact-count": "artifact-count",
+      "artifact-root": "artifact-root",
+      "before-code": "before-code",
+      "confirm-bytes": "confirm-bytes",
+      "denied-authority": "denied-authority",
+      "owner-root": "owner-root",
+      "reconstruction-root": "reconstruction-root",
+      "split-root": "split-root"
+    },
+    "scores": {
+      "artifact-count": 1.0,
+      "artifact-root": 1.0,
+      "before-code": 1.0,
+      "confirm-bytes": 1.0,
+      "denied-authority": 1.0,
+      "owner-root": 1.0,
+      "reconstruction-root": 1.0,
+      "split-root": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "artifact-count": 1,
+      "artifact-root": 1,
+      "before-code": 1,
+      "confirm-bytes": 1,
+      "denied-authority": 1,
+      "owner-root": 1,
+      "reconstruction-root": 1,
+      "split-root": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3612,
+      "norm": 92.477,
+      "triads": 8
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "artifact-count": "artifact-count",
+      "artifact-root": "artifact-root",
+      "before-code": "before-code",
+      "confirm-bytes": "confirm-bytes",
+      "denied-authority": "denied-authority",
+      "owner-root": "owner-root",
+      "reconstruction-root": "reconstruction-root",
+      "split-root": "split-root"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "artifact-count": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "artifact-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "before-code": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "confirm-bytes": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denied-authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "owner-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "reconstruction-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "split-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "artifact-count": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "artifact-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "before-code": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "confirm-bytes": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denied-authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "owner-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "reconstruction-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "split-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "artifact-count": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "artifact-count",
+        "exact_source_groups": [
+          "artifact-count"
+        ]
+      },
+      "artifact-root": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "artifact-root",
+        "exact_source_groups": [
+          "artifact-root"
+        ]
+      },
+      "before-code": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "before-code",
+        "exact_source_groups": [
+          "before-code"
+        ]
+      },
+      "confirm-bytes": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "confirm-bytes",
+        "exact_source_groups": [
+          "confirm-bytes"
+        ]
+      },
+      "denied-authority": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "denied-authority",
+        "exact_source_groups": [
+          "denied-authority"
+        ]
+      },
+      "owner-root": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "owner-root",
+        "exact_source_groups": [
+          "owner-root"
+        ]
+      },
+      "reconstruction-root": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "reconstruction-root",
+        "exact_source_groups": [
+          "reconstruction-root"
+        ]
+      },
+      "split-root": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "split-root",
+        "exact_source_groups": [
+          "split-root"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "artifact-count": {
+        "artifact-count": 1.0,
+        "artifact-root": 0.0352,
+        "before-code": -0.0137,
+        "confirm-bytes": 0.0039,
+        "denied-authority": -0.0352,
+        "owner-root": 0.0117,
+        "reconstruction-root": 0.0039,
+        "split-root": 0.041
+      },
+      "artifact-root": {
+        "artifact-count": 0.0352,
+        "artifact-root": 1.0,
+        "before-code": -0.0293,
+        "confirm-bytes": -0.0117,
+        "denied-authority": 0.0195,
+        "owner-root": 0.0078,
+        "reconstruction-root": -0.0039,
+        "split-root": -0.0137
+      },
+      "before-code": {
+        "artifact-count": -0.0137,
+        "artifact-root": -0.0293,
+        "before-code": 1.0,
+        "confirm-bytes": 0.0527,
+        "denied-authority": -0.002,
+        "owner-root": 0.002,
+        "reconstruction-root": -0.0371,
+        "split-root": 0.043
+      },
+      "confirm-bytes": {
+        "artifact-count": 0.0039,
+        "artifact-root": -0.0117,
+        "before-code": 0.0527,
+        "confirm-bytes": 1.0,
+        "denied-authority": 0.082,
+        "owner-root": 0.0117,
+        "reconstruction-root": -0.0273,
+        "split-root": -0.0137
+      },
+      "denied-authority": {
+        "artifact-count": -0.0352,
+        "artifact-root": 0.0195,
+        "before-code": -0.002,
+        "confirm-bytes": 0.082,
+        "denied-authority": 1.0,
+        "owner-root": -0.0156,
+        "reconstruction-root": 0.0273,
+        "split-root": 0.0176
+      },
+      "owner-root": {
+        "artifact-count": 0.0117,
+        "artifact-root": 0.0078,
+        "before-code": 0.002,
+        "confirm-bytes": 0.0117,
+        "denied-authority": -0.0156,
+        "owner-root": 1.0,
+        "reconstruction-root": 0.0273,
+        "split-root": -0.0176
+      },
+      "reconstruction-root": {
+        "artifact-count": 0.0039,
+        "artifact-root": -0.0039,
+        "before-code": -0.0371,
+        "confirm-bytes": -0.0273,
+        "denied-authority": 0.0273,
+        "owner-root": 0.0273,
+        "reconstruction-root": 1.0,
+        "split-root": 0.0098
+      },
+      "split-root": {
+        "artifact-count": 0.041,
+        "artifact-root": -0.0137,
+        "before-code": 0.043,
+        "confirm-bytes": -0.0137,
+        "denied-authority": 0.0176,
+        "owner-root": -0.0176,
+        "reconstruction-root": 0.0098,
+        "split-root": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "artifact-count": {
+          "gravity": 1.0,
+          "owner": "artifact-count",
+          "owners": {
+            "artifact-count": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "artifact-root": {
+          "gravity": 1.0,
+          "owner": "artifact-root",
+          "owners": {
+            "artifact-root": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "before-code": {
+          "gravity": 1.0,
+          "owner": "before-code",
+          "owners": {
+            "before-code": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "confirm-bytes": {
+          "gravity": 1.0,
+          "owner": "confirm-bytes",
+          "owners": {
+            "confirm-bytes": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "denied-authority": {
+          "gravity": 1.0,
+          "owner": "denied-authority",
+          "owners": {
+            "denied-authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "owner-root": {
+          "gravity": 1.0,
+          "owner": "request attempt split event dispatch absent authorization and denied authority",
+          "owners": {
+            "request attempt split event dispatch absent authorization and denied authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "reconstruction-root": {
+          "gravity": 1.0,
+          "owner": "reconstruction-root",
+          "owners": {
+            "reconstruction-root": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "split-root": {
+          "gravity": 1.0,
+          "owner": "split-root",
+          "owners": {
+            "split-root": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "byte authority": {
+          "gravity": 0.3333,
+          "owner": "artifact-root",
+          "owners": {
+            "artifact-root": 2,
+            "request attempt split event dispatch absent authorization and denied authority": 2,
+            "split-root": 2
+          },
+          "support": 2,
+          "total": 6
+        },
+        "chronology": {
+          "gravity": 1.0,
+          "owner": "before-code",
+          "owners": {
+            "before-code": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "collision boundary": {
+          "gravity": 1.0,
+          "owner": "reconstruction-root",
+          "owners": {
+            "reconstruction-root": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "denominator": {
+          "gravity": 1.0,
+          "owner": "artifact-count",
+          "owners": {
+            "artifact-count": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "invariant": {
+          "gravity": 1.0,
+          "owner": "denied-authority",
+          "owners": {
+            "denied-authority": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "parity": {
+          "gravity": 1.0,
+          "owner": "confirm-bytes",
+          "owners": {
+            "confirm-bytes": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "byte authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 3,
+          "entrypoints": [],
+          "evidence_paths": [
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/development-byte-contract.v1.json:156-235",
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/development-byte-contract.v1.json:29-75",
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/development-byte-contract.v1.json:78-153",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:154-170",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:186-202",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:225-243"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "artifact-root",
+            "request attempt split event dispatch absent authorization and denied authority",
+            "split-root"
+          ],
+          "scopes": [
+            "byte authority"
+          ],
+          "source_triads": 3,
+          "triads": 6
+        },
+        "chronology": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/development-byte-contract.v1.json:277-285",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:245-247"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "before-code"
+          ],
+          "scopes": [
+            "chronology"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "collision boundary": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/development-byte-contract.v1.json:237-257",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:204-213"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "reconstruction-root"
+          ],
+          "scopes": [
+            "collision boundary"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "denominator": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/preflight_development_byte_vector_generation_2026-08-20.md:21-31",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:215-223"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "artifact-count"
+          ],
+          "scopes": [
+            "denominator"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "invariant": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/development-byte-contract.v1.json:29-75",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:150-152"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "denied-authority"
+          ],
+          "scopes": [
+            "invariant"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "parity": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "evidence/k2_self_formed_uncertainty_v5_r8b_preflight_v2/preflight_confirm_fixture_generation_2026-08-20.md:21-35",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v5.md:478-484"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "confirm-bytes"
+          ],
+          "scopes": [
+            "parity"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "byte authority": {
+          "norm": 54.9909,
+          "self_coherence": 0.5728,
+          "triads": 3
+        },
+        "chronology": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "collision boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denominator": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "invariant": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "byte authority": {
+          "byte authority": 1.0,
+          "chronology": 0.0091,
+          "collision boundary": 0.0193,
+          "denominator": 0.0511,
+          "invariant": 0.0125,
+          "parity": -0.008
+        },
+        "chronology": {
+          "byte authority": 0.0091,
+          "chronology": 1.0,
+          "collision boundary": -0.0371,
+          "denominator": -0.0137,
+          "invariant": -0.002,
+          "parity": 0.0527
+        },
+        "collision boundary": {
+          "byte authority": 0.0193,
+          "chronology": -0.0371,
+          "collision boundary": 1.0,
+          "denominator": 0.0039,
+          "invariant": 0.0273,
+          "parity": -0.0273
+        },
+        "denominator": {
+          "byte authority": 0.0511,
+          "chronology": -0.0137,
+          "collision boundary": 0.0039,
+          "denominator": 1.0,
+          "invariant": -0.0352,
+          "parity": 0.0039
+        },
+        "invariant": {
+          "byte authority": 0.0125,
+          "chronology": -0.002,
+          "collision boundary": 0.0273,
+          "denominator": -0.0352,
+          "invariant": 1.0,
+          "parity": 0.082
+        },
+        "parity": {
+          "byte authority": -0.008,
+          "chronology": 0.0527,
+          "collision boundary": -0.0273,
+          "denominator": 0.0039,
+          "invariant": 0.082,
+          "parity": 1.0
+        }
+      },
+      "source": {
+        "byte authority": {
+          "norm": 54.9909,
+          "self_coherence": 0.5728,
+          "triads": 3
+        },
+        "chronology": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "collision boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denominator": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "invariant": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "parity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "artifact-count": 1,
+      "artifact-root": 1,
+      "before-code": 1,
+      "confirm-bytes": 1,
+      "denied-authority": 1,
+      "owner-root": 1,
+      "reconstruction-root": 1,
+      "split-root": 1
+    },
+    "stable_groups": [
+      "artifact-count",
+      "artifact-root",
+      "before-code",
+      "confirm-bytes",
+      "denied-authority",
+      "owner-root",
+      "reconstruction-root",
+      "split-root"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/r8b-v5-byte-contract.trace.json"
+}

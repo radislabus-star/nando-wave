@@ -1,0 +1,126 @@
+{
+  "schema": "nando.k2-self-formed-r8b-production-baseline.v1",
+  "observed_at": "2026-08-20T18:32:51+03:00",
+  "host": "e-MEGA-MINI-M1-13th",
+  "source_commit": "bdcae5351c7de75f325b0ebe752804066823cc38",
+  "observation_mode": "read_only",
+  "services": [
+    {
+      "unit": "nando-transition-serving.service",
+      "active_state": "active",
+      "sub_state": "running",
+      "main_pid": 1816591,
+      "n_restarts": 0,
+      "active_enter_timestamp": "Thu 2026-08-13 07:00:08 EEST",
+      "fragment_path": "/etc/systemd/system/nando-transition-serving.service",
+      "unit_sha256": "6e9d2fe41b1db95f94768d1ab41dffce1f15be92e2f774832c7fe392bb77b135",
+      "executable_path": "/opt/nando-wave/bin/nando-transition-serving",
+      "executable_sha256": "651d08ab0eebbadf4ed6c9175dbe5876dd8817ecf81894843c89f72554872000"
+    },
+    {
+      "unit": "nando-transport-gateway.service",
+      "active_state": "active",
+      "sub_state": "running",
+      "main_pid": 682430,
+      "n_restarts": 0,
+      "active_enter_timestamp": "Tue 2026-07-28 23:47:59 EEST",
+      "fragment_path": "/etc/systemd/system/nando-transport-gateway.service",
+      "unit_sha256": "b1ce3017e70256c4bd6a065c312dcebfbb432b7511f10900766c1b3e4cf48138",
+      "executable_path": "/usr/sbin/nginx",
+      "executable_sha256": "959d2004e530efb329618a1dd554d089355f3131fea5f65627e3a3e2aa9f80c8"
+    },
+    {
+      "unit": "nando-gateway-control.service",
+      "active_state": "active",
+      "sub_state": "running",
+      "main_pid": 3051880,
+      "n_restarts": 0,
+      "active_enter_timestamp": "Mon 2026-08-17 22:31:31 EEST",
+      "fragment_path": "/etc/systemd/system/nando-gateway-control.service",
+      "unit_sha256": "250d6a11157b8304a8c8eaaadd573377574c14d1651b585056e746c51d17912f",
+      "executable_path": "/opt/nando-wave/bin/nando-gateway-control",
+      "executable_sha256": "d447b899e4830adf2604b2c056a80375d5105b28764c90ccab80d1d0107ad090"
+    },
+    {
+      "unit": "nando-response-learning.service",
+      "active_state": "active",
+      "sub_state": "running",
+      "main_pid": 298492,
+      "n_restarts": 0,
+      "active_enter_timestamp": "Fri 2026-08-14 12:05:38 EEST",
+      "fragment_path": "/etc/systemd/system/nando-response-learning.service",
+      "unit_sha256": "c4b351c5afcdb1e8c4fcfa0ed42020f89c62f21af6dc0c9271efb8fe61ff6e1d",
+      "executable_path": "/opt/nando-wave/bin/nando-transition-serving-k1-v8",
+      "executable_sha256": "4bffd556aa0833e4e2434f05de022646533dc58c841b6f6ee6b54ba3ae82c99c"
+    },
+    {
+      "unit": "nando-operator-certification-authority.service",
+      "active_state": "active",
+      "sub_state": "running",
+      "main_pid": 150005,
+      "n_restarts": 0,
+      "active_enter_timestamp": "Fri 2026-08-14 10:30:10 EEST",
+      "fragment_path": "/etc/systemd/system/nando-operator-certification-authority.service",
+      "unit_sha256": "e23be0ca4eae0115c77a2b455288f558fa3dab58ee2bcc234c2599ca5935c088",
+      "executable_path": "/opt/nando-wave/bin/nando-operator-certification-authority",
+      "executable_sha256": "e6461cb6aec43446354c90b39a9c67a5846533122338930ee591ba4fe0002d94"
+    }
+  ],
+  "hot_health": {
+    "admission_verdict": "PASS",
+    "admission_fresh": true,
+    "response_registry_revision": 1600967834321909500,
+    "response_active_profiles": 2,
+    "effective_local_accept_enabled": true,
+    "response_effective_local_accept_enabled": true,
+    "response_runtime_revocation_state_valid": true,
+    "response_runtime_revocations_unresolved_active": 0,
+    "response_cache_error": ""
+  },
+  "cold_health": {
+    "admission_verdict": "PASS",
+    "admission_fresh": true,
+    "response_registry_revision": 1600967834321909500,
+    "response_active_profiles": 2,
+    "effective_local_accept_enabled": false,
+    "response_effective_local_accept_enabled": false,
+    "response_runtime_revocation_state_valid": true,
+    "response_runtime_revocations_unresolved_active": 0,
+    "response_cache_error": ""
+  },
+  "control_health": {
+    "cpu_allowed": true,
+    "mode": "CPU",
+    "ok": true,
+    "service": "nando-gateway-control",
+    "transport_dependency": false
+  },
+  "live_gate": {
+    "verdict": "PASS",
+    "m3_complete": false,
+    "eligible_for_local_accept": true,
+    "required_actions": [],
+    "response_authority": {
+      "registry_revision": 1600967834321909500,
+      "packages": 2,
+      "gate_build_sha256": "dc6de8d8c3619363b38d80122343919f29938c25f387c67c0f732e6e3be4142e",
+      "runtime_build_sha256": "8e10d120396fbe40ca5c2c9f74a16b0e931fa5fc0b3e43c35dd8f5c064f65a18"
+    },
+    "sections": {
+      "structural": "PASS",
+      "wave_causal": "PASS",
+      "runtime_admission": "PASS",
+      "response_runtime": "PASS",
+      "deployment": "PASS"
+    }
+  },
+  "claim_boundary": {
+    "proves": "preimplementation production projection only",
+    "does_not_prove": [
+      "future service survival",
+      "R8B correctness",
+      "scientific result",
+      "deployment safety"
+    ]
+  }
+}

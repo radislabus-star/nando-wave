@@ -1,0 +1,286 @@
+{
+  "schema": "nando.k2-self-formed-r8b-development-byte-contract.v1",
+  "status": "candidate_before_gate",
+  "source_commit": "bdcae5351c7de75f325b0ebe752804066823cc38",
+  "canonical_serializer": "uncertainty_bytes_v1",
+  "canonical_decoder": "uncertainty_decode_v1",
+  "root_function": "uncertainty_root_v1",
+  "json_object_field_order": "Rust struct declaration order",
+  "option_encoding": "JSON null or value; fields are never omitted",
+  "enum_encoding": "serde rename_all snake_case",
+  "integer_encoding": "JSON base-10 number with the exact Rust integer type declared below",
+  "kind": {
+    "rust_type": "K2UncertaintyDevelopmentRehearsalStoredArtifactKindV1",
+    "variants_in_order": [
+      "PublicBatch",
+      "PublicDenominator",
+      "ResolverTable",
+      "FinalTruth"
+    ],
+    "canonical_values": [
+      "public_batch",
+      "public_denominator",
+      "resolver_table",
+      "final_truth"
+    ]
+  },
+  "types": [
+    {
+      "rust_type": "K2UncertaintyDevelopmentRehearsalStoredArtifactV1",
+      "schema_literal": "nando.k2-self-formed-development-rehearsal-stored-artifact.v1",
+      "deny_unknown_fields": true,
+      "field_order": [
+        "schema",
+        "mode",
+        "kind",
+        "case_id_sha256",
+        "private_case_ordinal",
+        "relative_path",
+        "unix_mode",
+        "byte_len",
+        "content_sha256",
+        "semantic_root_sha256",
+        "authority",
+        "artifact_root_sha256"
+      ],
+      "field_types": {
+        "schema": "String",
+        "mode": "K2UncertaintyConfirmAttemptModeV1",
+        "kind": "K2UncertaintyDevelopmentRehearsalStoredArtifactKindV1",
+        "case_id_sha256": "Option<String>",
+        "private_case_ordinal": "Option<u64>",
+        "relative_path": "String",
+        "unix_mode": "u32",
+        "byte_len": "u64",
+        "content_sha256": "String",
+        "semantic_root_sha256": "String",
+        "authority": "K2CompositionAuthorityBoundaryV1",
+        "artifact_root_sha256": "String"
+      },
+      "root_field": "artifact_root_sha256",
+      "root_tuple": {
+        "tuple": [
+          { "literal": "nando.k2-self-formed-development-rehearsal-stored-artifact.v1" },
+          { "field": "mode" },
+          { "field": "kind" },
+          { "field": "case_id_sha256" },
+          { "field": "private_case_ordinal" },
+          { "field": "relative_path" },
+          { "field": "unix_mode" },
+          { "field": "byte_len" },
+          { "field": "content_sha256" },
+          { "field": "semantic_root_sha256" },
+          { "field": "authority" }
+        ]
+      }
+    },
+    {
+      "rust_type": "K2UncertaintyDevelopmentRehearsalSplitReceiptV1",
+      "schema_literal": "nando.k2-self-formed-development-rehearsal-split-receipt.v1",
+      "deny_unknown_fields": true,
+      "field_order": [
+        "schema",
+        "mode",
+        "attempt_root_sha256",
+        "owner_request_root_sha256",
+        "owner_executable_sha256",
+        "generator_executable_sha256",
+        "generator_request_root_sha256",
+        "generator_response_root_sha256",
+        "pipe_receipt",
+        "pipe_receipt_root_sha256",
+        "experiment_id_sha256",
+        "development_seed_commitment_sha256",
+        "public_batch_root_sha256",
+        "private_batch_root_sha256",
+        "public_denominator_root_sha256",
+        "artifacts",
+        "private_reconstruction_root_sha256",
+        "authority",
+        "split_receipt_root_sha256"
+      ],
+      "field_types": {
+        "schema": "String",
+        "mode": "K2UncertaintyConfirmAttemptModeV1",
+        "attempt_root_sha256": "String",
+        "owner_request_root_sha256": "String",
+        "owner_executable_sha256": "String",
+        "generator_executable_sha256": "String",
+        "generator_request_root_sha256": "String",
+        "generator_response_root_sha256": "String",
+        "pipe_receipt": "K2UncertaintyConfirmPipeReceiptV1",
+        "pipe_receipt_root_sha256": "String",
+        "experiment_id_sha256": "String",
+        "development_seed_commitment_sha256": "String",
+        "public_batch_root_sha256": "String",
+        "private_batch_root_sha256": "String",
+        "public_denominator_root_sha256": "String",
+        "artifacts": "Vec<K2UncertaintyDevelopmentRehearsalStoredArtifactV1>",
+        "private_reconstruction_root_sha256": "String",
+        "authority": "K2CompositionAuthorityBoundaryV1",
+        "split_receipt_root_sha256": "String"
+      },
+      "root_field": "split_receipt_root_sha256",
+      "root_tuple": {
+        "tuple": [
+          { "literal": "nando.k2-self-formed-development-rehearsal-split-receipt.v1" },
+          {
+            "tuple": [
+              { "field": "mode" },
+              { "field": "attempt_root_sha256" },
+              { "field": "owner_request_root_sha256" },
+              { "field": "owner_executable_sha256" },
+              { "field": "generator_executable_sha256" },
+              { "field": "generator_request_root_sha256" },
+              { "field": "generator_response_root_sha256" },
+              { "field": "pipe_receipt" }
+            ]
+          },
+          {
+            "tuple": [
+              { "field": "pipe_receipt_root_sha256" },
+              { "field": "experiment_id_sha256" },
+              { "field": "development_seed_commitment_sha256" },
+              { "field": "public_batch_root_sha256" },
+              { "field": "private_batch_root_sha256" },
+              { "field": "public_denominator_root_sha256" },
+              { "field": "artifacts" },
+              { "field": "private_reconstruction_root_sha256" }
+            ]
+          },
+          { "field": "authority" }
+        ]
+      }
+    },
+    {
+      "rust_type": "K2UncertaintyDevelopmentRehearsalOwnerReceiptV1",
+      "schema_literal": "nando.k2-self-formed-development-rehearsal-owner-receipt.v1",
+      "deny_unknown_fields": true,
+      "field_order": [
+        "schema",
+        "mode",
+        "owner_request_root_sha256",
+        "attempt_root_sha256",
+        "owner_executable_sha256",
+        "generator_executable_sha256",
+        "generator_request_root_sha256",
+        "generator_response_root_sha256",
+        "public_batch_root_sha256",
+        "private_batch_root_sha256",
+        "split_receipt_root_sha256",
+        "pipe_receipt_root_sha256",
+        "cases_generated_event_root_sha256",
+        "generator_dispatch_count",
+        "nonce_commitment_sha256",
+        "authorization_receipt_root_sha256",
+        "authorization_slot_claim_root_sha256",
+        "sealed_attempts",
+        "authority",
+        "receipt_root_sha256"
+      ],
+      "field_types": {
+        "schema": "String",
+        "mode": "K2UncertaintyConfirmAttemptModeV1",
+        "owner_request_root_sha256": "String",
+        "attempt_root_sha256": "String",
+        "owner_executable_sha256": "String",
+        "generator_executable_sha256": "String",
+        "generator_request_root_sha256": "String",
+        "generator_response_root_sha256": "String",
+        "public_batch_root_sha256": "String",
+        "private_batch_root_sha256": "String",
+        "split_receipt_root_sha256": "String",
+        "pipe_receipt_root_sha256": "String",
+        "cases_generated_event_root_sha256": "String",
+        "generator_dispatch_count": "u64",
+        "nonce_commitment_sha256": "Option<String>",
+        "authorization_receipt_root_sha256": "Option<String>",
+        "authorization_slot_claim_root_sha256": "Option<String>",
+        "sealed_attempts": "u64",
+        "authority": "K2CompositionAuthorityBoundaryV1",
+        "receipt_root_sha256": "String"
+      },
+      "root_field": "receipt_root_sha256",
+      "root_tuple": {
+        "tuple": [
+          { "literal": "nando.k2-self-formed-development-rehearsal-owner-receipt.v1" },
+          {
+            "tuple": [
+              { "field": "mode" },
+              { "field": "owner_request_root_sha256" },
+              { "field": "attempt_root_sha256" },
+              { "field": "owner_executable_sha256" },
+              { "field": "generator_executable_sha256" },
+              { "field": "generator_request_root_sha256" },
+              { "field": "generator_response_root_sha256" },
+              { "field": "public_batch_root_sha256" }
+            ]
+          },
+          {
+            "tuple": [
+              { "field": "private_batch_root_sha256" },
+              { "field": "split_receipt_root_sha256" },
+              { "field": "pipe_receipt_root_sha256" },
+              { "field": "cases_generated_event_root_sha256" },
+              { "field": "generator_dispatch_count" },
+              { "field": "nonce_commitment_sha256" },
+              { "field": "authorization_receipt_root_sha256" },
+              { "field": "authorization_slot_claim_root_sha256" }
+            ]
+          },
+          { "field": "sealed_attempts" },
+          { "field": "authority" }
+        ]
+      }
+    }
+  ],
+  "derived_roots": [
+    {
+      "name": "private_reconstruction_root_sha256",
+      "derived_value_types": {
+        "ordered_private_case_roots_sha256_for_ordinals_0_through_15": "Vec<String>",
+        "reconstructed_private_batch_root_sha256": "String",
+        "reconstructed_generator_response_root_sha256": "String",
+        "canonical_generator_response_byte_len": "u64",
+        "canonical_generator_response_bytes_sha256": "String"
+      },
+      "root_tuple": {
+        "tuple": [
+          { "literal": "nando.k2-self-formed-development-rehearsal-private-reconstruction.v1" },
+          { "derived": "ordered_private_case_roots_sha256_for_ordinals_0_through_15" },
+          { "derived": "reconstructed_private_batch_root_sha256" },
+          { "derived": "reconstructed_generator_response_root_sha256" },
+          { "derived": "canonical_generator_response_byte_len" },
+          { "derived": "canonical_generator_response_bytes_sha256" }
+        ]
+      }
+    }
+  ],
+  "fixed_invariants": {
+    "mode": "development_rehearsal",
+    "authority": "denied_authority_v1",
+    "artifact_count": 34,
+    "private_case_ordinals": "exactly 0 through 15 once for each private kind",
+    "artifact_sort_key": [
+      "kind declaration order",
+      "case_id_sha256 option",
+      "private_case_ordinal option",
+      "relative_path",
+      "artifact_root_sha256"
+    ],
+    "nonce_commitment_sha256": null,
+    "authorization_receipt_root_sha256": null,
+    "authorization_slot_claim_root_sha256": null,
+    "generator_dispatch_count": 1,
+    "sealed_attempts": 0
+  },
+  "known_answer_vectors": {
+    "probe_source_sha256": "5ddc196695ff1d3085f91c0ae72b37e7eb3ff054b22cb1e538aae3b04c98ff6d",
+    "manifest_path": "preimplementation-development-byte-vectors/development-byte-known-answer.manifest.json",
+    "manifest_sha256": "0e2ddc1b0a835d0ce98226e62d0ffc88d5636010d9b44b728a65a40afca3bebf",
+    "sha256sums_sha256": "19b9efe0a4fea2d77540ce992a633987c142e8c70d4117d2794f40d53be8e8e7",
+    "private_reconstruction_root_sha256": "6f4f865654612db327dcad1503790e151e881e8d888abc2a5e16df0545bad8ef",
+    "split_receipt_root_sha256": "12199a9d2bdbe3172b17e571bbd056f45723e23c3765564da59794eb804c67e5",
+    "owner_receipt_root_sha256": "0b413483f55c213604cca3bac9821fea79d0067692e4abb0b89dd1e193c6f4c3"
+  }
+}

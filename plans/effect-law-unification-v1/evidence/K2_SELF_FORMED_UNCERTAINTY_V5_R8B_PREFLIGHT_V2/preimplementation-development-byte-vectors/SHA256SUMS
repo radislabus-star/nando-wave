@@ -1,0 +1,4 @@
+0e2ddc1b0a835d0ce98226e62d0ffc88d5636010d9b44b728a65a40afca3bebf  ./development-byte-known-answer.manifest.json
+a7eff1b2e3c599e8877b24d76b6790b199009b8a28decfef9e2af6d4aca7aa4f  ./development-owner-receipt.vector.json
+2fadf4444c9fefbd0cab36191b2be2e216ce88dd1d10f57394cd33a29cb76930  ./development-split-receipt.vector.json
+5e9538235b1a036a4dd150cfb08f3c912df4b384ae484ddb2da044f31357093a  ./development-stored-artifacts.vector.json

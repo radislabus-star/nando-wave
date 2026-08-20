@@ -1,0 +1,332 @@
+{
+  "schema": "nando.k2-self-formed-r8b-implementation-inventory.v1",
+  "status": "candidate_before_implementation_preflight",
+  "source_commit": "bdcae5351c7de75f325b0ebe752804066823cc38",
+  "source_tree": "ad9fb66482f28575d74a6c25c408f0d7876b366a",
+  "scope": "DevelopmentRehearsal owner, split, recovery and non-sealed R8B harness only",
+  "modified_files": [
+    {
+      "path": "Cargo.lock",
+      "owner": "workspace dependency lock",
+      "change": "add the already-resolved libc package as a direct nando-operator-learning dependency edge only"
+    },
+    {
+      "path": "crates/nando-operator-learning/Cargo.toml",
+      "owner": "crate dependency manifest",
+      "change": "add libc for O_NOFOLLOW; no feature or version-family change"
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "owner": "module router",
+      "change": "declare and export the exact new Development and R8B modules"
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "owner": "shared request-envelope process router and unchanged Confirm owner",
+      "change": "reject Development in the Confirm API, dispatch the process envelope to one mode-specific API, and preserve concrete stdout schemas"
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7h_v1.rs",
+      "owner": "successor compatibility regression",
+      "change": "replace the obsolete current-tree Development no-split assertion with an explicitly named R7H-invariant compatibility test; retain frozen historical R7H evidence separately"
+    }
+  ],
+  "new_files": [
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/immutable_publication.rs",
+      "owner": "narrow Linux filesystem primitive",
+      "responsibility": "bounded O_NOFOLLOW regular-file reads, no-clobber temp publication, fsync, hard-link publication and injected boundary faults",
+      "line_budget": 500
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_model.rs",
+      "owner": "Development canonical byte model",
+      "responsibility": "the four frozen Development types, constructors, validators and exact known-answer root tuples",
+      "line_budget": 700
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_artifacts.rs",
+      "owner": "Development split persistence and validation",
+      "responsibility": "34 payload descriptors, exact reconstruction, split publication, full owner loader and metadata-only loader",
+      "line_budget": 900
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_owner.rs",
+      "owner": "single Development owner",
+      "responsibility": "mode check, live-owner lock, one dispatch, split validation, durable journal projection, owner receipt persistence and byte-identical recovery",
+      "line_budget": 900
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_tests.rs",
+      "owner": "module-private persistence proof",
+      "responsibility": "known-answer roots, no-follow and no-clobber controls, 72 publication boundaries and seven restart states",
+      "line_budget": 1200
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "owner": "R8B canonical requests and receipts",
+      "responsibility": "closed aggregate authorization and publication schemas with denied authority",
+      "line_budget": 700
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_authorizer.rs",
+      "owner": "R8B aggregate authorizer",
+      "responsibility": "validate the complete conjunct set only; no process execution, private reads or filesystem mutation",
+      "line_budget": 500
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_publisher.rs",
+      "owner": "R8B evidence publisher",
+      "responsibility": "publish one already-authorized aggregate atomically without reinterpreting evidence",
+      "line_budget": 500
+    },
+    {
+      "path": "crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-authorizer.rs",
+      "owner": "thin process entrypoint",
+      "responsibility": "stdin to aggregate authorizer to concrete stdout",
+      "line_budget": 12
+    },
+    {
+      "path": "crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-evidence-publisher.rs",
+      "owner": "thin process entrypoint",
+      "responsibility": "stdin to evidence publisher to concrete stdout",
+      "line_budget": 12
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/mod.rs",
+      "owner": "R8B test-only orchestration support",
+      "responsibility": "shared process launcher, executable manifest, test lab and immutable evidence helpers; no decision authority",
+      "line_budget": 1000
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "owner": "linked runner test binary",
+      "responsibility": "one complete 21-identity DevelopmentRehearsal process route and separate exact denominators",
+      "line_budget": 1200
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_mode_matrix_v1.rs",
+      "owner": "cross-mode and legacy negative proof",
+      "responsibility": "twenty named X01-X20 failures plus positive Confirm and Development parity",
+      "line_budget": 1000
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_authority_v1.rs",
+      "owner": "R8B authority and publication proof",
+      "responsibility": "authorizer completeness, publisher identity, atomic aggregate faults and zero-authority census",
+      "line_budget": 1000
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_cleanup_v1.rs",
+      "owner": "R8B actual-tree cleanup proof",
+      "responsibility": "complete successful and failed path classification, private deletion, retained evidence, unclassified-residue rejection and cleanup interruption",
+      "line_budget": 900
+    }
+  ],
+  "preserved_exact_files": [
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner_model.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifact_model.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup_verifier.rs",
+    "crates/nando-operator-learning/src/bin/nando-k2-self-formed-confirm-owner.rs",
+    "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+    "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+    "crates/nando-transition-serving/src/lib.rs",
+    "crates/nando-gateway-control/src/live_dashboard.rs",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_UNLOCK_2026-08-20.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_RESULT_2026-08-20.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/development-byte-contract.v1.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/SHA256SUMS",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vectors/SHA256SUMS",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/production-baseline.preimplementation.v1.json"
+  ],
+  "durable_mutations": [
+    {
+      "id": "M01",
+      "owner": "Development owner",
+      "object": "attempt directory and initial journal",
+      "cardinality": "1 attempt directory and 1 journal",
+      "production": false
+    },
+    {
+      "id": "M02",
+      "owner": "Development owner",
+      "object": "journal event replacement",
+      "cardinality": "one append-only logical event per durable transition, atomically replacing the journal projection",
+      "production": false
+    },
+    {
+      "id": "M03",
+      "owner": "Development split publisher",
+      "object": "Development immutable payloads and split",
+      "cardinality": "34 payloads and 1 split receipt",
+      "production": false
+    },
+    {
+      "id": "M04",
+      "owner": "Development owner",
+      "object": "Development owner receipt",
+      "cardinality": "1",
+      "production": false
+    },
+    {
+      "id": "M05",
+      "owner": "linked runner test",
+      "object": "test-owned process logs, child receipts and resource census",
+      "cardinality": "exact observed denominators, never reused as child execution",
+      "production": false
+    },
+    {
+      "id": "M06",
+      "owner": "existing cleanup owner",
+      "object": "classified Development private payload and sandbox deletion",
+      "cardinality": "only DeleteAfterTerminalAndObserverFsync registry entries",
+      "production": false
+    },
+    {
+      "id": "M07",
+      "owner": "R8B evidence publisher",
+      "object": "R8B_FROZEN aggregate",
+      "cardinality": "0 or 1",
+      "production": false
+    }
+  ],
+  "failure_transitions": [
+    {
+      "id": "F01",
+      "boundary": "attempt initialization before ArtifactsFrozen",
+      "result": "indeterminate, zero generator dispatch",
+      "cleanup": "retain complete path census; remove no unexplained bytes",
+      "test_id": "r8b-process-restart-p01"
+    },
+    {
+      "id": "F02",
+      "boundary": "ArtifactsFrozen before GeneratorDispatched",
+      "result": "restart may perform exactly one first dispatch",
+      "cleanup": "retain journal; process death releases the advisory lock on the lab-root directory and creates no lock artifact",
+      "test_id": "r8b-process-restart-p02"
+    },
+    {
+      "id": "F03",
+      "boundary": "GeneratorDispatched without a complete split",
+      "result": "indeterminate and no redispatch",
+      "cleanup": "retain partial publication and full failure census",
+      "test_id": "r8b-process-restart-p03"
+    },
+    {
+      "id": "F04",
+      "boundary": "complete split before CasesGenerated",
+      "result": "exact split reconstruction then CasesGenerated and owner recovery",
+      "cleanup": "retain split and journal",
+      "test_id": "r8b-process-restart-p04"
+    },
+    {
+      "id": "F05",
+      "boundary": "CasesGenerated before owner receipt",
+      "result": "byte-identical owner receipt recovery",
+      "cleanup": "retain split and journal",
+      "test_id": "r8b-process-restart-p05"
+    },
+    {
+      "id": "F06",
+      "boundary": "owner receipt durable before stdout",
+      "result": "byte-identical replay without dispatch or mutation",
+      "cleanup": "retain all durable evidence",
+      "test_id": "r8b-process-restart-p06"
+    },
+    {
+      "id": "F07",
+      "boundary": "second live owner while the first holds the attempt lock",
+      "result": "busy with zero contender mutation",
+      "cleanup": "first owner remains authoritative",
+      "test_id": "r8b-process-restart-p07"
+    },
+    {
+      "id": "F08",
+      "boundary": "before and after publication of each of 36 immutable Development objects",
+      "result": "72 exact fail-closed cases; final object is either absent or complete",
+      "cleanup": "remove only known temp; never overwrite a final object",
+      "test_id": "r8b-development-publication-72"
+    },
+    {
+      "id": "F09",
+      "boundary": "linked route child or resource measurement failure",
+      "result": "R8B_FAILED and no aggregate authorization",
+      "cleanup": "retain individual evidence and complete path census",
+      "test_id": "r8b-linked-failure-census"
+    },
+    {
+      "id": "F10",
+      "boundary": "classified cleanup interruption",
+      "result": "operationally incomplete and no R8B_FROZEN",
+      "cleanup": "retain terminal and observer evidence; resume deletion only from the exact registry",
+      "test_id": "r8b-cleanup-interruption"
+    },
+    {
+      "id": "F11",
+      "boundary": "before or after R8B aggregate publication",
+      "result": "aggregate absent or one complete immutable R8B_FROZEN",
+      "cleanup": "remove only unpublished temp; retain all input receipts",
+      "test_id": "r8b-aggregate-publication-fault"
+    }
+  ],
+  "runtime_preservation": {
+    "baseline": "production-baseline.preimplementation.v1.json",
+    "stable": [
+      "five unit SHA-256 values",
+      "five executable SHA-256 values",
+      "five active/running states",
+      "five MainPID and NRestarts pairs",
+      "hot and cold registry revision agreement",
+      "two active authority packages",
+      "hot local accept enabled and cold local accept disabled",
+      "zero unresolved runtime revocations"
+    ],
+    "expected_to_change": [
+      "observation timestamp",
+      "ordinary request and token counters",
+      "uptime",
+      "admission expiry age"
+    ],
+    "forbidden": [
+      "service restart",
+      "unit or binary replacement",
+      "authority package mutation",
+      "production file write",
+      "dashboard change",
+      "deployment"
+    ]
+  },
+  "code_budget": {
+    "new_runtime_modules": 7,
+    "new_test_modules": 1,
+    "new_thin_binaries": 2,
+    "new_integration_test_files": 5,
+    "maximum_single_new_runtime_file_lines": 900,
+    "maximum_single_new_test_file_lines": 1200,
+    "public_existing_schema_changes": 0,
+    "preserved_confirm_canonical_bytes": true
+  },
+  "claim_boundary": {
+    "may_prove": "non-sealed R8B implementation readiness and, after execution, R8B_FROZEN",
+    "cannot_prove": [
+      "self-formed uncertainty",
+      "Natural K2",
+      "natural-traffic transfer",
+      "Wave-causal grokking",
+      "CPU savings",
+      "product value",
+      "deployment readiness"
+    ],
+    "successors_locked": [
+      "R9B",
+      "R10B",
+      "R11B"
+    ]
+  }
+}

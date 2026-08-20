@@ -1,0 +1,12 @@
+{
+  "blockers": [
+    {
+      "code": "manifest_error",
+      "field": "manifest",
+      "message": "[Errno 2] No such file or directory: '/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-20260815/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/implementation-preflight.v1.json'"
+    }
+  ],
+  "safe_to_implement": false,
+  "schema": "nanda.implementation-preflight.v1",
+  "verdict": "ERROR"
+}
