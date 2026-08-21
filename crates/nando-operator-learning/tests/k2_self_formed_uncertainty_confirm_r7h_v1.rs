@@ -12,20 +12,123 @@ use nando_operator_learning::{
     K2UncertaintyConfirmAttemptEventKindV1, K2UncertaintyConfirmAttemptJournalFaultV1,
     K2UncertaintyConfirmAttemptJournalV1, K2UncertaintyConfirmAttemptPhaseV1,
     K2UncertaintyConfirmGeneratorRequestV1, K2UncertaintyConfirmGeneratorResponseV1,
-    K2UncertaintyConfirmOwnerReceiptV1, K2UncertaintyConfirmOwnerRequestV1,
-    K2UncertaintyConfirmPrivateSplitReceiptV1, K2UncertaintyConfirmStoredArtifactKindV1,
-    K2UncertaintyGeneratorRequestV1, composition_sha256_file_v1,
+    K2UncertaintyConfirmOwnerRequestV1, K2UncertaintyConfirmPrivateSplitReceiptV1,
+    K2UncertaintyConfirmStoredArtifactKindV1, K2UncertaintyDevelopmentRehearsalOwnerReceiptV1,
+    K2UncertaintyGeneratorRequestV1, K2UncertaintyImmutablePublicationFaultV1,
+    K2UncertaintyR8BEvidenceKindV2, composition_sha256_bytes_v1, composition_sha256_file_v1,
     dispatch_self_formed_generator_once_v1, execute_self_formed_confirm_owner_v1,
     generate_self_formed_confirm_batch_v1, generate_self_formed_development_batch_v1,
-    load_confirm_generator_split_receipt_v1, load_retained_confirm_nonce_receipt_v1,
-    persist_retained_confirm_nonce_v1, publish_confirm_generator_split_v1,
-    publish_confirm_generator_split_with_fault_v1, uncertainty_decode_v1,
+    load_confirm_generator_split_receipt_v1, load_development_rehearsal_owner_metadata_v1,
+    load_retained_confirm_nonce_receipt_v1, persist_retained_confirm_nonce_v1,
+    publish_confirm_generator_split_v1, publish_confirm_generator_split_with_fault_v1,
+    publish_immutable_file_v1, read_immutable_file_v1, recover_linked_publication_temp_v1,
+    uncertainty_decode_v1,
 };
 
 #[path = "k2_self_formed_uncertainty_confirm_r7h_support/mod.rs"]
 mod support;
 
+#[rustfmt::skip]
+#[path = "k2_self_formed_uncertainty_confirm_r8b_support/mod.rs"]
+mod r8b_support;
+
 use support::*;
+
+const S01_SELECTOR_V2: &str = "r8b_v7_s01_core_aggregate";
+
+#[test]
+#[ignore = "requires explicit R8B V7 execution authorization"]
+fn r8b_v7_s01_core_aggregate() {
+    r8b_support::begin_suite_request_from_stdin_v2("S01_CRATE_UNIT", S01_SELECTOR_V2);
+    let evidence = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2");
+    let confirm = evidence.join("preimplementation-confirm-fixtures");
+    let confirm_rows = verify_sha256s_v2(&confirm);
+    let vectors = evidence.join("preimplementation-development-byte-vectors");
+    let vector_rows = verify_sha256s_v2(&vectors);
+    assert_eq!(vector_rows.len(), 3);
+
+    for publication_id in 0..36_u64 {
+        let relative = format!("object-{publication_id:02}.json");
+        let bytes = format!("{{\"publication_id\":{publication_id}}}").into_bytes();
+        let before = r8b_support::TestEnvironmentV1::new("s01-before");
+        assert!(
+            publish_immutable_file_v1(
+                &before.root,
+                &relative,
+                &bytes,
+                0o400,
+                publication_id,
+                K2UncertaintyImmutablePublicationFaultV1::BeforePublish(publication_id),
+            )
+            .is_err()
+        );
+        let after = r8b_support::TestEnvironmentV1::new("s01-after");
+        assert!(
+            publish_immutable_file_v1(
+                &after.root,
+                &relative,
+                &bytes,
+                0o400,
+                publication_id,
+                K2UncertaintyImmutablePublicationFaultV1::AfterPublish(publication_id),
+            )
+            .is_err()
+        );
+        recover_linked_publication_temp_v1(&after.root, &relative, &bytes, 0o400, publication_id)
+            .expect("recover S01 after-publish fault");
+        assert_eq!(
+            read_immutable_file_v1(&after.root, &relative, 0o400, bytes.len())
+                .expect("reopen S01 immutable object")
+                .bytes,
+            bytes
+        );
+    }
+    r8b_support::publish_suite_measurements_v2(vec![
+        r8b_support::SuiteMeasurementV2 {
+            relative_path: "suites/s01/confirm-canonical.json",
+            kind: K2UncertaintyR8BEvidenceKindV2::ConfirmCanonicalBytes,
+            source_roots_sha256: vec![
+                nando_operator_learning::composition_root_v1(&confirm_rows)
+                    .expect("confirm rows root"),
+            ],
+            observed: confirm_rows.len() as u64,
+            metrics: std::collections::BTreeMap::new(),
+        },
+        r8b_support::SuiteMeasurementV2 {
+            relative_path: "suites/s01/development-known-answers.json",
+            kind: K2UncertaintyR8BEvidenceKindV2::DevelopmentKnownAnswers,
+            source_roots_sha256: vector_rows.iter().map(|row| row.1.clone()).collect(),
+            observed: 3,
+            metrics: std::collections::BTreeMap::new(),
+        },
+        r8b_support::SuiteMeasurementV2 {
+            relative_path: "suites/s01/immutable-publication.json",
+            kind: K2UncertaintyR8BEvidenceKindV2::ImmutablePublication,
+            source_roots_sha256: vec![
+                nando_operator_learning::composition_root_v1(&("s01-immutable", 72_u64))
+                    .expect("immutable root"),
+            ],
+            observed: 72,
+            metrics: std::collections::BTreeMap::new(),
+        },
+    ]);
+}
+
+fn verify_sha256s_v2(root: &std::path::Path) -> Vec<(String, String)> {
+    fs::read_to_string(root.join("SHA256SUMS"))
+        .expect("read SHA256SUMS")
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let (expected, name) = line.split_once("  ").expect("SHA256SUMS row");
+            let bytes = fs::read(root.join(name)).expect("read frozen vector");
+            assert_eq!(composition_sha256_bytes_v1(&bytes), expected);
+            (name.to_owned(), expected.to_owned())
+        })
+        .collect()
+}
 
 #[test]
 fn r7h_slot_claim_is_global_across_receipts_owners_and_restart() {
@@ -570,7 +673,7 @@ fn r7h_confirm_pipe_sends_once_without_forbidden_nonce_channels() {
 }
 
 #[test]
-fn r7h_development_rehearsal_owner_uses_same_pipe_without_slot_or_nonce() {
+fn r7h_invariant_compatibility_preserves_pipe_slot_nonce_and_confirm_bytes() {
     let environment = TestEnvironment::new("owner-process");
     let lab_root = environment.root.join("lab");
     fs::create_dir(&lab_root).expect("create owner lab root");
@@ -626,13 +729,21 @@ fn r7h_development_rehearsal_owner_uses_same_pipe_without_slot_or_nonce() {
         "owner failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let receipt: K2UncertaintyConfirmOwnerReceiptV1 =
+    let receipt: K2UncertaintyDevelopmentRehearsalOwnerReceiptV1 =
         uncertainty_decode_v1(&output.stdout).expect("owner receipt");
     receipt.validate().expect("valid owner receipt");
     assert_eq!(receipt.sealed_attempts, 0);
     assert_eq!(receipt.generator_dispatch_count, 1);
     assert!(receipt.nonce_commitment_sha256.is_none());
-    assert!(receipt.split_receipt_root_sha256.is_none());
+    assert!(!receipt.split_receipt_root_sha256.is_empty());
+    let metadata =
+        load_development_rehearsal_owner_metadata_v1(&lab_root.join("attempt"), &request)
+            .expect("Development metadata");
+    assert_eq!(
+        metadata.split.split_receipt_root_sha256,
+        receipt.split_receipt_root_sha256
+    );
+    assert_eq!(metadata.split.artifacts.len(), 34);
     let reopened = K2UncertaintyConfirmAttemptJournalV1::open_existing(&lab_root.join("attempt"))
         .expect("reopen owner journal");
     assert_eq!(reopened.projection().generator_dispatch_count, 1);
@@ -655,7 +766,12 @@ fn r7h_development_rehearsal_owner_uses_same_pipe_without_slot_or_nonce() {
         )
         .expect("write replayed owner request");
     let replay_output = replay.wait_with_output().expect("replayed owner output");
-    assert!(!replay_output.status.success());
+    assert!(
+        replay_output.status.success(),
+        "owner replay failed: {}",
+        String::from_utf8_lossy(&replay_output.stderr)
+    );
+    assert_eq!(replay_output.stdout, output.stdout);
     let replayed = K2UncertaintyConfirmAttemptJournalV1::open_existing(&lab_root.join("attempt"))
         .expect("reopen journal after replay attempt");
     assert_eq!(replayed.projection().generator_dispatch_count, 1);

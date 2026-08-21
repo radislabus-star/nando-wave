@@ -33,6 +33,8 @@ pub enum K2UncertaintyConfirmGuestExecutableV1 {
     Worker,
     Observer,
     FinalVerifier,
+    Oracle,
+    R8BAggregateAuthorizer,
 }
 
 impl K2UncertaintyConfirmGuestExecutableV1 {
@@ -50,6 +52,8 @@ impl K2UncertaintyConfirmGuestExecutableV1 {
             Self::Worker => "/nando/bin/worker",
             Self::Observer => "/nando/bin/observer",
             Self::FinalVerifier => "/nando/bin/final-verifier",
+            Self::Oracle => "/nando/bin/oracle",
+            Self::R8BAggregateAuthorizer => "/nando/bin/r8b-authorizer",
         }
     }
 }
@@ -62,6 +66,9 @@ pub enum K2UncertaintyConfirmMountTargetV1 {
     Source,
     Evidence,
     FinalTruth,
+    OracleEvidence,
+    OraclePrivateTruth,
+    AggregateEvidence,
 }
 
 impl K2UncertaintyConfirmMountTargetV1 {
@@ -73,13 +80,21 @@ impl K2UncertaintyConfirmMountTargetV1 {
             Self::Source => "/source",
             Self::Evidence => "/evidence",
             Self::FinalTruth => "/private/final-truth.json",
+            Self::OracleEvidence => "/oracle",
+            Self::OraclePrivateTruth => "/oracle/private-truth.json",
+            Self::AggregateEvidence => "/evidence",
         }
     }
 
     const fn expects_directory(self) -> bool {
         matches!(
             self,
-            Self::Output | Self::Workspace | Self::Source | Self::Evidence
+            Self::Output
+                | Self::Workspace
+                | Self::Source
+                | Self::Evidence
+                | Self::OracleEvidence
+                | Self::AggregateEvidence
         )
     }
 }
@@ -127,6 +142,26 @@ pub fn run_self_formed_r7k_cleanup_sandbox_v1(
     input: &[u8],
     cpu_seconds: u64,
 ) -> K2CompositionResultV1<Vec<u8>> {
+    successful_stdout_v1(run_self_formed_r7k_cleanup_sandbox_measured_v1(
+        role,
+        executable,
+        expected_executable_sha256,
+        governed_root,
+        control_root,
+        input,
+        cpu_seconds,
+    )?)
+}
+
+pub fn run_self_formed_r7k_cleanup_sandbox_measured_v1(
+    role: K2UncertaintyR7kCleanupGuestV1,
+    executable: &Path,
+    expected_executable_sha256: &str,
+    governed_root: Option<&Path>,
+    control_root: &Path,
+    input: &[u8],
+    cpu_seconds: u64,
+) -> K2CompositionResultV1<K2UncertaintySandboxProcessOutcomeV1> {
     require_composition_root_v1(expected_executable_sha256)?;
     if input.len() > K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 || !(1..=600).contains(&cpu_seconds) {
         return Err(K2CompositionErrorV1::Invalid(
@@ -207,7 +242,7 @@ pub fn run_self_formed_r7k_cleanup_sandbox_v1(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    execute_child_v1(command, input, Duration::from_secs(cpu_seconds + 10))
+    execute_child_measured_v1(command, input, Duration::from_secs(cpu_seconds + 10))
 }
 
 fn validate_r7k_cleanup_root_v1(root: &Path) -> K2CompositionResultV1<()> {
@@ -321,6 +356,24 @@ pub fn run_self_formed_confirm_sandbox_v1(
     input: &[u8],
     cpu_seconds: u64,
 ) -> K2CompositionResultV1<Vec<u8>> {
+    successful_stdout_v1(run_self_formed_confirm_sandbox_measured_v1(
+        role,
+        executable,
+        expected_executable_sha256,
+        mounts,
+        input,
+        cpu_seconds,
+    )?)
+}
+
+pub fn run_self_formed_confirm_sandbox_measured_v1(
+    role: K2UncertaintyConfirmGuestExecutableV1,
+    executable: &Path,
+    expected_executable_sha256: &str,
+    mounts: &[K2UncertaintyConfirmDataMountV1<'_>],
+    input: &[u8],
+    cpu_seconds: u64,
+) -> K2CompositionResultV1<K2UncertaintySandboxProcessOutcomeV1> {
     require_composition_root_v1(expected_executable_sha256)?;
     if input.len() > K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 || !(1..=600).contains(&cpu_seconds) {
         return Err(K2CompositionErrorV1::Invalid(
@@ -373,6 +426,15 @@ pub fn run_self_formed_confirm_sandbox_v1(
             .arg(mount.host_path)
             .arg(mount.target.path());
     }
+    match role {
+        K2UncertaintyConfirmGuestExecutableV1::Oracle => {
+            command.args(["--chdir", "/oracle"]);
+        }
+        K2UncertaintyConfirmGuestExecutableV1::R8BAggregateAuthorizer => {
+            command.args(["--chdir", "/evidence"]);
+        }
+        _ => {}
+    }
     command
         .args(["--setenv", "HOME", "/tmp", "--setenv", "LANG", "C"])
         .args(["--", PRLIMIT_PATH_V1])
@@ -387,7 +449,7 @@ pub fn run_self_formed_confirm_sandbox_v1(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    execute_child_v1(command, input, Duration::from_secs(cpu_seconds + 10))
+    execute_child_measured_v1(command, input, Duration::from_secs(cpu_seconds + 10))
 }
 
 fn validate_executable_v1(path: &Path, expected_sha256: &str) -> K2CompositionResultV1<()> {
@@ -411,9 +473,22 @@ fn validate_data_mounts_v1(
 ) -> K2CompositionResultV1<()> {
     let mut targets = std::collections::BTreeSet::new();
     for mount in mounts {
-        let metadata = fs::symlink_metadata(mount.host_path)
+        let link_metadata = fs::symlink_metadata(mount.host_path)
             .map_err(|_| K2CompositionErrorV1::Io("stat_self_formed_confirm_sandbox_mount"))?;
-        if metadata.file_type().is_symlink()
+        let descriptor_overlay = matches!(
+            mount.target,
+            K2UncertaintyConfirmMountTargetV1::ResolverTable
+                | K2UncertaintyConfirmMountTargetV1::FinalTruth
+                | K2UncertaintyConfirmMountTargetV1::OraclePrivateTruth
+        ) && inherited_descriptor_path_v1(mount.host_path);
+        let metadata = if descriptor_overlay {
+            fs::metadata(mount.host_path).map_err(|_| {
+                K2CompositionErrorV1::Io("stat_self_formed_confirm_sandbox_descriptor_mount")
+            })?
+        } else {
+            link_metadata.clone()
+        };
+        if (link_metadata.file_type().is_symlink() && !descriptor_overlay)
             || !mount.host_path.is_absolute()
             || metadata.is_dir() != mount.target.expects_directory()
             || !targets.insert(mount.target.path())
@@ -448,6 +523,13 @@ fn validate_data_mounts_v1(
             (K2UncertaintyConfirmMountTargetV1::FinalTruth, false),
             (K2UncertaintyConfirmMountTargetV1::Evidence, false),
         ],
+        K2UncertaintyConfirmGuestExecutableV1::Oracle => &[
+            (K2UncertaintyConfirmMountTargetV1::OracleEvidence, false),
+            (K2UncertaintyConfirmMountTargetV1::OraclePrivateTruth, false),
+        ],
+        K2UncertaintyConfirmGuestExecutableV1::R8BAggregateAuthorizer => {
+            &[(K2UncertaintyConfirmMountTargetV1::AggregateEvidence, false)]
+        }
         K2UncertaintyConfirmGuestExecutableV1::Learner
         | K2UncertaintyConfirmGuestExecutableV1::Selector
         | K2UncertaintyConfirmGuestExecutableV1::Baseline
@@ -470,12 +552,19 @@ fn validate_data_mounts_v1(
     Ok(())
 }
 
-fn execute_child_v1(
-    command: Command,
-    input: &[u8],
-    timeout: Duration,
+fn inherited_descriptor_path_v1(path: &Path) -> bool {
+    path.parent() == Some(Path::new("/proc/self/fd"))
+        && path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| {
+                !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
+            })
+}
+
+fn successful_stdout_v1(
+    outcome: K2UncertaintySandboxProcessOutcomeV1,
 ) -> K2CompositionResultV1<Vec<u8>> {
-    let outcome = execute_child_measured_v1(command, input, timeout)?;
     if !outcome.normal_exit || outcome.exit_code != 0 {
         if std::env::var_os("NANDO_K2_CONFIRM_SANDBOX_DIAGNOSTICS").is_some() {
             eprintln!(

@@ -7,6 +7,7 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+libc = "0.2"
 nando-client-evidence = { path = "../nando-client-evidence" }
 nando-core = { path = "../nando-core" }
 nando-operator-kernel = { path = "../nando-operator-kernel" }
@@ -16,6 +17,7 @@ serde_cbor = "0.11"
 serde_bytes = "0.11"
 serde_json = "1"
 sha2 = "0.10"
+rustix = "1.1.4"
 zstd = "0.13"
 
 [dev-dependencies]

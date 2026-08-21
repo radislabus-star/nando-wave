@@ -5,6 +5,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
+use std::sync::OnceLock;
 use std::sync::atomic::{Ordering, compiler_fence};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -14,12 +15,14 @@ use super::super::{
     composition_sha256_file_v1,
 };
 use super::{
-    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2UncertaintyAuthorizationSlotLedgerV1,
-    K2UncertaintyConfirmAttemptEventKindV1, K2UncertaintyConfirmAttemptJournalV1,
-    K2UncertaintyConfirmAttemptModeV1, K2UncertaintyConfirmGeneratorRequestV1,
-    K2UncertaintyConfirmGeneratorResponseV1, K2UncertaintyConfirmOwnerReceiptV1,
-    K2UncertaintyConfirmOwnerRequestV1, K2UncertaintyConfirmPipeReceiptV1,
-    K2UncertaintyGeneratorResponseV1, load_confirm_generator_split_receipt_v1,
+    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2,
+    K2UncertaintyAuthorizationSlotLedgerV1, K2UncertaintyConfirmAttemptEventKindV1,
+    K2UncertaintyConfirmAttemptJournalV1, K2UncertaintyConfirmAttemptModeV1,
+    K2UncertaintyConfirmGeneratorRequestV1, K2UncertaintyConfirmGeneratorResponseV1,
+    K2UncertaintyConfirmOwnerReceiptV1, K2UncertaintyConfirmOwnerRequestV1,
+    K2UncertaintyConfirmPipeReceiptV1, K2UncertaintyGeneratorResponseV1,
+    K2UncertaintyR8BExecutableIdentityV2, K2UncertaintyR8BLedgerWriterV2,
+    K2UncertaintyR8BProducedReceiptV2, load_confirm_generator_split_receipt_v1,
     persist_retained_confirm_nonce_v1, publish_confirm_generator_split_v1,
     retained_confirm_nonce_observed_root_v1, uncertainty_bytes_v1, uncertainty_decode_v1,
     uncertainty_root_v1,
@@ -37,6 +40,11 @@ pub fn execute_self_formed_confirm_owner_v1(
     owner_executable: &Path,
 ) -> K2CompositionResultV1<K2UncertaintyConfirmOwnerReceiptV1> {
     request.validate()?;
+    if request.descriptor.mode != K2UncertaintyConfirmAttemptModeV1::Confirm {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_confirm_owner_mode_invalid",
+        ));
+    }
     let owner_executable_sha256 = composition_sha256_file_v1(owner_executable)?;
     let generator_executable = PathBuf::from(&request.generator_executable_path);
     let generator_executable_sha256 = composition_sha256_file_v1(&generator_executable)?;
@@ -74,23 +82,13 @@ pub fn execute_self_formed_confirm_owner_v1(
         artifacts_root,
     )?;
 
-    match request.descriptor.mode {
-        K2UncertaintyConfirmAttemptModeV1::DevelopmentRehearsal => {
-            execute_development_rehearsal_v1(
-                request,
-                &generator_executable,
-                owner_executable_sha256,
-                &mut journal,
-            )
-        }
-        K2UncertaintyConfirmAttemptModeV1::Confirm => execute_confirm_v1(
-            request,
-            &attempt_root,
-            &generator_executable,
-            owner_executable_sha256,
-            &mut journal,
-        ),
-    }
+    execute_confirm_v1(
+        request,
+        &attempt_root,
+        &generator_executable,
+        owner_executable_sha256,
+        &mut journal,
+    )
 }
 
 fn project_existing_attempt_without_replay_v1(
@@ -122,67 +120,6 @@ fn project_existing_attempt_without_replay_v1(
     Err(K2CompositionErrorV1::Invalid(
         "self_formed_confirm_existing_attempt_recovered_without_replay",
     ))
-}
-
-fn execute_development_rehearsal_v1(
-    owner_request: &K2UncertaintyConfirmOwnerRequestV1,
-    generator_executable: &Path,
-    owner_executable_sha256: String,
-    journal: &mut K2UncertaintyConfirmAttemptJournalV1,
-) -> K2CompositionResultV1<K2UncertaintyConfirmOwnerReceiptV1> {
-    let generator_request = owner_request.development_generator_request.as_ref().ok_or(
-        K2CompositionErrorV1::Invalid("self_formed_development_owner_generator_request_missing"),
-    )?;
-    generator_request.validate()?;
-    let request_root = generator_request.request_root_sha256.clone();
-    let mut request_bytes = uncertainty_bytes_v1(generator_request)?;
-    let dispatch_root = dispatch_binding_root_v1(
-        &request_root,
-        &owner_request.descriptor.generator_executable_sha256,
-    )?;
-    journal.append(
-        K2UncertaintyConfirmAttemptEventKindV1::GeneratorDispatched,
-        owner_executable_sha256,
-        owner_request.request_root_sha256.clone(),
-        dispatch_root,
-    )?;
-    let (response_bytes, pipe_receipt) = dispatch_self_formed_generator_once_v1(
-        generator_executable,
-        &owner_request.descriptor.generator_executable_sha256,
-        &request_root,
-        &mut request_bytes,
-        None,
-    )?;
-    let response: K2UncertaintyGeneratorResponseV1 = uncertainty_decode_v1(&response_bytes)?;
-    response.validate()?;
-    if response.generator_request_root_sha256 != request_root
-        || response.public.experiment_id_sha256 != owner_request.descriptor.experiment_id_sha256
-    {
-        return Err(K2CompositionErrorV1::Invalid(
-            "self_formed_development_owner_response_binding_invalid",
-        ));
-    }
-    let event = journal.append(
-        K2UncertaintyConfirmAttemptEventKindV1::CasesGenerated,
-        owner_request
-            .descriptor
-            .confirm_owner_executable_sha256
-            .clone(),
-        owner_request.request_root_sha256.clone(),
-        response.response_root_sha256.clone(),
-    )?;
-    K2UncertaintyConfirmOwnerReceiptV1::seal(
-        owner_request,
-        response.response_root_sha256,
-        response.public.public_batch_root_sha256,
-        response.private.private_batch_root_sha256,
-        request_root,
-        None,
-        None,
-        pipe_receipt,
-        event.event_root_sha256,
-        journal.projection().generator_dispatch_count,
-    )
 }
 
 fn execute_confirm_v1(
@@ -297,6 +234,7 @@ pub fn dispatch_self_formed_generator_once_v1(
         ));
     }
     let request_len = request_bytes.len() as u64;
+    let stdin_sha256 = composition_sha256_bytes_v1(request_bytes);
     let mut command = generator_sandbox_command_v1(generator_executable);
     if let Some(secret) = forbidden_secret
         && let Err(error) =
@@ -305,6 +243,22 @@ pub fn dispatch_self_formed_generator_once_v1(
         wipe_bytes_v1(request_bytes);
         return Err(error);
     }
+    let ledger = generator_ledger_v2(generator_executable, expected_generator_sha256)?;
+    let started = ledger
+        .as_ref()
+        .map(|writer| {
+            writer.child_started(
+                "C02",
+                None,
+                None,
+                "M02_GENERATOR",
+                generator_executable,
+                generator_request_root_sha256.to_owned(),
+                stdin_sha256,
+                monotonic_ns_v2(),
+            )
+        })
+        .transpose()?;
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(_) => {
@@ -401,6 +355,24 @@ pub fn dispatch_self_formed_generator_once_v1(
             "self_formed_confirm_generator_failed",
         ));
     }
+    let (receipt_schema, semantic_root) =
+        typed_generator_response_v2(&response_bytes, generator_request_root_sha256)?;
+    if let (Some(writer), Some(started)) = (&ledger, &started) {
+        writer.child_finished(
+            started,
+            &response_bytes,
+            &stderr_bytes,
+            vec![K2UncertaintyR8BProducedReceiptV2 {
+                relative_path: K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2.to_owned(),
+                byte_len: response_bytes.len() as u64,
+                unix_mode: 0,
+                content_sha256: composition_sha256_bytes_v1(&response_bytes),
+                receipt_schema,
+                semantic_root_sha256: semantic_root,
+            }],
+            monotonic_ns_v2(),
+        )?;
+    }
     let receipt = K2UncertaintyConfirmPipeReceiptV1::seal(
         actual_generator_sha256,
         generator_request_root_sha256.to_owned(),
@@ -409,6 +381,64 @@ pub fn dispatch_self_formed_generator_once_v1(
         composition_sha256_bytes_v1(&response_bytes),
     )?;
     Ok((response_bytes, receipt))
+}
+
+fn generator_ledger_v2(
+    generator_executable: &Path,
+    generator_sha256: &str,
+) -> K2CompositionResultV1<Option<K2UncertaintyR8BLedgerWriterV2>> {
+    let metadata = fs::metadata(generator_executable)
+        .map_err(|_| K2CompositionErrorV1::Io("stat_self_formed_r8b_generator"))?;
+    let owner = std::env::current_exe()
+        .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_r8b_m01"))?;
+    let owner_name = owner
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    let writer_role = if owner_name == "nando-k2-self-formed-confirm-owner" {
+        "M01_DEVELOPMENT_OWNER"
+    } else if owner_name.starts_with("k2_self_formed_uncertainty_confirm_r8b_restart_v1-") {
+        "S02_RESTART"
+    } else {
+        return Ok(None);
+    };
+    K2UncertaintyR8BLedgerWriterV2::from_environment(
+        writer_role,
+        composition_sha256_file_v1(&owner)?,
+        vec![K2UncertaintyR8BExecutableIdentityV2 {
+            role: "M02_GENERATOR".to_owned(),
+            canonical_path: generator_executable.to_string_lossy().into_owned(),
+            byte_len: metadata.len(),
+            unix_mode: metadata.permissions().mode() & 0o7777,
+            sha256: generator_sha256.to_owned(),
+        }],
+    )
+}
+
+fn typed_generator_response_v2(
+    bytes: &[u8],
+    request_root: &str,
+) -> K2CompositionResultV1<(String, String)> {
+    if let Ok(value) = uncertainty_decode_v1::<K2UncertaintyConfirmGeneratorResponseV1>(bytes)
+        && value.validate().is_ok()
+        && value.generator_request_root_sha256 == request_root
+    {
+        return Ok((value.schema, value.response_root_sha256));
+    }
+    if let Ok(value) = uncertainty_decode_v1::<K2UncertaintyGeneratorResponseV1>(bytes)
+        && value.validate().is_ok()
+        && value.generator_request_root_sha256 == request_root
+    {
+        return Ok((value.schema, value.response_root_sha256));
+    }
+    Err(K2CompositionErrorV1::Invalid(
+        "self_formed_r8b_generator_response_invalid",
+    ))
+}
+
+fn monotonic_ns_v2() -> u64 {
+    static ORIGIN: OnceLock<Instant> = OnceLock::new();
+    ORIGIN.get_or_init(Instant::now).elapsed().as_nanos() as u64
 }
 
 pub fn run_self_formed_confirm_owner_process_v1() -> K2CompositionResultV1<()> {
@@ -420,9 +450,16 @@ pub fn run_self_formed_confirm_owner_process_v1() -> K2CompositionResultV1<()> {
     let request: K2UncertaintyConfirmOwnerRequestV1 = uncertainty_decode_v1(&input)?;
     let executable = std::env::current_exe()
         .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_confirm_owner"))?;
-    let receipt = execute_self_formed_confirm_owner_v1(&request, &executable)?;
+    let output = match request.descriptor.mode {
+        K2UncertaintyConfirmAttemptModeV1::DevelopmentRehearsal => uncertainty_bytes_v1(
+            &super::execute_self_formed_development_rehearsal_owner_v1(&request, &executable)?,
+        )?,
+        K2UncertaintyConfirmAttemptModeV1::Confirm => uncertainty_bytes_v1(
+            &execute_self_formed_confirm_owner_v1(&request, &executable)?,
+        )?,
+    };
     std::io::stdout()
-        .write_all(&uncertainty_bytes_v1(&receipt)?)
+        .write_all(&output)
         .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_confirm_owner_stdout"))
 }
 
@@ -465,7 +502,7 @@ fn validate_authority_binding_v1(
     Ok(())
 }
 
-fn canonical_private_lab_root_v1(value: &str) -> K2CompositionResultV1<PathBuf> {
+pub(crate) fn canonical_private_lab_root_v1(value: &str) -> K2CompositionResultV1<PathBuf> {
     let requested = PathBuf::from(value);
     let link_metadata = fs::symlink_metadata(&requested)
         .map_err(|_| K2CompositionErrorV1::Io("open_self_formed_confirm_lab_root"))?;
@@ -485,7 +522,7 @@ fn canonical_private_lab_root_v1(value: &str) -> K2CompositionResultV1<PathBuf> 
     Ok(root)
 }
 
-fn dispatch_binding_root_v1(
+pub(crate) fn dispatch_binding_root_v1(
     request_root_sha256: &str,
     generator_executable_sha256: &str,
 ) -> K2CompositionResultV1<String> {

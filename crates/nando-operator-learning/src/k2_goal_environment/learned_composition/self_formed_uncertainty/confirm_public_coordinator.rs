@@ -3,29 +3,34 @@ use std::fs;
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::Instant;
 
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::super::{
     K2CompositionErrorV1, K2CompositionResultV1, K2InquiryBaselineRequestV1, K2InquiryBaselinesV1,
-    K2InquiryVerifierCommandV1, K2InquiryVerifierReceiptV1, composition_sha256_file_v1,
-    require_composition_root_v1,
+    K2InquirySelectionPrecommitV1, K2InquiryVerifierCommandV1, K2InquiryVerifierReceiptV1,
+    composition_sha256_bytes_v1, composition_sha256_file_v1, require_composition_root_v1,
 };
 use super::{
-    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1,
-    K2UncertaintyBatchPrecommitV2, K2UncertaintyCasePreverificationV2,
-    K2UncertaintyClosureCensusV1, K2UncertaintyClosurePlanV1, K2UncertaintyClosurePlannerRequestV1,
-    K2UncertaintyClosureVerificationReceiptV1, K2UncertaintyClosureVerificationRequestV1,
-    K2UncertaintyConfirmDataMountV1, K2UncertaintyConfirmGuestExecutableV1,
-    K2UncertaintyConfirmMountTargetV1, K2UncertaintyLearnerRequestV1,
-    K2UncertaintyLearnerResponseV1, K2UncertaintyProbeArtifactsV1, K2UncertaintyProbeRequestV1,
-    K2UncertaintyPublicCoordinatorRequestV1, K2UncertaintyPublicOwnerRoleV1,
-    K2UncertaintyPublicOwnerV1, K2UncertaintyPublicPrecommitReceiptV1,
-    K2UncertaintyPublicPreparedCaseV1, denied_authority_v1,
+    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2,
+    K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1, K2UncertaintyBatchPrecommitV2,
+    K2UncertaintyCasePreverificationV2, K2UncertaintyClosureCensusV1, K2UncertaintyClosurePlanV1,
+    K2UncertaintyClosurePlannerRequestV1, K2UncertaintyClosureVerificationReceiptV1,
+    K2UncertaintyClosureVerificationRequestV1, K2UncertaintyConfirmDataMountV1,
+    K2UncertaintyConfirmGuestExecutableV1, K2UncertaintyConfirmMountTargetV1,
+    K2UncertaintyLearnerRequestV1, K2UncertaintyLearnerResponseV1, K2UncertaintyProbeArtifactsV1,
+    K2UncertaintyProbeRequestV1, K2UncertaintyPublicCoordinatorRequestV1,
+    K2UncertaintyPublicOwnerRoleV1, K2UncertaintyPublicOwnerV1,
+    K2UncertaintyPublicPrecommitReceiptV1, K2UncertaintyPublicPreparedCaseV1,
+    K2UncertaintyR8BExecutableIdentityV2, K2UncertaintyR8BLedgerWriterV2,
+    K2UncertaintyR8BProducedReceiptV2, denied_authority_v1,
     preverify_self_formed_case_with_owner_v1, publish_self_formed_final_verifier_material_v2,
     publish_self_formed_public_case_v1, publish_self_formed_public_precommit_v1,
-    reopen_self_formed_probe_output_v1, run_self_formed_confirm_sandbox_v1,
+    reopen_self_formed_probe_output_v1, run_self_formed_confirm_sandbox_measured_v1,
     run_self_formed_tournament_with_owners_v1, uncertainty_bytes_v1, uncertainty_decode_v1,
+    uncertainty_root_v1,
 };
 
 pub fn execute_self_formed_public_coordinator_v1(
@@ -294,15 +299,169 @@ where
     I: Serialize,
     O: DeserializeOwned + Serialize,
 {
-    let output = run_self_formed_confirm_sandbox_v1(
+    let request_root = uncertainty_root_v1(input)?;
+    let input = uncertainty_bytes_v1(input)?;
+    let (stage_id, child_role) = public_child_identity_v2(role)?;
+    let executable = Path::new(&owner.executable_path);
+    let metadata = fs::metadata(executable)
+        .map_err(|_| K2CompositionErrorV1::Io("stat_self_formed_r8b_public_child"))?;
+    let current = std::env::current_exe()
+        .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_r8b_m10"))?;
+    let ledger = K2UncertaintyR8BLedgerWriterV2::from_environment(
+        "M10_PUBLIC_COORDINATOR",
+        composition_sha256_file_v1(&current)?,
+        vec![K2UncertaintyR8BExecutableIdentityV2 {
+            role: child_role.to_owned(),
+            canonical_path: owner.executable_path.clone(),
+            byte_len: metadata.len(),
+            unix_mode: metadata.permissions().mode() & 0o7777,
+            sha256: owner.executable_sha256.clone(),
+        }],
+    )?;
+    let started = ledger
+        .as_ref()
+        .map(|writer| {
+            writer.child_started(
+                stage_id,
+                None,
+                None,
+                child_role,
+                executable,
+                request_root,
+                composition_sha256_bytes_v1(&input),
+                monotonic_ns_v2(),
+            )
+        })
+        .transpose()?;
+    let outcome = run_self_formed_confirm_sandbox_measured_v1(
         role,
-        Path::new(&owner.executable_path),
+        executable,
         &owner.executable_sha256,
         mounts,
-        &uncertainty_bytes_v1(input)?,
+        &input,
         cpu_seconds,
     )?;
-    uncertainty_decode_v1(&output)
+    if !outcome.normal_exit || outcome.exit_code != 0 {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_confirm_sandbox_child_failed",
+        ));
+    }
+    let (receipt_schema, semantic_root) = validate_public_child_output_v2(role, &outcome.stdout)?;
+    let value = uncertainty_decode_v1(&outcome.stdout)?;
+    if let (Some(writer), Some(started)) = (&ledger, &started) {
+        writer.child_finished(
+            started,
+            &outcome.stdout,
+            &outcome.stderr,
+            vec![K2UncertaintyR8BProducedReceiptV2 {
+                relative_path: K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2.to_owned(),
+                byte_len: outcome.stdout.len() as u64,
+                unix_mode: 0,
+                content_sha256: composition_sha256_bytes_v1(&outcome.stdout),
+                receipt_schema,
+                semantic_root_sha256: semantic_root,
+            }],
+            monotonic_ns_v2(),
+        )?;
+    }
+    Ok(value)
+}
+
+fn public_child_identity_v2(
+    role: K2UncertaintyConfirmGuestExecutableV1,
+) -> K2CompositionResultV1<(&'static str, &'static str)> {
+    match role {
+        K2UncertaintyConfirmGuestExecutableV1::Learner => Ok(("C03", "M03_LEARNER")),
+        K2UncertaintyConfirmGuestExecutableV1::Probe => Ok(("C04", "M04_PROBE")),
+        K2UncertaintyConfirmGuestExecutableV1::Selector => Ok(("C05", "M05_SELECTOR")),
+        K2UncertaintyConfirmGuestExecutableV1::Baseline => Ok(("C06", "M06_BASELINE")),
+        K2UncertaintyConfirmGuestExecutableV1::SelectionPreverifier => {
+            Ok(("C07", "M07_SELECTION_PREVERIFIER"))
+        }
+        K2UncertaintyConfirmGuestExecutableV1::ClosurePlanner => Ok(("C08", "M08_CLOSURE_PLANNER")),
+        K2UncertaintyConfirmGuestExecutableV1::ClosureVerifier => {
+            Ok(("C09", "M09_CLOSURE_VERIFIER"))
+        }
+        _ => Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r8b_m10_child_role_invalid",
+        )),
+    }
+}
+
+fn validate_public_child_output_v2(
+    role: K2UncertaintyConfirmGuestExecutableV1,
+    bytes: &[u8],
+) -> K2CompositionResultV1<(String, String)> {
+    match role {
+        K2UncertaintyConfirmGuestExecutableV1::Learner => {
+            let value: K2UncertaintyLearnerResponseV1 = uncertainty_decode_v1(bytes)?;
+            value.validate()?;
+            Ok((value.schema, value.response_root_sha256))
+        }
+        K2UncertaintyConfirmGuestExecutableV1::Probe => {
+            let value: K2UncertaintyProbeArtifactsV1 = uncertainty_decode_v1(bytes)?;
+            value.validate()?;
+            Ok((value.schema, value.artifacts_root_sha256))
+        }
+        K2UncertaintyConfirmGuestExecutableV1::Selector => {
+            let value: K2InquirySelectionPrecommitV1 = uncertainty_decode_v1(bytes)?;
+            let mut resealed = value.clone();
+            resealed.reseal()?;
+            if value != resealed {
+                return Err(K2CompositionErrorV1::Invalid(
+                    "self_formed_r8b_selector_output_invalid",
+                ));
+            }
+            Ok((value.schema, value.precommit_root_sha256))
+        }
+        K2UncertaintyConfirmGuestExecutableV1::Baseline => {
+            let value: K2InquiryBaselinesV1 = uncertainty_decode_v1(bytes)?;
+            let mut resealed = value.clone();
+            resealed.reseal()?;
+            if value != resealed {
+                return Err(K2CompositionErrorV1::Invalid(
+                    "self_formed_r8b_baseline_output_invalid",
+                ));
+            }
+            Ok((value.schema, value.baselines_root_sha256))
+        }
+        K2UncertaintyConfirmGuestExecutableV1::SelectionPreverifier => {
+            let value: K2InquiryVerifierReceiptV1 = uncertainty_decode_v1(bytes)?;
+            match value {
+                K2InquiryVerifierReceiptV1::Selection { value } => {
+                    let mut resealed = value.clone();
+                    resealed.reseal()?;
+                    if value != resealed {
+                        return Err(K2CompositionErrorV1::Invalid(
+                            "self_formed_r8b_preverifier_output_invalid",
+                        ));
+                    }
+                    Ok((value.schema, value.receipt_root_sha256))
+                }
+                K2InquiryVerifierReceiptV1::Outcome { .. } => Err(K2CompositionErrorV1::Invalid(
+                    "self_formed_r8b_preverifier_output_invalid",
+                )),
+            }
+        }
+        K2UncertaintyConfirmGuestExecutableV1::ClosurePlanner => {
+            let value: K2UncertaintyClosureCensusV1 = uncertainty_decode_v1(bytes)?;
+            value.validate()?;
+            Ok((value.schema, value.census_root_sha256))
+        }
+        K2UncertaintyConfirmGuestExecutableV1::ClosureVerifier => {
+            let value: K2UncertaintyClosureVerificationReceiptV1 = uncertainty_decode_v1(bytes)?;
+            value.validate()?;
+            Ok((value.schema, value.receipt_root_sha256))
+        }
+        _ => Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r8b_m10_child_role_invalid",
+        )),
+    }
+}
+
+fn monotonic_ns_v2() -> u64 {
+    static ORIGIN: OnceLock<Instant> = OnceLock::new();
+    ORIGIN.get_or_init(Instant::now).elapsed().as_nanos() as u64
 }
 
 fn prepare_empty_output_root_v1(root: &Path) -> K2CompositionResultV1<()> {
