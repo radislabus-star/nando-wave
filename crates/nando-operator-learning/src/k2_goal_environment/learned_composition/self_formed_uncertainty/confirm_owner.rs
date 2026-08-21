@@ -15,17 +15,19 @@ use super::super::{
     composition_sha256_file_v1,
 };
 use super::{
-    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2,
+    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_R8B_PRODUCER_REQUEST_ENV_V3,
+    K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2,
     K2UncertaintyAuthorizationSlotLedgerV1, K2UncertaintyConfirmAttemptEventKindV1,
     K2UncertaintyConfirmAttemptJournalV1, K2UncertaintyConfirmAttemptModeV1,
     K2UncertaintyConfirmGeneratorRequestV1, K2UncertaintyConfirmGeneratorResponseV1,
     K2UncertaintyConfirmOwnerReceiptV1, K2UncertaintyConfirmOwnerRequestV1,
     K2UncertaintyConfirmPipeReceiptV1, K2UncertaintyGeneratorResponseV1,
     K2UncertaintyR8BExecutableIdentityV2, K2UncertaintyR8BLedgerWriterV2,
-    K2UncertaintyR8BProducedReceiptV2, load_confirm_generator_split_receipt_v1,
+    K2UncertaintyR8BLedgerWriterV3, K2UncertaintyR8BProcessEventV3, K2UncertaintyR8BProducedReceiptV2,
+    K2UncertaintyR8BProducerRequestV3, K2UncertaintyR8BValidatedFactV3, load_confirm_generator_split_receipt_v1,
     persist_retained_confirm_nonce_v1, publish_confirm_generator_split_v1,
     retained_confirm_nonce_observed_root_v1, uncertainty_bytes_v1, uncertainty_decode_v1,
-    uncertainty_root_v1,
+    uncertainty_root_v1, validate_self_formed_r8b_producer_request_v3,
 };
 
 const BWRAP_PATH_V1: &str = "/usr/bin/bwrap";
@@ -244,6 +246,9 @@ pub fn dispatch_self_formed_generator_once_v1(
         return Err(error);
     }
     let ledger = generator_ledger_v2(generator_executable, expected_generator_sha256)?;
+    let started_v3 = generator_start_v3(
+        generator_writer_role_v3()?, generator_request_root_sha256, &stdin_sha256,
+    )?;
     let started = ledger
         .as_ref()
         .map(|writer| {
@@ -357,6 +362,10 @@ pub fn dispatch_self_formed_generator_once_v1(
     }
     let (receipt_schema, semantic_root) =
         typed_generator_response_v2(&response_bytes, generator_request_root_sha256)?;
+    if let Some((writer, started)) = started_v3 {
+        writer.success(&started, &response_bytes, &stderr_bytes, receipt_schema.clone(),
+            semantic_root.clone(), K2UncertaintyR8BValidatedFactV3::None, Vec::new(), monotonic_ns_v2())?;
+    }
     if let (Some(writer), Some(started)) = (&ledger, &started) {
         writer.child_finished(
             started,
@@ -413,6 +422,35 @@ fn generator_ledger_v2(
             sha256: generator_sha256.to_owned(),
         }],
     )
+}
+
+fn generator_writer_role_v3() -> K2CompositionResultV1<&'static str> {
+    let owner = std::env::current_exe().map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_r8b_m01"))?;
+    let name = owner.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+    if name == "nando-k2-self-formed-confirm-owner" { Ok("M01_DEVELOPMENT_OWNER") }
+    else if name.starts_with("k2_self_formed_uncertainty_confirm_r8b_restart_v1-") { Ok("S02_RESTART") }
+    else { Err(K2CompositionErrorV1::Invalid("self_formed_r8b_v3_generator_owner_invalid")) }
+}
+
+fn generator_start_v3(
+    owner: &str,
+    request_root_sha256: &str,
+    stdin_sha256: &str,
+) -> K2CompositionResultV1<Option<(K2UncertaintyR8BLedgerWriterV3, K2UncertaintyR8BProcessEventV3)>> {
+    let Some(path) = std::env::var_os(K2_UNCERTAINTY_R8B_PRODUCER_REQUEST_ENV_V3) else { return Ok(None) };
+    let bytes = fs::read(path).map_err(|_| K2CompositionErrorV1::Io("read_self_formed_r8b_v3_producer_request"))?;
+    let request: K2UncertaintyR8BProducerRequestV3 = uncertainty_decode_v1(&bytes)?;
+    validate_self_formed_r8b_producer_request_v3(&request)?;
+    if uncertainty_bytes_v1(&request)? != bytes { return Err(K2CompositionErrorV1::Invalid("self_formed_r8b_v3_request_bytes_invalid")); }
+    let writer = K2UncertaintyR8BLedgerWriterV3::attach_request(&request)?;
+    let observed = writer.summary()?.invocations.into_iter().map(|row| row.invocation_id_sha256)
+        .collect::<std::collections::BTreeSet<_>>();
+    let plan = request.invocation_plan.iter().find(|row| {
+        row.request_owner_role == owner && row.target_role == "M02_GENERATOR" && row.stage == "C02"
+            && !observed.contains(&row.invocation_id_sha256)
+    }).cloned().ok_or(K2CompositionErrorV1::Invalid("self_formed_r8b_v3_generator_plan_missing"))?;
+    let started = writer.request(plan, request_root_sha256.to_owned(), stdin_sha256.to_owned(), monotonic_ns_v2())?;
+    Ok(Some((writer, started)))
 }
 
 fn typed_generator_response_v2(

@@ -311,7 +311,7 @@ fn r8b_cleanup_uses_four_distinct_process_owners_and_completes_once() {
         result.cleanup_receipt_root_sha256,
         cleanup.receipt_root_sha256
     );
-    assert!(!governed.join("R8B_RECEIPT_V2.json").exists());
+    assert!(!governed.join("R8B_RECEIPT_V3.json").exists());
 }
 
 #[test]
@@ -336,7 +336,7 @@ fn r8b_cleanup_rejects_unclassified_residue_before_authority() {
         .is_err()
     );
     assert!(governed.join("development-owner-receipt.json").exists());
-    assert!(!governed.join("R8B_RECEIPT_V2.json").exists());
+    assert!(!governed.join("R8B_RECEIPT_V3.json").exists());
 }
 
 fn development_terminal_v1(experiment: &str) -> K2UncertaintyTerminalEvaluationReceiptV1 {
@@ -348,7 +348,11 @@ fn development_terminal_v1(experiment: &str) -> K2UncertaintyTerminalEvaluationR
         K2UncertaintyControlScopeV1::DevelopmentRehearsalV5,
     ]
     .into_iter()
-    .map(|scope| control_receipt_v1(scope, experiment, Some(&root_v1("freeze")), None))
+    .map(|scope| {
+        let freeze = (scope == K2UncertaintyControlScopeV1::DevelopmentRehearsalV5)
+            .then_some(root_v1("freeze"));
+        control_receipt_v1(scope, experiment, freeze.as_deref(), None)
+    })
     .collect();
     let terminal = PathBuf::from(env!(
         "CARGO_BIN_EXE_nando-k2-self-formed-terminal-evaluator"

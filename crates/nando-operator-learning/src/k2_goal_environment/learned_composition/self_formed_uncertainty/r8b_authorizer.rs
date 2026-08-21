@@ -1,411 +1,443 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Read, Write};
+use std::io::BufReader;
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
-
-use super::r8b_process_authorizer::{
-    closed_tree_paths_v2, descriptor_matches_entry_v2, load_identity_manifest_v2,
-    read_closed_file_v2,
-};
+use super::immutable_publication::closed_tree_paths_v2;
+use super::immutable_publication::decode_canonical_json_v1;
+use super::immutable_publication::open_closed_file_v2;
+use super::immutable_publication::read_closed_file_v2;
+use super::immutable_publication::read_closed_json_v2;
 
 use super::super::{
-    K2CompositionAuthorityBoundaryV1, K2CompositionErrorV1, K2CompositionResultV1,
-    composition_sha256_file_v1, require_composition_root_v1,
+    K2CompositionErrorV1, K2CompositionResultV1, require_composition_root_v1, valid_composition_path_v1,
 };
 use super::{
-    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_R8B_PACKET_MANIFEST_PATH_V2,
-    K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2, K2UncertaintyCleanupReceiptV1,
-    K2UncertaintyControlEvaluationReceiptV1, K2UncertaintyDevelopmentResultReceiptV1,
-    K2UncertaintyOracleBaselineBatchReceiptV1, K2UncertaintyR8BEvidenceKindV2,
-    K2UncertaintyR8BExecutableManifestV2, K2UncertaintyR8BManifestClassV2,
-    K2UncertaintyR8BMeasuredReceiptV2, K2UncertaintyR8BPacketEntryV2,
-    K2UncertaintyR8BPacketManifestV2, denied_authority_v1, require_denied_authority_v1,
-    uncertainty_bytes_v1, uncertainty_decode_v1, uncertainty_root_v1,
+    K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_R8B_AUTHORIZATION_RECEIPT_SCHEMA_V3,
+    K2_UNCERTAINTY_R8B_MAX_LEDGER_BYTES_V3, K2_UNCERTAINTY_R8B_PACKET_MANIFEST_SCHEMA_V3,
+    K2UncertaintyR8BAuthorizationReceiptV3, K2UncertaintyR8BAuthorizationRequestV3, K2UncertaintyR8BControlWrapperV3,
+    K2UncertaintyR8BDownstreamContractV3, K2UncertaintyR8BEvidenceKindV2 as EvidenceKind,
+    K2UncertaintyR8BExecutableManifestV2, K2UncertaintyR8BLedgerSummaryV3,
+    K2UncertaintyR8BManifestClassV2 as ManifestClass, K2UncertaintyR8BObjectRoleV3 as ObjectRole,
+    K2UncertaintyR8BOracleWrapperV3, K2UncertaintyR8BOutputContractV3, K2UncertaintyR8BPacketDescriptorV3,
+    K2UncertaintyR8BPacketManifestV3, K2UncertaintyR8BResourceReceiptV3, decode_self_formed_r8b_evidence_view_v3,
+    denied_authority_v1, uncertainty_root_v1, validate_self_formed_r8b_control_wrapper_v3,
+    validate_self_formed_r8b_delegated_resource_v3, validate_self_formed_r8b_downstream_contract_v3,
+    validate_self_formed_r8b_ledger_stream_attested_v3, validate_self_formed_r8b_oracle_wrapper_v3,
+    validate_self_formed_r8b_process_projections_v3,
 };
+const PACKET_MANIFEST_PATH_V3: &str = "packet-manifest.json";
+const PROCESS_LEDGER_PATH_V3: &str = "process-ledger.json";
 
-pub const K2_UNCERTAINTY_R8B_AUTHORIZATION_REQUEST_SCHEMA_V2: &str =
-    "nando.k2-self-formed-r8b-authorization-request.v2";
-pub const K2_UNCERTAINTY_R8B_AUTHORIZATION_RECEIPT_SCHEMA_V2: &str =
-    "nando.k2-self-formed-r8b-authorization-receipt.v2";
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct K2UncertaintyR8BAuthorizationRequestV2 {
-    pub schema: String,
-    pub route_id_sha256: String,
-    pub manifest_root_sha256: String,
-    pub authorizer_executable_sha256: String,
-    pub request_root_sha256: String,
+pub fn validate_self_formed_r8b_packet_manifest_v3(
+    manifest: &K2UncertaintyR8BPacketManifestV3,
+    ledger: &K2UncertaintyR8BLedgerSummaryV3,
+    c08: &K2UncertaintyR8BDownstreamContractV3,
+) -> K2CompositionResultV1<()> {
+    validate_manifest_shape_v3(manifest)?;
+    validate_self_formed_r8b_downstream_contract_v3(c08)?;
+    reject(
+        manifest.schema != K2_UNCERTAINTY_R8B_PACKET_MANIFEST_SCHEMA_V3
+            || manifest.route_id_sha256 != ledger.route_id_sha256
+            || manifest.route_id_sha256 != c08.route_id_sha256
+            || manifest.c08_projection_root_sha256 != c08.projection_root_sha256
+            || manifest.ledger_event_count != ledger.event_count
+            || ledger.seal_root_sha256.as_ref() != Some(&manifest.ledger_seal_root_sha256),
+        "self_formed_r8b_v3_packet_binding_invalid",
+    )?;
+    validate_self_formed_r8b_process_projections_v3(ledger, c08)?;
+    validate_dual_roots_v3(manifest, ledger)?;
+    validate_descriptor_attestations_v3(manifest, ledger)?;
+    Ok(())
 }
 
-impl K2UncertaintyR8BAuthorizationRequestV2 {
-    pub fn seal(
-        route_id_sha256: String,
-        manifest_root_sha256: String,
-        authorizer_executable_sha256: String,
-    ) -> K2CompositionResultV1<Self> {
-        let mut value = Self {
-            schema: K2_UNCERTAINTY_R8B_AUTHORIZATION_REQUEST_SCHEMA_V2.to_owned(),
-            route_id_sha256,
-            manifest_root_sha256,
-            authorizer_executable_sha256,
-            request_root_sha256: String::new(),
-        };
-        value.request_root_sha256 = rooted_v2(&value)?;
-        value.validate()?;
-        Ok(value)
-    }
-
-    pub fn validate(&self) -> K2CompositionResultV1<()> {
-        for root in [
-            &self.route_id_sha256,
-            &self.manifest_root_sha256,
-            &self.authorizer_executable_sha256,
-        ] {
-            require_composition_root_v1(root)?;
-        }
-        let mut canonical = self.clone();
-        canonical.request_root_sha256.clear();
-        if self.schema != K2_UNCERTAINTY_R8B_AUTHORIZATION_REQUEST_SCHEMA_V2
-            || self.request_root_sha256 != uncertainty_root_v1(&canonical)?
-        {
-            return Err(invalid("self_formed_r8b_authorization_request_invalid"));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct K2UncertaintyR8BAuthorizationReceiptV2 {
-    pub schema: String,
-    pub request_root_sha256: String,
-    pub tested_commit_sha256: String,
-    pub route_id_sha256: String,
-    pub manifest_root_sha256: String,
-    pub linked_manifest_root_sha256: String,
-    pub suite_manifest_root_sha256: String,
-    pub process_ledger_root_sha256: String,
-    pub entry_roots_sha256: Vec<String>,
-    pub publisher_executable_sha256: String,
-    pub disposition: String,
-    pub authority: K2CompositionAuthorityBoundaryV1,
-    pub receipt_root_sha256: String,
-}
-
-impl K2UncertaintyR8BAuthorizationReceiptV2 {
-    fn seal(
-        request: &K2UncertaintyR8BAuthorizationRequestV2,
-        manifest: &K2UncertaintyR8BPacketManifestV2,
-    ) -> K2CompositionResultV1<Self> {
-        let mut value = Self {
-            schema: K2_UNCERTAINTY_R8B_AUTHORIZATION_RECEIPT_SCHEMA_V2.to_owned(),
-            request_root_sha256: request.request_root_sha256.clone(),
-            tested_commit_sha256: manifest.tested_commit_sha256.clone(),
-            route_id_sha256: manifest.route_id_sha256.clone(),
-            manifest_root_sha256: manifest.manifest_root_sha256.clone(),
-            linked_manifest_root_sha256: manifest.linked_manifest_root_sha256.clone(),
-            suite_manifest_root_sha256: manifest.suite_manifest_root_sha256.clone(),
-            process_ledger_root_sha256: manifest.process_ledger.ledger_root_sha256.clone(),
-            entry_roots_sha256: manifest
-                .entries
-                .iter()
-                .map(|entry| entry.entry_root_sha256.clone())
-                .collect(),
-            publisher_executable_sha256: manifest.publisher_executable_sha256.clone(),
-            disposition: "R8B_FROZEN".to_owned(),
-            authority: denied_authority_v1(),
-            receipt_root_sha256: String::new(),
-        };
-        value.receipt_root_sha256 = rooted_v2(&value)?;
-        value.validate()?;
-        Ok(value)
-    }
-
-    pub fn validate(&self) -> K2CompositionResultV1<()> {
-        for root in [
-            &self.request_root_sha256,
-            &self.tested_commit_sha256,
-            &self.route_id_sha256,
-            &self.manifest_root_sha256,
-            &self.linked_manifest_root_sha256,
-            &self.suite_manifest_root_sha256,
-            &self.process_ledger_root_sha256,
-            &self.publisher_executable_sha256,
-        ]
-        .into_iter()
-        .chain(self.entry_roots_sha256.iter())
-        {
-            require_composition_root_v1(root)?;
-        }
-        require_denied_authority_v1(&self.authority)?;
-        let mut canonical = self.clone();
-        canonical.receipt_root_sha256.clear();
-        if self.schema != K2_UNCERTAINTY_R8B_AUTHORIZATION_RECEIPT_SCHEMA_V2
-            || self.entry_roots_sha256.is_empty()
-            || self.disposition != "R8B_FROZEN"
-            || self.receipt_root_sha256 != uncertainty_root_v1(&canonical)?
-        {
-            return Err(invalid("self_formed_r8b_authorization_receipt_invalid"));
-        }
-        Ok(())
-    }
-}
-
-pub fn authorize_self_formed_r8b_v2(
-    request: &K2UncertaintyR8BAuthorizationRequestV2,
+pub fn authorize_self_formed_r8b_v3(
+    request: &K2UncertaintyR8BAuthorizationRequestV3,
     packet_root: &Path,
-) -> K2CompositionResultV1<K2UncertaintyR8BAuthorizationReceiptV2> {
+) -> K2CompositionResultV1<K2UncertaintyR8BAuthorizationReceiptV3> {
     request.validate()?;
-    let manifest_bytes = read_closed_file_v2(
-        &packet_root.join(K2_UNCERTAINTY_R8B_PACKET_MANIFEST_PATH_V2),
+    let manifest: K2UncertaintyR8BPacketManifestV3 = read_closed_json_v2(
+        &packet_root.join(PACKET_MANIFEST_PATH_V3),
+        K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+        None,
         None,
     )?;
-    let manifest: K2UncertaintyR8BPacketManifestV2 = uncertainty_decode_v1(&manifest_bytes)?;
-    manifest.validate()?;
-    if manifest.route_id_sha256 != request.route_id_sha256
-        || manifest.manifest_root_sha256 != request.manifest_root_sha256
-    {
-        return Err(invalid("self_formed_r8b_packet_request_binding_invalid"));
-    }
-    let observed_paths = closed_tree_paths_v2(packet_root)?;
+    validate_manifest_shape_v3(&manifest)?;
+    reject(
+        manifest.route_id_sha256 != request.route_id_sha256
+            || manifest.manifest_root_sha256 != request.manifest_root_sha256,
+        "self_formed_r8b_v3_manifest_envelope_invalid",
+    )?;
     let expected_paths = manifest
-        .entries
+        .members
         .iter()
-        .map(|entry| entry.relative_path.clone())
-        .chain(std::iter::once(
-            K2_UNCERTAINTY_R8B_PACKET_MANIFEST_PATH_V2.to_owned(),
-        ))
+        .map(|row| row.relative_path.clone())
+        .chain(std::iter::once(PACKET_MANIFEST_PATH_V3.to_owned()))
         .collect::<BTreeSet<_>>();
-    if observed_paths != expected_paths {
-        return Err(invalid("self_formed_r8b_packet_path_set_invalid"));
-    }
+    reject(
+        expected_paths.len() != 23 || closed_tree_paths_v2(packet_root)? != expected_paths,
+        "self_formed_r8b_v3_packet_path_set_invalid",
+    )?;
 
-    let linked = load_identity_manifest_v2(
-        packet_root,
-        &manifest,
-        K2UncertaintyR8BEvidenceKindV2::LinkedManifest,
-        K2UncertaintyR8BManifestClassV2::Linked,
+    let ledger_descriptor = descriptor_v3(&manifest, DescriptorKeyV3::Role(ObjectRole::ProcessLedger))?;
+    let ledger_file = open_closed_file_v2(
+        &packet_root.join(&ledger_descriptor.relative_path),
+        K2_UNCERTAINTY_R8B_MAX_LEDGER_BYTES_V3,
+        Some(ledger_descriptor.byte_len),
     )?;
-    let suite = load_identity_manifest_v2(
-        packet_root,
-        &manifest,
-        K2UncertaintyR8BEvidenceKindV2::SuiteManifest,
-        K2UncertaintyR8BManifestClassV2::Suite,
+    let (ledger, ledger_len, ledger_sha256) =
+        validate_self_formed_r8b_ledger_stream_attested_v3(BufReader::new(ledger_file), true)?;
+    reject(
+        ledger_len != ledger_descriptor.byte_len
+            || ledger_sha256 != ledger_descriptor.content_sha256
+            || ledger.seal_root_sha256.as_ref() != Some(&ledger_descriptor.semantic_root_sha256),
+        "self_formed_r8b_v3_ledger_attestation_invalid",
     )?;
-    if linked.manifest_root_sha256 != manifest.linked_manifest_root_sha256
-        || suite.manifest_root_sha256 != manifest.suite_manifest_root_sha256
-    {
-        return Err(invalid("self_formed_r8b_manifest_root_binding_invalid"));
-    }
+
+    let c08_descriptor = descriptor_v3(&manifest, DescriptorKeyV3::Role(ObjectRole::DownstreamInvocationContract))?;
+    let c08: K2UncertaintyR8BDownstreamContractV3 = read_descriptor_json_v3(packet_root, c08_descriptor)?;
+    validate_self_formed_r8b_packet_manifest_v3(&manifest, &ledger, &c08)?;
+
+    let resource_descriptor = descriptor_v3(&manifest, DescriptorKeyV3::Role(ObjectRole::ResourceReceipt))?;
+    let resource: K2UncertaintyR8BResourceReceiptV3 = read_descriptor_json_v3(packet_root, resource_descriptor)?;
+    validate_self_formed_r8b_delegated_resource_v3(&ledger, &resource)?;
+    reject(
+        resource.route_id_sha256 != manifest.route_id_sha256
+            || resource.receipt_root_sha256 != resource_descriptor.semantic_root_sha256,
+        "self_formed_r8b_v3_resource_binding_invalid",
+    )?;
+    let linked = read_identity_manifest_v3(
+        packet_root,
+        descriptor_v3(&manifest, DescriptorKeyV3::Kind(EvidenceKind::LinkedManifest))?,
+        ManifestClass::Linked,
+    )?;
+    let suite = read_identity_manifest_v3(
+        packet_root,
+        descriptor_v3(&manifest, DescriptorKeyV3::Kind(EvidenceKind::SuiteManifest))?,
+        ManifestClass::Suite,
+    )?;
     let identities = linked
         .identities
         .iter()
         .chain(&suite.identities)
         .map(|identity| (identity.role.as_str(), identity.sha256.as_str()))
         .collect::<BTreeMap<_, _>>();
-    if identities.get("M25_R8B_AUTHORIZER") != Some(&request.authorizer_executable_sha256.as_str())
-        || identities.get("M26_R8B_PUBLISHER")
-            != Some(&manifest.publisher_executable_sha256.as_str())
-    {
-        return Err(invalid("self_formed_r8b_authority_identity_invalid"));
+    reject(
+        identities.get("M25_R8B_AUTHORIZER") != Some(&request.authorizer_executable_sha256.as_str()),
+        "self_formed_r8b_v3_authorizer_identity_invalid",
+    )?;
+    for invocation in &ledger.invocations {
+        reject(
+            identities.get(invocation.target_role.as_str()) != Some(&invocation.target_executable_sha256.as_str())
+                || identities.get(invocation.request_owner_role.as_str())
+                    != Some(&invocation.request_owner_executable_sha256.as_str()),
+            "self_formed_r8b_v3_process_identity_invalid",
+        )?;
     }
-    let mut consumed_descriptors = BTreeSet::new();
-    for entry in &manifest.entries {
-        verify_packet_entry_v2(packet_root, entry)?;
-        if identities.get(entry.producer_role.as_str())
-            != Some(&entry.producer_executable_sha256.as_str())
-        {
-            return Err(invalid("self_formed_r8b_entry_producer_identity_invalid"));
-        }
-        let parent_owned = matches!(
-            entry.kind,
-            K2UncertaintyR8BEvidenceKindV2::LinkedManifest
-                | K2UncertaintyR8BEvidenceKindV2::SuiteManifest
-                | K2UncertaintyR8BEvidenceKindV2::ProductionSurvival
-        );
-        if parent_owned {
-            if entry.producer_role != "M24_LINKED_RUNNER"
-                || entry.producer_event_root_sha256 != entry.semantic_root_sha256
-            {
-                return Err(invalid("self_formed_r8b_parent_observation_invalid"));
-            }
-        } else {
-            if matches!(
-                entry.producer_role.as_str(),
-                "M25_R8B_AUTHORIZER" | "M26_R8B_PUBLISHER"
-            ) {
-                return Err(invalid("self_formed_r8b_future_outcome_in_packet"));
-            }
-            let event = manifest
-                .process_ledger
-                .finished_event(&entry.producer_event_root_sha256)
-                .ok_or_else(|| invalid("self_formed_r8b_entry_process_event_missing"))?;
-            if event.role != entry.producer_role
-                || event.executable_sha256 != entry.producer_executable_sha256
-                || event.normal_exit != Some(true)
-                || event.exit_code != Some(0)
-            {
-                return Err(invalid("self_formed_r8b_entry_process_binding_invalid"));
-            }
-            let (index, descriptor) = event
-                .produced_receipts
-                .iter()
-                .enumerate()
-                .filter(|(_, descriptor)| descriptor_matches_entry_v2(descriptor, entry))
-                .collect::<Vec<_>>()
-                .as_slice()
-                .first()
-                .copied()
-                .ok_or_else(|| invalid("self_formed_r8b_produced_receipt_missing"))?;
-            if !consumed_descriptors.insert((event.event_root_sha256.as_str(), index))
-                || event
-                    .produced_receipts
-                    .iter()
-                    .filter(|candidate| descriptor_matches_entry_v2(candidate, entry))
-                    .count()
-                    != 1
-                || (descriptor.relative_path == K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2
-                    && (event.stdout_byte_len != Some(descriptor.byte_len)
-                        || event.stdout_sha256.as_ref() != Some(&descriptor.content_sha256)))
-            {
-                return Err(invalid("self_formed_r8b_produced_receipt_reused"));
-            }
-        }
+    for (_, output) in &ledger.authority_outputs {
+        reject(
+            identities.get(output.producer_role.as_str()) != Some(&output.producer_executable_sha256.as_str()),
+            "self_formed_r8b_v3_output_identity_invalid",
+        )?;
     }
-    K2UncertaintyR8BAuthorizationReceiptV2::seal(request, &manifest)
+    for descriptor in manifest.members.iter().filter(|row| {
+        row.object_role == ObjectRole::Evidence
+            && !matches!(row.evidence_kind, Some(EvidenceKind::LinkedManifest | EvidenceKind::SuiteManifest))
+    }) {
+        validate_evidence_v3(packet_root, descriptor, &manifest, &ledger, &identities)?;
+    }
+    let publisher =
+        identities.get("M26_R8B_PUBLISHER").ok_or_else(|| invalid("self_formed_r8b_v3_publisher_identity_missing"))?;
+    let mut packet_member_roots_sha256 =
+        manifest.members.iter().map(|row| row.semantic_root_sha256.clone()).collect::<Vec<_>>();
+    packet_member_roots_sha256.sort();
+    let mut receipt = K2UncertaintyR8BAuthorizationReceiptV3 {
+        schema: K2_UNCERTAINTY_R8B_AUTHORIZATION_RECEIPT_SCHEMA_V3.to_owned(),
+        request_root_sha256: request.request_root_sha256.clone(),
+        route_id_sha256: manifest.route_id_sha256.clone(),
+        manifest_root_sha256: manifest.manifest_root_sha256.clone(),
+        c08_projection_root_sha256: manifest.c08_projection_root_sha256.clone(),
+        resource_receipt_root_sha256: manifest.resource_receipt_root_sha256.clone(),
+        ledger_seal_root_sha256: manifest.ledger_seal_root_sha256.clone(),
+        packet_member_roots_sha256,
+        publisher_executable_sha256: (*publisher).to_owned(),
+        disposition: "R8B_FROZEN".to_owned(),
+        authority: denied_authority_v1(),
+        receipt_root_sha256: String::new(),
+    };
+    receipt.receipt_root_sha256 = uncertainty_root_v1(&receipt)?;
+    receipt.validate()?;
+    Ok(receipt)
 }
 
-pub fn run_self_formed_r8b_authorizer_process_v2() -> K2CompositionResultV1<()> {
-    let mut input = Vec::new();
-    std::io::stdin()
-        .take((K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1 + 1) as u64)
-        .read_to_end(&mut input)
-        .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_r8b_authorizer_stdin"))?;
-    let request: K2UncertaintyR8BAuthorizationRequestV2 = uncertainty_decode_v1(&input)?;
-    let executable = std::env::current_exe()
-        .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_r8b_authorizer"))?;
-    if composition_sha256_file_v1(&executable)? != request.authorizer_executable_sha256 {
-        return Err(invalid("self_formed_r8b_authorizer_executable_mismatch"));
+fn validate_manifest_shape_v3(manifest: &K2UncertaintyR8BPacketManifestV3) -> K2CompositionResultV1<()> {
+    for root in [
+        &manifest.route_id_sha256,
+        &manifest.c08_projection_root_sha256,
+        &manifest.resource_receipt_root_sha256,
+        &manifest.ledger_seal_root_sha256,
+    ] {
+        require_composition_root_v1(root)?;
     }
-    let packet_root = std::env::current_dir()
-        .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_r8b_packet_root"))?;
-    let receipt = authorize_self_formed_r8b_v2(&request, &packet_root)?;
-    std::io::stdout()
-        .write_all(&uncertainty_bytes_v1(&receipt)?)
-        .map_err(|_| K2CompositionErrorV1::Io("write_self_formed_r8b_authorizer_stdout"))
-}
-
-fn verify_packet_entry_v2(
-    root: &Path,
-    entry: &K2UncertaintyR8BPacketEntryV2,
-) -> K2CompositionResultV1<()> {
-    entry.validate()?;
-    let bytes = read_closed_file_v2(&root.join(&entry.relative_path), Some(entry))?;
-    match entry.kind {
-        K2UncertaintyR8BEvidenceKindV2::LinkedRoute
-        | K2UncertaintyR8BEvidenceKindV2::ProductionSurvival
-        | K2UncertaintyR8BEvidenceKindV2::ConfirmCanonicalBytes
-        | K2UncertaintyR8BEvidenceKindV2::DevelopmentKnownAnswers
-        | K2UncertaintyR8BEvidenceKindV2::ModeMatrix
-        | K2UncertaintyR8BEvidenceKindV2::ImmutablePublication
-        | K2UncertaintyR8BEvidenceKindV2::ProcessRestart
-        | K2UncertaintyR8BEvidenceKindV2::FrozenControlScopes
-        | K2UncertaintyR8BEvidenceKindV2::CleanupInterruption
-        | K2UncertaintyR8BEvidenceKindV2::AggregatePublicationFaults => {
-            let value: K2UncertaintyR8BMeasuredReceiptV2 = uncertainty_decode_v1(&bytes)?;
-            value.validate()?;
-            if value.kind != entry.kind
-                || value.route_id_sha256 != entry.route_id_sha256
-                || value.observed != entry.observed
-                || value.producer_executable_sha256 != entry.producer_executable_sha256
-                || value.receipt_root_sha256 != entry.semantic_root_sha256
-            {
-                return Err(invalid("self_formed_r8b_measured_entry_invalid"));
-            }
-        }
-        K2UncertaintyR8BEvidenceKindV2::LinkedManifest
-        | K2UncertaintyR8BEvidenceKindV2::SuiteManifest => {
-            let value: K2UncertaintyR8BExecutableManifestV2 = uncertainty_decode_v1(&bytes)?;
-            value.validate()?;
-            if value.manifest_root_sha256 != entry.semantic_root_sha256 {
-                return Err(invalid("self_formed_r8b_manifest_entry_invalid"));
-            }
-        }
-        K2UncertaintyR8BEvidenceKindV2::OracleCases => {
-            let value: K2UncertaintyOracleBaselineBatchReceiptV1 = uncertainty_decode_v1(&bytes)?;
-            value.validate()?;
-            if value.case_receipts.len() as u64 != entry.observed
-                || value.receipt_root_sha256 != entry.semantic_root_sha256
-            {
-                return Err(invalid("self_formed_r8b_oracle_entry_invalid"));
-            }
-        }
-        K2UncertaintyR8BEvidenceKindV2::LegacyControls
-        | K2UncertaintyR8BEvidenceKindV2::V3Controls
-        | K2UncertaintyR8BEvidenceKindV2::V4Controls
-        | K2UncertaintyR8BEvidenceKindV2::FreshControlCases => {
-            let value: K2UncertaintyControlEvaluationReceiptV1 = uncertainty_decode_v1(&bytes)?;
-            value.validate()?;
-            if !value.all_pass
-                || (entry.kind != K2UncertaintyR8BEvidenceKindV2::FrozenControlScopes
-                    && value.passed != entry.observed)
-                || value.receipt_root_sha256 != entry.semantic_root_sha256
-            {
-                return Err(invalid("self_formed_r8b_control_entry_invalid"));
-            }
-        }
-        K2UncertaintyR8BEvidenceKindV2::CleanupTransaction => {
-            let value: K2UncertaintyCleanupReceiptV1 = uncertainty_decode_v1(&bytes)?;
-            value.validate()?;
-            require_semantic_root_v2(&value.receipt_root_sha256, entry)?;
-        }
-        K2UncertaintyR8BEvidenceKindV2::DevelopmentResult => {
-            let value: K2UncertaintyDevelopmentResultReceiptV1 = uncertainty_decode_v1(&bytes)?;
-            value.validate()?;
-            require_semantic_root_v2(&value.receipt_root_sha256, entry)?;
-        }
+    let mut paths = BTreeSet::new();
+    let mut kinds = BTreeSet::new();
+    let mut roles = [0_usize; 4];
+    for descriptor in &manifest.members {
+        validate_packet_descriptor_v3(descriptor)?;
+        roles[descriptor.object_role as usize] += 1;
+        reject(
+            !paths.insert(&descriptor.relative_path)
+                || descriptor.evidence_kind.is_some_and(|kind| !kinds.insert(kind)),
+            "self_formed_r8b_v3_packet_member_duplicate",
+        )?;
+    }
+    let mut canonical = manifest.clone();
+    canonical.manifest_root_sha256.clear();
+    reject(
+        manifest.schema != K2_UNCERTAINTY_R8B_PACKET_MANIFEST_SCHEMA_V3
+            || manifest.members.len() != 22
+            || roles != [19, 1, 1, 1]
+            || kinds != EvidenceKind::ALL.into_iter().collect()
+            || !manifest.members.windows(2).all(|pair| {
+                (&pair[0].relative_path, pair[0].object_role as u8)
+                    < (&pair[1].relative_path, pair[1].object_role as u8)
+            })
+            || manifest.manifest_root_sha256 != uncertainty_root_v1(&canonical)?,
+        "self_formed_r8b_v3_manifest_shape_invalid",
+    )?;
+    for (role, root, path) in [
+        (ObjectRole::DownstreamInvocationContract, manifest.c08_projection_root_sha256.as_str(), None),
+        (ObjectRole::ResourceReceipt, manifest.resource_receipt_root_sha256.as_str(), None),
+        (ObjectRole::ProcessLedger, manifest.ledger_seal_root_sha256.as_str(), Some(PROCESS_LEDGER_PATH_V3)),
+    ] {
+        require_special_descriptor_v3(manifest, role, root, path)?;
     }
     Ok(())
 }
 
-fn require_semantic_root_v2(
-    actual: &str,
-    entry: &K2UncertaintyR8BPacketEntryV2,
-) -> K2CompositionResultV1<()> {
-    if actual == entry.semantic_root_sha256 {
-        Ok(())
-    } else {
-        Err(invalid("self_formed_r8b_packet_semantic_root_mismatch"))
-    }
+#[derive(Clone, Copy)]
+enum DescriptorKeyV3 {
+    Role(ObjectRole),
+    Kind(EvidenceKind),
 }
 
-fn rooted_v2<T>(value: &T) -> K2CompositionResultV1<String>
+fn descriptor_v3(
+    manifest: &K2UncertaintyR8BPacketManifestV3,
+    key: DescriptorKeyV3,
+) -> K2CompositionResultV1<&K2UncertaintyR8BPacketDescriptorV3> {
+    let mut rows = manifest.members.iter().filter(|row| match key {
+        DescriptorKeyV3::Role(role) => row.object_role == role,
+        DescriptorKeyV3::Kind(kind) => row.evidence_kind == Some(kind),
+    });
+    let row = rows.next().ok_or_else(|| invalid("self_formed_r8b_v3_descriptor_missing"))?;
+    reject(rows.next().is_some(), "self_formed_r8b_v3_descriptor_duplicate")?;
+    Ok(row)
+}
+
+fn read_descriptor_json_v3<T>(root: &Path, descriptor: &K2UncertaintyR8BPacketDescriptorV3) -> K2CompositionResultV1<T>
 where
-    T: Clone + Serialize + RootFieldV2,
+    T: serde::de::DeserializeOwned + serde::Serialize,
 {
-    let mut canonical = value.clone();
-    canonical.clear_root_v2();
-    uncertainty_root_v1(&canonical)
+    read_closed_json_v2(
+        &root.join(&descriptor.relative_path),
+        K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+        Some(descriptor.byte_len),
+        Some(&descriptor.content_sha256),
+    )
 }
 
-trait RootFieldV2 {
-    fn clear_root_v2(&mut self);
+fn read_identity_manifest_v3(
+    root: &Path,
+    descriptor: &K2UncertaintyR8BPacketDescriptorV3,
+    class: ManifestClass,
+) -> K2CompositionResultV1<K2UncertaintyR8BExecutableManifestV2> {
+    let value: K2UncertaintyR8BExecutableManifestV2 = read_descriptor_json_v3(root, descriptor)?;
+    value.validate()?;
+    reject(
+        value.class != class || value.manifest_root_sha256 != descriptor.semantic_root_sha256,
+        "self_formed_r8b_v3_identity_manifest_invalid",
+    )?;
+    Ok(value)
 }
 
-impl RootFieldV2 for K2UncertaintyR8BAuthorizationRequestV2 {
-    fn clear_root_v2(&mut self) {
-        self.request_root_sha256.clear();
+fn validate_evidence_v3(
+    packet_root: &Path,
+    descriptor: &K2UncertaintyR8BPacketDescriptorV3,
+    manifest: &K2UncertaintyR8BPacketManifestV3,
+    ledger: &K2UncertaintyR8BLedgerSummaryV3,
+    identities: &BTreeMap<&str, &str>,
+) -> K2CompositionResultV1<()> {
+    let kind = descriptor.evidence_kind.ok_or_else(|| invalid("self_formed_r8b_v3_evidence_kind_missing"))?;
+    let bytes = read_closed_file_v2(
+        &packet_root.join(&descriptor.relative_path),
+        K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1,
+        Some(descriptor.byte_len),
+        Some(&descriptor.content_sha256),
+    )?;
+    let mut sources = None;
+    let (schema, semantic_root, observed, producer) = match kind {
+        EvidenceKind::OracleCases => {
+            let value: K2UncertaintyR8BOracleWrapperV3 = decode_canonical_json_v1(&bytes)?;
+            validate_self_formed_r8b_oracle_wrapper_v3(&value)?;
+            reject(
+                value.completion_event_roots_sha256 != manifest.m16_completion_event_roots_sha256
+                    || value.receipt_roots_sha256 != manifest.m16_receipt_roots_sha256,
+                "self_formed_r8b_v3_m16_wrapper_roots_invalid",
+            )?;
+            (value.schema, value.receipt_root_sha256, 16, None)
+        }
+        EvidenceKind::FrozenControlScopes => {
+            let value: K2UncertaintyR8BControlWrapperV3 = decode_canonical_json_v1(&bytes)?;
+            validate_self_formed_r8b_control_wrapper_v3(&value)?;
+            reject(
+                value.completion_event_roots_sha256 != manifest.m17_completion_event_roots_sha256
+                    || value.receipt_roots_sha256 != manifest.m17_receipt_roots_sha256,
+                "self_formed_r8b_v3_m17_wrapper_roots_invalid",
+            )?;
+            sources = Some(value.census.source_roots_sha256);
+            (value.schema, value.receipt_root_sha256, 4, Some(value.census.producer_executable_sha256))
+        }
+        _ => {
+            let (view_schema, view_root, view_observed, view_producer, view_sources) =
+                decode_self_formed_r8b_evidence_view_v3(kind, &bytes, &manifest.route_id_sha256)?;
+            sources = view_sources;
+            (view_schema, view_root, view_observed, view_producer)
+        }
+    };
+    reject(
+        semantic_root != descriptor.semantic_root_sha256
+            || kind.required().is_some_and(|required| observed != required),
+        "self_formed_r8b_v3_evidence_semantics_invalid",
+    )?;
+    if kind == EvidenceKind::ProductionSurvival {
+        reject(
+            producer.as_deref() != identities.get("M24_LINKED_RUNNER").copied(),
+            "self_formed_r8b_v3_parent_evidence_identity_invalid",
+        )?;
+        return Ok(());
     }
+    let output = unique_output_contract_v3(ledger, &descriptor.relative_path)?;
+    reject(
+        output.object_role != descriptor.object_role
+            || output.evidence_kind != descriptor.evidence_kind
+            || output.receipt_schema != schema
+            || output.required_denominator.is_some_and(|required| required != observed)
+            || producer.as_deref().is_some_and(|actual| actual != output.producer_executable_sha256)
+            || sources.as_ref().is_some_and(|actual| *actual != output.required_source_roots_sha256),
+        "self_formed_r8b_v3_output_semantics_invalid",
+    )
 }
 
-impl RootFieldV2 for K2UncertaintyR8BAuthorizationReceiptV2 {
-    fn clear_root_v2(&mut self) {
-        self.receipt_root_sha256.clear();
+fn unique_output_contract_v3<'a>(
+    ledger: &'a K2UncertaintyR8BLedgerSummaryV3,
+    relative_path: &str,
+) -> K2CompositionResultV1<&'a K2UncertaintyR8BOutputContractV3> {
+    let mut rows = ledger.authority_outputs.iter().filter(|(_, output)| output.relative_path == relative_path);
+    let (_, output) = rows.next().ok_or_else(|| invalid("self_formed_r8b_v3_output_contract_missing"))?;
+    reject(rows.next().is_some(), "self_formed_r8b_v3_output_contract_duplicate")?;
+    Ok(output)
+}
+
+fn validate_packet_descriptor_v3(descriptor: &K2UncertaintyR8BPacketDescriptorV3) -> K2CompositionResultV1<()> {
+    require_composition_root_v1(&descriptor.content_sha256)?;
+    require_composition_root_v1(&descriptor.semantic_root_sha256)?;
+    let evidence = descriptor.object_role == ObjectRole::Evidence;
+    reject(
+        !valid_composition_path_v1(&descriptor.relative_path)
+            || descriptor.relative_path == PACKET_MANIFEST_PATH_V3
+            || descriptor.relative_path.len() > 240
+            || descriptor.byte_len == 0
+            || descriptor.unix_mode != 0o400
+            || evidence != descriptor.evidence_kind.is_some(),
+        "self_formed_r8b_v3_packet_descriptor_invalid",
+    )
+}
+
+fn require_special_descriptor_v3(
+    manifest: &K2UncertaintyR8BPacketManifestV3,
+    role: ObjectRole,
+    semantic_root: &str,
+    path: Option<&str>,
+) -> K2CompositionResultV1<()> {
+    let matches = manifest.members.iter().filter(|row| {
+        row.object_role == role
+            && row.semantic_root_sha256 == semantic_root
+            && path.is_none_or(|expected| row.relative_path == expected)
+    });
+    reject(matches.count() != 1, "self_formed_r8b_v3_packet_special_descriptor_invalid")
+}
+
+fn validate_root_vector_v3(roots: &[String], required: usize) -> K2CompositionResultV1<()> {
+    for root in roots {
+        require_composition_root_v1(root)?;
     }
+    reject(
+        roots.len() != required || roots.windows(2).any(|pair| pair[0] >= pair[1]),
+        "self_formed_r8b_root_vector_invalid",
+    )
+}
+
+fn validate_dual_roots_v3(
+    manifest: &K2UncertaintyR8BPacketManifestV3,
+    ledger: &K2UncertaintyR8BLedgerSummaryV3,
+) -> K2CompositionResultV1<()> {
+    #[rustfmt::skip]
+    let groups = [
+        (&manifest.m16_completion_event_roots_sha256, &ledger.m16_event_roots_sha256,
+         &manifest.m16_receipt_roots_sha256, &ledger.m16_receipt_roots_sha256, 16),
+        (&manifest.m17_completion_event_roots_sha256, &ledger.m17_event_roots_sha256,
+         &manifest.m17_receipt_roots_sha256, &ledger.m17_receipt_roots_sha256, 4),
+    ];
+    for (events, observed_events, receipts, observed_receipts, required) in groups {
+        for (claimed, observed) in [(events, observed_events), (receipts, observed_receipts)] {
+            validate_root_vector_v3(claimed, required)?;
+            reject(
+                claimed.iter().cloned().collect::<BTreeSet<_>>() != *observed,
+                "self_formed_r8b_v3_dual_root_set_invalid",
+            )?;
+        }
+        reject(
+            !events.iter().collect::<BTreeSet<_>>().is_disjoint(&receipts.iter().collect()),
+            "self_formed_r8b_dual_root_domain_invalid",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_descriptor_attestations_v3(
+    manifest: &K2UncertaintyR8BPacketManifestV3,
+    ledger: &K2UncertaintyR8BLedgerSummaryV3,
+) -> K2CompositionResultV1<()> {
+    for descriptor in manifest.members.iter().filter(|row| {
+        row.object_role == ObjectRole::DownstreamInvocationContract
+            || row.evidence_kind.is_some_and(|kind| {
+                !matches!(
+                    kind,
+                    EvidenceKind::LinkedManifest | EvidenceKind::SuiteManifest | EvidenceKind::ProductionSurvival
+                )
+            })
+    }) {
+        let output = unique_output_contract_v3(ledger, &descriptor.relative_path)
+            .map_err(|_| invalid("self_formed_r8b_v3_packet_descriptor_unattested"))?;
+        let attestation = output
+            .file_attestation
+            .as_ref()
+            .ok_or_else(|| invalid("self_formed_r8b_v3_packet_descriptor_attestation_missing"))?;
+        reject(
+            output.object_role != descriptor.object_role
+                || output.evidence_kind != descriptor.evidence_kind
+                || (attestation.byte_len, attestation.unix_mode) != (descriptor.byte_len, descriptor.unix_mode)
+                || attestation.content_sha256 != descriptor.content_sha256
+                || attestation.semantic_root_sha256 != descriptor.semantic_root_sha256,
+            "self_formed_r8b_v3_packet_descriptor_attestation_invalid",
+        )?;
+    }
+    Ok(())
 }
 
 fn invalid(reason: &'static str) -> K2CompositionErrorV1 {
     K2CompositionErrorV1::Invalid(reason)
+}
+
+fn reject(condition: bool, reason: &'static str) -> K2CompositionResultV1<()> {
+    (!condition).then_some(()).ok_or_else(|| invalid(reason))
 }

@@ -162,11 +162,11 @@ fn p07_ptrace_stopped_real_owner_excludes_real_contender() {
     assert!(String::from_utf8_lossy(&contender.stderr).contains("development_attempt_owner_busy"));
     assert_eq!(tree_snapshot_v1(&case.lab), before);
 
-    let status = Command::new("/bin/kill")
-        .args(["-CONT", &owner_pid.to_string()])
-        .status()
-        .expect("resume traced owner");
-    assert!(status.success());
+    rustix::process::kill_process(
+        rustix::process::Pid::from_raw(owner_pid as i32).expect("positive traced owner PID"),
+        rustix::process::Signal::CONT,
+    )
+    .expect("resume traced owner");
     let first = tracer.wait_with_output().expect("wait traced owner");
     finish_suite_nested_child_v2(nested, &first);
     let receipt = decode_owner_success_v1(&first);
@@ -332,13 +332,7 @@ impl RestartCaseV1 {
 fn spawn_traced_owner_v1(
     case: &RestartCaseV1,
     trace: &Path,
-) -> (
-    Child,
-    Option<(
-        nando_operator_learning::K2UncertaintyR8BLedgerWriterV2,
-        nando_operator_learning::K2UncertaintyR8BProcessEventV2,
-    )>,
-) {
+) -> (Child, Option<SuiteNestedStartV3>) {
     let input = uncertainty_bytes_v1(&case.request).expect("traced owner request");
     let nested = begin_suite_nested_child_v2(&case.owner, &case.request, &input);
     let mut child = Command::new("/usr/bin/strace")
@@ -381,8 +375,11 @@ fn wait_for_tracee_v1(tracer_pid: u32, timeout: Duration) -> u32 {
 fn wait_for_stopped_lock_v1(pid: u32, inode: u64, timeout: Duration) {
     let deadline = Instant::now() + timeout;
     loop {
-        let stopped = fs::read_to_string(format!("/proc/{pid}/status"))
-            .is_ok_and(|value| value.lines().any(|line| line.starts_with("State:\tT")));
+        let stopped = fs::read_to_string(format!("/proc/{pid}/status")).is_ok_and(|value| {
+            value
+                .lines()
+                .any(|line| line.starts_with("State:\tT") || line.starts_with("State:\tt"))
+        });
         let locked = fs::read_to_string("/proc/locks").is_ok_and(|value| {
             value.lines().any(|line| {
                 line.contains("FLOCK")

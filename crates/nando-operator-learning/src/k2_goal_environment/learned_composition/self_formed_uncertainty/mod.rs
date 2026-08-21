@@ -151,6 +151,7 @@ pub use precommit_v2::*;
 pub use probe::*;
 pub use r8b_authorizer::*;
 pub use r8b_model::*;
+pub use r8b_process_authorizer::*;
 pub use r8b_process_ledger::*;
 pub use r8b_process_model::*;
 pub use r8b_publisher::*;
