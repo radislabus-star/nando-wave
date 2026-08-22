@@ -216,11 +216,19 @@ impl RestartCaseV1 {
     }
 
     fn run_owner(&self) -> Output {
-        run_process_v1(&self.owner, &self.request)
+        run_suite_command_recorded_v3(&self.owner, &self.request, self.strace_command(), Some(1))
     }
 
     fn run_owner_success(&self) -> Output {
-        run_process_recorded_v2(&self.owner, &self.request)
+        run_suite_command_recorded_v3(&self.owner, &self.request, self.strace_command(), None)
+    }
+
+    fn strace_command(&self) -> Command {
+        let mut command = Command::new("/usr/bin/strace");
+        command
+            .args(["-f", "-qq", "-e", "trace=none", "-o", "/dev/null"])
+            .arg(&self.owner);
+        command
     }
 
     fn prepare_artifacts_frozen(&self) {

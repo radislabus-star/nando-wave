@@ -1,6 +1,6 @@
 use super::super::{
-    K2CompositionErrorV1, K2CompositionResultV1, composition_sha256_bytes_v1, require_composition_root_v1,
-    valid_composition_path_v1,
+    K2CompositionErrorV1, K2CompositionResultV1, composition_sha256_bytes_v1,
+    require_composition_root_v1, valid_composition_path_v1,
 };
 use super::{
     K2_UNCERTAINTY_R8B_DOWNSTREAM_CONTRACT_SCHEMA_V3, K2_UNCERTAINTY_R8B_PROCESS_EVENT_SCHEMA_V3,
@@ -9,16 +9,28 @@ use super::{
     K2_UNCERTAINTY_R8B_STATIC_PROJECTION_SCHEMA_V3, K2UncertaintyR8BCompletionKindV3 as Completion,
     K2UncertaintyR8BDownstreamContractV3, K2UncertaintyR8BEvidenceKindV2 as EvidenceKind,
     K2UncertaintyR8BExpectedOutcomeV3 as ExpectedOutcome, K2UncertaintyR8BInputRoleV3 as InputRole,
-    K2UncertaintyR8BInvocationPlanV3, K2UncertaintyR8BLaunchKindV3 as LaunchKind, K2UncertaintyR8BLedgerSummaryV3,
-    K2UncertaintyR8BManagerIdentityV3, K2UncertaintyR8BObjectRoleV3 as ObjectRole, K2UncertaintyR8BOutputContractV3,
-    K2UncertaintyR8BPrivilegedProbeV3, K2UncertaintyR8BProcessEventV3, K2UncertaintyR8BProducerRequestV3,
-    K2UncertaintyR8BResourceReceiptV3, K2UncertaintyR8BScheduleAuthorityV3, K2UncertaintyR8BStaticProjectionV3,
+    K2UncertaintyR8BInvocationPlanV3, K2UncertaintyR8BLaunchKindV3 as LaunchKind,
+    K2UncertaintyR8BLedgerSummaryV3, K2UncertaintyR8BManagerIdentityV3,
+    K2UncertaintyR8BObjectRoleV3 as ObjectRole, K2UncertaintyR8BOutputContractV3,
+    K2UncertaintyR8BPrivilegedProbeV3, K2UncertaintyR8BProcessEventV3,
+    K2UncertaintyR8BProducerRequestV3, K2UncertaintyR8BResourceReceiptV3,
+    K2UncertaintyR8BScheduleAuthorityV3, K2UncertaintyR8BStaticProjectionV3,
     K2UncertaintyR8BToolRoleV3 as ToolRole, K2UncertaintyR8BUnitResourceObservationV3,
-    K2UncertaintyR8BValidatedFactV3 as ValidatedFact, K2UncertaintyR8BValidatorV3 as Validator, denied_authority_v1,
-    require_denied_authority_v1, uncertainty_bytes_v1, uncertainty_root_v1, valid_r8b_role_v3,
+    K2UncertaintyR8BValidatedFactV3 as ValidatedFact, K2UncertaintyR8BValidatorV3 as Validator,
+    denied_authority_v1, require_denied_authority_v1, uncertainty_bytes_v1, uncertainty_root_v1,
+    valid_r8b_role_v3,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+#[path = "r8b_process_authorizer/projection.rs"]
+mod projection;
+
+pub use projection::{
+    validate_self_formed_r8b_downstream_contract_v3,
+    validate_self_formed_r8b_process_projections_v3,
+    validate_self_formed_r8b_schedule_authority_v3,
+};
 
 const MAX_PATH_BYTES_V3: usize = 240;
 const MAX_STDOUT_BYTES_V3: u64 = 1_048_576;
@@ -26,6 +38,9 @@ const MAX_STDERR_BYTES_V3: u64 = 65_536;
 const MAX_EVENT_BYTES_V3: usize = 4_096;
 const MAX_AUTHORITY_OUTPUTS_V3: usize = 4;
 const MAX_PROCESS_IDENTIFIER_BYTES_V3: usize = 128;
+const STRACE_V3: &str = "/usr/bin/strace";
+const BWRAP_V3: &str = "/usr/bin/bwrap";
+const PRLIMIT_V3: &str = "/usr/bin/prlimit";
 const SYSTEMD_RUN_V3: &str = "/usr/bin/systemd-run";
 const SYSTEMD_MANAGER_V3: &str = "/usr/lib/systemd/systemd";
 const SUDO_V3: &str = "/usr/lib/cargo/bin/sudo";
@@ -64,14 +79,17 @@ pub fn validate_self_formed_r8b_delegated_resource_v3(
     value: &K2UncertaintyR8BResourceReceiptV3,
 ) -> K2CompositionResultV1<()> {
     validate_self_formed_r8b_resource_receipt_v3(value)?;
-    let mut rows = ledger
-        .invocations
-        .iter()
-        .filter(|row| row.target_role == "M24_LINKED_RUNNER" && row.launch_kind == LaunchKind::UserSystemd);
-    let invocation = rows.next().ok_or_else(|| invalid("self_formed_r8b_v3_delegated_invocation_missing"))?;
+    let mut rows = ledger.invocations.iter().filter(|row| {
+        row.target_role == "M24_LINKED_RUNNER" && row.launch_kind == LaunchKind::UserSystemd
+    });
+    let invocation = rows
+        .next()
+        .ok_or_else(|| invalid("self_formed_r8b_v3_delegated_invocation_missing"))?;
     reject(
         rows.next().is_some()
-            || ledger.request_roots_sha256.get(&invocation.invocation_id_sha256)
+            || ledger
+                .request_roots_sha256
+                .get(&invocation.invocation_id_sha256)
                 != Some(&value.delegated_launch_request_root_sha256),
         "self_formed_r8b_v3_delegated_request_invalid",
     )
@@ -89,10 +107,21 @@ pub fn validate_self_formed_r8b_resource_receipt_v3(
     require_denied_authority_v1(&value.authority)?;
     let unit = self_formed_r8b_route_unit_v3(&value.route_id_sha256)?;
     validate_systemd_run_argv_v3(&value.normalized_systemd_run_argv, &unit)?;
-    validate_manager_identity_v3(&value.manager_pre)?;
-    reject(value.manager_pre != value.manager_post, "self_formed_r8b_manager_identity_drift")?;
-    validate_probe_v3(&value.probe_pre, value.manager_pre.main_pid, &value.pinned_systemd_sha256)?;
-    validate_probe_v3(&value.probe_post, value.manager_post.main_pid, &value.pinned_systemd_sha256)?;
+    validate_self_formed_r8b_manager_identity_v3(&value.manager_pre)?;
+    reject(
+        value.manager_pre != value.manager_post,
+        "self_formed_r8b_manager_identity_drift",
+    )?;
+    validate_self_formed_r8b_privileged_probe_v3(
+        &value.probe_pre,
+        value.manager_pre.main_pid,
+        &value.pinned_systemd_sha256,
+    )?;
+    validate_self_formed_r8b_privileged_probe_v3(
+        &value.probe_post,
+        value.manager_post.main_pid,
+        &value.pinned_systemd_sha256,
+    )?;
     validate_unit_resource_v3(&value.unit, &unit)?;
     let mut canonical = value.clone();
     canonical.receipt_root_sha256.clear();
@@ -129,7 +158,9 @@ fn validate_systemd_run_argv_v3(argv: &[String], unit: &str) -> K2CompositionRes
     ];
     reject(
         argv.len() != 22
-            || fixed.iter().any(|(index, expected)| argv[*index] != *expected)
+            || fixed
+                .iter()
+                .any(|(index, expected)| argv[*index] != *expected)
             || argv[4] != format!("--unit={unit}"),
         "self_formed_r8b_systemd_run_argv_invalid",
     )?;
@@ -144,13 +175,16 @@ fn validate_systemd_run_argv_v3(argv: &[String], unit: &str) -> K2CompositionRes
         .map(|(index, prefix)| argv[index].strip_prefix(prefix).unwrap_or_default())
         .collect::<Vec<_>>();
     reject(
-        paths.iter().any(|path| path.is_empty() || !Path::new(path).is_absolute() || path.len() > MAX_PATH_BYTES_V3)
-            || paths.iter().collect::<BTreeSet<_>>().len() != paths.len(),
+        paths.iter().any(|path| {
+            path.is_empty() || !Path::new(path).is_absolute() || path.len() > MAX_PATH_BYTES_V3
+        }) || paths.iter().collect::<BTreeSet<_>>().len() != paths.len(),
         "self_formed_r8b_systemd_run_path_invalid",
     )
 }
 
-fn validate_manager_identity_v3(value: &K2UncertaintyR8BManagerIdentityV3) -> K2CompositionResultV1<()> {
+pub fn validate_self_formed_r8b_manager_identity_v3(
+    value: &K2UncertaintyR8BManagerIdentityV3,
+) -> K2CompositionResultV1<()> {
     reject(
         value.bus_peer_pid == 0
             || value.bus_peer_pid != value.main_pid
@@ -171,7 +205,7 @@ fn validate_manager_identity_v3(value: &K2UncertaintyR8BManagerIdentityV3) -> K2
     )
 }
 
-fn validate_probe_v3(
+pub fn validate_self_formed_r8b_privileged_probe_v3(
     value: &K2UncertaintyR8BPrivilegedProbeV3,
     pid: u32,
     pinned_systemd_sha256: &str,
@@ -209,7 +243,9 @@ fn validate_unit_resource_v3(
     value: &K2UncertaintyR8BUnitResourceObservationV3,
     unit: &str,
 ) -> K2CompositionResultV1<()> {
-    let duration = value.route_finished_monotonic_ns.checked_sub(value.route_started_monotonic_ns);
+    let duration = value
+        .route_finished_monotonic_ns
+        .checked_sub(value.route_started_monotonic_ns);
     reject(
         value.unit != unit
             || value.stop_target != unit
@@ -233,28 +269,6 @@ fn validate_unit_resource_v3(
     )
 }
 
-pub fn validate_self_formed_r8b_schedule_authority_v3(
-    authority: &K2UncertaintyR8BScheduleAuthorityV3,
-) -> K2CompositionResultV1<()> {
-    for root in std::iter::once(&authority.schedule_grammar_root_sha256)
-        .chain(authority.case_ids_sha256.iter())
-        .chain(std::iter::once(&authority.authority_root_sha256))
-    {
-        require_composition_root_v1(root)?;
-    }
-    let mut canonical = authority.clone();
-    canonical.authority_root_sha256.clear();
-    reject(
-        authority.schema != K2_UNCERTAINTY_R8B_SCHEDULE_AUTHORITY_SCHEMA_V3
-            || authority.formula != K2_UNCERTAINTY_R8B_SCHEDULE_FORMULA_V3
-            || authority.case_ids_sha256.len() != 16
-            || !authority.case_ids_sha256.windows(2).all(|pair| pair[0] < pair[1])
-            || authority.minimum_representatives != 8
-            || authority.maximum_representatives != 1_792
-            || authority.authority_root_sha256 != uncertainty_root_v1(&canonical)?,
-        "self_formed_r8b_schedule_authority_invalid",
-    )
-}
 pub fn seal_self_formed_r8b_process_event_v3(
     mut event: K2UncertaintyR8BProcessEventV3,
 ) -> K2CompositionResultV1<K2UncertaintyR8BProcessEventV3> {
@@ -265,141 +279,14 @@ pub fn seal_self_formed_r8b_process_event_v3(
     Ok(event)
 }
 
-pub fn validate_self_formed_r8b_downstream_contract_v3(
-    contract: &K2UncertaintyR8BDownstreamContractV3,
-) -> K2CompositionResultV1<()> {
-    require_composition_root_v1(&contract.route_id_sha256)?;
-    require_composition_root_v1(&contract.schedule_grammar_root_sha256)?;
-    let mut ids = BTreeSet::new();
-    for invocation in &contract.invocations {
-        validate_invocation_plan_v3(invocation)?;
-        reject(
-            !downstream_invocation_v3(invocation) || !ids.insert(invocation.invocation_id_sha256.as_str()),
-            "self_formed_r8b_v3_downstream_row_invalid",
-        )?;
-    }
-    let mut canonical = contract.clone();
-    canonical.projection_root_sha256.clear();
-    reject(
-        contract.schema != K2_UNCERTAINTY_R8B_DOWNSTREAM_CONTRACT_SCHEMA_V3
-            || contract.invocations.len() != 149
-            || !contract.invocations.windows(2).all(|pair| pair[0].invocation_id_sha256 < pair[1].invocation_id_sha256)
-            || contract.projection_root_sha256 != uncertainty_root_v1(&canonical)?,
-        "self_formed_r8b_v3_downstream_contract_invalid",
-    )?;
-    validate_c08_cardinality_v3(&contract.invocations)?;
-    Ok(())
-}
-
-pub fn validate_self_formed_r8b_process_projections_v3(
-    ledger: &K2UncertaintyR8BLedgerSummaryV3,
-    c08: &K2UncertaintyR8BDownstreamContractV3,
-) -> K2CompositionResultV1<()> {
-    validate_self_formed_r8b_schedule_authority_v3(&ledger.schedule_authority)?;
-    let static_rows = ledger.invocations.iter().filter(|row| static_invocation_v3(row)).cloned().collect::<Vec<_>>();
-    let roots = static_rows
-        .iter()
-        .filter(|row| PRODUCER_ROLES_V3.contains(&row.target_role.as_str()))
-        .map(|row| {
-            ledger
-                .request_roots_sha256
-                .get(&row.invocation_id_sha256)
-                .cloned()
-                .map(|root| (row.invocation_id_sha256.clone(), root))
-        })
-        .collect::<Option<BTreeMap<_, _>>>()
-        .ok_or_else(|| invalid("self_formed_r8b_v3_static_request_root_missing"))?;
-    let observed = seal_static_projection_v3(
-        ledger.route_id_sha256.clone(),
-        ledger.schedule_authority.schedule_grammar_root_sha256.clone(),
-        static_rows,
-        roots,
-    )?;
-    reject(
-        observed.projection_root_sha256 != ledger.expected_projection_root_sha256
-            || c08.schedule_grammar_root_sha256 != ledger.schedule_authority.schedule_grammar_root_sha256
-            || ledger.invocations.iter().any(|row| {
-                [static_invocation_v3(row), dynamic_invocation_v3(row), downstream_invocation_v3(row)]
-                    .into_iter()
-                    .filter(|value| *value)
-                    .count()
-                    != 1
-            }),
-        "self_formed_r8b_v3_projection_partition_invalid",
-    )?;
-    validate_m10_projection_v3(ledger)?;
-    validate_downstream_projection_v3(ledger, c08)
-}
-
-fn validate_m10_projection_v3(ledger: &K2UncertaintyR8BLedgerSummaryV3) -> K2CompositionResultV1<()> {
-    let cases = ledger.schedule_authority.case_ids_sha256.iter().cloned().collect::<BTreeSet<_>>();
-    reject(
-        ledger.representative_counts.keys().cloned().collect::<BTreeSet<_>>() != cases,
-        "self_formed_r8b_v3_m10_fact_set_invalid",
-    )?;
-    let mut expected = BTreeMap::new();
-    for (case, representatives) in &ledger.representative_counts {
-        reject(
-            !(ledger.schedule_authority.minimum_representatives..=ledger.schedule_authority.maximum_representatives)
-                .contains(representatives),
-            "self_formed_r8b_v3_m10_fact_range_invalid",
-        )?;
-        let t = representatives.saturating_sub(8).div_ceil(7) + 1;
-        for (role, count) in [
-            ("M03_LEARNER", 1),
-            ("M04_PROBE", 1),
-            ("M05_SELECTOR", t),
-            ("M06_BASELINE", 1 + 3 * t),
-            ("M07_SELECTION_PREVERIFIER", 1),
-            ("M08_CLOSURE_PLANNER", 1),
-            ("M09_CLOSURE_VERIFIER", 1),
-        ] {
-            expected.insert((case.clone(), role.to_owned()), count);
-        }
-    }
-    let mut observed = BTreeMap::new();
-    for row in ledger.invocations.iter().filter(|row| dynamic_invocation_v3(row)) {
-        let case = row.case_id_sha256.clone().ok_or_else(|| invalid("self_formed_r8b_v3_m10_case_missing"))?;
-        *observed.entry((case, row.target_role.clone())).or_insert(0) += 1;
-    }
-    reject(observed != expected, "self_formed_r8b_v3_m10_projection_mismatch")
-}
-
-fn validate_c08_cardinality_v3(plan: &[K2UncertaintyR8BInvocationPlanV3]) -> K2CompositionResultV1<()> {
-    #[rustfmt::skip]
-    let expected = [
-        ("M11_PRIVATE_RESOLVER", 24), ("M12_SAFETY", 24),
-        ("M13_WORKER", 24), ("M14_OBSERVER", 24),
-        ("M15_FINAL_VERIFIER", 16), ("M16_ORACLE", 16),
-        ("M19_FRESH_CONTROL_CASE", 12), ("M17_CONTROL_EVALUATOR", 4),
-        ("M18_TERMINAL_EVALUATOR", 1), ("M20_CLEANUP_AUTHORIZER", 1),
-        ("M21_CLEANUP_OWNER", 1), ("M22_CLEANUP_VERIFIER", 1),
-        ("M23_DEVELOPMENT_RESULT_PUBLISHER", 1),
-    ].into_iter().collect::<BTreeMap<_, _>>();
-    let mut observed = BTreeMap::new();
-    for row in plan {
-        *observed.entry(row.target_role.as_str()).or_insert(0_usize) += 1;
-    }
-    reject(
-        observed != expected || plan.iter().any(|row| row.request_owner_role != "M24_LINKED_RUNNER"),
-        "self_formed_r8b_v3_c08_cardinality_invalid",
-    )
-}
-
-fn validate_downstream_projection_v3(
-    ledger: &K2UncertaintyR8BLedgerSummaryV3,
-    c08: &K2UncertaintyR8BDownstreamContractV3,
-) -> K2CompositionResultV1<()> {
-    let mut observed =
-        ledger.invocations.iter().filter(|row| downstream_invocation_v3(row)).cloned().collect::<Vec<_>>();
-    observed.sort_by(|left, right| left.invocation_id_sha256.cmp(&right.invocation_id_sha256));
-    reject(observed != c08.invocations, "self_formed_r8b_v3_c08_projection_mismatch")
-}
-
 pub fn validate_self_formed_r8b_producer_request_v3(
     request: &K2UncertaintyR8BProducerRequestV3,
 ) -> K2CompositionResultV1<()> {
-    for root in [&request.route_id_sha256, &request.producer_executable_sha256, &request.schedule_grammar_root_sha256] {
+    for root in [
+        &request.route_id_sha256,
+        &request.producer_executable_sha256,
+        &request.schedule_grammar_root_sha256,
+    ] {
         require_composition_root_v1(root)?;
     }
     reject(
@@ -414,7 +301,9 @@ pub fn validate_self_formed_r8b_producer_request_v3(
         require_composition_root_v1(&input.content_sha256)?;
         require_composition_root_v1(&input.semantic_root_sha256)?;
         let expected_mode = match input.role {
-            InputRole::DevelopmentSeed | InputRole::LinkedManifest | InputRole::SuiteManifest => 0o400,
+            InputRole::DevelopmentSeed | InputRole::LinkedManifest | InputRole::SuiteManifest => {
+                0o400
+            }
             InputRole::FixtureTree => 0o500,
             InputRole::ProcessLedger => 0o600,
             InputRole::ExclusiveOutput => 0o700,
@@ -438,7 +327,10 @@ pub fn validate_self_formed_r8b_producer_request_v3(
     ]
     .into_iter()
     .collect();
-    reject(input_roles != required_inputs, "self_formed_r8b_v3_input_set_invalid")?;
+    reject(
+        input_roles != required_inputs,
+        "self_formed_r8b_v3_input_set_invalid",
+    )?;
     let mut output_paths = BTreeSet::new();
     for output in &request.outputs {
         validate_output_contract_v3(output, false)?;
@@ -466,27 +358,25 @@ pub fn validate_self_formed_r8b_producer_request_v3(
         }),
         "self_formed_r8b_v3_invocation_parent_missing",
     )?;
-    if request.producer_role == "S02_RESTART" {
-        validate_s02_plan_v3(&request.invocation_plan)?;
-    } else {
-        reject(
-            request.producer_role != "S01_CRATE_UNIT"
-                && request.invocation_plan.iter().any(|row| {
-                    row.request_owner_role != request.producer_role || row.parent_invocation_id_sha256.is_some()
-                }),
-            "self_formed_r8b_v3_producer_writer_partition_invalid",
-        )?;
-    }
-    validate_producer_shape_v3(request)?;
+    validate_exact_producer_plan_v3(request)?;
+    projection::validate_producer_shape_v3(request)?;
     let mut canonical = request.clone();
     canonical.request_root_sha256.clear();
-    reject(request.request_root_sha256 != uncertainty_root_v1(&canonical)?, "self_formed_r8b_v3_request_root_invalid")
+    reject(
+        request.request_root_sha256 != uncertainty_root_v1(&canonical)?,
+        "self_formed_r8b_v3_request_root_invalid",
+    )
 }
 
-pub fn validate_self_formed_r8b_process_event_v3(event: &K2UncertaintyR8BProcessEventV3) -> K2CompositionResultV1<()> {
-    for root in
-        [&event.previous_event_root_sha256, &event.route_id_sha256, &event.request_root_sha256, &event.stdin_sha256]
-    {
+pub fn validate_self_formed_r8b_process_event_v3(
+    event: &K2UncertaintyR8BProcessEventV3,
+) -> K2CompositionResultV1<()> {
+    for root in [
+        &event.previous_event_root_sha256,
+        &event.route_id_sha256,
+        &event.request_root_sha256,
+        &event.stdin_sha256,
+    ] {
         require_composition_root_v1(root)?;
     }
     if let Some(root) = &event.stdout_sha256 {
@@ -510,24 +400,40 @@ pub fn validate_self_formed_r8b_process_event_v3(event: &K2UncertaintyR8BProcess
             || (requested && terminal_fields.iter().any(|value| *value))
             || (!requested && terminal_fields.iter().any(|value| !*value))
             || (requested && event.validated_output.is_some())
-            || event.stdout_byte_len.is_some_and(|bytes| bytes > MAX_STDOUT_BYTES_V3)
-            || event.stderr_byte_len.is_some_and(|bytes| bytes > MAX_STDERR_BYTES_V3),
+            || event
+                .stdout_byte_len
+                .is_some_and(|bytes| bytes > MAX_STDOUT_BYTES_V3)
+            || event
+                .stderr_byte_len
+                .is_some_and(|bytes| bytes > MAX_STDERR_BYTES_V3),
         "self_formed_r8b_v3_process_event_shape_invalid",
     )?;
     if let Some(completion) = event.completion {
         let authority = completion == Completion::AuthoritySuccess;
+        let diagnostic_exit_matches = event
+            .invocation
+            .expected_exit_predicate
+            .as_ref()
+            .is_some_and(|predicate| event.exit_code == Some(predicate.exact_exit_code));
         reject(
             authority != event.validated_output.is_some()
                 || (authority && event.exit_code != Some(0))
-                || (completion == Completion::DiagnosticExpectedFailure && event.exit_code == Some(0))
-                || (authority && event.invocation.expected_outcome != ExpectedOutcome::AuthoritySuccess)
                 || (completion == Completion::DiagnosticExpectedFailure
-                    && event.invocation.expected_outcome != ExpectedOutcome::DiagnosticExpectedFailure),
+                    && !diagnostic_exit_matches)
+                || (authority
+                    && event.invocation.expected_outcome != ExpectedOutcome::AuthoritySuccess)
+                || (completion == Completion::DiagnosticExpectedFailure
+                    && event.invocation.expected_outcome
+                        != ExpectedOutcome::DiagnosticExpectedFailure),
             "self_formed_r8b_v3_completion_authority_invalid",
         )?;
     }
     if let Some(output) = &event.validated_output {
-        for root in [&output.stdout_sha256, &output.semantic_root_sha256, &output.validator_executable_sha256] {
+        for root in [
+            &output.stdout_sha256,
+            &output.semantic_root_sha256,
+            &output.validator_executable_sha256,
+        ] {
             require_composition_root_v1(root)?;
         }
         reject(
@@ -543,13 +449,21 @@ pub fn validate_self_formed_r8b_process_event_v3(event: &K2UncertaintyR8BProcess
             validate_output_contract_v3(descriptor, true)?;
             reject(
                 descriptor.producer_role != event.invocation.target_role
-                    || descriptor.producer_executable_sha256 != event.invocation.target_executable_sha256,
+                    || descriptor.producer_executable_sha256
+                        != event.invocation.target_executable_sha256,
                 "self_formed_r8b_v3_authority_output_owner_invalid",
             )?;
         }
-        match (&output.fact, output.validator, event.invocation.target_role.as_str()) {
-            (ValidatedFact::RepresentativeCount { count }, Validator::RepresentativeCount, "M04_PROBE")
-                if (8..=1792).contains(count) => {}
+        match (
+            &output.fact,
+            output.validator,
+            event.invocation.target_role.as_str(),
+        ) {
+            (
+                ValidatedFact::RepresentativeCount { count },
+                Validator::RepresentativeCount,
+                "M04_PROBE",
+            ) if (8..=1792).contains(count) => {}
             (ValidatedFact::None, validator, _) if validator != Validator::RepresentativeCount => {}
             _ => return Err(invalid("self_formed_r8b_v3_validated_fact_invalid")),
         }
@@ -582,18 +496,30 @@ fn validate_output_contract_v3(
             || !short_process_identifier_v3(&output.receipt_schema)
             || !short_process_identifier_v3(&output.producer_role)
             || require_attestation != output.file_attestation.is_some()
-            || output.file_attestation.as_ref().is_some_and(|value| value.byte_len == 0 || value.unix_mode != 0o400)
+            || output
+                .file_attestation
+                .as_ref()
+                .is_some_and(|value| value.byte_len == 0 || value.unix_mode != 0o400)
             || evidence != output.evidence_kind.is_some()
-            || (evidence && output.required_denominator != output.evidence_kind.and_then(EvidenceKind::required))
+            || (evidence
+                && output.required_denominator
+                    != output.evidence_kind.and_then(EvidenceKind::required))
             || (output.object_role == ObjectRole::DownstreamInvocationContract
-                && (output.evidence_kind.is_some() || output.validator != Validator::DownstreamInvocationContract))
-            || output.required_source_roots_sha256.iter().collect::<BTreeSet<_>>().len()
+                && (output.evidence_kind.is_some()
+                    || output.validator != Validator::DownstreamInvocationContract))
+            || output
+                .required_source_roots_sha256
+                .iter()
+                .collect::<BTreeSet<_>>()
+                .len()
                 != output.required_source_roots_sha256.len(),
         "self_formed_r8b_v3_output_contract_invalid",
     )
 }
 
-fn validate_invocation_plan_v3(invocation: &K2UncertaintyR8BInvocationPlanV3) -> K2CompositionResultV1<()> {
+fn validate_invocation_plan_v3(
+    invocation: &K2UncertaintyR8BInvocationPlanV3,
+) -> K2CompositionResultV1<()> {
     for root in [
         Some(&invocation.invocation_id_sha256),
         invocation.parent_invocation_id_sha256.as_ref(),
@@ -606,71 +532,189 @@ fn validate_invocation_plan_v3(invocation: &K2UncertaintyR8BInvocationPlanV3) ->
     {
         require_composition_root_v1(root)?;
     }
-    let expected_tools: &[ToolRole] = match invocation.launch_kind {
+    let expected_tools: &[(ToolRole, &str)] = match invocation.launch_kind {
         LaunchKind::Direct => &[],
-        LaunchKind::StraceMediated => &[ToolRole::Strace],
-        LaunchKind::BwrapPrlimitMediated => &[ToolRole::Bwrap, ToolRole::Prlimit],
-        LaunchKind::UserSystemd => &[ToolRole::SystemdRun],
+        LaunchKind::StraceMediated => &[(ToolRole::Strace, STRACE_V3)],
+        LaunchKind::BwrapPrlimitMediated => {
+            &[(ToolRole::Bwrap, BWRAP_V3), (ToolRole::Prlimit, PRLIMIT_V3)]
+        }
+        LaunchKind::UserSystemd => &[(ToolRole::SystemdRun, SYSTEMD_RUN_V3)],
     };
     for tool in &invocation.tool_chain {
         require_composition_root_v1(&tool.sha256)?;
-        reject(!bounded_process_path_v3(&tool.canonical_path), "self_formed_r8b_v3_tool_identity_invalid")?;
+        reject(
+            !bounded_process_path_v3(&tool.canonical_path),
+            "self_formed_r8b_v3_tool_identity_invalid",
+        )?;
     }
+    let exit_predicate_valid = match (
+        invocation.expected_outcome,
+        invocation.expected_exit_predicate.as_ref(),
+    ) {
+        (ExpectedOutcome::AuthoritySuccess, None) => true,
+        (ExpectedOutcome::DiagnosticExpectedFailure, Some(predicate)) => {
+            (1..=255).contains(&predicate.exact_exit_code)
+        }
+        _ => false,
+    };
     reject(
         !valid_r8b_role_v3(&invocation.request_owner_role)
             || !valid_r8b_role_v3(&invocation.target_role)
             || !short_process_identifier_v3(&invocation.stage)
-            || invocation.tool_chain.iter().map(|tool| tool.role).ne(expected_tools.iter().copied()),
+            || !exit_predicate_valid
+            || invocation
+                .tool_chain
+                .iter()
+                .map(|tool| (tool.role, tool.canonical_path.as_str()))
+                .ne(expected_tools.iter().copied()),
         "self_formed_r8b_v3_invocation_plan_invalid",
     )
 }
 
-fn validate_producer_shape_v3(request: &K2UncertaintyR8BProducerRequestV3) -> K2CompositionResultV1<()> {
-    let expected = match request.producer_role.as_str() {
-        "S01_CRATE_UNIT" => (0, 3),
-        "S02_RESTART" => (16, 1),
-        "S03_MODE_MATRIX" | "S04_CLEANUP_NEGATIVE" => (6, 1),
-        "S05_AUTHORITY_PUBLICATION" => (2, 1),
-        "M24_LINKED_RUNNER" => (151, 4),
+type PlanShapeV3 = (
+    &'static str,
+    &'static str,
+    &'static str,
+    LaunchKind,
+    ExpectedOutcome,
+    Option<i32>,
+    Validator,
+    bool,
+    bool,
+    usize,
+);
+
+fn validate_exact_producer_plan_v3(
+    request: &K2UncertaintyR8BProducerRequestV3,
+) -> K2CompositionResultV1<()> {
+    use ExpectedOutcome::{AuthoritySuccess as A, DiagnosticExpectedFailure as D};
+    use LaunchKind::{BwrapPrlimitMediated as B, Direct as X, StraceMediated as S};
+    use Validator::ConcreteReceipt as C;
+    #[rustfmt::skip]
+    let expected: &[PlanShapeV3] = match request.producer_role.as_str() {
+        "S01_CRATE_UNIT" => &[],
+        "S02_RESTART" => &[
+            ("S02_RESTART", "M01_DEVELOPMENT_OWNER", "C02", S, A, None, C, false, false, 6),
+            ("S02_RESTART", "M01_DEVELOPMENT_OWNER", "C02", S, D, Some(1), C, false, false, 4),
+            ("S02_RESTART", "M02_GENERATOR", "C02", B, A, None, C, false, false, 3),
+            ("M01_DEVELOPMENT_OWNER", "M02_GENERATOR", "C02", B, A, None, C, false, false, 3),
+        ],
+        "S03_MODE_MATRIX" => &[
+            ("S03_MODE_MATRIX", "M01_DEVELOPMENT_OWNER", "C03", X, A, None, C, false, false, 1),
+            ("S03_MODE_MATRIX", "M01_DEVELOPMENT_OWNER", "C03", X, D, Some(1), C, false, false, 1),
+            ("M01_DEVELOPMENT_OWNER", "M02_GENERATOR", "C02", B, A, None, C, false, false, 1),
+            ("S03_MODE_MATRIX", "M18_TERMINAL_EVALUATOR", "C03", X, A, None, C, false, false, 3),
+        ],
+        "S04_CLEANUP_NEGATIVE" => &[
+            ("S04_CLEANUP_NEGATIVE", "M01_DEVELOPMENT_OWNER", "C04", X, A, None, C, false, false, 1),
+            ("M01_DEVELOPMENT_OWNER", "M02_GENERATOR", "C02", B, A, None, C, false, false, 1),
+            ("S04_CLEANUP_NEGATIVE", "M18_TERMINAL_EVALUATOR", "C04", X, A, None, C, false, false, 1),
+            ("S04_CLEANUP_NEGATIVE", "M20_CLEANUP_AUTHORIZER", "C04", B, A, None, C, false, false, 1),
+            ("S04_CLEANUP_NEGATIVE", "M21_CLEANUP_OWNER", "C04", B, A, None, C, false, false, 1),
+            ("S04_CLEANUP_NEGATIVE", "M22_CLEANUP_VERIFIER", "C04", B, A, None, C, false, false, 1),
+        ],
+        "S05_AUTHORITY_PUBLICATION" => &[
+            ("S05_AUTHORITY_PUBLICATION", "M26_R8B_PUBLISHER", "C05", X, D, Some(1), C, false, false, 2),
+        ],
+        "M24_LINKED_RUNNER" => &[
+            ("M24_LINKED_RUNNER", "M01_DEVELOPMENT_OWNER", "C01", X, A, None, C, false, false, 1),
+            ("M24_LINKED_RUNNER", "M10_PUBLIC_COORDINATOR", "C06", X, A, None, C, false, false, 1),
+            ("M24_LINKED_RUNNER", "M11_PRIVATE_RESOLVER", "C09", B, A, None, C, true, true, 24),
+            ("M24_LINKED_RUNNER", "M12_SAFETY", "C09", B, A, None, C, true, true, 24),
+            ("M24_LINKED_RUNNER", "M13_WORKER", "C09", B, A, None, C, true, true, 24),
+            ("M24_LINKED_RUNNER", "M14_OBSERVER", "C09", B, A, None, C, true, true, 24),
+            ("M24_LINKED_RUNNER", "M15_FINAL_VERIFIER", "C09", B, A, None, C, true, false, 16),
+            ("M24_LINKED_RUNNER", "M16_ORACLE", "C10", B, A, None, C, true, false, 16),
+            ("M24_LINKED_RUNNER", "M19_FRESH_CONTROL_CASE", "C11", B, A, None, C, true, false, 12),
+            ("M24_LINKED_RUNNER", "M17_CONTROL_EVALUATOR", "C12", X, A, None, C, false, false, 4),
+            ("M24_LINKED_RUNNER", "M18_TERMINAL_EVALUATOR", "C14", X, A, None, C, false, false, 1),
+            ("M24_LINKED_RUNNER", "M20_CLEANUP_AUTHORIZER", "C16", B, A, None, C, false, false, 1),
+            ("M24_LINKED_RUNNER", "M21_CLEANUP_OWNER", "C17", B, A, None, C, false, false, 1),
+            ("M24_LINKED_RUNNER", "M22_CLEANUP_VERIFIER", "C18", B, A, None, C, false, false, 1),
+            ("M24_LINKED_RUNNER", "M23_DEVELOPMENT_RESULT_PUBLISHER", "C20", B, A, None, C, false, false, 1),
+        ],
         _ => return Err(invalid("self_formed_r8b_v3_producer_role_invalid")),
     };
-    let roles = request.outputs.iter().fold(BTreeMap::new(), |mut counts, row| {
-        *counts.entry(row.object_role).or_insert(0_usize) += 1;
-        counts
-    });
+    let mut counts = vec![0_usize; expected.len()];
+    let mut target_hashes = BTreeMap::new();
+    let mut tool_hashes = BTreeMap::new();
+    let mut nested_parents = BTreeSet::new();
+    for row in &request.invocation_plan {
+        let index = expected
+            .iter()
+            .position(|shape| plan_shape_matches_v3(row, shape))
+            .ok_or_else(|| invalid("self_formed_r8b_v3_producer_plan_substitution"))?;
+        counts[index] += 1;
+        reject(
+            target_hashes
+                .insert(
+                    row.target_role.as_str(),
+                    row.target_executable_sha256.as_str(),
+                )
+                .is_some_and(|hash| hash != row.target_executable_sha256.as_str()),
+            "self_formed_r8b_v3_target_identity_drift",
+        )?;
+        for tool in &row.tool_chain {
+            reject(
+                tool_hashes
+                    .insert(tool.canonical_path.as_str(), tool.sha256.as_str())
+                    .is_some_and(|hash| hash != tool.sha256.as_str()),
+                "self_formed_r8b_v3_tool_identity_drift",
+            )?;
+        }
+        let parent = row.parent_invocation_id_sha256.as_ref().and_then(|id| {
+            request
+                .invocation_plan
+                .iter()
+                .find(|candidate| &candidate.invocation_id_sha256 == id)
+        });
+        if row.request_owner_role == request.producer_role {
+            reject(
+                parent.is_some()
+                    || row.request_owner_executable_sha256 != request.producer_executable_sha256,
+                "self_formed_r8b_v3_producer_writer_partition_invalid",
+            )?;
+        } else {
+            reject(
+                row.request_owner_role != "M01_DEVELOPMENT_OWNER"
+                    || parent.is_none_or(|value| {
+                        value.request_owner_role != request.producer_role
+                            || value.target_role != "M01_DEVELOPMENT_OWNER"
+                            || value.expected_outcome != ExpectedOutcome::AuthoritySuccess
+                            || value.target_executable_sha256 != row.request_owner_executable_sha256
+                    })
+                    || !nested_parents.insert(
+                        row.parent_invocation_id_sha256
+                            .as_deref()
+                            .unwrap_or_default(),
+                    ),
+                "self_formed_r8b_v3_nested_writer_partition_invalid",
+            )?;
+        }
+    }
     reject(
-        (request.invocation_plan.len(), request.outputs.len()) != expected
-            || (request.producer_role == "M24_LINKED_RUNNER"
-                && (roles.get(&ObjectRole::DownstreamInvocationContract) != Some(&1)
-                    || roles.get(&ObjectRole::Evidence) != Some(&3)
-                    || roles.len() != 2))
-            || (request.producer_role != "M24_LINKED_RUNNER" && roles != BTreeMap::from([(ObjectRole::Evidence, expected.1)])),
-        "self_formed_r8b_v3_producer_shape_invalid",
+        counts
+            .iter()
+            .zip(expected)
+            .any(|(count, shape)| *count != shape.9),
+        "self_formed_r8b_v3_producer_plan_cardinality_invalid",
     )
 }
 
-fn validate_s02_plan_v3(plan: &[K2UncertaintyR8BInvocationPlanV3]) -> K2CompositionResultV1<()> {
-    let m01 = plan
-        .iter()
-        .filter(|row| row.request_owner_role == "S02_RESTART" && row.target_role == "M01_DEVELOPMENT_OWNER")
-        .collect::<Vec<_>>();
-    let setup =
-        plan.iter().filter(|row| row.request_owner_role == "S02_RESTART" && row.target_role == "M02_GENERATOR").count();
-    let nested = plan
-        .iter()
-        .filter(|row| row.request_owner_role == "M01_DEVELOPMENT_OWNER" && row.target_role == "M02_GENERATOR")
-        .collect::<Vec<_>>();
-    let parents = m01.iter().map(|row| row.invocation_id_sha256.as_str()).collect::<BTreeSet<_>>();
-    reject(
-        plan.len() != 16
-            || m01.len() != 10
-            || setup != 3
-            || nested.len() != 3
-            || nested
-                .iter()
-                .any(|row| row.parent_invocation_id_sha256.as_deref().is_none_or(|parent| !parents.contains(parent))),
-        "self_formed_r8b_v3_s02_plan_invalid",
-    )
+fn plan_shape_matches_v3(row: &K2UncertaintyR8BInvocationPlanV3, shape: &PlanShapeV3) -> bool {
+    row.request_owner_role == shape.0
+        && row.target_role == shape.1
+        && row.stage == shape.2
+        && row.launch_kind == shape.3
+        && row.expected_outcome == shape.4
+        && row
+            .expected_exit_predicate
+            .as_ref()
+            .map(|value| value.exact_exit_code)
+            == shape.5
+        && row.validator == shape.6
+        && row.case_id_sha256.is_some() == shape.7
+        && row.probe_ordinal.is_some() == shape.8
 }
 
 fn bounded_process_path_v3(path: &str) -> bool {
@@ -681,66 +725,10 @@ fn short_process_identifier_v3(value: &str) -> bool {
     !value.is_empty() && value.len() <= MAX_PROCESS_IDENTIFIER_BYTES_V3 && value.is_ascii()
 }
 
-fn seal_static_projection_v3(
-    route_id_sha256: String,
-    schedule_grammar_root_sha256: String,
-    mut invocations: Vec<K2UncertaintyR8BInvocationPlanV3>,
-    producer_request_roots_sha256: BTreeMap<String, String>,
-) -> K2CompositionResultV1<K2UncertaintyR8BStaticProjectionV3> {
-    require_composition_root_v1(&route_id_sha256)?;
-    require_composition_root_v1(&schedule_grammar_root_sha256)?;
-    invocations.sort_by(|left, right| left.invocation_id_sha256.cmp(&right.invocation_id_sha256));
-    for row in &invocations {
-        validate_invocation_plan_v3(row)?;
-    }
-    for root in producer_request_roots_sha256.values() {
-        require_composition_root_v1(root)?;
-    }
-    reject(
-        invocations.len() != 39
-            || producer_request_roots_sha256.len() != 6
-            || invocations.windows(2).any(|pair| pair[0].invocation_id_sha256 >= pair[1].invocation_id_sha256)
-            || producer_request_roots_sha256
-                .keys()
-                .any(|id| !invocations.iter().any(|row| &row.invocation_id_sha256 == id)),
-        "self_formed_r8b_v3_static_projection_invalid",
-    )?;
-    let mut projection = K2UncertaintyR8BStaticProjectionV3 {
-        schema: K2_UNCERTAINTY_R8B_STATIC_PROJECTION_SCHEMA_V3.to_owned(),
-        route_id_sha256,
-        schedule_grammar_root_sha256,
-        invocations,
-        producer_request_roots_sha256,
-        projection_root_sha256: String::new(),
-    };
-    projection.projection_root_sha256 = uncertainty_root_v1(&projection)?;
-    Ok(projection)
-}
-
-fn dynamic_invocation_v3(row: &K2UncertaintyR8BInvocationPlanV3) -> bool {
-    row.request_owner_role == "M10_PUBLIC_COORDINATOR" && DYNAMIC_ROLES_V3.contains(&row.target_role.as_str())
-}
-
-fn downstream_invocation_v3(row: &K2UncertaintyR8BInvocationPlanV3) -> bool {
-    row.request_owner_role == "M24_LINKED_RUNNER"
-        && DOWNSTREAM_ROLES_V3.contains(&row.target_role.as_str())
-        && row
-            .stage
-            .strip_prefix('C')
-            .and_then(|value| value.parse::<u8>().ok())
-            .is_some_and(|value| (9..=20).contains(&value))
-}
-
-fn static_invocation_v3(row: &K2UncertaintyR8BInvocationPlanV3) -> bool {
-    PRODUCER_ROLES_V3.contains(&row.target_role.as_str())
-        || PRODUCER_ROLES_V3[..5].contains(&row.request_owner_role.as_str())
-        || (row.request_owner_role == "M01_DEVELOPMENT_OWNER" && row.target_role == "M02_GENERATOR")
-        || (row.request_owner_role == "M24_LINKED_RUNNER"
-            && matches!(row.target_role.as_str(), "M01_DEVELOPMENT_OWNER" | "M10_PUBLIC_COORDINATOR"))
-}
-
 fn require_roots<'a>(roots: impl IntoIterator<Item = &'a String>) -> K2CompositionResultV1<()> {
-    roots.into_iter().try_for_each(|root| require_composition_root_v1(root))
+    roots
+        .into_iter()
+        .try_for_each(|root| require_composition_root_v1(root))
 }
 fn reject(condition: bool, reason: &'static str) -> K2CompositionResultV1<()> {
     (!condition).then_some(()).ok_or_else(|| invalid(reason))

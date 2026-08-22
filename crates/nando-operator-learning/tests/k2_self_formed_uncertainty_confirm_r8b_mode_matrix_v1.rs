@@ -178,7 +178,11 @@ fn r8b_mode_and_legacy_matrix_rejects_x01_through_x20() {
     let lock = File::open(&contender_lab).expect("open contender lab lock");
     lock.try_lock().expect("hold contender lab lock");
     let before = tree_snapshot_v1(&contender_lab);
-    assert!(!run_process_v1(&owner, &contender_request).status.success());
+    assert!(
+        !run_process_expected_failure_recorded_v3(&owner, &contender_request, 1)
+            .status
+            .success()
+    );
     assert_eq!(tree_snapshot_v1(&contender_lab), before);
     assert!(!contender_lab.join("attempt").exists());
     rejected.push("X20");

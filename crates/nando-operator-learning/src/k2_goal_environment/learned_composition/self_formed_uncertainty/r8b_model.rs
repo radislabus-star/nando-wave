@@ -4,17 +4,23 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::super::{
-    K2CompositionAuthorityBoundaryV1, K2CompositionErrorV1, K2CompositionResultV1, require_composition_root_v1,
+    K2CompositionAuthorityBoundaryV1, K2CompositionErrorV1, K2CompositionResultV1,
+    require_composition_root_v1,
 };
-use super::immutable_publication::decode_canonical_json_v1;
 use super::{
     K2_UNCERTAINTY_R8B_CONTROL_WRAPPER_SCHEMA_V3, K2_UNCERTAINTY_R8B_EXECUTABLE_MANIFEST_SCHEMA_V2,
     K2_UNCERTAINTY_R8B_ORACLE_WRAPPER_SCHEMA_V3, K2_UNCERTAINTY_R8B_PRODUCER_REQUEST_SCHEMA_V2,
     K2_UNCERTAINTY_R8B_ROUTE_RECEIPT_SCHEMA_V2, K2_UNCERTAINTY_R8B_SUITE_RECEIPT_SCHEMA_V2,
-    K2UncertaintyCleanupReceiptV1, K2UncertaintyControlEvaluationReceiptV1, K2UncertaintyDevelopmentResultReceiptV1,
-    K2UncertaintyOracleBaselineBatchReceiptV1,
-    K2UncertaintyR8BControlWrapperV3, K2UncertaintyR8BOracleWrapperV3, denied_authority_v1,
-    require_denied_authority_v1, uncertainty_root_v1,
+    denied_authority_v1, require_denied_authority_v1, uncertainty_root_v1,
+};
+
+#[path = "r8b_model/wrappers.rs"]
+mod wrappers;
+
+pub(super) use wrappers::decode_self_formed_r8b_evidence_view_v3;
+pub use wrappers::{
+    seal_self_formed_r8b_control_wrapper_v3, seal_self_formed_r8b_oracle_wrapper_v3,
+    validate_self_formed_r8b_control_wrapper_v3, validate_self_formed_r8b_oracle_wrapper_v3,
 };
 
 pub const K2_UNCERTAINTY_R8B_AUTHORIZATION_REQUEST_SCHEMA_V2: &str =
@@ -80,7 +86,11 @@ impl K2UncertaintyR8BAuthorizationRequestV2 {
     }
 
     pub fn validate(&self) -> K2CompositionResultV1<()> {
-        for root in [&self.route_id_sha256, &self.manifest_root_sha256, &self.authorizer_executable_sha256] {
+        for root in [
+            &self.route_id_sha256,
+            &self.manifest_root_sha256,
+            &self.authorizer_executable_sha256,
+        ] {
             require_composition_root_v1(root)?;
         }
         let mut canonical = self.clone();
@@ -172,7 +182,11 @@ impl K2UncertaintyR8BAuthorizationRequestV3 {
     }
 
     pub fn validate(&self) -> K2CompositionResultV1<()> {
-        for root in [&self.route_id_sha256, &self.manifest_root_sha256, &self.authorizer_executable_sha256] {
+        for root in [
+            &self.route_id_sha256,
+            &self.manifest_root_sha256,
+            &self.authorizer_executable_sha256,
+        ] {
             require_composition_root_v1(root)?;
         }
         if self.schema != K2_UNCERTAINTY_R8B_AUTHORIZATION_REQUEST_SCHEMA_V3
@@ -228,7 +242,10 @@ impl K2UncertaintyR8BAuthorizationReceiptV3 {
         canonical.receipt_root_sha256.clear();
         if self.schema != K2_UNCERTAINTY_R8B_AUTHORIZATION_RECEIPT_SCHEMA_V3
             || self.packet_member_roots_sha256.len() != 22
-            || self.packet_member_roots_sha256.windows(2).any(|pair| pair[0] >= pair[1])
+            || self
+                .packet_member_roots_sha256
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
             || self.disposition != "R8B_FROZEN"
             || self.receipt_root_sha256 != uncertainty_root_v1(&canonical)?
         {
@@ -251,7 +268,10 @@ pub struct K2UncertaintyR8BExecutableIdentityV2 {
 impl K2UncertaintyR8BExecutableIdentityV2 {
     pub fn validate(&self) -> K2CompositionResultV1<()> {
         require_composition_root_v1(&self.sha256)?;
-        if !Path::new(&self.canonical_path).is_absolute() || self.byte_len == 0 || self.unix_mode & 0o111 == 0 {
+        if !Path::new(&self.canonical_path).is_absolute()
+            || self.byte_len == 0
+            || self.unix_mode & 0o111 == 0
+        {
             return Err(invalid("self_formed_r8b_executable_identity_invalid"));
         }
         Ok(())
@@ -296,9 +316,21 @@ impl K2UncertaintyR8BExecutableManifestV2 {
             K2UncertaintyR8BManifestClassV2::Linked => LINKED_ROLES_V2.as_slice(),
             K2UncertaintyR8BManifestClassV2::Suite => SUITE_ROLES_V2.as_slice(),
         };
-        let roles = self.identities.iter().map(|identity| identity.role.as_str()).collect::<Vec<_>>();
-        let paths = self.identities.iter().map(|identity| identity.canonical_path.as_str()).collect::<BTreeSet<_>>();
-        let hashes = self.identities.iter().map(|identity| identity.sha256.as_str()).collect::<BTreeSet<_>>();
+        let roles = self
+            .identities
+            .iter()
+            .map(|identity| identity.role.as_str())
+            .collect::<Vec<_>>();
+        let paths = self
+            .identities
+            .iter()
+            .map(|identity| identity.canonical_path.as_str())
+            .collect::<BTreeSet<_>>();
+        let hashes = self
+            .identities
+            .iter()
+            .map(|identity| identity.sha256.as_str())
+            .collect::<BTreeSet<_>>();
         for identity in &self.identities {
             identity.validate()?;
         }
@@ -350,7 +382,10 @@ impl K2UncertaintyR8BProducerRequestV2 {
             || self.test_selector.is_empty()
             || self.allowed_relative_paths.is_empty()
             || paths.len() != self.allowed_relative_paths.len()
-            || !self.allowed_relative_paths.iter().all(|path| super::super::valid_composition_path_v1(path))
+            || !self
+                .allowed_relative_paths
+                .iter()
+                .all(|path| super::super::valid_composition_path_v1(path))
             || !Path::new(&self.exclusive_output_directory).is_absolute()
             || self.request_root_sha256 != self.expected_root()?
         {
@@ -438,13 +473,18 @@ impl K2UncertaintyR8BEvidenceKindV2 {
 
     pub const fn expected_schema(self) -> &'static str {
         match self {
-            Self::LinkedRoute | Self::ProductionSurvival => K2_UNCERTAINTY_R8B_ROUTE_RECEIPT_SCHEMA_V2,
-            Self::LinkedManifest | Self::SuiteManifest => K2_UNCERTAINTY_R8B_EXECUTABLE_MANIFEST_SCHEMA_V2,
+            Self::LinkedRoute | Self::ProductionSurvival => {
+                K2_UNCERTAINTY_R8B_ROUTE_RECEIPT_SCHEMA_V2
+            }
+            Self::LinkedManifest | Self::SuiteManifest => {
+                K2_UNCERTAINTY_R8B_EXECUTABLE_MANIFEST_SCHEMA_V2
+            }
             Self::OracleCases => "nando.k2-self-formed-oracle-batch-receipt.v1",
             Self::FrozenControlScopes => K2_UNCERTAINTY_R8B_SUITE_RECEIPT_SCHEMA_V2,
-            Self::LegacyControls | Self::V3Controls | Self::V4Controls | Self::FreshControlCases => {
-                "nando.k2-self-formed-control-receipt.v1"
-            }
+            Self::LegacyControls
+            | Self::V3Controls
+            | Self::V4Controls
+            | Self::FreshControlCases => "nando.k2-self-formed-control-receipt.v1",
             Self::CleanupTransaction => "nando.k2-self-formed-cleanup-receipt.v1",
             Self::DevelopmentResult => "nando.k2-self-formed-development-result-receipt.v1",
             _ => K2_UNCERTAINTY_R8B_SUITE_RECEIPT_SCHEMA_V2,
@@ -513,11 +553,19 @@ impl K2UncertaintyR8BMeasuredReceiptV2 {
     }
 
     pub fn validate(&self) -> K2CompositionResultV1<()> {
-        for root in self.source_roots_sha256.iter().chain([&self.route_id_sha256, &self.producer_executable_sha256]) {
+        for root in self
+            .source_roots_sha256
+            .iter()
+            .chain([&self.route_id_sha256, &self.producer_executable_sha256])
+        {
             require_composition_root_v1(root)?;
         }
         require_denied_authority_v1(&self.authority)?;
-        let distinct_sources = self.source_roots_sha256.iter().collect::<BTreeSet<_>>().len();
+        let distinct_sources = self
+            .source_roots_sha256
+            .iter()
+            .collect::<BTreeSet<_>>()
+            .len();
         let custom_schema = matches!(
             self.schema.as_str(),
             K2_UNCERTAINTY_R8B_ROUTE_RECEIPT_SCHEMA_V2 | K2_UNCERTAINTY_R8B_SUITE_RECEIPT_SCHEMA_V2
@@ -526,9 +574,13 @@ impl K2UncertaintyR8BMeasuredReceiptV2 {
             || self.schema != self.kind.expected_schema()
             || self.source_roots_sha256.is_empty()
             || distinct_sources != self.source_roots_sha256.len()
-            || (self.kind == K2UncertaintyR8BEvidenceKindV2::FrozenControlScopes && distinct_sources != 4)
+            || (self.kind == K2UncertaintyR8BEvidenceKindV2::FrozenControlScopes
+                && distinct_sources != 4)
             || self.observed == 0
-            || self.kind.required().is_some_and(|required| self.observed != required)
+            || self
+                .kind
+                .required()
+                .is_some_and(|required| self.observed != required)
             || self.false_accepts != 0
             || self.sealed_attempts != 0
             || self.production_mutations != 0
@@ -545,132 +597,6 @@ impl K2UncertaintyR8BMeasuredReceiptV2 {
         value.receipt_root_sha256.clear();
         uncertainty_root_v1(&value)
     }
-}
-
-pub fn validate_self_formed_r8b_oracle_wrapper_v3(
-    value: &K2UncertaintyR8BOracleWrapperV3,
-) -> K2CompositionResultV1<()> {
-    value.batch.validate()?;
-    validate_wrapper_roots_v3(&value.completion_event_roots_sha256, &value.receipt_roots_sha256, 16)?;
-    let expected =
-        value.batch.case_receipts.iter().map(|row| row.receipt_root_sha256.as_str()).collect::<BTreeSet<_>>();
-    let mut canonical = value.clone();
-    canonical.receipt_root_sha256.clear();
-    if value.schema != K2_UNCERTAINTY_R8B_ORACLE_WRAPPER_SCHEMA_V3
-        || value.receipt_roots_sha256.iter().map(String::as_str).collect::<BTreeSet<_>>() != expected
-        || value.receipt_root_sha256 != uncertainty_root_v1(&canonical)?
-    {
-        return Err(invalid("self_formed_r8b_oracle_wrapper_invalid"));
-    }
-    Ok(())
-}
-
-pub fn seal_self_formed_r8b_oracle_wrapper_v3(
-    batch: K2UncertaintyOracleBaselineBatchReceiptV1,
-    completion_event_roots_sha256: Vec<String>,
-    receipt_roots_sha256: Vec<String>,
-) -> K2CompositionResultV1<K2UncertaintyR8BOracleWrapperV3> {
-    let mut value = K2UncertaintyR8BOracleWrapperV3 {
-        schema: K2_UNCERTAINTY_R8B_ORACLE_WRAPPER_SCHEMA_V3.to_owned(), batch,
-        completion_event_roots_sha256, receipt_roots_sha256, receipt_root_sha256: String::new(),
-    };
-    value.receipt_root_sha256 = uncertainty_root_v1(&value)?;
-    validate_self_formed_r8b_oracle_wrapper_v3(&value)?;
-    Ok(value)
-}
-
-pub fn validate_self_formed_r8b_control_wrapper_v3(
-    value: &K2UncertaintyR8BControlWrapperV3,
-) -> K2CompositionResultV1<()> {
-    value.census.validate()?;
-    validate_wrapper_roots_v3(&value.completion_event_roots_sha256, &value.receipt_roots_sha256, 4)?;
-    let mut canonical = value.clone();
-    canonical.receipt_root_sha256.clear();
-    if value.schema != K2_UNCERTAINTY_R8B_CONTROL_WRAPPER_SCHEMA_V3
-        || value.census.kind != K2UncertaintyR8BEvidenceKindV2::FrozenControlScopes
-        || value.census.source_roots_sha256 != value.receipt_roots_sha256
-        || value.receipt_root_sha256 != uncertainty_root_v1(&canonical)?
-    {
-        return Err(invalid("self_formed_r8b_control_wrapper_invalid"));
-    }
-    Ok(())
-}
-
-pub fn seal_self_formed_r8b_control_wrapper_v3(
-    census: K2UncertaintyR8BMeasuredReceiptV2,
-    completion_event_roots_sha256: Vec<String>,
-    receipt_roots_sha256: Vec<String>,
-) -> K2CompositionResultV1<K2UncertaintyR8BControlWrapperV3> {
-    let mut value = K2UncertaintyR8BControlWrapperV3 {
-        schema: K2_UNCERTAINTY_R8B_CONTROL_WRAPPER_SCHEMA_V3.to_owned(), census,
-        completion_event_roots_sha256, receipt_roots_sha256, receipt_root_sha256: String::new(),
-    };
-    value.receipt_root_sha256 = uncertainty_root_v1(&value)?;
-    validate_self_formed_r8b_control_wrapper_v3(&value)?;
-    Ok(value)
-}
-
-fn validate_wrapper_roots_v3(events: &[String], receipts: &[String], required: usize) -> K2CompositionResultV1<()> {
-    for roots in [events, receipts] {
-        roots.iter().try_for_each(|root| require_composition_root_v1(root))?;
-        if roots.len() != required || roots.windows(2).any(|pair| pair[0] >= pair[1]) {
-            return Err(invalid("self_formed_r8b_root_vector_invalid"));
-        }
-    }
-    if !events.iter().collect::<BTreeSet<_>>().is_disjoint(&receipts.iter().collect()) {
-        return Err(invalid("self_formed_r8b_dual_root_domain_invalid"));
-    }
-    Ok(())
-}
-
-pub(super) type K2UncertaintyR8BEvidenceViewV3 = (String, String, u64, Option<String>, Option<Vec<String>>);
-
-pub(super) fn decode_self_formed_r8b_evidence_view_v3(
-    kind: K2UncertaintyR8BEvidenceKindV2,
-    bytes: &[u8],
-    route_id_sha256: &str,
-) -> K2CompositionResultV1<K2UncertaintyR8BEvidenceViewV3> {
-    let (schema, semantic_root_sha256, observed, producer_executable_sha256, source_roots_sha256) = match kind {
-        K2UncertaintyR8BEvidenceKindV2::LegacyControls
-        | K2UncertaintyR8BEvidenceKindV2::V3Controls
-        | K2UncertaintyR8BEvidenceKindV2::V4Controls
-        | K2UncertaintyR8BEvidenceKindV2::FreshControlCases => {
-            let value: K2UncertaintyControlEvaluationReceiptV1 = decode_canonical_json_v1(bytes)?;
-            value.validate()?;
-            (value.schema, value.receipt_root_sha256, value.passed, Some(value.evaluator_executable_sha256), None)
-        }
-        K2UncertaintyR8BEvidenceKindV2::CleanupTransaction => {
-            let value: K2UncertaintyCleanupReceiptV1 = decode_canonical_json_v1(bytes)?;
-            value.validate()?;
-            (value.schema, value.receipt_root_sha256, 1, None, None)
-        }
-        K2UncertaintyR8BEvidenceKindV2::DevelopmentResult => {
-            let value: K2UncertaintyDevelopmentResultReceiptV1 = decode_canonical_json_v1(bytes)?;
-            value.validate()?;
-            (value.schema, value.receipt_root_sha256, 1, None, None)
-        }
-        K2UncertaintyR8BEvidenceKindV2::OracleCases
-        | K2UncertaintyR8BEvidenceKindV2::FrozenControlScopes
-        | K2UncertaintyR8BEvidenceKindV2::LinkedManifest
-        | K2UncertaintyR8BEvidenceKindV2::SuiteManifest => {
-            return Err(invalid("self_formed_r8b_v3_special_evidence_redecoded"));
-        }
-        _ => {
-            let value: K2UncertaintyR8BMeasuredReceiptV2 = decode_canonical_json_v1(bytes)?;
-            value.validate()?;
-            if value.kind != kind || value.route_id_sha256 != route_id_sha256 {
-                return Err(invalid("self_formed_r8b_v3_measured_evidence_invalid"));
-            }
-            (
-                value.schema,
-                value.receipt_root_sha256,
-                value.observed,
-                Some(value.producer_executable_sha256),
-                Some(value.source_roots_sha256),
-            )
-        }
-    };
-    Ok((schema, semantic_root_sha256, observed, producer_executable_sha256, source_roots_sha256))
 }
 
 fn invalid(reason: &'static str) -> K2CompositionErrorV1 {

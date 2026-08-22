@@ -30,7 +30,7 @@ use nando_operator_learning::{
     K2UncertaintyR8BExecutableManifestV2, K2UncertaintyR8BLedgerWriterV2, K2UncertaintyR8BManifestClassV2, K2UncertaintyR8BMeasuredReceiptV2,
     K2UncertaintyR8BDownstreamContractV3, K2UncertaintyR8BFileAttestationV3, K2UncertaintyR8BInputRoleV3,
     K2UncertaintyR8BLedgerWriterV3, K2UncertaintyR8BObjectRoleV3, K2UncertaintyR8BOutputContractV3,
-    K2UncertaintyR8BProcessEventV2,
+    K2UncertaintyR8BCompletionKindV3, K2UncertaintyR8BProcessEventV2,
     K2UncertaintyR8BProcessEventV3, K2UncertaintyR8BProcessLedgerV2, K2UncertaintyR8BProducedReceiptV2,
     K2UncertaintyR8BProducerRequestV2, K2UncertaintyR8BProducerRequestV3,
     K2UncertaintyR8BValidatedFactV3, K2UncertaintyR8BValidatorV3, composition_root_v1,

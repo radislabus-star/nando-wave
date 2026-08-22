@@ -22,9 +22,10 @@ use nando_operator_learning::{
     K2UncertaintyR8BCompletionKindV3, K2UncertaintyR8BControlWrapperV3,
     K2UncertaintyR8BDownstreamContractV3, K2UncertaintyR8BEvidenceKindV2,
     K2UncertaintyR8BExecutableIdentityV2, K2UncertaintyR8BExecutableManifestV2,
-    K2UncertaintyR8BExpectedOutcomeV3, K2UncertaintyR8BFileAttestationV3,
-    K2UncertaintyR8BInputBindingV3, K2UncertaintyR8BInputRoleV3, K2UncertaintyR8BInvocationPlanV3,
-    K2UncertaintyR8BLaunchKindV3, K2UncertaintyR8BLedgerSummaryV3, K2UncertaintyR8BLedgerWriterV3,
+    K2UncertaintyR8BExitPredicateV3, K2UncertaintyR8BExpectedOutcomeV3,
+    K2UncertaintyR8BFileAttestationV3, K2UncertaintyR8BInputBindingV3, K2UncertaintyR8BInputRoleV3,
+    K2UncertaintyR8BInvocationPlanV3, K2UncertaintyR8BLaunchKindV3,
+    K2UncertaintyR8BLedgerSummaryV3, K2UncertaintyR8BLedgerWriterV3,
     K2UncertaintyR8BManagerIdentityV3, K2UncertaintyR8BManifestClassV2,
     K2UncertaintyR8BMeasuredReceiptV2, K2UncertaintyR8BObjectRoleV3,
     K2UncertaintyR8BOracleWrapperV3, K2UncertaintyR8BOutputContractV3,
@@ -56,7 +57,8 @@ mod support;
 use support::*;
 
 const S05_SELECTOR_V2: &str = "r8b_v7_s05_authority_aggregate";
-static POSITIVE_AUTHORIZATION_V3: OnceLock<K2UncertaintyR8BAuthorizationReceiptV3> = OnceLock::new();
+static POSITIVE_AUTHORIZATION_V3: OnceLock<K2UncertaintyR8BAuthorizationReceiptV3> =
+    OnceLock::new();
 
 fn fixture_invalid(reason: &'static str) -> K2CompositionErrorV1 {
     K2CompositionErrorV1::Invalid(reason)
@@ -131,11 +133,16 @@ struct PacketEvidenceV3 {
     source_roots_sha256: Vec<String>,
 }
 
-impl PacketEvidenceV3 {
-    fn new<T: serde::Serialize>(
-        kind: K2UncertaintyR8BEvidenceKindV2,
-        relative_path: &str,
-        value: &T,
+struct PacketEvidenceAuthorityV3 {
+    semantic_root_sha256: String,
+    receipt_schema: String,
+    producer_role: String,
+    producer_executable_sha256: String,
+    source_roots_sha256: Vec<String>,
+}
+
+impl PacketEvidenceAuthorityV3 {
+    fn new(
         semantic_root_sha256: String,
         receipt_schema: &str,
         producer_role: &str,
@@ -143,14 +150,31 @@ impl PacketEvidenceV3 {
         source_roots_sha256: Vec<String>,
     ) -> Self {
         Self {
-            kind,
-            relative_path: relative_path.to_owned(),
-            bytes: uncertainty_bytes_v1(value).expect("canonical packet evidence bytes"),
             semantic_root_sha256,
             receipt_schema: receipt_schema.to_owned(),
             producer_role: producer_role.to_owned(),
             producer_executable_sha256,
             source_roots_sha256,
+        }
+    }
+}
+
+impl PacketEvidenceV3 {
+    fn new<T: serde::Serialize>(
+        kind: K2UncertaintyR8BEvidenceKindV2,
+        relative_path: &str,
+        value: &T,
+        authority: PacketEvidenceAuthorityV3,
+    ) -> Self {
+        Self {
+            kind,
+            relative_path: relative_path.to_owned(),
+            bytes: uncertainty_bytes_v1(value).expect("canonical packet evidence bytes"),
+            semantic_root_sha256: authority.semantic_root_sha256,
+            receipt_schema: authority.receipt_schema,
+            producer_role: authority.producer_role,
+            producer_executable_sha256: authority.producer_executable_sha256,
+            source_roots_sha256: authority.source_roots_sha256,
         }
     }
 
@@ -308,7 +332,7 @@ fn seal_self_formed_r8b_static_projection_v3(
 #[ignore = "requires explicit R8B V7 execution authorization"]
 fn r8b_v7_s05_authority_aggregate() {
     begin_suite_request_from_stdin_v2("S05_AUTHORITY_PUBLICATION", S05_SELECTOR_V2);
-    r8b_publisher_rejects_no_clobber_and_symlink_boundaries();
+    r8b_publisher_process_rejects_no_clobber_and_symlink_boundaries();
     publish_suite_measurements_v2(vec![SuiteMeasurementV2 {
         relative_path: "suites/s05/aggregate-publication-faults.json",
         kind: nando_operator_learning::K2UncertaintyR8BEvidenceKindV2::AggregatePublicationFaults,
@@ -316,6 +340,39 @@ fn r8b_v7_s05_authority_aggregate() {
         observed: 2,
         metrics: std::collections::BTreeMap::new(),
     }]);
+}
+
+fn r8b_publisher_process_rejects_no_clobber_and_symlink_boundaries() {
+    let publisher = PathBuf::from(env!(
+        "CARGO_BIN_EXE_nando-k2-self-formed-r8b-evidence-publisher"
+    ));
+    let publisher_sha = composition_sha256_file_v1(&publisher).expect("S05 M26 SHA-256");
+    for boundary in ["existing", "symlink"] {
+        let environment = TestEnvironmentV1::new(&format!("authority-process-{boundary}"));
+        let publication = environment.private_child("publication");
+        let final_path = publication.join("R8B_RECEIPT_V3.json");
+        if boundary == "existing" {
+            write_new_read_only_v2(&final_path, b"existing authority bytes");
+        } else {
+            let outside = environment.root.join("outside.json");
+            fs::write(&outside, b"outside").expect("outside bytes");
+            std::os::unix::fs::symlink(&outside, &final_path).expect("publication symlink");
+        }
+        let request = K2UncertaintyR8BPublicationRequestV3::seal(
+            publication.to_string_lossy().into_owned(),
+            component_authorization_v3(&publisher_sha),
+        )
+        .expect("S05 M26 boundary request");
+        let output = run_process_expected_failure_recorded_v3(&publisher, &request, 1);
+        assert!(!output.status.success());
+        assert!(fs::symlink_metadata(&final_path).is_ok());
+        if boundary == "symlink" {
+            assert_eq!(
+                fs::read(environment.root.join("outside.json")).expect("R8B V8 authority fixture"),
+                b"outside"
+            );
+        }
+    }
 }
 
 #[test]
@@ -389,7 +446,8 @@ fn r8b_v8_m24_completion_fits_frozen_event_budget() {
     }
     let receipt_schema = "nando.fixture-m24-receipt.v3";
     let semantic_root_sha256 = root_v1("positive-m24-receipt");
-    let stdout = uncertainty_bytes_v1(&(receipt_schema, &semantic_root_sha256)).unwrap();
+    let stdout = uncertainty_bytes_v1(&(receipt_schema, &semantic_root_sha256))
+        .expect("R8B V8 authority fixture");
     let stdout_sha256 = composition_sha256_bytes_v1(&stdout);
     let mut invocation = invocation_v3(11_005, "P01", "M24_LINKED_RUNNER");
     invocation.launch_kind = K2UncertaintyR8BLaunchKindV3::UserSystemd;
@@ -426,8 +484,12 @@ fn r8b_v8_m24_completion_fits_frozen_event_budget() {
         monotonic_ns: 696,
         event_root_sha256: root_v1("event-root"),
     };
-    let bytes = uncertainty_bytes_v1(&event).unwrap();
-    assert!(bytes.len() <= 4_096, "M24 completion bytes: {}", bytes.len());
+    let bytes = uncertainty_bytes_v1(&event).expect("R8B V8 authority fixture");
+    assert!(
+        bytes.len() <= 4_096,
+        "M24 completion bytes: {}",
+        bytes.len()
+    );
 }
 
 #[test]
@@ -502,7 +564,10 @@ fn r8b_publisher_rejects_no_clobber_and_symlink_boundaries() {
         assert!(publish_self_formed_r8b_v3(&request).is_err());
         assert!(fs::symlink_metadata(final_path).is_ok());
         if boundary == "symlink" {
-            assert_eq!(fs::read(environment.root.join("outside.json")).unwrap(), b"outside");
+            assert_eq!(
+                fs::read(environment.root.join("outside.json")).expect("R8B V8 authority fixture"),
+                b"outside"
+            );
         }
     }
 }
@@ -532,12 +597,20 @@ fn r8b_v8_m26_recovers_only_linked_no_clobber_temp() {
     let temporary = immutable_publication_temp_relative_path_v1("R8B_RECEIPT_V3.json", 0)
         .expect("M26 temporary path");
     assert!(publication.join(&temporary).exists());
-    let receipt = recover_self_formed_r8b_publication_v3(&request)
-        .expect("M26 linked no-clobber recovery");
+    let receipt =
+        recover_self_formed_r8b_publication_v3(&request).expect("M26 linked no-clobber recovery");
     receipt.validate().expect("M26 recovery receipt");
     let final_path = publication.join("R8B_RECEIPT_V3.json");
-    assert_eq!(fs::read(&final_path).unwrap(), bytes);
-    assert_eq!(fs::metadata(&final_path).unwrap().nlink(), 1);
+    assert_eq!(
+        fs::read(&final_path).expect("R8B V8 authority fixture"),
+        bytes
+    );
+    assert_eq!(
+        fs::metadata(&final_path)
+            .expect("R8B V8 authority fixture")
+            .nlink(),
+        1
+    );
     assert!(!publication.join(temporary).exists());
     assert!(recover_self_formed_r8b_publication_v3(&request).is_err());
 }
@@ -580,9 +653,97 @@ fn r8b_v8_n20_rejects_output_schema_denominator_substitution() {
 
 #[test]
 fn r8b_v8_n21_rejects_child_role_substitution() {
-    let mut request = producer_request_v3("S03_MODE_MATRIX", simple_plan_v3(6));
-    request.invocation_plan[0].target_role = "M99_FOREIGN".to_owned();
+    let mut request = producer_request_v3("S03_MODE_MATRIX", s03_plan_v3());
+    request.invocation_plan[0].target_role = "M18_TERMINAL_EVALUATOR".to_owned();
+    request.invocation_plan[0].target_executable_sha256 = root_v1("target-M18_TERMINAL_EVALUATOR");
     assert!(seal_self_formed_r8b_producer_request_v3(request).is_err());
+
+    let c08 = downstream_rows_v3();
+    let mut plan = vec![
+        invocation_v3(10_000, "C01", "M01_DEVELOPMENT_OWNER"),
+        invocation_v3(10_001, "C06", "M10_PUBLIC_COORDINATOR"),
+    ];
+    plan.extend(c08);
+    plan[1].target_role = "M01_DEVELOPMENT_OWNER".to_owned();
+    plan[1].target_executable_sha256 = root_v1("target-M01_DEVELOPMENT_OWNER");
+    assert!(
+        seal_self_formed_r8b_producer_request_v3(producer_request_v3("M24_LINKED_RUNNER", plan))
+            .is_err()
+    );
+}
+
+#[test]
+fn r8b_v8_n21_requires_exact_diagnostic_exit_predicate() {
+    let mut missing = producer_request_v3("S03_MODE_MATRIX", s03_plan_v3());
+    missing.invocation_plan[0].expected_outcome =
+        K2UncertaintyR8BExpectedOutcomeV3::DiagnosticExpectedFailure;
+    assert!(seal_self_formed_r8b_producer_request_v3(missing).is_err());
+
+    let mut forbidden = producer_request_v3("S03_MODE_MATRIX", s03_plan_v3());
+    forbidden.invocation_plan[0].expected_exit_predicate =
+        Some(K2UncertaintyR8BExitPredicateV3 { exact_exit_code: 1 });
+    assert!(seal_self_formed_r8b_producer_request_v3(forbidden).is_err());
+
+    let matching = terminal_event_v3(
+        invocation_v3(0, "C09", "M17_CONTROL_EVALUATOR"),
+        K2UncertaintyR8BCompletionKindV3::DiagnosticExpectedFailure,
+    );
+    assert!(seal_self_formed_r8b_process_event_v3(matching.clone()).is_ok());
+    let mut mismatched = matching;
+    mismatched.exit_code = Some(2);
+    assert!(seal_self_formed_r8b_process_event_v3(mismatched).is_err());
+}
+
+#[test]
+fn r8b_v8_writer_derives_expected_failure_from_exact_exit() {
+    let run = |label: &str, exit_code: i32| {
+        let environment = TestEnvironmentV1::new(label);
+        let writer = K2UncertaintyR8BLedgerWriterV3::create(
+            &environment.private_child("staging"),
+            root_v1(&format!("{label}-route")),
+            root_v1(&format!("{label}-projection")),
+            schedule_authority_v3(),
+        )
+        .expect("R8B V8 authority fixture");
+        let mut invocation = invocation_v3(0, "C03", "M01_DEVELOPMENT_OWNER");
+        invocation.expected_outcome = K2UncertaintyR8BExpectedOutcomeV3::DiagnosticExpectedFailure;
+        invocation.expected_exit_predicate =
+            Some(K2UncertaintyR8BExitPredicateV3 { exact_exit_code: 1 });
+        let started = writer
+            .request(
+                invocation,
+                root_v1(&format!("{label}-request")),
+                root_v1(&format!("{label}-stdin")),
+                1,
+            )
+            .expect("R8B V8 authority fixture");
+        let completed = writer
+            .failure(
+                &started,
+                K2UncertaintyR8BCompletionKindV3::UnexpectedFailure,
+                exit_code,
+                b"",
+                b"diagnostic",
+                2,
+            )
+            .expect("R8B V8 authority fixture");
+        (
+            completed,
+            writer.summary().expect("R8B V8 authority fixture"),
+        )
+    };
+    let (matching, summary) = run("v8-exact-diagnostic", 1);
+    assert_eq!(
+        matching.completion,
+        Some(K2UncertaintyR8BCompletionKindV3::DiagnosticExpectedFailure)
+    );
+    assert!(!summary.fail_stopped);
+    let (mismatched, summary) = run("v8-wrong-diagnostic", 2);
+    assert_eq!(
+        mismatched.completion,
+        Some(K2UncertaintyR8BCompletionKindV3::UnexpectedFailure)
+    );
+    assert!(summary.fail_stopped);
 }
 
 #[test]
@@ -618,12 +779,110 @@ fn r8b_v8_n24_rejects_unpaired_nested_m02() {
 
 #[test]
 fn r8b_v8_n25_rejects_tool_chain_omission() {
-    let mut plan = simple_plan_v3(6);
+    let mut plan = s03_plan_v3();
     plan[0].launch_kind = K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated;
     assert!(
         seal_self_formed_r8b_producer_request_v3(producer_request_v3("S03_MODE_MATRIX", plan))
             .is_err()
     );
+
+    let mut c08 = downstream_rows_v3();
+    c08[0].launch_kind = K2UncertaintyR8BLaunchKindV3::Direct;
+    c08[0].tool_chain.clear();
+    assert!(
+        seal_self_formed_r8b_downstream_contract_v3(K2UncertaintyR8BDownstreamContractV3 {
+            schema: String::new(),
+            route_id_sha256: root_v1("route"),
+            schedule_grammar_root_sha256: root_v1("schedule-grammar"),
+            invocations: c08,
+            projection_root_sha256: String::new(),
+        })
+        .is_err()
+    );
+
+    let mut nested = s03_plan_v3();
+    set_launch_v3(&mut nested[2], K2UncertaintyR8BLaunchKindV3::Direct);
+    assert!(
+        seal_self_formed_r8b_producer_request_v3(producer_request_v3("S03_MODE_MATRIX", nested))
+            .is_err()
+    );
+}
+
+#[test]
+fn r8b_v8_suite_plans_match_observed_process_routes() {
+    let s02 = s02_plan_v3();
+    assert_eq!(s02.len(), 16);
+    assert_eq!(
+        s02.iter()
+            .take(10)
+            .enumerate()
+            .filter_map(|(index, row)| (row.expected_outcome
+                == K2UncertaintyR8BExpectedOutcomeV3::DiagnosticExpectedFailure)
+                .then_some(index))
+            .collect::<Vec<_>>(),
+        vec![0, 2, 3, 9]
+    );
+    assert!(
+        s02.iter()
+            .take(10)
+            .all(|row| row.launch_kind == K2UncertaintyR8BLaunchKindV3::StraceMediated)
+    );
+    assert!(
+        s02.iter()
+            .skip(10)
+            .all(|row| row.launch_kind == K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated)
+    );
+
+    let s03 = s03_plan_v3();
+    assert_eq!(
+        (
+            s03[2].target_role.as_str(),
+            s03[2].stage.as_str(),
+            s03[2].launch_kind
+        ),
+        (
+            "M02_GENERATOR",
+            "C02",
+            K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated
+        )
+    );
+
+    let s04 = s04_plan_v3();
+    assert_eq!(
+        s04.iter()
+            .map(|row| row.target_role.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "M01_DEVELOPMENT_OWNER",
+            "M02_GENERATOR",
+            "M18_TERMINAL_EVALUATOR",
+            "M20_CLEANUP_AUTHORIZER",
+            "M21_CLEANUP_OWNER",
+            "M22_CLEANUP_VERIFIER",
+        ]
+    );
+    assert!(
+        s04.iter()
+            .all(|row| row.expected_outcome == K2UncertaintyR8BExpectedOutcomeV3::AuthoritySuccess)
+    );
+
+    let s05 = s05_plan_v3();
+    assert!(s05.iter().all(|row| {
+        row.target_role == "M26_R8B_PUBLISHER"
+            && row
+                .expected_exit_predicate
+                .as_ref()
+                .is_some_and(|exit| exit.exact_exit_code == 1)
+    }));
+    for (role, plan) in [
+        ("S02_RESTART", s02),
+        ("S03_MODE_MATRIX", s03),
+        ("S04_CLEANUP_NEGATIVE", s04),
+        ("S05_AUTHORITY_PUBLICATION", s05),
+    ] {
+        seal_self_formed_r8b_producer_request_v3(producer_request_v3(role, plan))
+            .expect("R8B V8 authority fixture");
+    }
 }
 
 #[test]
@@ -633,8 +892,8 @@ fn r8b_v8_n26_rejects_incomplete_ledger() {
         root_v1("projection"),
         schedule_authority_v3(),
     )
-    .unwrap();
-    let mut bytes = uncertainty_bytes_v1(&header).unwrap();
+    .expect("R8B V8 authority fixture");
+    let mut bytes = uncertainty_bytes_v1(&header).expect("R8B V8 authority fixture");
     bytes.push(b'\n');
     assert!(
         validate_self_formed_r8b_ledger_stream_v3(BufReader::new(Cursor::new(bytes)), true)
@@ -687,15 +946,15 @@ fn r8b_v8_m17_wrapper_binds_exact_event_and_receipt_domains() {
         BTreeMap::new(),
         root_v1("m17-wrapper-producer"),
     )
-    .unwrap();
-    let wrapper =
-        seal_self_formed_r8b_control_wrapper_v3(census, roots_v3("m17-wrapper-event", 4)).unwrap();
-    validate_self_formed_r8b_control_wrapper_v3(&wrapper).unwrap();
+    .expect("R8B V8 authority fixture");
+    let wrapper = seal_self_formed_r8b_control_wrapper_v3(census, roots_v3("m17-wrapper-event", 4))
+        .expect("R8B V8 authority fixture");
+    validate_self_formed_r8b_control_wrapper_v3(&wrapper).expect("R8B V8 authority fixture");
 
     let mut swapped = wrapper.clone();
     swapped.completion_event_roots_sha256 = receipts;
     swapped.receipt_root_sha256.clear();
-    swapped.receipt_root_sha256 = composition_root_v1(&swapped).unwrap();
+    swapped.receipt_root_sha256 = composition_root_v1(&swapped).expect("R8B V8 authority fixture");
     assert!(validate_self_formed_r8b_control_wrapper_v3(&swapped).is_err());
 }
 
@@ -716,14 +975,15 @@ fn r8b_v8_projection_partitions_are_owner_target_disjoint() {
             row.request_owner_role == "M10_PUBLIC_COORDINATOR"
                 && row.target_role == "M09_CLOSURE_VERIFIER"
         })
-        .unwrap()
+        .expect("R8B V8 authority fixture")
         .stage = "C09".to_owned();
-    validate_self_formed_r8b_packet_manifest_v3(&manifest, &ledger, &c08).unwrap();
+    validate_self_formed_r8b_packet_manifest_v3(&manifest, &ledger, &c08)
+        .expect("R8B V8 authority fixture");
     ledger
         .invocations
         .iter_mut()
         .find(|row| row.target_role == "M09_CLOSURE_VERIFIER")
-        .unwrap()
+        .expect("R8B V8 authority fixture")
         .request_owner_role = "M24_LINKED_RUNNER".to_owned();
     assert!(validate_self_formed_r8b_packet_manifest_v3(&manifest, &ledger, &c08).is_err());
 
@@ -732,7 +992,7 @@ fn r8b_v8_projection_partitions_are_owner_target_disjoint() {
         .invocations
         .iter_mut()
         .find(|row| row.target_role == "M11_PRIVATE_RESOLVER")
-        .unwrap()
+        .expect("R8B V8 authority fixture")
         .request_owner_role = "M10_PUBLIC_COORDINATOR".to_owned();
     assert!(validate_self_formed_r8b_packet_manifest_v3(&manifest, &ledger, &c08).is_err());
 
@@ -741,7 +1001,7 @@ fn r8b_v8_projection_partitions_are_owner_target_disjoint() {
         .invocations
         .iter_mut()
         .find(|row| row.request_owner_role == "S03_MODE_MATRIX")
-        .unwrap()
+        .expect("R8B V8 authority fixture")
         .request_owner_role = "M10_PUBLIC_COORDINATOR".to_owned();
     assert!(validate_self_formed_r8b_packet_manifest_v3(&manifest, &ledger, &c08).is_err());
 }
@@ -749,7 +1009,11 @@ fn r8b_v8_projection_partitions_are_owner_target_disjoint() {
 #[test]
 fn r8b_v8_m10_formula_rejects_fact_schedule_mismatch() {
     let (manifest, mut ledger, c08) = packet_fixture_v3();
-    *ledger.representative_counts.values_mut().next().unwrap() = 16;
+    *ledger
+        .representative_counts
+        .values_mut()
+        .next()
+        .expect("R8B V8 authority fixture") = 16;
     assert!(validate_self_formed_r8b_packet_manifest_v3(&manifest, &ledger, &c08).is_err());
 }
 
@@ -805,8 +1069,9 @@ fn r8b_v8_n38_and_n43_reject_systemd_or_probe_command_drift() {
 
 #[test]
 fn r8b_v8_resource_receipt_seals_two_channel_custody() {
-    let resources = seal_self_formed_r8b_resource_receipt_v3(resource_receipt_v3()).unwrap();
-    validate_self_formed_r8b_resource_receipt_v3(&resources).unwrap();
+    let resources = seal_self_formed_r8b_resource_receipt_v3(resource_receipt_v3())
+        .expect("R8B V8 authority fixture");
+    validate_self_formed_r8b_resource_receipt_v3(&resources).expect("R8B V8 authority fixture");
     assert_eq!(
         resources.authority,
         K2CompositionAuthorityBoundaryV1::denied()
@@ -818,26 +1083,36 @@ fn r8b_v8_n39_rejects_packet_overwrite_during_ledger_freeze() {
     let environment = TestEnvironmentV1::new("v8-ledger-no-replace");
     let staging = environment.private_child("staging");
     let packet = environment.private_child("packet");
-    fs::write(packet.join("process-ledger.json"), b"occupied").unwrap();
+    fs::write(packet.join("process-ledger.json"), b"occupied").expect("R8B V8 authority fixture");
     let writer = K2UncertaintyR8BLedgerWriterV3::create(
         &staging,
         root_v1("route"),
         root_v1("projection"),
         schedule_authority_v3(),
     )
-    .unwrap();
+    .expect("R8B V8 authority fixture");
     let destination = packet.join("process-ledger.json");
     assert!(writer.freeze(&destination).is_err());
     let open = staging.join("process-ledger.open.jsonl");
     assert_eq!(
-        fs::metadata(&open).unwrap().permissions().mode() & 0o7777,
+        fs::metadata(&open)
+            .expect("R8B V8 authority fixture")
+            .permissions()
+            .mode()
+            & 0o7777,
         0o600
     );
-    fs::remove_file(&destination).unwrap();
-    writer.freeze(&destination).unwrap();
+    fs::remove_file(&destination).expect("R8B V8 authority fixture");
+    writer
+        .freeze(&destination)
+        .expect("R8B V8 authority fixture");
     assert!(!open.exists());
     assert_eq!(
-        fs::metadata(&destination).unwrap().permissions().mode() & 0o7777,
+        fs::metadata(&destination)
+            .expect("R8B V8 authority fixture")
+            .permissions()
+            .mode()
+            & 0o7777,
         0o400
     );
 }
@@ -854,13 +1129,22 @@ fn r8b_v8_ledger_freeze_recovers_rename_before_chmod() {
         root_v1("projection"),
         schedule_authority_v3(),
     )
-    .unwrap();
-    let expected = writer.freeze(&destination).unwrap();
-    fs::set_permissions(&destination, fs::Permissions::from_mode(0o600)).unwrap();
-    let recovered = writer.freeze(&destination).unwrap();
+    .expect("R8B V8 authority fixture");
+    let expected = writer
+        .freeze(&destination)
+        .expect("R8B V8 authority fixture");
+    fs::set_permissions(&destination, fs::Permissions::from_mode(0o600))
+        .expect("R8B V8 authority fixture");
+    let recovered = writer
+        .freeze(&destination)
+        .expect("R8B V8 authority fixture");
     assert_eq!(recovered, expected);
     assert_eq!(
-        fs::metadata(&destination).unwrap().permissions().mode() & 0o7777,
+        fs::metadata(&destination)
+            .expect("R8B V8 authority fixture")
+            .permissions()
+            .mode()
+            & 0o7777,
         0o400
     );
 }
@@ -877,13 +1161,10 @@ fn producer_request_v3(
     mut invocation_plan: Vec<K2UncertaintyR8BInvocationPlanV3>,
 ) -> K2UncertaintyR8BProducerRequestV3 {
     let producer = root_v1(&format!("producer-{role}"));
-    if role != "S02_RESTART" {
-        for (index, row) in invocation_plan.iter_mut().enumerate() {
+    for row in &mut invocation_plan {
+        if row.request_owner_role == "M24_LINKED_RUNNER" {
             row.request_owner_role = role.to_owned();
             row.request_owner_executable_sha256 = producer.clone();
-            if role != "M24_LINKED_RUNNER" {
-                row.invocation_id_sha256 = root_v1(&format!("invocation-{role}-{index}"));
-            }
         }
     }
     let inputs = [
@@ -1034,14 +1315,9 @@ fn invocation_v3(index: usize, stage: &str, target: &str) -> K2UncertaintyR8BInv
         case_id_sha256: None,
         probe_ordinal: None,
         expected_outcome: K2UncertaintyR8BExpectedOutcomeV3::AuthoritySuccess,
+        expected_exit_predicate: None,
         validator: K2UncertaintyR8BValidatorV3::ConcreteReceipt,
     }
-}
-
-fn simple_plan_v3(count: usize) -> Vec<K2UncertaintyR8BInvocationPlanV3> {
-    (0..count)
-        .map(|index| invocation_v3(index, "C03", "M17_CONTROL_EVALUATOR"))
-        .collect()
 }
 
 fn s02_plan_v3() -> Vec<K2UncertaintyR8BInvocationPlanV3> {
@@ -1050,22 +1326,109 @@ fn s02_plan_v3() -> Vec<K2UncertaintyR8BInvocationPlanV3> {
         let mut row = invocation_v3(index, "C02", "M01_DEVELOPMENT_OWNER");
         row.request_owner_role = "S02_RESTART".to_owned();
         row.request_owner_executable_sha256 = root_v1("producer-S02_RESTART");
+        set_launch_v3(&mut row, K2UncertaintyR8BLaunchKindV3::StraceMediated);
+        if [0, 2, 3, 9].contains(&index) {
+            set_diagnostic_v3(&mut row, 1);
+        }
         plan.push(row);
     }
     for index in 10..13 {
         let mut row = invocation_v3(index, "C02", "M02_GENERATOR");
         row.request_owner_role = "S02_RESTART".to_owned();
         row.request_owner_executable_sha256 = root_v1("producer-S02_RESTART");
+        set_launch_v3(&mut row, K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated);
         plan.push(row);
     }
     for index in 13..16 {
         let mut row = invocation_v3(index, "C02", "M02_GENERATOR");
         row.request_owner_role = "M01_DEVELOPMENT_OWNER".to_owned();
         row.request_owner_executable_sha256 = root_v1("target-M01_DEVELOPMENT_OWNER");
-        row.parent_invocation_id_sha256 = Some(plan[index - 13].invocation_id_sha256.clone());
+        row.parent_invocation_id_sha256 = Some(plan[index - 9].invocation_id_sha256.clone());
+        set_launch_v3(&mut row, K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated);
         plan.push(row);
     }
     plan
+}
+
+fn s03_plan_v3() -> Vec<K2UncertaintyR8BInvocationPlanV3> {
+    let owner = invocation_v3(0, "C03", "M01_DEVELOPMENT_OWNER");
+    let mut rejected_owner = invocation_v3(1, "C03", "M01_DEVELOPMENT_OWNER");
+    set_diagnostic_v3(&mut rejected_owner, 1);
+    let mut nested = invocation_v3(2, "C02", "M02_GENERATOR");
+    nested.request_owner_role = "M01_DEVELOPMENT_OWNER".to_owned();
+    nested.request_owner_executable_sha256 = owner.target_executable_sha256.clone();
+    nested.parent_invocation_id_sha256 = Some(owner.invocation_id_sha256.clone());
+    set_launch_v3(
+        &mut nested,
+        K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated,
+    );
+    let mut plan = vec![owner, rejected_owner, nested];
+    plan.extend((3..6).map(|index| invocation_v3(index, "C03", "M18_TERMINAL_EVALUATOR")));
+    plan
+}
+
+fn s04_plan_v3() -> Vec<K2UncertaintyR8BInvocationPlanV3> {
+    let owner = invocation_v3(0, "C04", "M01_DEVELOPMENT_OWNER");
+    let mut nested = invocation_v3(1, "C02", "M02_GENERATOR");
+    nested.request_owner_role = "M01_DEVELOPMENT_OWNER".to_owned();
+    nested.request_owner_executable_sha256 = owner.target_executable_sha256.clone();
+    nested.parent_invocation_id_sha256 = Some(owner.invocation_id_sha256.clone());
+    set_launch_v3(
+        &mut nested,
+        K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated,
+    );
+    let terminal = invocation_v3(2, "C04", "M18_TERMINAL_EVALUATOR");
+    let mut m20 = invocation_v3(3, "C04", "M20_CLEANUP_AUTHORIZER");
+    let mut m21 = invocation_v3(4, "C04", "M21_CLEANUP_OWNER");
+    let mut m22 = invocation_v3(5, "C04", "M22_CLEANUP_VERIFIER");
+    for row in [&mut m20, &mut m21, &mut m22] {
+        set_launch_v3(row, K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated);
+    }
+    vec![owner, nested, terminal, m20, m21, m22]
+}
+
+fn s05_plan_v3() -> Vec<K2UncertaintyR8BInvocationPlanV3> {
+    (0..2)
+        .map(|index| {
+            let mut row = invocation_v3(index, "C05", "M26_R8B_PUBLISHER");
+            set_diagnostic_v3(&mut row, 1);
+            row
+        })
+        .collect()
+}
+
+fn set_diagnostic_v3(row: &mut K2UncertaintyR8BInvocationPlanV3, exit_code: i32) {
+    row.expected_outcome = K2UncertaintyR8BExpectedOutcomeV3::DiagnosticExpectedFailure;
+    row.expected_exit_predicate = Some(K2UncertaintyR8BExitPredicateV3 {
+        exact_exit_code: exit_code,
+    });
+}
+
+fn set_launch_v3(row: &mut K2UncertaintyR8BInvocationPlanV3, launch: K2UncertaintyR8BLaunchKindV3) {
+    row.launch_kind = launch;
+    row.tool_chain = match launch {
+        K2UncertaintyR8BLaunchKindV3::Direct => Vec::new(),
+        K2UncertaintyR8BLaunchKindV3::StraceMediated => vec![tool_v3(
+            K2UncertaintyR8BToolRoleV3::Strace,
+            "/usr/bin/strace",
+        )],
+        K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated => vec![
+            tool_v3(K2UncertaintyR8BToolRoleV3::Bwrap, "/usr/bin/bwrap"),
+            tool_v3(K2UncertaintyR8BToolRoleV3::Prlimit, "/usr/bin/prlimit"),
+        ],
+        K2UncertaintyR8BLaunchKindV3::UserSystemd => vec![tool_v3(
+            K2UncertaintyR8BToolRoleV3::SystemdRun,
+            "/usr/bin/systemd-run",
+        )],
+    };
+}
+
+fn tool_v3(role: K2UncertaintyR8BToolRoleV3, path: &str) -> K2UncertaintyR8BToolIdentityV3 {
+    K2UncertaintyR8BToolIdentityV3 {
+        role,
+        canonical_path: path.to_owned(),
+        sha256: root_v1(path),
+    }
 }
 
 fn terminal_event_v3(
@@ -1073,6 +1436,8 @@ fn terminal_event_v3(
     completion: K2UncertaintyR8BCompletionKindV3,
 ) -> K2UncertaintyR8BProcessEventV3 {
     invocation.expected_outcome = K2UncertaintyR8BExpectedOutcomeV3::DiagnosticExpectedFailure;
+    invocation.expected_exit_predicate =
+        Some(K2UncertaintyR8BExitPredicateV3 { exact_exit_code: 1 });
     K2UncertaintyR8BProcessEventV3 {
         schema: String::new(),
         sequence: 1,
@@ -1124,30 +1489,14 @@ fn packet_fixture_v3() -> (
     K2UncertaintyR8BLedgerSummaryV3,
     K2UncertaintyR8BDownstreamContractV3,
 ) {
-    #[rustfmt::skip]
-    let counts = [
-        ("M11_PRIVATE_RESOLVER", 24), ("M12_SAFETY", 24),
-        ("M13_WORKER", 24), ("M14_OBSERVER", 24),
-        ("M15_FINAL_VERIFIER", 16), ("M16_ORACLE", 16),
-        ("M19_FRESH_CONTROL_CASE", 12), ("M17_CONTROL_EVALUATOR", 4),
-        ("M18_TERMINAL_EVALUATOR", 1), ("M20_CLEANUP_AUTHORIZER", 1),
-        ("M21_CLEANUP_OWNER", 1), ("M22_CLEANUP_VERIFIER", 1),
-        ("M23_DEVELOPMENT_RESULT_PUBLISHER", 1),
-    ];
-    let invocations = counts
-        .into_iter()
-        .flat_map(|(role, count)| std::iter::repeat_n(role, count))
-        .enumerate()
-        .map(|(index, role)| invocation_v3(index, "C09", role))
-        .collect();
     let c08 = seal_self_formed_r8b_downstream_contract_v3(K2UncertaintyR8BDownstreamContractV3 {
         schema: String::new(),
         route_id_sha256: root_v1("v8-route"),
         schedule_grammar_root_sha256: root_v1("schedule-grammar"),
-        invocations,
+        invocations: downstream_rows_v3(),
         projection_root_sha256: String::new(),
     })
-    .unwrap();
+    .expect("R8B V8 authority fixture");
     let (projection, dynamic, representative_counts) = projection_fixture_v3(&c08, None);
     let m16_events = roots_v3("m16-event", 16);
     let m16_receipts = roots_v3("m16-receipt", 16);
@@ -1275,7 +1624,7 @@ fn packet_fixture_v3() -> (
         &ledger,
         &c08,
     )
-    .unwrap();
+    .expect("R8B V8 authority fixture");
     (manifest, ledger, c08)
 }
 
@@ -1286,7 +1635,7 @@ fn schedule_authority_v3() -> nando_operator_learning::K2UncertaintyR8BScheduleA
             .map(|index| root_v1(&format!("schedule-case-{index}")))
             .collect(),
     )
-    .unwrap()
+    .expect("R8B V8 authority fixture")
 }
 
 fn projection_fixture_v3(
@@ -1300,9 +1649,9 @@ fn projection_fixture_v3(
     let mut requests = [
         ("S01_CRATE_UNIT", Vec::new()),
         ("S02_RESTART", s02_plan_v3()),
-        ("S03_MODE_MATRIX", simple_plan_v3(6)),
-        ("S04_CLEANUP_NEGATIVE", simple_plan_v3(6)),
-        ("S05_AUTHORITY_PUBLICATION", simple_plan_v3(2)),
+        ("S03_MODE_MATRIX", s03_plan_v3()),
+        ("S04_CLEANUP_NEGATIVE", s04_plan_v3()),
+        ("S05_AUTHORITY_PUBLICATION", s05_plan_v3()),
     ]
     .into_iter()
     .map(|(role, plan)| {
@@ -1311,7 +1660,7 @@ fn projection_fixture_v3(
             request.route_id_sha256 = c08.route_id_sha256.clone();
             bind_producer_request_identities_v3(&mut request, identities);
         }
-        seal_self_formed_r8b_producer_request_v3(request).unwrap()
+        seal_self_formed_r8b_producer_request_v3(request).expect("R8B V8 authority fixture")
     })
     .collect::<Vec<_>>();
     let mut linked_plan = vec![
@@ -1324,20 +1673,17 @@ fn projection_fixture_v3(
         linked_request.route_id_sha256 = c08.route_id_sha256.clone();
         bind_producer_request_identities_v3(&mut linked_request, identities);
     }
-    requests.push(seal_self_formed_r8b_producer_request_v3(linked_request).unwrap());
+    requests.push(
+        seal_self_formed_r8b_producer_request_v3(linked_request).expect("R8B V8 authority fixture"),
+    );
     let parent_launches = requests
         .iter()
         .enumerate()
         .map(|(index, request)| {
             let mut row = invocation_v3(11_000 + index, "P01", &request.producer_role);
             row.target_executable_sha256 = request.producer_executable_sha256.clone();
-            if request.producer_role == "M24_LINKED_RUNNER" && identities.is_some() {
-                row.launch_kind = K2UncertaintyR8BLaunchKindV3::UserSystemd;
-                row.tool_chain = vec![K2UncertaintyR8BToolIdentityV3 {
-                    role: K2UncertaintyR8BToolRoleV3::SystemdRun,
-                    canonical_path: "/usr/bin/systemd-run".to_owned(),
-                    sha256: root_v1("positive-systemd-run"),
-                }];
+            if request.producer_role == "M24_LINKED_RUNNER" {
+                set_launch_v3(&mut row, K2UncertaintyR8BLaunchKindV3::UserSystemd);
             }
             if let Some(identities) = identities {
                 bind_invocation_identities_v3(&mut row, identities);
@@ -1345,8 +1691,8 @@ fn projection_fixture_v3(
             row
         })
         .collect::<Vec<_>>();
-    let projection =
-        seal_self_formed_r8b_static_projection_v3(&requests, &parent_launches).unwrap();
+    let projection = seal_self_formed_r8b_static_projection_v3(&requests, &parent_launches)
+        .expect("R8B V8 authority fixture");
     let authority = schedule_authority_v3();
     let representative_counts = authority
         .case_ids_sha256
@@ -1366,11 +1712,23 @@ fn projection_fixture_v3(
             ("M08_CLOSURE_PLANNER", 1),
             ("M09_CLOSURE_VERIFIER", 1),
         ] {
-            for _ in 0..count {
-                let mut row = invocation_v3(ordinal, "C03", role);
+            for probe in 0..count {
+                let stage = match role {
+                    "M03_LEARNER" => "C03",
+                    "M04_PROBE" => "C04",
+                    "M05_SELECTOR" => "C05",
+                    "M06_BASELINE" => "C06",
+                    "M07_SELECTION_PREVERIFIER" => "C07",
+                    "M08_CLOSURE_PLANNER" => "C08",
+                    "M09_CLOSURE_VERIFIER" => "C09",
+                    _ => unreachable!(),
+                };
+                let mut row = invocation_v3(ordinal, stage, role);
                 row.request_owner_role = "M10_PUBLIC_COORDINATOR".to_owned();
                 row.request_owner_executable_sha256 = root_v1("target-M10_PUBLIC_COORDINATOR");
                 row.case_id_sha256 = Some(case.clone());
+                row.probe_ordinal = Some(probe as u64);
+                set_launch_v3(&mut row, K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated);
                 if role == "M04_PROBE" {
                     row.validator = K2UncertaintyR8BValidatorV3::RepresentativeCount;
                 }
@@ -1490,7 +1848,8 @@ fn resource_receipt_v3() -> K2UncertaintyR8BResourceReceiptV3 {
     let mut post_probe = probe.clone();
     post_probe.started_monotonic_ns = 5;
     post_probe.finished_monotonic_ns = 6;
-    let unit = self_formed_r8b_route_unit_v3(&contract.route_id_sha256).unwrap();
+    let unit =
+        self_formed_r8b_route_unit_v3(&contract.route_id_sha256).expect("R8B V8 authority fixture");
     K2UncertaintyR8BResourceReceiptV3 {
         schema: String::new(),
         route_id_sha256: contract.route_id_sha256,
@@ -1612,11 +1971,13 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
             kind,
             path,
             &control,
-            control.receipt_root_sha256.clone(),
-            &control.schema,
-            "M17_CONTROL_EVALUATOR",
-            identities["M17_CONTROL_EVALUATOR"].clone(),
-            Vec::new(),
+            PacketEvidenceAuthorityV3::new(
+                control.receipt_root_sha256.clone(),
+                &control.schema,
+                "M17_CONTROL_EVALUATOR",
+                identities["M17_CONTROL_EVALUATOR"].clone(),
+                Vec::new(),
+            ),
         ));
         controls.push(control);
     }
@@ -1658,31 +2019,37 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
         K2UncertaintyR8BEvidenceKindV2::LinkedRoute,
         "linked/route.json",
         &linked_route,
-        linked_route.receipt_root_sha256.clone(),
-        &linked_route.schema,
-        "M24_LINKED_RUNNER",
-        identities["M24_LINKED_RUNNER"].clone(),
-        linked_route.source_roots_sha256.clone(),
+        PacketEvidenceAuthorityV3::new(
+            linked_route.receipt_root_sha256.clone(),
+            &linked_route.schema,
+            "M24_LINKED_RUNNER",
+            identities["M24_LINKED_RUNNER"].clone(),
+            linked_route.source_roots_sha256.clone(),
+        ),
     ));
     evidence.push(PacketEvidenceV3::new(
         K2UncertaintyR8BEvidenceKindV2::CleanupTransaction,
         "linked/cleanup.json",
         &cleanup,
-        cleanup.receipt_root_sha256.clone(),
-        &cleanup.schema,
-        "M22_CLEANUP_VERIFIER",
-        identities["M22_CLEANUP_VERIFIER"].clone(),
-        Vec::new(),
+        PacketEvidenceAuthorityV3::new(
+            cleanup.receipt_root_sha256.clone(),
+            &cleanup.schema,
+            "M22_CLEANUP_VERIFIER",
+            identities["M22_CLEANUP_VERIFIER"].clone(),
+            Vec::new(),
+        ),
     ));
     evidence.push(PacketEvidenceV3::new(
         K2UncertaintyR8BEvidenceKindV2::DevelopmentResult,
         "linked/development-result.json",
         &development,
-        development.receipt_root_sha256.clone(),
-        &development.schema,
-        "M23_DEVELOPMENT_RESULT_PUBLISHER",
-        identities["M23_DEVELOPMENT_RESULT_PUBLISHER"].clone(),
-        Vec::new(),
+        PacketEvidenceAuthorityV3::new(
+            development.receipt_root_sha256.clone(),
+            &development.schema,
+            "M23_DEVELOPMENT_RESULT_PUBLISHER",
+            identities["M23_DEVELOPMENT_RESULT_PUBLISHER"].clone(),
+            Vec::new(),
+        ),
     ));
 
     for (kind, path, role) in [
@@ -1734,21 +2101,25 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
         K2UncertaintyR8BEvidenceKindV2::LinkedManifest,
         "manifests/linked-executables.json",
         &linked_manifest,
-        linked_manifest.manifest_root_sha256.clone(),
-        &linked_manifest.schema,
-        "M24_LINKED_RUNNER",
-        identities["M24_LINKED_RUNNER"].clone(),
-        Vec::new(),
+        PacketEvidenceAuthorityV3::new(
+            linked_manifest.manifest_root_sha256.clone(),
+            &linked_manifest.schema,
+            "M24_LINKED_RUNNER",
+            identities["M24_LINKED_RUNNER"].clone(),
+            Vec::new(),
+        ),
     ));
     evidence.push(PacketEvidenceV3::new(
         K2UncertaintyR8BEvidenceKindV2::SuiteManifest,
         "manifests/suite-executables.json",
         &suite_manifest,
-        suite_manifest.manifest_root_sha256.clone(),
-        &suite_manifest.schema,
-        "M24_LINKED_RUNNER",
-        identities["M24_LINKED_RUNNER"].clone(),
-        Vec::new(),
+        PacketEvidenceAuthorityV3::new(
+            suite_manifest.manifest_root_sha256.clone(),
+            &suite_manifest.schema,
+            "M24_LINKED_RUNNER",
+            identities["M24_LINKED_RUNNER"].clone(),
+            Vec::new(),
+        ),
     ));
     evidence.push(positive_measured_evidence_v3(
         K2UncertaintyR8BEvidenceKindV2::ProductionSurvival,
@@ -1818,10 +2189,12 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
             &writer,
             invocation.clone(),
             request_root,
-            root_v1(&format!("producer-receipt-{}", invocation.target_role)),
-            "nando.fixture-producer-receipt.v3",
-            K2UncertaintyR8BValidatedFactV3::None,
-            outputs,
+            CompletionEvidenceV3::new(
+                root_v1(&format!("producer-receipt-{}", invocation.target_role)),
+                "nando.fixture-producer-receipt.v3",
+                K2UncertaintyR8BValidatedFactV3::None,
+                outputs,
+            ),
             &mut clock,
         );
     }
@@ -1830,14 +2203,27 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
         .iter()
         .filter(|row| !parent_ids.contains(&row.invocation_id_sha256))
     {
+        if invocation.expected_outcome
+            == K2UncertaintyR8BExpectedOutcomeV3::DiagnosticExpectedFailure
+        {
+            append_expected_failure_v3(
+                &writer,
+                invocation.clone(),
+                root_v1(&format!("request-{}", invocation.invocation_id_sha256)),
+                &mut clock,
+            );
+            continue;
+        }
         append_success_v3(
             &writer,
             invocation.clone(),
             root_v1(&format!("request-{}", invocation.invocation_id_sha256)),
-            root_v1(&format!("receipt-{}", invocation.invocation_id_sha256)),
-            "nando.fixture-static-receipt.v3",
-            K2UncertaintyR8BValidatedFactV3::None,
-            Vec::new(),
+            CompletionEvidenceV3::new(
+                root_v1(&format!("receipt-{}", invocation.invocation_id_sha256)),
+                "nando.fixture-static-receipt.v3",
+                K2UncertaintyR8BValidatedFactV3::None,
+                Vec::new(),
+            ),
             &mut clock,
         );
     }
@@ -1856,10 +2242,12 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
             &writer,
             invocation.clone(),
             root_v1(&format!("request-{}", invocation.invocation_id_sha256)),
-            root_v1(&format!("receipt-{}", invocation.invocation_id_sha256)),
-            "nando.fixture-dynamic-receipt.v3",
-            fact,
-            Vec::new(),
+            CompletionEvidenceV3::new(
+                root_v1(&format!("receipt-{}", invocation.invocation_id_sha256)),
+                "nando.fixture-dynamic-receipt.v3",
+                fact,
+                Vec::new(),
+            ),
             &mut clock,
         );
     }
@@ -1917,10 +2305,12 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
             &writer,
             invocation.clone(),
             root_v1(&format!("request-{}", invocation.invocation_id_sha256)),
-            semantic_root,
-            schema,
-            K2UncertaintyR8BValidatedFactV3::None,
-            outputs,
+            CompletionEvidenceV3::new(
+                semantic_root,
+                schema,
+                K2UncertaintyR8BValidatedFactV3::None,
+                outputs,
+            ),
             &mut clock,
         );
         match invocation.target_role.as_str() {
@@ -1939,21 +2329,25 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
         K2UncertaintyR8BEvidenceKindV2::OracleCases,
         "linked/oracle-batch.json",
         &oracle_wrapper,
-        oracle_wrapper.receipt_root_sha256.clone(),
-        &oracle_wrapper.schema,
-        "M24_LINKED_RUNNER",
-        identities["M24_LINKED_RUNNER"].clone(),
-        Vec::new(),
+        PacketEvidenceAuthorityV3::new(
+            oracle_wrapper.receipt_root_sha256.clone(),
+            &oracle_wrapper.schema,
+            "M24_LINKED_RUNNER",
+            identities["M24_LINKED_RUNNER"].clone(),
+            Vec::new(),
+        ),
     ));
     evidence.push(PacketEvidenceV3::new(
         K2UncertaintyR8BEvidenceKindV2::FrozenControlScopes,
         "linked/control-scopes.json",
         &control_wrapper,
-        control_wrapper.receipt_root_sha256.clone(),
-        &control_wrapper.schema,
-        "M24_LINKED_RUNNER",
-        identities["M24_LINKED_RUNNER"].clone(),
-        control_roots,
+        PacketEvidenceAuthorityV3::new(
+            control_wrapper.receipt_root_sha256.clone(),
+            &control_wrapper.schema,
+            "M24_LINKED_RUNNER",
+            identities["M24_LINKED_RUNNER"].clone(),
+            control_roots,
+        ),
     ));
     for kind in [
         K2UncertaintyR8BEvidenceKindV2::OracleCases,
@@ -1978,10 +2372,12 @@ fn build_positive_packet_authorization_v3() -> K2UncertaintyR8BAuthorizationRece
     append_completion_v3(
         &writer,
         &m24_started.expect("positive M24 start"),
-        root_v1("positive-m24-receipt"),
-        "nando.fixture-m24-receipt.v3",
-        K2UncertaintyR8BValidatedFactV3::None,
-        m24_outputs,
+        CompletionEvidenceV3::new(
+            root_v1("positive-m24-receipt"),
+            "nando.fixture-m24-receipt.v3",
+            K2UncertaintyR8BValidatedFactV3::None,
+            m24_outputs,
+        ),
         &mut clock,
     );
 
@@ -2127,11 +2523,35 @@ fn downstream_rows_v3() -> Vec<K2UncertaintyR8BInvocationPlanV3> {
         ("M21_CLEANUP_OWNER", 1), ("M22_CLEANUP_VERIFIER", 1),
         ("M23_DEVELOPMENT_RESULT_PUBLISHER", 1),
     ];
+    let mut index = 0_usize;
     counts
         .into_iter()
-        .flat_map(|(role, count)| std::iter::repeat_n(role, count))
-        .enumerate()
-        .map(|(index, role)| invocation_v3(index, "C09", role))
+        .flat_map(|(role, count)| (0..count).map(move |ordinal| (role, ordinal)))
+        .map(|(role, ordinal)| {
+            let (stage, mediated, case, probe) = match role {
+                "M11_PRIVATE_RESOLVER" | "M12_SAFETY" | "M13_WORKER" | "M14_OBSERVER" => {
+                    ("C09", true, Some(ordinal % 16), Some((ordinal / 16) as u64))
+                }
+                "M15_FINAL_VERIFIER" => ("C09", true, Some(ordinal), None),
+                "M16_ORACLE" => ("C10", true, Some(ordinal), None),
+                "M19_FRESH_CONTROL_CASE" => ("C11", true, Some(100 + ordinal), None),
+                "M17_CONTROL_EVALUATOR" => ("C12", false, None, None),
+                "M18_TERMINAL_EVALUATOR" => ("C14", false, None, None),
+                "M20_CLEANUP_AUTHORIZER" => ("C16", true, None, None),
+                "M21_CLEANUP_OWNER" => ("C17", true, None, None),
+                "M22_CLEANUP_VERIFIER" => ("C18", true, None, None),
+                "M23_DEVELOPMENT_RESULT_PUBLISHER" => ("C20", true, None, None),
+                _ => unreachable!(),
+            };
+            let mut row = invocation_v3(index, stage, role);
+            index += 1;
+            row.case_id_sha256 = case.map(|value| root_v1(&format!("downstream-case-{value:03}")));
+            row.probe_ordinal = probe;
+            if mediated {
+                set_launch_v3(&mut row, K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated);
+            }
+            row
+        })
         .collect()
 }
 
@@ -2144,12 +2564,12 @@ fn pure_control_receipt_v3(
     let outcomes = (0..scope.expected_count())
         .map(|ordinal| {
             let (control_id, disposition) =
-                expected_self_formed_control_v1(scope, ordinal).unwrap();
+                expected_self_formed_control_v1(scope, ordinal).expect("R8B V8 authority fixture");
             let stdout = uncertainty_bytes_v1(&K2UncertaintyControlStdoutV1 {
                 control_id: control_id.clone(),
                 disposition: disposition.clone(),
             })
-            .unwrap();
+            .expect("R8B V8 authority fixture");
             K2UncertaintyControlProcessOutcomeV1::seal(
                 scope,
                 control_id,
@@ -2169,7 +2589,7 @@ fn pure_control_receipt_v3(
                 root_v1(&format!("positive-control-source-{scope:?}-{ordinal}")),
                 root_v1(&format!("positive-control-log-{scope:?}-{ordinal}")),
             )
-            .unwrap()
+            .expect("R8B V8 authority fixture")
         })
         .collect();
     let request = K2UncertaintyControlEvaluationRequestV1::seal(
@@ -2216,7 +2636,7 @@ fn positive_cleanup_receipt_v3(verifier_sha256: &str) -> K2UncertaintyCleanupRec
         &value.verifier_executable_sha256,
         &value.authority,
     ))
-    .unwrap();
+    .expect("R8B V8 authority fixture");
     value.validate().expect("positive cleanup receipt");
     value
 }
@@ -2245,7 +2665,7 @@ fn positive_development_receipt_v3(
         &value.publisher_executable_sha256,
         &value.authority,
     ))
-    .unwrap();
+    .expect("R8B V8 authority fixture");
     value
         .validate()
         .expect("positive Development result receipt");
@@ -2273,11 +2693,13 @@ fn positive_measured_evidence_v3(
         kind,
         path,
         &receipt,
-        receipt.receipt_root_sha256.clone(),
-        &receipt.schema,
-        role,
-        producer_sha256.to_owned(),
-        sources,
+        PacketEvidenceAuthorityV3::new(
+            receipt.receipt_root_sha256.clone(),
+            &receipt.schema,
+            role,
+            producer_sha256.to_owned(),
+            sources,
+        ),
     )
 }
 
@@ -2389,39 +2811,77 @@ fn append_requested_v3(
         .expect("append positive invocation request")
 }
 
+struct CompletionEvidenceV3 {
+    semantic_root_sha256: String,
+    receipt_schema: String,
+    fact: K2UncertaintyR8BValidatedFactV3,
+    authority_outputs: Vec<K2UncertaintyR8BOutputContractV3>,
+}
+
+impl CompletionEvidenceV3 {
+    fn new(
+        semantic_root_sha256: String,
+        receipt_schema: &str,
+        fact: K2UncertaintyR8BValidatedFactV3,
+        authority_outputs: Vec<K2UncertaintyR8BOutputContractV3>,
+    ) -> Self {
+        Self {
+            semantic_root_sha256,
+            receipt_schema: receipt_schema.to_owned(),
+            fact,
+            authority_outputs,
+        }
+    }
+}
+
 fn append_success_v3(
     writer: &K2UncertaintyR8BLedgerWriterV3,
     invocation: K2UncertaintyR8BInvocationPlanV3,
     request_root_sha256: String,
-    semantic_root_sha256: String,
-    receipt_schema: &str,
-    fact: K2UncertaintyR8BValidatedFactV3,
-    authority_outputs: Vec<K2UncertaintyR8BOutputContractV3>,
+    evidence: CompletionEvidenceV3,
     clock: &mut u64,
 ) -> K2UncertaintyR8BProcessEventV3 {
     let started = append_requested_v3(writer, invocation, request_root_sha256, clock);
-    append_completion_v3(
-        writer,
-        &started,
-        semantic_root_sha256,
-        receipt_schema,
-        fact,
-        authority_outputs,
-        clock,
-    )
+    append_completion_v3(writer, &started, evidence, clock)
+}
+
+fn append_expected_failure_v3(
+    writer: &K2UncertaintyR8BLedgerWriterV3,
+    invocation: K2UncertaintyR8BInvocationPlanV3,
+    request_root_sha256: String,
+    clock: &mut u64,
+) -> K2UncertaintyR8BProcessEventV3 {
+    let exit = invocation
+        .expected_exit_predicate
+        .as_ref()
+        .expect("diagnostic predicate")
+        .exact_exit_code;
+    let started = append_requested_v3(writer, invocation, request_root_sha256, clock);
+    let monotonic_ns = *clock;
+    *clock += 1;
+    writer
+        .failure(
+            &started,
+            K2UncertaintyR8BCompletionKindV3::UnexpectedFailure,
+            exit,
+            b"",
+            b"expected diagnostic",
+            monotonic_ns,
+        )
+        .expect("append expected diagnostic")
 }
 
 fn append_completion_v3(
     writer: &K2UncertaintyR8BLedgerWriterV3,
     started: &K2UncertaintyR8BProcessEventV3,
-    semantic_root_sha256: String,
-    receipt_schema: &str,
-    fact: K2UncertaintyR8BValidatedFactV3,
-    authority_outputs: Vec<K2UncertaintyR8BOutputContractV3>,
+    evidence: CompletionEvidenceV3,
     clock: &mut u64,
 ) -> K2UncertaintyR8BProcessEventV3 {
-    let stdout = uncertainty_bytes_v1(&(receipt_schema, &semantic_root_sha256))
-        .expect("positive stdout bytes");
+    let stdout = uncertainty_bytes_v1(&(
+        evidence.receipt_schema.as_str(),
+        &evidence.semantic_root_sha256,
+    ))
+    .expect("positive stdout bytes");
     let stdout_sha256 = composition_sha256_bytes_v1(&stdout);
     let monotonic_ns = *clock;
     *clock += 1;
@@ -2444,12 +2904,12 @@ fn append_completion_v3(
             validated_output: Some(K2UncertaintyR8BValidatedOutputV3 {
                 stdout_byte_len: stdout.len() as u64,
                 stdout_sha256,
-                receipt_schema: receipt_schema.to_owned(),
-                semantic_root_sha256,
+                receipt_schema: evidence.receipt_schema,
+                semantic_root_sha256: evidence.semantic_root_sha256,
                 validator: started.invocation.validator,
                 validator_executable_sha256: started.invocation.target_executable_sha256.clone(),
-                fact,
-                authority_outputs,
+                fact: evidence.fact,
+                authority_outputs: evidence.authority_outputs,
             }),
             monotonic_ns,
             event_root_sha256: String::new(),

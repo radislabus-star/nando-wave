@@ -11,9 +11,9 @@ use super::super::{
 use super::{
     K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2UncertaintyImmutablePublicationFaultV1,
     K2UncertaintyR8BAuthorizationReceiptV3, denied_authority_v1,
-    immutable_publication_temp_relative_path_v1, publish_immutable_file_v1,
-    read_immutable_file_v1, recover_linked_publication_temp_v1, require_denied_authority_v1,
-    uncertainty_bytes_v1, uncertainty_decode_v1, uncertainty_root_v1,
+    immutable_publication_temp_relative_path_v1, publish_immutable_file_v1, read_immutable_file_v1,
+    recover_linked_publication_temp_v1, require_denied_authority_v1, uncertainty_bytes_v1,
+    uncertainty_decode_v1, uncertainty_root_v1,
 };
 
 pub const K2_UNCERTAINTY_R8B_PUBLICATION_REQUEST_SCHEMA_V3: &str =
@@ -190,12 +190,8 @@ pub fn recover_self_formed_r8b_publication_v3(
         0o400,
         K2_UNCERTAINTY_R8B_PUBLICATION_ID_V3,
     )?;
-    let published = read_immutable_file_v1(
-        root,
-        K2_UNCERTAINTY_R8B_RECEIPT_PATH_V3,
-        0o400,
-        bytes.len(),
-    )?;
+    let published =
+        read_immutable_file_v1(root, K2_UNCERTAINTY_R8B_RECEIPT_PATH_V3, 0o400, bytes.len())?;
     if published.bytes != bytes || published.content_sha256 != composition_sha256_bytes_v1(&bytes) {
         return Err(invalid("self_formed_r8b_recovered_bytes_invalid"));
     }

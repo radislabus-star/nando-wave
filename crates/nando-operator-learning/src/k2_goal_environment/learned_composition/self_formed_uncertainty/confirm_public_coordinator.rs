@@ -15,19 +15,19 @@ use super::super::{
 };
 use super::{
     K2_UNCERTAINTY_MAX_PROTOCOL_BYTES_V1, K2_UNCERTAINTY_R8B_PRODUCER_REQUEST_ENV_V3,
-    K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2,
-    K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1, K2UncertaintyBatchPrecommitV2,
-    K2UncertaintyCasePreverificationV2, K2UncertaintyClosureCensusV1, K2UncertaintyClosurePlanV1,
-    K2UncertaintyClosurePlannerRequestV1, K2UncertaintyClosureVerificationReceiptV1,
-    K2UncertaintyClosureVerificationRequestV1, K2UncertaintyConfirmDataMountV1,
-    K2UncertaintyConfirmGuestExecutableV1, K2UncertaintyConfirmMountTargetV1,
-    K2UncertaintyLearnerRequestV1, K2UncertaintyLearnerResponseV1, K2UncertaintyProbeArtifactsV1,
-    K2UncertaintyProbeRequestV1, K2UncertaintyPublicCoordinatorRequestV1,
-    K2UncertaintyPublicOwnerRoleV1, K2UncertaintyPublicOwnerV1,
-    K2UncertaintyPublicPrecommitReceiptV1, K2UncertaintyPublicPreparedCaseV1,
-    K2UncertaintyR8BExecutableIdentityV2, K2UncertaintyR8BExpectedOutcomeV3,
-    K2UncertaintyR8BInvocationPlanV3, K2UncertaintyR8BLaunchKindV3, K2UncertaintyR8BLedgerWriterV2,
-    K2UncertaintyR8BLedgerWriterV3, K2UncertaintyR8BProcessEventV3, K2UncertaintyR8BProducedReceiptV2,
+    K2_UNCERTAINTY_R8B_STDOUT_RECEIPT_PATH_V2, K2_UNCERTAINTY_SELECTOR_SOURCE_SHA256_V1,
+    K2UncertaintyBatchPrecommitV2, K2UncertaintyCasePreverificationV2,
+    K2UncertaintyClosureCensusV1, K2UncertaintyClosurePlanV1, K2UncertaintyClosurePlannerRequestV1,
+    K2UncertaintyClosureVerificationReceiptV1, K2UncertaintyClosureVerificationRequestV1,
+    K2UncertaintyConfirmDataMountV1, K2UncertaintyConfirmGuestExecutableV1,
+    K2UncertaintyConfirmMountTargetV1, K2UncertaintyLearnerRequestV1,
+    K2UncertaintyLearnerResponseV1, K2UncertaintyProbeArtifactsV1, K2UncertaintyProbeRequestV1,
+    K2UncertaintyPublicCoordinatorRequestV1, K2UncertaintyPublicOwnerRoleV1,
+    K2UncertaintyPublicOwnerV1, K2UncertaintyPublicPrecommitReceiptV1,
+    K2UncertaintyPublicPreparedCaseV1, K2UncertaintyR8BExecutableIdentityV2,
+    K2UncertaintyR8BExpectedOutcomeV3, K2UncertaintyR8BInvocationPlanV3,
+    K2UncertaintyR8BLaunchKindV3, K2UncertaintyR8BLedgerWriterV2, K2UncertaintyR8BLedgerWriterV3,
+    K2UncertaintyR8BProcessEventV3, K2UncertaintyR8BProducedReceiptV2,
     K2UncertaintyR8BProducerRequestV3, K2UncertaintyR8BToolIdentityV3, K2UncertaintyR8BToolRoleV3,
     K2UncertaintyR8BValidatedFactV3, K2UncertaintyR8BValidatorV3, denied_authority_v1,
     preverify_self_formed_case_with_owner_v1, publish_self_formed_final_verifier_material_v2,
@@ -332,8 +332,12 @@ where
     )?;
     let stdin_sha256 = composition_sha256_bytes_v1(&input);
     let started_v3 = start_dynamic_invocation_v3(
-        stage_id, child_role, case_id_sha256, &owner.executable_sha256,
-        &request_root, &stdin_sha256,
+        stage_id,
+        child_role,
+        case_id_sha256,
+        &owner.executable_sha256,
+        &request_root,
+        &stdin_sha256,
     )?;
     let started = ledger
         .as_ref()
@@ -367,8 +371,16 @@ where
     let fact = validated_public_fact_v3(role, mounts, &outcome.stdout)?;
     let value = uncertainty_decode_v1(&outcome.stdout)?;
     if let Some((writer, started)) = started_v3 {
-        writer.success(&started, &outcome.stdout, &outcome.stderr, receipt_schema.clone(),
-            semantic_root.clone(), fact, Vec::new(), monotonic_ns_v2())?;
+        writer.success(
+            &started,
+            &outcome.stdout,
+            &outcome.stderr,
+            receipt_schema.clone(),
+            semantic_root.clone(),
+            fact,
+            Vec::new(),
+            monotonic_ns_v2(),
+        )?;
     }
     if let (Some(writer), Some(started)) = (&ledger, &started) {
         writer.child_finished(
@@ -391,38 +403,90 @@ where
 
 #[allow(clippy::too_many_arguments)]
 fn start_dynamic_invocation_v3(
-    stage: &str, target_role: &str, case_id_sha256: &str, target_sha256: &str,
-    request_root_sha256: &str, stdin_sha256: &str,
-) -> K2CompositionResultV1<Option<(K2UncertaintyR8BLedgerWriterV3, K2UncertaintyR8BProcessEventV3)>> {
-    let Some(path) = std::env::var_os(K2_UNCERTAINTY_R8B_PRODUCER_REQUEST_ENV_V3) else { return Ok(None) };
-    let bytes = fs::read(path).map_err(|_| K2CompositionErrorV1::Io("read_self_formed_r8b_v3_m10_request"))?;
+    stage: &str,
+    target_role: &str,
+    case_id_sha256: &str,
+    target_sha256: &str,
+    request_root_sha256: &str,
+    stdin_sha256: &str,
+) -> K2CompositionResultV1<
+    Option<(
+        K2UncertaintyR8BLedgerWriterV3,
+        K2UncertaintyR8BProcessEventV3,
+    )>,
+> {
+    let Some(path) = std::env::var_os(K2_UNCERTAINTY_R8B_PRODUCER_REQUEST_ENV_V3) else {
+        return Ok(None);
+    };
+    let bytes = fs::read(path)
+        .map_err(|_| K2CompositionErrorV1::Io("read_self_formed_r8b_v3_m10_request"))?;
     let request: K2UncertaintyR8BProducerRequestV3 = uncertainty_decode_v1(&bytes)?;
     validate_self_formed_r8b_producer_request_v3(&request)?;
-    if uncertainty_bytes_v1(&request)? != bytes { return Err(K2CompositionErrorV1::Invalid("self_formed_r8b_v3_m10_request_bytes_invalid")); }
+    if uncertainty_bytes_v1(&request)? != bytes {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r8b_v3_m10_request_bytes_invalid",
+        ));
+    }
     let writer = K2UncertaintyR8BLedgerWriterV3::attach_request(&request)?;
     let summary = writer.summary()?;
-    let ordinal = summary.invocations.iter().filter(|row| {
-        row.request_owner_role == "M10_PUBLIC_COORDINATOR" && row.target_role == target_role
-            && row.case_id_sha256.as_deref() == Some(case_id_sha256)
-    }).count() as u64;
-    let owner_sha256 = composition_sha256_file_v1(&std::env::current_exe()
-        .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_r8b_m10"))?)?;
+    let ordinal = summary
+        .invocations
+        .iter()
+        .filter(|row| {
+            row.request_owner_role == "M10_PUBLIC_COORDINATOR"
+                && row.target_role == target_role
+                && row.case_id_sha256.as_deref() == Some(case_id_sha256)
+        })
+        .count() as u64;
+    let owner_sha256 = composition_sha256_file_v1(
+        &std::env::current_exe()
+            .map_err(|_| K2CompositionErrorV1::Io("resolve_self_formed_r8b_m10"))?,
+    )?;
     let invocation = K2UncertaintyR8BInvocationPlanV3 {
-        invocation_id_sha256: uncertainty_root_v1(&("nando.r8b.m10-invocation.v3", &request.route_id_sha256,
-            case_id_sha256, target_role, ordinal, request_root_sha256))?, parent_invocation_id_sha256: None,
-        request_owner_role: "M10_PUBLIC_COORDINATOR".to_owned(), request_owner_executable_sha256: owner_sha256,
-        target_role: target_role.to_owned(), target_executable_sha256: target_sha256.to_owned(),
+        invocation_id_sha256: uncertainty_root_v1(&(
+            "nando.r8b.m10-invocation.v3",
+            &request.route_id_sha256,
+            case_id_sha256,
+            target_role,
+            ordinal,
+            request_root_sha256,
+        ))?,
+        parent_invocation_id_sha256: None,
+        request_owner_role: "M10_PUBLIC_COORDINATOR".to_owned(),
+        request_owner_executable_sha256: owner_sha256,
+        target_role: target_role.to_owned(),
+        target_executable_sha256: target_sha256.to_owned(),
         launch_kind: K2UncertaintyR8BLaunchKindV3::BwrapPrlimitMediated,
-        tool_chain: [(K2UncertaintyR8BToolRoleV3::Bwrap, "/usr/bin/bwrap"),
-            (K2UncertaintyR8BToolRoleV3::Prlimit, "/usr/bin/prlimit")].into_iter().map(|(role, path)|
-                Ok(K2UncertaintyR8BToolIdentityV3 { role, canonical_path: path.to_owned(), sha256: composition_sha256_file_v1(Path::new(path))? }))
-            .collect::<K2CompositionResultV1<Vec<_>>>()?, stage: stage.to_owned(),
-        case_id_sha256: Some(case_id_sha256.to_owned()), probe_ordinal: Some(ordinal),
+        tool_chain: [
+            (K2UncertaintyR8BToolRoleV3::Bwrap, "/usr/bin/bwrap"),
+            (K2UncertaintyR8BToolRoleV3::Prlimit, "/usr/bin/prlimit"),
+        ]
+        .into_iter()
+        .map(|(role, path)| {
+            Ok(K2UncertaintyR8BToolIdentityV3 {
+                role,
+                canonical_path: path.to_owned(),
+                sha256: composition_sha256_file_v1(Path::new(path))?,
+            })
+        })
+        .collect::<K2CompositionResultV1<Vec<_>>>()?,
+        stage: stage.to_owned(),
+        case_id_sha256: Some(case_id_sha256.to_owned()),
+        probe_ordinal: Some(ordinal),
         expected_outcome: K2UncertaintyR8BExpectedOutcomeV3::AuthoritySuccess,
-        validator: if target_role == "M04_PROBE" { K2UncertaintyR8BValidatorV3::RepresentativeCount }
-            else { K2UncertaintyR8BValidatorV3::ConcreteReceipt },
+        expected_exit_predicate: None,
+        validator: if target_role == "M04_PROBE" {
+            K2UncertaintyR8BValidatorV3::RepresentativeCount
+        } else {
+            K2UncertaintyR8BValidatorV3::ConcreteReceipt
+        },
     };
-    let started = writer.request(invocation, request_root_sha256.to_owned(), stdin_sha256.to_owned(), monotonic_ns_v2())?;
+    let started = writer.request(
+        invocation,
+        request_root_sha256.to_owned(),
+        stdin_sha256.to_owned(),
+        monotonic_ns_v2(),
+    )?;
     Ok(Some((writer, started)))
 }
 
@@ -431,13 +495,24 @@ fn validated_public_fact_v3(
     mounts: &[K2UncertaintyConfirmDataMountV1<'_>],
     stdout: &[u8],
 ) -> K2CompositionResultV1<K2UncertaintyR8BValidatedFactV3> {
-    if role != K2UncertaintyConfirmGuestExecutableV1::Probe { return Ok(K2UncertaintyR8BValidatedFactV3::None) }
+    if role != K2UncertaintyConfirmGuestExecutableV1::Probe {
+        return Ok(K2UncertaintyR8BValidatedFactV3::None);
+    }
     let artifacts: K2UncertaintyProbeArtifactsV1 = uncertainty_decode_v1(stdout)?;
     artifacts.validate()?;
-    let root = mounts.first().ok_or(K2CompositionErrorV1::Invalid("self_formed_r8b_v3_probe_mount_missing"))?.host_path;
+    let root = mounts
+        .first()
+        .ok_or(K2CompositionErrorV1::Invalid(
+            "self_formed_r8b_v3_probe_mount_missing",
+        ))?
+        .host_path;
     let output = reopen_self_formed_probe_output_v1(root, &artifacts)?;
     let count = output.frontier.representative_probe_roots_sha256.len() as u64;
-    if !(8..=1792).contains(&count) { return Err(K2CompositionErrorV1::Invalid("self_formed_r8b_v3_representative_count_invalid")); }
+    if !(8..=1792).contains(&count) {
+        return Err(K2CompositionErrorV1::Invalid(
+            "self_formed_r8b_v3_representative_count_invalid",
+        ));
+    }
     Ok(K2UncertaintyR8BValidatedFactV3::RepresentativeCount { count })
 }
 
