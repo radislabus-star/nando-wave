@@ -1,0 +1,419 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_POSTIMPLEMENTATION/code-route.p09.observed-source.v8.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821",
+  "node_count": 9,
+  "edge_count": 9,
+  "routes": [
+    {
+      "id": "p09-authority-binding",
+      "event": "p09_authority_binding",
+      "kind": "authority",
+      "entry": "p08_published_bytes",
+      "via": [],
+      "terminal": "separate_p09_authority",
+      "path_count": 1,
+      "paths": [
+        [
+          "p08_published_bytes",
+          "separate_p09_authority"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "p08_published_bytes"
+        ],
+        "authorization_owner": [
+          "separate_p09_authority"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "p08_published_bytes",
+          "to": "separate_p09_authority",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "p08_published_bytes",
+              "separate_p09_authority"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p09-request-authorization",
+      "event": "p09_request_authorization",
+      "kind": "authority",
+      "entry": "separate_p09_authority",
+      "via": [],
+      "terminal": "p09_diagnostic_permission",
+      "path_count": 1,
+      "paths": [
+        [
+          "separate_p09_authority",
+          "p09_diagnostic_permission"
+        ]
+      ],
+      "role_owners": {
+        "mutation_owner": [
+          "p09_diagnostic_permission"
+        ],
+        "authorization_owner": [
+          "separate_p09_authority"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "separate_p09_authority",
+          "to": "p09_diagnostic_permission",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "separate_p09_authority",
+              "p09_diagnostic_permission"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p09-process-execution",
+      "event": "p09_process_execution",
+      "kind": "execution",
+      "entry": "separate_p09_authority",
+      "via": [],
+      "terminal": "p09_process_adapter",
+      "path_count": 1,
+      "paths": [
+        [
+          "separate_p09_authority",
+          "p09_diagnostic_request",
+          "p09_process_adapter"
+        ]
+      ],
+      "role_owners": {
+        "interface": [
+          "p09_diagnostic_request"
+        ],
+        "producer": [
+          "p09_process_adapter"
+        ],
+        "authorization_owner": [
+          "separate_p09_authority"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "separate_p09_authority",
+          "to": "p09_process_adapter",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "separate_p09_authority",
+              "p09_diagnostic_request",
+              "p09_process_adapter"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p09-artifact-output",
+      "event": "p09_artifact_output",
+      "kind": "authority",
+      "entry": "p09_process_adapter",
+      "via": [],
+      "terminal": "p09_diagnostic_artifact",
+      "path_count": 1,
+      "paths": [
+        [
+          "p09_process_adapter",
+          "p09_diagnostic_artifact"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "p09_diagnostic_artifact"
+        ],
+        "producer": [
+          "p09_process_adapter"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "p09_process_adapter",
+          "to": "p09_diagnostic_artifact",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "p09_process_adapter",
+              "p09_diagnostic_artifact"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p09-receipt-output",
+      "event": "p09_receipt_output",
+      "kind": "authority",
+      "entry": "p09_process_adapter",
+      "via": [],
+      "terminal": "p09_typed_receipt",
+      "path_count": 1,
+      "paths": [
+        [
+          "p09_process_adapter",
+          "p09_typed_receipt"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "p09_process_adapter"
+        ],
+        "evidence_owner": [
+          "p09_typed_receipt"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "p09_process_adapter",
+          "to": "p09_typed_receipt",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "p09_process_adapter",
+              "p09_typed_receipt"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p09-artifact-proof",
+      "event": "p09_artifact_proof",
+      "kind": "proof",
+      "entry": "p09_diagnostic_artifact",
+      "via": [],
+      "terminal": "p09_receipt_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "p09_diagnostic_artifact",
+          "p09_receipt_validator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "p09_diagnostic_artifact"
+        ],
+        "proof_owner": [
+          "p09_receipt_validator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "p09_diagnostic_artifact",
+          "to": "p09_receipt_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "p09_diagnostic_artifact",
+              "p09_receipt_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p09-receipt-proof",
+      "event": "p09_receipt_proof",
+      "kind": "proof",
+      "entry": "p09_typed_receipt",
+      "via": [],
+      "terminal": "p09_receipt_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "p09_typed_receipt",
+          "p09_receipt_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "p09_receipt_validator"
+        ],
+        "evidence_owner": [
+          "p09_typed_receipt"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "p09_typed_receipt",
+          "to": "p09_receipt_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "p09_typed_receipt",
+              "p09_receipt_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p09-nonmutation-proof",
+      "event": "p09_nonmutation_proof",
+      "kind": "proof",
+      "entry": "p08_published_bytes",
+      "via": [],
+      "terminal": "p09_nonmutation_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "p08_published_bytes",
+          "p09_nonmutation_validator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "p08_published_bytes"
+        ],
+        "proof_owner": [
+          "p09_nonmutation_validator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "p08_published_bytes",
+          "to": "p09_nonmutation_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "p08_published_bytes",
+              "p09_nonmutation_validator"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "p09_authority_binding": {
+      "render_owner": [],
+      "authorization_owner": [
+        "separate_p09_authority"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "p08_published_bytes"
+      ],
+      "candidate_rank_owner": []
+    },
+    "p09_request_authorization": {
+      "render_owner": [],
+      "authorization_owner": [
+        "separate_p09_authority"
+      ],
+      "mutation_owner": [
+        "p09_diagnostic_permission"
+      ],
+      "display_rank_owner": [],
+      "evidence_owner": [],
+      "candidate_rank_owner": []
+    },
+    "p09_artifact_output": {
+      "render_owner": [],
+      "authorization_owner": [],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "p09_diagnostic_artifact"
+      ],
+      "candidate_rank_owner": []
+    },
+    "p09_receipt_output": {
+      "render_owner": [],
+      "authorization_owner": [],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "evidence_owner": [
+        "p09_typed_receipt"
+      ],
+      "candidate_rank_owner": []
+    }
+  },
+  "source_evidence": {
+    "expected": 18,
+    "verified": 18,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

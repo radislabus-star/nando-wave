@@ -1,0 +1,4241 @@
+{
+  "schema": "nanda.implementation-preflight.v1",
+  "task_id": "k2-self-formed-uncertainty-r8b-v7",
+  "authority_bearing": true,
+  "scientific_future_sensitive": true,
+  "reuses_existing_implementation": true,
+  "baseline_checks": [
+    {
+      "id": "baseline-01",
+      "kind": "file",
+      "path": "../../../../Cargo.lock",
+      "expect": {
+        "size_bytes": 39973,
+        "sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-02",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/Cargo.toml",
+      "expect": {
+        "size_bytes": 663,
+        "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-03",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "expect": {
+        "size_bytes": 3821,
+        "sha256": "5b3333e5e6a720daf1abc3a7f68af1315baa702b0ebc7231f8bb4188295fdea2",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-04",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "expect": {
+        "size_bytes": 23258,
+        "sha256": "aa742715cd3ae522d9d2cbb3b7c0695d6f5aa34be95242204b8c6bb88e88f751",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-05",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7h_v1.rs",
+      "expect": {
+        "size_bytes": 26253,
+        "sha256": "201d793e165d03a3d2d61f1856820fdf443a3f527f6919b37a5d96d60420751c",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-06",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner_model.rs",
+      "expect": {
+        "size_bytes": 17934,
+        "sha256": "c2f300111bdc3e0445303e22a316d0cdf3b068c49353cd5775344506c7901594",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-07",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+      "expect": {
+        "size_bytes": 21109,
+        "sha256": "af341b4e430b06cbf13b92e859800458a07f80dccd8503374e6cc20113fe99ab",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-08",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifact_model.rs",
+      "expect": {
+        "size_bytes": 18220,
+        "sha256": "438a2e51552aa33b50ff6f37ae2391887251843ce90e49a32ee9bf364f354205",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-09",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+      "expect": {
+        "size_bytes": 16406,
+        "sha256": "6560bdc9e50a82aa96ef5d1c9b4aadccb0defd5bfe5d3fc6bb465cf0c24ff704",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-10",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs",
+      "expect": {
+        "size_bytes": 5148,
+        "sha256": "b04e9fdea3458547000b6c180108890ed7a1708f0b0308688371d90bb4f78e03",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-11",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs",
+      "expect": {
+        "size_bytes": 7353,
+        "sha256": "591e6df3af110094d99329164b24187f66b477d284eddeb68c3ae796c267b1ee",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-12",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs",
+      "expect": {
+        "size_bytes": 19687,
+        "sha256": "5bd4380f457482607cc95b1e0c71827be05480fba8aca106ffed53ac6d175e45",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-13",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup_verifier.rs",
+      "expect": {
+        "size_bytes": 20483,
+        "sha256": "6595ea0f4e530c0fc7697efe0ab215f0ea6c114302180f6f4b1f5fdc6af95bcd",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-14",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/bin/nando-k2-self-formed-confirm-owner.rs",
+      "expect": {
+        "size_bytes": 222,
+        "sha256": "693460a518b4007f75464725dd592c978eec622226517ca13b4dcee43a5f8bb7",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-15",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+      "expect": {
+        "size_bytes": 50397,
+        "sha256": "95419ac45cd34db4c04a32064bac7cce0bd0a035ad18627c8efe637bd371f1bf",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-16",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+      "expect": {
+        "size_bytes": 46526,
+        "sha256": "d126babdb9d496b750b50a0f35f694abd10579cb4d04a9c260c4e19465d63c67",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-17",
+      "kind": "file",
+      "path": "../../../../crates/nando-transition-serving/src/lib.rs",
+      "expect": {
+        "size_bytes": 457899,
+        "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-18",
+      "kind": "file",
+      "path": "../../../../crates/nando-gateway-control/src/live_dashboard.rs",
+      "expect": {
+        "size_bytes": 28960,
+        "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-19",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md",
+      "expect": {
+        "size_bytes": 24952,
+        "sha256": "075275b140c00b8e26bfbccebd014136bd39a0d7b23ae83f6d8292bd6d6b776d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-20",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_UNLOCK_2026-08-20.md",
+      "expect": {
+        "size_bytes": 2960,
+        "sha256": "c5a7c02324c074f600c6128a6650adeeeafeb1b26e091a8b54f0aadf4f62c0d8",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-21",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_RESULT_2026-08-20.md",
+      "expect": {
+        "size_bytes": 6796,
+        "sha256": "765c8ebe5a4c94d00f2282ff45ef3bc3edd6210edbc0111a37f2eedf48c01c15",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-22",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/development-byte-contract.v1.json",
+      "expect": {
+        "size_bytes": 11186,
+        "sha256": "1cb8837d6d7cdd14049dfe79a0f28ec9fa7749fb67989c4562b709a415ad636f",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-23",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/SHA256SUMS",
+      "expect": {
+        "size_bytes": 4466,
+        "sha256": "b331bc19350a1f71bcfb4adb3c56bff15402dd6483641d4f1ef8d336577fd757",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-24",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vectors/SHA256SUMS",
+      "expect": {
+        "size_bytes": 433,
+        "sha256": "19b9efe0a4fea2d77540ce992a633987c142e8c70d4117d2794f40d53be8e8e7",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-25",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/production-baseline.preimplementation.v1.json",
+      "expect": {
+        "size_bytes": 4967,
+        "sha256": "b3d7d0996d56eb0897ee5b15a749c72e3ae5b95b4315a4a44352f88bd55f9531",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-26",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V5.md",
+      "expect": {
+        "size_bytes": 21295,
+        "sha256": "6e782ca4ae6074c2dce758b3ebe79127c93cb89fbc41de23f0ba0c52f7fc2f69",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-27",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V5_PREFLIGHT_CRITIQUE.md",
+      "expect": {
+        "size_bytes": 1642,
+        "sha256": "4bfb6d252abdf092761d58f3a01e9f3224e6fc7dc7fd69a70d099f5c841ddbee",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-28",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_IMPLEMENTATION_INVENTORY_CRITIQUE.md",
+      "expect": {
+        "size_bytes": 2961,
+        "sha256": "77707a5dffcb7aa6b2b5562790b7b81e32a8b745d4a3666aa26343f1f14ee257",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-29",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/implementation-inventory.v1.json",
+      "expect": {
+        "size_bytes": 15339,
+        "sha256": "dfad257cc97d200a5c8f72980ea5d0f6cb3381a7dfc9c1b7d87a293b7c9379c4",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-30",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/code-route.design.v5.json",
+      "expect": {
+        "size_bytes": 27186,
+        "sha256": "d7bfdd11678a5ed33df67a99f5aea85dbf28ed258dd9bc061d55d77e904096e6",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-31",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/code-route.design.v5.receipt.json",
+      "expect": {
+        "size_bytes": 45976,
+        "sha256": "4449e5bad71737d5e1c30a2c302d8ccbf80e460f74fd469ecf11d85d1670bc7d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-32",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-byte-contract.receipt.json",
+      "expect": {
+        "size_bytes": 22812,
+        "sha256": "51dc75cdad790e5ae036c5fe2de1e1576e33f26b9c7a838c9664682891c5aaa4",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-33",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-controls-resources-claim.receipt.json",
+      "expect": {
+        "size_bytes": 21126,
+        "sha256": "89be838b10d391f870f6aa7337bf6633f07339509950786d25299e9ca6c9e90b",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-34",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-development-split.receipt.json",
+      "expect": {
+        "size_bytes": 17720,
+        "sha256": "e6dc1e05600f0af7bade245d6888018b8d48eb22734434f44cd96a3c94b3a496",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-35",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-linked-execution.receipt.json",
+      "expect": {
+        "size_bytes": 16770,
+        "sha256": "48e73bbebc764c59ebc8a587d3bc8d2c2feb970b84cc861e42ac06a45872788e",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-36",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-mode-matrix.receipt.json",
+      "expect": {
+        "size_bytes": 17716,
+        "sha256": "326241c372076ee6dfd32495f36d008fd5440abf22ee93f7fd03c358ce905dfd",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-37",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-private-boundary.receipt.json",
+      "expect": {
+        "size_bytes": 17578,
+        "sha256": "145071e22f584c83353949c16ffcfa086b6d432c7ae945bb64ddb78c33f9a39b",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-38",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-recovery.receipt.json",
+      "expect": {
+        "size_bytes": 16465,
+        "sha256": "1b41d8f599fc87a96de7ea24f1d6eb56279faf9b9b2cad652f35c6cfa9a72de1",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-39",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixture-probe/src/main.rs",
+      "expect": {
+        "size_bytes": 7741,
+        "sha256": "37925c0ce536d34d73bcb3d10be7dfdec67cce9d000c5a4989ebcfa2cc75c714",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-40",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vector-probe/src/main.rs",
+      "expect": {
+        "size_bytes": 15935,
+        "sha256": "5ddc196695ff1d3085f91c0ae72b37e7eb3ff054b22cb1e538aae3b04c98ff6d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-41",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/FIXTURE_MANIFEST.json",
+      "expect": {
+        "size_bytes": 2700,
+        "sha256": "3c653c51265caeb14bf1d32e1c0e7455641c03ecf6d12e23948314493dc3b076",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-42",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/immutable_publication.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-43",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_model.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-44",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_artifacts.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-45",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_owner.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-46",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_tests.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-47",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-48",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_authorizer.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-49",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_publisher.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-50",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-authorizer.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-51",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-evidence-publisher.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-52",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/mod.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-53",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-54",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_mode_matrix_v1.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-55",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_authority_v1.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-56",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_cleanup_v1.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-57",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_sandbox.rs",
+      "expect": {
+        "size_bytes": 19352,
+        "sha256": "4b9ef378ac30bbd402ff046cb24509b6fcd7d4ef65cd4b24f66cfbd52467d6af",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-58",
+      "kind": "absent",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_restart_v1.rs",
+      "expect": {}
+    },
+    {
+      "id": "baseline-59",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_POSTIMPLEMENTATION_VETO_2026-08-21.md",
+      "expect": {
+        "size_bytes": 5382,
+        "sha256": "a6843a862bb68675bcce0564bb1db9a76a544f04db882e0bed3c08ed26f0f1a2",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-60",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6.md",
+      "expect": {
+        "size_bytes": 19120,
+        "sha256": "f960936011695f568d6b1134ce5e3299e815c72d112005cbd23bb79234e53b81",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-61",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6_CRITIQUE_V1.md",
+      "expect": {
+        "size_bytes": 8124,
+        "sha256": "12db8c4852070210a02381eadaf61f58f0385cda9e2f5d916f3b913935144bce",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-62",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-manifest-chain.md",
+      "expect": {
+        "size_bytes": 3072,
+        "sha256": "5dc366af55c40853c33e1d0f8058de3e06f0a8918316b9aba58e1de84834dbd9",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-63",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-manifest-chain.receipt.json",
+      "expect": {
+        "size_bytes": 17732,
+        "sha256": "61357bdd419159f720a42ebf23a273c3321a8650d66abdd6acddfa57bbb92411",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-64",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-oracle-boundary.md",
+      "expect": {
+        "size_bytes": 2893,
+        "sha256": "03d6d950951373bcfdaa7441bf31a867def7ebb2d5489841f4b1ea0d522bd5f5",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-65",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-oracle-boundary.receipt.json",
+      "expect": {
+        "size_bytes": 17494,
+        "sha256": "73ccc61cbbccb8ab08db910ff85978d54ad5973436eda69bfef6f3fa480cf0e2",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-66",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-restart-cleanup.md",
+      "expect": {
+        "size_bytes": 2941,
+        "sha256": "1ae59206defbc5e2dc06a0edaba48e259427e27ad45dd6aa5c31fbf596486844",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-67",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-restart-cleanup.receipt.json",
+      "expect": {
+        "size_bytes": 18356,
+        "sha256": "d3366773fe51116974f1f3729478a1f0677976f2b3cefe08a1aebde7ed131afb",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-68",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-aggregate-boundary.md",
+      "expect": {
+        "size_bytes": 3071,
+        "sha256": "dee1e125f3853446da8c6e570c9187689c81add698eba3db5a7bcba4311d531d",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-69",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-aggregate-boundary.receipt.json",
+      "expect": {
+        "size_bytes": 18220,
+        "sha256": "bc00da60ff936ed90a40b4411fa5c5953de0f30c0aae96bc66d77fe075c81570",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-70",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.json",
+      "expect": {
+        "size_bytes": 37880,
+        "sha256": "82c39055db447da19dddcca156a8927c492155519f9af1cda60643e18ede2ec8",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-71",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.receipt.json",
+      "expect": {
+        "size_bytes": 76187,
+        "sha256": "798275910678428e1ec16a7d0e289eb85eca7bbdb21cf5126c03634d83c05c31",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-72",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/implementation-inventory.v6.json",
+      "expect": {
+        "size_bytes": 21702,
+        "mode": "0664",
+        "sha256": "f8f6d2c1c47e694dcb33bdb9b208b0e9044fdb913dff70b0b2ec8e83cd95b282"
+      }
+    },
+    {
+      "id": "baseline-73",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_GATE_RESULT_2026-08-21.md",
+      "expect": {
+        "size_bytes": 3291,
+        "mode": "0664",
+        "sha256": "d4afb4786addc35c31da49ec7a311a2b5c40b04952dcdd93a3b418dfa37d2791"
+      }
+    },
+    {
+      "id": "baseline-74",
+      "kind": "file",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+      "expect": {
+        "size_bytes": 13501,
+        "mode": "0664",
+        "sha256": "7d8b25755615157e319fcb5e200e3d971e8c048ce7007044aae43024c0a071bb"
+      }
+    },
+    {
+      "id": "baseline-75",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_DISCREPANCY_2026-08-21.md",
+      "expect": {
+        "size_bytes": 4188,
+        "mode": "0664",
+        "sha256": "67fb18893f13749da31fa5e4881ecde183ed8e36dca8753442bcd9f771e3816c"
+      }
+    },
+    {
+      "id": "baseline-76",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7.md",
+      "expect": {
+        "size_bytes": 13922,
+        "mode": "0664",
+        "sha256": "464d0a0de71042bc615e3a90c0f1238d41414e61cb98a1a3cd1c799dbc0c1567"
+      }
+    },
+    {
+      "id": "baseline-77",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V1.md",
+      "expect": {
+        "size_bytes": 4395,
+        "mode": "0664",
+        "sha256": "d78bcb104d8d3ba6173e40a564cc9cdf90ab3ba768357e17da8b7516f828c694"
+      }
+    },
+    {
+      "id": "baseline-78",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V2.md",
+      "expect": {
+        "size_bytes": 2465,
+        "mode": "0664",
+        "sha256": "f638310b85a4a0fb80130aeedcefdeb63cf6ab4d2019fc7c5c8a2d6aa2e5a591"
+      }
+    },
+    {
+      "id": "baseline-79",
+      "kind": "file",
+      "path": "nanda-task-r8b-v7-ledger-ownership.md",
+      "expect": {
+        "size_bytes": 2908,
+        "mode": "0664",
+        "sha256": "09ba8629e8b830715040a17235f6acdcdee5a403cd9fe4d946dde5ea39efddc1"
+      }
+    },
+    {
+      "id": "baseline-80",
+      "kind": "file",
+      "path": "nanda-r8b-v7-ledger-ownership.receipt.json",
+      "expect": {
+        "size_bytes": 15431,
+        "mode": "0664",
+        "sha256": "4923f7d34bb2fb4df4788b13445ba99f570fc8ebd279231ad0eeb7686a6583c8"
+      }
+    },
+    {
+      "id": "baseline-81",
+      "kind": "file",
+      "path": "nanda-task-r8b-v7-receipt-provenance.md",
+      "expect": {
+        "size_bytes": 3087,
+        "mode": "0664",
+        "sha256": "0af667df142bfb6bc2f67ae83522b44b5a9d42dfd3e3b61b685062db8994ac8d"
+      }
+    },
+    {
+      "id": "baseline-82",
+      "kind": "file",
+      "path": "nanda-r8b-v7-receipt-provenance.receipt.json",
+      "expect": {
+        "size_bytes": 16592,
+        "mode": "0664",
+        "sha256": "06ccedf48f37266a6bbdeb622e99ebcde81b38b4254217d6821f84eb70c83784"
+      }
+    },
+    {
+      "id": "baseline-83",
+      "kind": "file",
+      "path": "nanda-task-r8b-v7-causal-authority.md",
+      "expect": {
+        "size_bytes": 2973,
+        "mode": "0664",
+        "sha256": "33223c93b4418060465c6a36d20dc4e4532c521161cad42eb484b09a4de92231"
+      }
+    },
+    {
+      "id": "baseline-84",
+      "kind": "file",
+      "path": "nanda-r8b-v7-causal-authority.receipt.json",
+      "expect": {
+        "size_bytes": 15185,
+        "mode": "0664",
+        "sha256": "a5d3e340114edaaabc78b005fd2f2baaba61c82529c4e7ac1d91b313356da753"
+      }
+    },
+    {
+      "id": "baseline-85",
+      "kind": "file",
+      "path": "code-route.design.v7.json",
+      "expect": {
+        "size_bytes": 69446,
+        "mode": "0664",
+        "sha256": "345faefb38c74ee88eb7d8f73e240c8990534ccc613cdb7de1f2970876c2a1d2"
+      }
+    },
+    {
+      "id": "baseline-86",
+      "kind": "file",
+      "path": "nanda-r8b-v7-code-route.receipt.json",
+      "expect": {
+        "size_bytes": 96633,
+        "mode": "0664",
+        "sha256": "2b721f897e522c08921dc63ba23437baeb765ea8cc01c575cb31e42c18bf438d"
+      }
+    },
+    {
+      "id": "baseline-87",
+      "kind": "file",
+      "path": "implementation-inventory.v7.json",
+      "expect": {
+        "size_bytes": 26410,
+        "mode": "0664",
+        "sha256": "053901c5062ee19fe4318e73660d479a4e4c521382088d11c7bd765460459ab4"
+      }
+    },
+    {
+      "id": "baseline-88",
+      "kind": "file",
+      "path": "/usr/bin/strace",
+      "expect": {
+        "size_bytes": 2370264,
+        "mode": "0755",
+        "sha256": "f47342683309e807bca57d6d89b82f94a9b39aa614e9c28c2b67cefbc35eee58"
+      }
+    },
+    {
+      "id": "baseline-89",
+      "kind": "file",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_IMPLEMENTATION_PREFLIGHT_CRITIQUE_V1.md",
+      "expect": {
+        "size_bytes": 2821,
+        "mode": "0664",
+        "sha256": "cb7e53b1e7a593ae55622e866789fad53b1d11eab8335179d88cf84f8b0383b6"
+      }
+    },
+    {
+      "id": "baseline-90",
+      "kind": "file",
+      "path": "implementation-preflight.v7.pre-critique.json",
+      "expect": {
+        "size_bytes": 138284,
+        "mode": "0664",
+        "sha256": "92dd520d42f2f0b5bfbbf163ae3ddc4e3d75268f4a43c8e5153042f664f39f66"
+      }
+    },
+    {
+      "id": "baseline-91",
+      "kind": "file",
+      "path": "implementation-preflight.v7.pre-critique.receipt.json",
+      "expect": {
+        "size_bytes": 50416,
+        "mode": "0664",
+        "sha256": "b9ad0633ccf4188e170d7a8528f7e7fb8b4a08d0238232e8f5abf16052b68bb4"
+      }
+    }
+  ],
+  "side_effects": {
+    "planned": [
+      {
+        "id": "modify-seven-frozen-scope-files",
+        "kind": "scoped_source_modify"
+      },
+      {
+        "id": "add-sixteen-frozen-scope-files",
+        "kind": "scoped_source_add"
+      },
+      {
+        "id": "add-libc-direct-edge",
+        "kind": "dependency_edge_add"
+      },
+      {
+        "id": "read-frozen-source-paper-and-fixtures",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "create-test-owned-attempt-and-evidence-trees",
+        "kind": "test_attempt_create"
+      },
+      {
+        "id": "write-fsynced-owner-and-locked-hierarchical-process-journals",
+        "kind": "test_journal_write"
+      },
+      {
+        "id": "create-exclusive-suite-and-child-receipt-channels",
+        "kind": "test_receipt_channel_create"
+      },
+      {
+        "id": "publish-development-immutable-objects",
+        "kind": "test_immutable_publication"
+      },
+      {
+        "id": "execute-26-manifest-bound-linked-identities",
+        "kind": "test_child_process_execution"
+      },
+      {
+        "id": "execute-five-manifest-bound-suite-producers-and-direct-nando-children",
+        "kind": "test_suite_process_execution"
+      },
+      {
+        "id": "trace-real-owner-flock-and-execve",
+        "kind": "test_ptrace_observation"
+      },
+      {
+        "id": "inspect-proc-lock-owner",
+        "kind": "test_proc_observation"
+      },
+      {
+        "id": "open-private-source-opath-nofollow",
+        "kind": "test_descriptor_open"
+      },
+      {
+        "id": "mount-inherited-private-descriptor-read-only",
+        "kind": "test_namespace_mount"
+      },
+      {
+        "id": "run-child-route-in-fresh-delegated-cgroup",
+        "kind": "test_cgroup_execution"
+      },
+      {
+        "id": "write-child-candidate-resource-and-aggregate-receipts",
+        "kind": "test_evidence_write"
+      },
+      {
+        "id": "write-oracle-batch-four-scope-census-and-produced-receipt-descriptors",
+        "kind": "test_derived_evidence_write"
+      },
+      {
+        "id": "delete-only-classified-test-private-paths",
+        "kind": "test_cleanup_delete"
+      },
+      {
+        "id": "publish-authorized-r8b-aggregate",
+        "kind": "append_only_evidence_write"
+      },
+      {
+        "id": "write-non-authoritative-post-authorization-audit",
+        "kind": "diagnostic_audit_write"
+      },
+      {
+        "id": "observe-production-stable-projection",
+        "kind": "service_snapshot",
+        "comparison_id": "production-stable-projection"
+      },
+      {
+        "id": "perform-bounded-parent-health-gets",
+        "kind": "http_get_health",
+        "comparison_id": "production-stable-projection"
+      },
+      {
+        "id": "pipe-canonical-suite-and-child-requests-on-stdin",
+        "kind": "test_process_stdin_write"
+      }
+    ],
+    "forbidden": [
+      "generated_traffic",
+      "synthetic_fixture",
+      "natural_traffic_read",
+      "experiment_network_access",
+      "production_write",
+      "service_control",
+      "dashboard_change",
+      "deployment",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "package_activation",
+      "phase_memory_mutation",
+      "authorization_slot_claim",
+      "confirm_nonce_create",
+      "sealed_scientific_execution",
+      "scientific_verdict_publication",
+      "control_evaluator_modify",
+      "terminal_evaluator_modify",
+      "cleanup_verifier_modify",
+      "r9b_execution",
+      "r10b_authorization",
+      "r11b_execution",
+      "natural_k2_authority",
+      "confirm_schema_modify",
+      "confirm_canonical_bytes_modify",
+      "confirm_journal_modify",
+      "raw_generator_response_persist",
+      "second_generator_dispatch",
+      "private_truth_public_read",
+      "final_path_overwrite",
+      "symlink_follow",
+      "unclassified_cleanup_delete",
+      "runtime_accept_enable",
+      "pathname_only_private_mount",
+      "runner_private_truth_content_read",
+      "foreign_test_lock_holder",
+      "automatic_indeterminate_child_replay",
+      "shell_generated_receipt",
+      "unmanifested_linked_identity",
+      "synthetic_positive_conjunct",
+      "child_aggregate_authority",
+      "parent_child_completion_authority",
+      "resource_authorization_cycle",
+      "oracle_evaluator_modify",
+      "cleanup_authorizer_modify",
+      "cleanup_owner_modify",
+      "result_publisher_logic_modify",
+      "fresh_control_case_logic_modify",
+      "suite_linked_identity_merge",
+      "r8b_attempt_execution_without_separate_authorization",
+      "unjournaled_receipt_process_spawn",
+      "parent_fabricated_producer_receipt",
+      "libtest_stdout_as_canonical_receipt",
+      "future_outcome_in_p06",
+      "post_authorization_audit_as_m25_input",
+      "produced_receipt_descriptor_reuse",
+      "produced_receipt_path_rewrite",
+      "expected_count_positive_receipt",
+      "unbound_strace_tool",
+      "receipt_request_via_environment_or_path"
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "confirm-owner-source",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "sha256": "aa742715cd3ae522d9d2cbb3b7c0695d6f5aa34be95242204b8c6bb88e88f751",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "service_control",
+          "regex": "(systemctl|service\\s+(start|stop|restart))"
+        },
+        {
+          "effect": "scientific_verdict_publication",
+          "regex": "K2_SELF_FORMED_UNCERTAINTY_CAPABILITY_PASS"
+        },
+        {
+          "effect": "confirm_schema_modify",
+          "regex": "nando\\.k2-self-formed-confirm-[a-z-]+\\.v2"
+        },
+        {
+          "effect": "confirm_canonical_bytes_modify",
+          "regex": "uncertainty_bytes_v2"
+        },
+        {
+          "effect": "confirm_journal_modify",
+          "regex": "nando\\.k2-self-formed-confirm-attempt-journal\\.v2"
+        },
+        {
+          "effect": "raw_generator_response_persist",
+          "regex": "persist_[a-z_]*generator_response"
+        },
+        {
+          "effect": "second_generator_dispatch",
+          "regex": "generator_dispatch_count\\s*[:=]\\s*2"
+        },
+        {
+          "effect": "private_truth_public_read",
+          "regex": "public_coordinator.{0,80}(resolver|final_truth)"
+        },
+        {
+          "effect": "final_path_overwrite",
+          "regex": "development_rehearsal.{0,80}(rename|overwrite)\\s*\\("
+        },
+        {
+          "effect": "symlink_follow",
+          "regex": "follow_links\\s*[:=]\\s*true"
+        },
+        {
+          "effect": "unclassified_cleanup_delete",
+          "regex": "delete_unclassified\\s*\\("
+        },
+        {
+          "effect": "runtime_accept_enable",
+          "regex": "r8b.{0,80}effective_local_accept_enabled\\s*[:=]\\s*true"
+        }
+      ]
+    },
+    {
+      "id": "r7j-route-source",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+      "sha256": "95419ac45cd34db4c04a32064bac7cce0bd0a035ad18627c8efe637bd371f1bf",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "authorization_slot_claim",
+          "regex": "claim_authorization_slot"
+        },
+        {
+          "effect": "sealed_scientific_execution",
+          "regex": "SealedAttemptV5"
+        },
+        {
+          "effect": "cleanup_verifier_modify",
+          "regex": "pub fn verify_self_formed_cleanup_v1"
+        },
+        {
+          "effect": "confirm_nonce_create",
+          "regex": "read_self_formed_confirm_csprng"
+        },
+        {
+          "effect": "control_evaluator_modify",
+          "regex": "pub fn evaluate_self_formed_controls_v1"
+        },
+        {
+          "effect": "dashboard_change",
+          "regex": "live_dashboard"
+        },
+        {
+          "effect": "generated_traffic",
+          "regex": "generated_traffic"
+        },
+        {
+          "effect": "k1_registry_mutation",
+          "regex": "EpistemicRegistry"
+        },
+        {
+          "effect": "law_certificate_issue",
+          "regex": "LawCertificate"
+        },
+        {
+          "effect": "natural_traffic_read",
+          "regex": "natural_traffic"
+        },
+        {
+          "effect": "package_activation",
+          "regex": "activate_package"
+        },
+        {
+          "effect": "phase_memory_mutation",
+          "regex": "phase_memory"
+        },
+        {
+          "effect": "r9b_execution",
+          "regex": "execute_r9b"
+        },
+        {
+          "effect": "r10b_authorization",
+          "regex": "authorize_r10b"
+        },
+        {
+          "effect": "r11b_execution",
+          "regex": "execute_r11b"
+        },
+        {
+          "effect": "synthetic_fixture",
+          "regex": "synthetic_fixture"
+        },
+        {
+          "effect": "terminal_evaluator_modify",
+          "regex": "pub fn evaluate_self_formed_terminal"
+        }
+      ]
+    },
+    {
+      "id": "r7k-route-source",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+      "sha256": "d126babdb9d496b750b50a0f35f694abd10579cb4d04a9c260c4e19465d63c67",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "natural_k2_authority",
+          "regex": "natural_k2_authority\\s*:\\s*true"
+        },
+        {
+          "effect": "deployment",
+          "regex": "(deployment-receipt|deploy_remote)"
+        }
+      ]
+    },
+    {
+      "id": "confirm-journal-source",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+      "sha256": "af341b4e430b06cbf13b92e859800458a07f80dccd8503374e6cc20113fe99ab",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "confirm_journal_modify",
+          "regex": "nando\\.k2-self-formed-confirm-attempt-journal\\.v2"
+        }
+      ]
+    },
+    {
+      "id": "confirm-artifacts-source",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+      "sha256": "6560bdc9e50a82aa96ef5d1c9b4aadccb0defd5bfe5d3fc6bb465cf0c24ff704",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "final_path_overwrite",
+          "regex": "development_rehearsal.{0,80}(rename|overwrite)\\s*\\("
+        },
+        {
+          "effect": "private_truth_public_read",
+          "regex": "public_coordinator.{0,80}(resolver|final_truth)"
+        }
+      ]
+    },
+    {
+      "id": "cleanup-source",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs",
+      "sha256": "5bd4380f457482607cc95b1e0c71827be05480fba8aca106ffed53ac6d175e45",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "unclassified_cleanup_delete",
+          "regex": "delete_unclassified\\s*\\("
+        }
+      ]
+    },
+    {
+      "id": "confirm-sandbox-source",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_sandbox.rs",
+      "sha256": "4b9ef378ac30bbd402ff046cb24509b6fcd7d4ef65cd4b24f66cfbd52467d6af",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "experiment_network_access",
+          "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"
+        },
+        {
+          "effect": "production_write",
+          "regex": "(/var/lib/nando-wave|/etc/nando-wave)"
+        },
+        {
+          "effect": "pathname_only_private_mount",
+          "regex": "mount_private_truth_by_pathname"
+        },
+        {
+          "effect": "runner_private_truth_content_read",
+          "regex": "runner_(read|hash|serialize)_private_truth"
+        },
+        {
+          "effect": "foreign_test_lock_holder",
+          "regex": "foreign_test_process_lock_holder"
+        },
+        {
+          "effect": "automatic_indeterminate_child_replay",
+          "regex": "replay_indeterminate_child"
+        },
+        {
+          "effect": "shell_generated_receipt",
+          "regex": "shell_generated_receipt"
+        },
+        {
+          "effect": "unmanifested_linked_identity",
+          "regex": "allow_unmanifested_identity"
+        },
+        {
+          "effect": "synthetic_positive_conjunct",
+          "regex": "synthetic_positive_conjunct"
+        },
+        {
+          "effect": "child_aggregate_authority",
+          "regex": "child_(authorize|publish)_r8b"
+        },
+        {
+          "effect": "parent_child_completion_authority",
+          "regex": "parent_(terminal|cleanup|completion)_pass"
+        },
+        {
+          "effect": "resource_authorization_cycle",
+          "regex": "authorize_before_child_exit"
+        },
+        {
+          "effect": "oracle_evaluator_modify",
+          "regex": "evaluate_self_formed_oracle_v2"
+        },
+        {
+          "effect": "cleanup_authorizer_modify",
+          "regex": "authorize_self_formed_cleanup_v2"
+        },
+        {
+          "effect": "cleanup_owner_modify",
+          "regex": "execute_self_formed_cleanup_v2"
+        },
+        {
+          "effect": "result_publisher_logic_modify",
+          "regex": "publish_self_formed_result_v2"
+        },
+        {
+          "effect": "fresh_control_case_logic_modify",
+          "regex": "self_formed_r7k_control_case_v2"
+        },
+        {
+          "effect": "suite_linked_identity_merge",
+          "regex": "merge_suite_and_linked_manifest"
+        }
+      ]
+    },
+    {
+      "id": "confirm-public-coordinator-source",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+      "sha256": "7d8b25755615157e319fcb5e200e3d971e8c048ce7007044aae43024c0a071bb",
+      "forbidden_effect_patterns": [
+        {
+          "effect": "r8b_attempt_execution_without_separate_authorization",
+          "regex": "(execute|run)_r8b_attempt"
+        },
+        {
+          "effect": "unjournaled_receipt_process_spawn",
+          "regex": "spawn_(unjournaled|without_ledger)"
+        },
+        {
+          "effect": "parent_fabricated_producer_receipt",
+          "regex": "parent_(fabricate|synthesize)_[a-z_]*receipt"
+        },
+        {
+          "effect": "libtest_stdout_as_canonical_receipt",
+          "regex": "libtest_stdout_as_[a-z_]*receipt"
+        },
+        {
+          "effect": "future_outcome_in_p06",
+          "regex": "include_(m25|m26)_outcome_in_p06"
+        },
+        {
+          "effect": "post_authorization_audit_as_m25_input",
+          "regex": "post_authorization_audit_as_(m25_)?input"
+        },
+        {
+          "effect": "produced_receipt_descriptor_reuse",
+          "regex": "reuse_produced_receipt_descriptor"
+        },
+        {
+          "effect": "produced_receipt_path_rewrite",
+          "regex": "rewrite_produced_receipt_path"
+        },
+        {
+          "effect": "expected_count_positive_receipt",
+          "regex": "expected_count_positive_receipt"
+        },
+        {
+          "effect": "unbound_strace_tool",
+          "regex": "Command::new\\(\"strace\"\\)"
+        },
+        {
+          "effect": "receipt_request_via_environment_or_path",
+          "regex": "NANDO_R8B_(SUITE|CHILD)_REQUEST(_PATH)?"
+        }
+      ]
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "id": "preserved-01",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner_model.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-06"
+    },
+    {
+      "id": "preserved-02",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-07"
+    },
+    {
+      "id": "preserved-03",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifact_model.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-08"
+    },
+    {
+      "id": "preserved-04",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-09"
+    },
+    {
+      "id": "preserved-05",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-10"
+    },
+    {
+      "id": "preserved-06",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-11"
+    },
+    {
+      "id": "preserved-07",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-12"
+    },
+    {
+      "id": "preserved-08",
+      "path": "../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup_verifier.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-13"
+    },
+    {
+      "id": "preserved-09",
+      "path": "../../../../crates/nando-operator-learning/src/bin/nando-k2-self-formed-confirm-owner.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-14"
+    },
+    {
+      "id": "preserved-10",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-15"
+    },
+    {
+      "id": "preserved-11",
+      "path": "../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-16"
+    },
+    {
+      "id": "preserved-12",
+      "path": "../../../../crates/nando-transition-serving/src/lib.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-17"
+    },
+    {
+      "id": "preserved-13",
+      "path": "../../../../crates/nando-gateway-control/src/live_dashboard.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-18"
+    },
+    {
+      "id": "preserved-14",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-19"
+    },
+    {
+      "id": "preserved-15",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_UNLOCK_2026-08-20.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-20"
+    },
+    {
+      "id": "preserved-16",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_RESULT_2026-08-20.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-21"
+    },
+    {
+      "id": "preserved-17",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/development-byte-contract.v1.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-22"
+    },
+    {
+      "id": "preserved-18",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/SHA256SUMS",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-23"
+    },
+    {
+      "id": "preserved-19",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vectors/SHA256SUMS",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-24"
+    },
+    {
+      "id": "preserved-20",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/production-baseline.preimplementation.v1.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-25"
+    },
+    {
+      "id": "preserved-21",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V5.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-26"
+    },
+    {
+      "id": "preserved-22",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V5_PREFLIGHT_CRITIQUE.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-27"
+    },
+    {
+      "id": "preserved-23",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_IMPLEMENTATION_INVENTORY_CRITIQUE.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-28"
+    },
+    {
+      "id": "preserved-24",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/implementation-inventory.v1.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-29"
+    },
+    {
+      "id": "preserved-25",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/code-route.design.v5.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-30"
+    },
+    {
+      "id": "preserved-26",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/code-route.design.v5.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-31"
+    },
+    {
+      "id": "preserved-27",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-byte-contract.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-32"
+    },
+    {
+      "id": "preserved-28",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-controls-resources-claim.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-33"
+    },
+    {
+      "id": "preserved-29",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-development-split.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-34"
+    },
+    {
+      "id": "preserved-30",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-linked-execution.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-35"
+    },
+    {
+      "id": "preserved-31",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-mode-matrix.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-36"
+    },
+    {
+      "id": "preserved-32",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-private-boundary.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-37"
+    },
+    {
+      "id": "preserved-33",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-recovery.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-38"
+    },
+    {
+      "id": "preserved-34",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixture-probe/src/main.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-39"
+    },
+    {
+      "id": "preserved-35",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vector-probe/src/main.rs",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-40"
+    },
+    {
+      "id": "preserved-36",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/FIXTURE_MANIFEST.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-41"
+    },
+    {
+      "id": "preserved-37",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_POSTIMPLEMENTATION_VETO_2026-08-21.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-59"
+    },
+    {
+      "id": "preserved-38",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-60"
+    },
+    {
+      "id": "preserved-39",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6_CRITIQUE_V1.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-61"
+    },
+    {
+      "id": "preserved-40",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-manifest-chain.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-62"
+    },
+    {
+      "id": "preserved-41",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-manifest-chain.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-63"
+    },
+    {
+      "id": "preserved-42",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-oracle-boundary.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-64"
+    },
+    {
+      "id": "preserved-43",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-oracle-boundary.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-65"
+    },
+    {
+      "id": "preserved-44",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-restart-cleanup.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-66"
+    },
+    {
+      "id": "preserved-45",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-restart-cleanup.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-67"
+    },
+    {
+      "id": "preserved-46",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-aggregate-boundary.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-68"
+    },
+    {
+      "id": "preserved-47",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-aggregate-boundary.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-69"
+    },
+    {
+      "id": "preserved-48",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-70"
+    },
+    {
+      "id": "preserved-49",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-71"
+    },
+    {
+      "id": "preserved-50",
+      "path": "../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/implementation-inventory.v6.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-72"
+    },
+    {
+      "id": "preserved-51",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_GATE_RESULT_2026-08-21.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-73"
+    },
+    {
+      "id": "preserved-52",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_DISCREPANCY_2026-08-21.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-75"
+    },
+    {
+      "id": "preserved-53",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-76"
+    },
+    {
+      "id": "preserved-54",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V1.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-77"
+    },
+    {
+      "id": "preserved-55",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V2.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-78"
+    },
+    {
+      "id": "preserved-56",
+      "path": "nanda-task-r8b-v7-ledger-ownership.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-79"
+    },
+    {
+      "id": "preserved-57",
+      "path": "nanda-r8b-v7-ledger-ownership.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-80"
+    },
+    {
+      "id": "preserved-58",
+      "path": "nanda-task-r8b-v7-receipt-provenance.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-81"
+    },
+    {
+      "id": "preserved-59",
+      "path": "nanda-r8b-v7-receipt-provenance.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-82"
+    },
+    {
+      "id": "preserved-60",
+      "path": "nanda-task-r8b-v7-causal-authority.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-83"
+    },
+    {
+      "id": "preserved-61",
+      "path": "nanda-r8b-v7-causal-authority.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-84"
+    },
+    {
+      "id": "preserved-62",
+      "path": "code-route.design.v7.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-85"
+    },
+    {
+      "id": "preserved-63",
+      "path": "nanda-r8b-v7-code-route.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-86"
+    },
+    {
+      "id": "preserved-64",
+      "path": "implementation-inventory.v7.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-87"
+    },
+    {
+      "id": "preserved-65",
+      "path": "/usr/bin/strace",
+      "policy": "external_dependency_exact_bytes",
+      "rollback_policy": "abort_if_changed_no_restore",
+      "baseline_check_id": "baseline-88"
+    },
+    {
+      "id": "preserved-66",
+      "path": "../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_IMPLEMENTATION_PREFLIGHT_CRITIQUE_V1.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-89"
+    },
+    {
+      "id": "preserved-67",
+      "path": "implementation-preflight.v7.pre-critique.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-90"
+    },
+    {
+      "id": "preserved-68",
+      "path": "implementation-preflight.v7.pre-critique.receipt.json",
+      "policy": "immutable_bytes",
+      "rollback_policy": "restore_exact_baseline",
+      "baseline_check_id": "baseline-91"
+    }
+  ],
+  "state_machine": {
+    "initial_state": "V7_PREFLIGHT_READY",
+    "terminal_states": [
+      "IMPLEMENTATION_FAILED",
+      "ATTEMPT_INITIALIZATION_INDETERMINATE",
+      "GENERATOR_RESULT_INDETERMINATE",
+      "SPLIT_PUBLICATION_FAILED",
+      "CASES_APPEND_FAILED",
+      "OWNER_PUBLICATION_FAILED",
+      "CHILD_LAUNCH_FAILED",
+      "LINKED_ROUTE_FAILED",
+      "CLEANUP_AUTHORIZATION_FAILED",
+      "CLEANUP_INCOMPLETE",
+      "CLEANUP_VERIFICATION_FAILED",
+      "CHILD_CANDIDATE_FAILED",
+      "RESOURCE_FINALIZATION_FAILED",
+      "PRODUCTION_OBSERVATION_FAILED",
+      "AGGREGATE_PACKET_FAILED",
+      "AGGREGATE_AUTHORIZATION_FAILED",
+      "R8B_PUBLICATION_FAILED",
+      "MANIFEST_VALIDATION_FAILED",
+      "SUITE_RECEIPT_FAILED",
+      "R8B_FROZEN_AUDITED",
+      "R8B_FROZEN_AUDIT_INCOMPLETE",
+      "R8B_EXECUTION_NOT_AUTHORIZED"
+    ],
+    "steps": [
+      {
+        "id": "implement-scoped-r8b-v7",
+        "from": "V7_PREFLIGHT_READY",
+        "to": "IMPLEMENTATION_READY",
+        "mutates": true,
+        "failure_state": "IMPLEMENTATION_FAILED",
+        "cleanup": "retain V6 discrepancy, V7 paper, gate receipts and diagnostics; preserve the dirty V6 implementation worktree; start no R8B execution",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-implementation-fault"
+      },
+      {
+        "id": "require-separate-r8b-execution-authorization",
+        "from": "IMPLEMENTATION_READY",
+        "to": "R8B_EXECUTION_AUTHORIZED",
+        "mutates": false,
+        "failure_state": "R8B_EXECUTION_NOT_AUTHORIZED",
+        "cleanup": "retain implementation and all gate evidence; execute no suite, M24 child, M25, M26 or P09 process without a separate explicit authorization outside this preflight",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-execution-boundary"
+      },
+      {
+        "id": "validate-manifests-inventory-and-tool-bindings",
+        "from": "R8B_EXECUTION_AUTHORIZED",
+        "to": "PREEXECUTION_VALIDATED",
+        "mutates": false,
+        "failure_state": "MANIFEST_VALIDATION_FAILED",
+        "cleanup": "retain validation diagnostics; mutate no attempt or production state",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-manifest-tool-binding"
+      },
+      {
+        "id": "launch-suite-producers-with-closed-receipt-channels",
+        "from": "PREEXECUTION_VALIDATED",
+        "to": "SUITE_RECEIPTS_DURABLE",
+        "mutates": true,
+        "failure_state": "SUITE_RECEIPT_FAILED",
+        "cleanup": "retain canonical request stdin hash, suite directories, stdout/stderr diagnostics and the natural started-without-finished ledger suffix; promote no suite evidence",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-canonical-receipt-channel-negative"
+      },
+      {
+        "id": "snapshot-production-and-launch-journaled-child",
+        "from": "SUITE_RECEIPTS_DURABLE",
+        "to": "CHILD_RUNNING",
+        "mutates": true,
+        "failure_state": "CHILD_LAUNCH_FAILED",
+        "cleanup": "retain suite evidence, bounded canonical M24-child request stdin hash, pre-snapshot and launch diagnostics; terminate only the test child/cgroup; preserve a natural incomplete ledger suffix; issue no PASS",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-parent-child-launch-fault"
+      },
+      {
+        "id": "initialize-development-attempt-in-child",
+        "from": "CHILD_RUNNING",
+        "to": "ARTIFACTS_FROZEN",
+        "mutates": true,
+        "failure_state": "ATTEMPT_INITIALIZATION_INDETERMINATE",
+        "cleanup": "retain child-owned census; permit no generator dispatch",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-process-restart-p01"
+      },
+      {
+        "id": "dispatch-generator-once-in-child",
+        "from": "ARTIFACTS_FROZEN",
+        "to": "GENERATOR_DISPATCHED",
+        "mutates": true,
+        "failure_state": "GENERATOR_RESULT_INDETERMINATE",
+        "cleanup": "retain Development journal and the shared process ledger; M01 may append ChildFinished only after typed M02 receipt validation and never redispatches after durable dispatch",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-process-restart-p03"
+      },
+      {
+        "id": "publish-development-split-in-child",
+        "from": "GENERATOR_DISPATCHED",
+        "to": "SPLIT_DURABLE",
+        "mutates": true,
+        "failure_state": "SPLIT_PUBLICATION_FAILED",
+        "cleanup": "remove only known temp; retain complete immutable objects",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-development-publication-72"
+      },
+      {
+        "id": "append-cases-generated-in-child",
+        "from": "SPLIT_DURABLE",
+        "to": "CASES_GENERATED",
+        "mutates": true,
+        "failure_state": "CASES_APPEND_FAILED",
+        "cleanup": "retain split and journal; recover only exact reconstruction",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-process-restart-p04"
+      },
+      {
+        "id": "publish-development-owner-receipt-in-child",
+        "from": "CASES_GENERATED",
+        "to": "OWNER_DURABLE",
+        "mutates": true,
+        "failure_state": "OWNER_PUBLICATION_FAILED",
+        "cleanup": "retain split and journal; recover one byte-identical receipt",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-process-restart-p05"
+      },
+      {
+        "id": "freeze-public-and-downstream-contracts",
+        "from": "OWNER_DURABLE",
+        "to": "DOWNSTREAM_FROZEN",
+        "mutates": true,
+        "failure_state": "LINKED_ROUTE_FAILED",
+        "cleanup": "retain barrier, prior receipts and the shared process ledger; M10 journals each M03-M09 child itself and starts no private successor after failure",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-linked-failure-census"
+      },
+      {
+        "id": "execute-private-oracle-controls-terminal-and-child-aggregates",
+        "from": "DOWNSTREAM_FROZEN",
+        "to": "TERMINAL_DURABLE",
+        "mutates": true,
+        "failure_state": "LINKED_ROUTE_FAILED",
+        "cleanup": "retain process ledger, canonical producer directories, M24-child receipt, Oracle batch, scope census and diagnostics; never replay an indeterminate child",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-process-ledger-interruption"
+      },
+      {
+        "id": "freeze-cleanup-inputs-and-authorization",
+        "from": "TERMINAL_DURABLE",
+        "to": "CLEANUP_AUTHORIZED",
+        "mutates": true,
+        "failure_state": "CLEANUP_AUTHORIZATION_FAILED",
+        "cleanup": "retain terminal/observer evidence; perform zero deletion",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-cleanup-interruption"
+      },
+      {
+        "id": "execute-intent-first-cleanup",
+        "from": "CLEANUP_AUTHORIZED",
+        "to": "CLEANUP_OWNER_DURABLE",
+        "mutates": true,
+        "failure_state": "CLEANUP_INCOMPLETE",
+        "cleanup": "resume only from exact registry/journal; retain evidence",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-cleanup-interruption"
+      },
+      {
+        "id": "verify-cleanup-and-publish-development-completion",
+        "from": "CLEANUP_OWNER_DURABLE",
+        "to": "DEVELOPMENT_COMPLETE",
+        "mutates": true,
+        "failure_state": "CLEANUP_VERIFICATION_FAILED",
+        "cleanup": "retain owner receipt/post-census; emit no completion on failure",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-cleanup-verification-fault"
+      },
+      {
+        "id": "freeze-child-candidate-packet",
+        "from": "DEVELOPMENT_COMPLETE",
+        "to": "CHILD_CANDIDATE_DURABLE",
+        "mutates": true,
+        "failure_state": "CHILD_CANDIDATE_FAILED",
+        "cleanup": "remove only candidate temp; retain completion and completed child-only evidence; include no M25 or M26 future outcome",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-child-candidate-fault"
+      },
+      {
+        "id": "exit-child-and-finalize-resource-receipt",
+        "from": "CHILD_CANDIDATE_DURABLE",
+        "to": "RESOURCE_DURABLE",
+        "mutates": true,
+        "failure_state": "RESOURCE_FINALIZATION_FAILED",
+        "cleanup": "retain candidate, exit and cgroup observations; authorize nothing",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-resource-finalization-fault"
+      },
+      {
+        "id": "observe-production-and-freeze-survival",
+        "from": "RESOURCE_DURABLE",
+        "to": "PRODUCTION_SURVIVAL_DURABLE",
+        "mutates": true,
+        "failure_state": "PRODUCTION_OBSERVATION_FAILED",
+        "cleanup": "retain read-only snapshots/health traffic; perform no service action",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-production-observation-fault"
+      },
+      {
+        "id": "freeze-closed-aggregate-packet",
+        "from": "PRODUCTION_SURVIVAL_DURABLE",
+        "to": "AGGREGATE_PACKET_DURABLE",
+        "mutates": true,
+        "failure_state": "AGGREGATE_PACKET_FAILED",
+        "cleanup": "remove only P06 packet temp; retain canonical receipts and produced descriptors; include only completed pre-authorization processes",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-aggregate-packet-fault"
+      },
+      {
+        "id": "authorize-closed-aggregate",
+        "from": "AGGREGATE_PACKET_DURABLE",
+        "to": "AGGREGATE_AUTHORIZED",
+        "mutates": true,
+        "failure_state": "AGGREGATE_AUTHORIZATION_FAILED",
+        "cleanup": "retain P06 and M25 diagnostics; require a descriptor-to-entry bijection and publish no final receipt",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-aggregate-packet-fault"
+      },
+      {
+        "id": "publish-r8b-frozen",
+        "from": "AGGREGATE_AUTHORIZED",
+        "to": "R8B_FROZEN",
+        "mutates": true,
+        "failure_state": "R8B_PUBLICATION_FAILED",
+        "cleanup": "remove only final temp; retain exact M25 authorization and all P06 entries; reinterpret no evidence",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-aggregate-publication-fault"
+      },
+      {
+        "id": "freeze-post-authorization-audit",
+        "from": "R8B_FROZEN",
+        "to": "R8B_FROZEN_AUDITED",
+        "mutates": true,
+        "failure_state": "R8B_FROZEN_AUDIT_INCOMPLETE",
+        "cleanup": "retain exact M25 authorization, M26 publication and any natural audit prefix; never rerun, retract or reinterpret authority",
+        "preserves": [
+          "preserved-01",
+          "preserved-02",
+          "preserved-03",
+          "preserved-04",
+          "preserved-05",
+          "preserved-06",
+          "preserved-07",
+          "preserved-08",
+          "preserved-09",
+          "preserved-10",
+          "preserved-11",
+          "preserved-12",
+          "preserved-13",
+          "preserved-14",
+          "preserved-15",
+          "preserved-16",
+          "preserved-17",
+          "preserved-18",
+          "preserved-19",
+          "preserved-20",
+          "preserved-21",
+          "preserved-22",
+          "preserved-23",
+          "preserved-24",
+          "preserved-25",
+          "preserved-26",
+          "preserved-27",
+          "preserved-28",
+          "preserved-29",
+          "preserved-30",
+          "preserved-31",
+          "preserved-32",
+          "preserved-33",
+          "preserved-34",
+          "preserved-35",
+          "preserved-36",
+          "preserved-37",
+          "preserved-38",
+          "preserved-39",
+          "preserved-40",
+          "preserved-41",
+          "preserved-42",
+          "preserved-43",
+          "preserved-44",
+          "preserved-45",
+          "preserved-46",
+          "preserved-47",
+          "preserved-48",
+          "preserved-49",
+          "preserved-50",
+          "preserved-51",
+          "preserved-52",
+          "preserved-53",
+          "preserved-54",
+          "preserved-55",
+          "preserved-56",
+          "preserved-57",
+          "preserved-58",
+          "preserved-59",
+          "preserved-60",
+          "preserved-61",
+          "preserved-62",
+          "preserved-63",
+          "preserved-64",
+          "preserved-65",
+          "preserved-66",
+          "preserved-67",
+          "preserved-68"
+        ],
+        "test_id": "r8b-post-authorization-audit-fault"
+      }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "source-scope",
+      "statement": "only seven modified predecessor paths and sixteen new paths may change within V7 line budgets",
+      "test_id": "r8b-source-scope-parity"
+    },
+    {
+      "id": "code-route-ownership",
+      "statement": "execution, authority, observation and proof retain the frozen V7 design topology and remain non-mixed",
+      "test_id": "r8b-code-route-parity"
+    },
+    {
+      "id": "confirm-byte-compatibility",
+      "statement": "Confirm schemas, validators, bytes, fixtures and decode compatibility remain exact",
+      "test_id": "r8b-confirm-canonical-byte-parity"
+    },
+    {
+      "id": "development-byte-contract",
+      "statement": "Development roots equal frozen known answers",
+      "test_id": "r8b-development-known-answer-parity"
+    },
+    {
+      "id": "one-first-dispatch",
+      "statement": "ArtifactsFrozen recovery permits exactly one first dispatch and no lock artifact",
+      "test_id": "r8b-process-restart-p02"
+    },
+    {
+      "id": "no-redispatch",
+      "statement": "after GeneratorDispatched invalid or missing split never permits redispatch",
+      "test_id": "r8b-process-restart-p03"
+    },
+    {
+      "id": "real-single-live-owner",
+      "statement": "P07 uses two real M01 processes with ptrace and /proc/locks PID/inode proof",
+      "test_id": "r8b-process-restart-p07"
+    },
+    {
+      "id": "durable-owner-stdout-replay",
+      "statement": "P06 returns the durable owner receipt byte-identically after stdout loss with zero dispatch and zero durable mutation",
+      "test_id": "r8b-process-restart-p06"
+    },
+    {
+      "id": "immutable-publication",
+      "statement": "36 objects pass 72 no-follow/no-clobber boundaries",
+      "test_id": "r8b-development-publication-72"
+    },
+    {
+      "id": "durable-process-ledger",
+      "statement": "the actual spawn owner appends ChildStarted before spawn and ChildFinished only after normal exit plus typed canonical receipt validation; incomplete children are never replay authority",
+      "test_id": "r8b-process-ledger-parity"
+    },
+    {
+      "id": "manifest-separation",
+      "statement": "26 linked identities, five suite producers, direct suite subprocesses and invocation denominators remain distinct",
+      "test_id": "r8b-linked-manifest-parity"
+    },
+    {
+      "id": "private-truth-separation",
+      "statement": "runner uses O_PATH custody only; Oracle alone reads descriptor-mounted bytes after public exit",
+      "test_id": "r8b-oracle-descriptor-identity"
+    },
+    {
+      "id": "real-cleanup-route",
+      "statement": "M20-M23 are distinct and only M23 emits completion after M22",
+      "test_id": "r8b-development-result-publisher-identity"
+    },
+    {
+      "id": "parent-child-resource-order",
+      "statement": "child exits before parent resource/production/aggregate authority",
+      "test_id": "r8b-runner-invocation-parity"
+    },
+    {
+      "id": "actual-tree-cleanup",
+      "statement": "every path classified once and only authorized disposable paths deleted",
+      "test_id": "r8b-cleanup-actual-tree"
+    },
+    {
+      "id": "resource-bound",
+      "statement": "child C01-C22 alone is in cgroup denominator; M25/M26 separate",
+      "test_id": "r8b-resource-cgroup"
+    },
+    {
+      "id": "canonical-aggregate-bytes",
+      "statement": "M25 bijectively matches every non-parent P06 entry to one actual producer descriptor and accepts no expected counts, fixture roots, future outcomes or synthetic positives",
+      "test_id": "r8b-aggregate-packet-identity"
+    },
+    {
+      "id": "zero-authority",
+      "statement": "no nonce, slot, sealed attempt, scientific/production authority or successor execution",
+      "test_id": "r8b-authority-census"
+    },
+    {
+      "id": "production-preserved",
+      "statement": "M24 does read-only stable projection and counted health GETs with zero mutation",
+      "test_id": "r8b-production-runtime-survival"
+    },
+    {
+      "id": "denominators-separate",
+      "statement": "historical, suite, linked, control, route, restart, cleanup, resource, production, publication and post-authorization audit counts remain separate",
+      "test_id": "r8b-denominator-separation"
+    },
+    {
+      "id": "hierarchical-ledger-ownership",
+      "statement": "M01 journals only M02, M10 journals only M03-M09, M24 journals only direct manifested children, and S02-S05 journal only their direct Nando subprocesses through one shared locked prefix",
+      "test_id": "r8b-hierarchical-ledger-negative"
+    },
+    {
+      "id": "canonical-multi-receipt-channel",
+      "statement": "S01-S05 and M24 child own exclusive immutable output directories; libtest stdout and stderr are diagnostics and never canonical receipts",
+      "test_id": "r8b-canonical-receipt-channel-negative"
+    },
+    {
+      "id": "produced-receipt-bijection",
+      "statement": "each packet entry matches exactly one unique descriptor binding canonical final relative path, bytes, mode, hash, schema and semantic root",
+      "test_id": "r8b-produced-receipt-bijection"
+    },
+    {
+      "id": "derived-receipt-source-roots",
+      "statement": "the Oracle batch binds sixteen distinct M16 roots and the four-scope census binds four distinct M17 roots without becoming additive outcomes",
+      "test_id": "r8b-derived-receipt-source-roots"
+    },
+    {
+      "id": "preauthorization-causal-closure",
+      "statement": "P06 contains only processes completed before authorization and cannot contain M25, M26 or post-authorization outcomes",
+      "test_id": "r8b-preauthorization-causal-closure"
+    },
+    {
+      "id": "postauthorization-audit-nonauthority",
+      "statement": "P09 is append-only diagnostics and cannot alter, retract or authorize exact M25 or M26 bytes",
+      "test_id": "r8b-post-authorization-audit-fault"
+    },
+    {
+      "id": "strace-tool-binding",
+      "statement": "S02 uses the exact preflight-pinned /usr/bin/strace bytes and rejects a missing or substituted tool",
+      "test_id": "r8b-manifest-tool-binding"
+    },
+    {
+      "id": "implementation-execution-boundary",
+      "statement": "READY_TO_IMPLEMENT authorizes only scoped source work; every suite, M24 child, M25, M26 and P09 launch requires a separate explicit R8B execution authorization",
+      "test_id": "r8b-execution-boundary"
+    },
+    {
+      "id": "canonical-libtest-request-stdin",
+      "statement": "S01-S05 and M24 child receive exactly one bounded canonical request on stdin and validate route, exact selector, current executable SHA-256, allowed evidence paths and exclusive output directory before any write",
+      "test_id": "r8b-libtest-request-stdin-negative"
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "confirm-canonical-fixture-identity",
+      "producer": "unchanged Confirm serializers at 0263e6ef18ec348379af73bd4793b975f4b74870",
+      "consumer": "41 frozen fixtures and SHA256SUMS",
+      "comparison": "decode and canonical reserialize byte identity plus manifest SHA-256",
+      "test_id": "r8b-confirm-canonical-byte-parity"
+    },
+    {
+      "id": "development-known-answer-identity",
+      "producer": "frozen Development byte-vector probe",
+      "consumer": "implemented Development model",
+      "comparison": "canonical bytes and reconstruction/split/owner root identity",
+      "test_id": "r8b-development-known-answer-parity"
+    },
+    {
+      "id": "development-owner-loader-identity",
+      "producer": "M01 owner and split publisher",
+      "consumer": "recovery and metadata-only loaders",
+      "comparison": "request/attempt/executable/pipe/response/batch/split/artifact/owner identity",
+      "test_id": "r8b-linked-route-parity"
+    },
+    {
+      "id": "linked-process-manifest-identity",
+      "producer": "exact 26-entry linked manifest",
+      "consumer": "actual-spawn-owner ledger appenders, P06 and M25",
+      "comparison": "role/path/length/mode/SHA-256 plus writer/child allowlist with no missing, duplicate, substitution or extra",
+      "test_id": "r8b-linked-manifest-parity"
+    },
+    {
+      "id": "suite-manifest-separation",
+      "producer": "exact five-entry suite manifest",
+      "consumer": "M24 canonical channel validator, P06 and M25",
+      "comparison": "five unique suite producers and their direct Nando subprocesses remain separate from the 26 linked identities",
+      "test_id": "r8b-linked-manifest-parity"
+    },
+    {
+      "id": "runner-parent-child-identity",
+      "producer": "one M24 manifest entry",
+      "consumer": "M24 parent and child rows",
+      "comparison": "same SHA-256, distinct invocation roles, one child cgroup",
+      "test_id": "r8b-runner-invocation-parity"
+    },
+    {
+      "id": "process-ledger-identity",
+      "producer": "shared locked appenders owned by M24, M01, M10 and S02-S05",
+      "consumer": "child candidate, P06 and M25",
+      "comparison": "natural sequence/previous-root plus route/stage/case/ordinal/writer/child/executable/request/stdin/exit/stdout/stderr/produced-receipts/time identity",
+      "test_id": "r8b-process-ledger-parity"
+    },
+    {
+      "id": "control-evaluator-identity",
+      "producer": "12 fresh M19 outcomes plus separate 32/4/16 regressions",
+      "consumer": "unchanged M17",
+      "comparison": "scope/ordinal/disposition/commit/producer/manifest identity",
+      "test_id": "r8b-static-control-parity"
+    },
+    {
+      "id": "oracle-descriptor-identity",
+      "producer": "split descriptor and O_PATH inode custody",
+      "consumer": "M16 namespace/evaluator",
+      "comparison": "metadata/inherited mount/recomputed length/hash/root identity",
+      "test_id": "r8b-oracle-descriptor-identity"
+    },
+    {
+      "id": "private-child-identity",
+      "producer": "public metadata and descriptor-backed overlay",
+      "consumer": "resolver/final/Oracle requests",
+      "comparison": "route/case/ordinal/path/mode/length/hash/root without runner read",
+      "test_id": "r8b-private-child-identity-parity"
+    },
+    {
+      "id": "cleanup-owner-verifier-identity",
+      "producer": "registry/authorization/journal/M21 receipt",
+      "consumer": "M22 and M23",
+      "comparison": "census/roots/classification/deletion/retention/post-census identity",
+      "test_id": "r8b-cleanup-owner-verifier-parity"
+    },
+    {
+      "id": "development-result-publication-identity",
+      "producer": "M22 verification receipt",
+      "consumer": "M23",
+      "comparison": "exact bytes authorize only DEVELOPMENT_REHEARSAL_COMPLETE; M22/M26 cannot emit it",
+      "test_id": "r8b-development-result-publisher-identity"
+    },
+    {
+      "id": "aggregate-packet-authorizer-identity",
+      "producer": "M24 closed P06 packet containing completed pre-authorization processes only",
+      "consumer": "sandboxed M25",
+      "comparison": "bijective path/bytes/mode/hash/schema/root/producer/route/denominator/disposition identity with no M25/M26 future outcome",
+      "test_id": "r8b-aggregate-packet-identity"
+    },
+    {
+      "id": "aggregate-publication-identity",
+      "producer": "M25 authorization bytes",
+      "consumer": "M26",
+      "comparison": "authorization/root/target/mode/packet identity without reinterpretation",
+      "test_id": "r8b-aggregate-publication-identity"
+    },
+    {
+      "id": "ledger-writer-child-allowlist-identity",
+      "producer": "current executable SHA and frozen role allowlists for M24, M01, M10 and S02-S05",
+      "consumer": "shared locked ledger appender before every direct receipt-producing spawn",
+      "comparison": "writer executable/route/root/prefix/child role/path exact identity",
+      "test_id": "r8b-hierarchical-ledger-parity"
+    },
+    {
+      "id": "canonical-receipt-channel-identity",
+      "producer": "S01-S05 and M24 child exclusive output directories",
+      "consumer": "M24 validator, ChildFinished descriptors, P06 and M25",
+      "comparison": "unique canonical final relative path, regular nlink=1 immutable mode, bytes, SHA-256, schema and semantic root; stdout/stderr excluded",
+      "test_id": "r8b-canonical-receipt-channel-parity"
+    },
+    {
+      "id": "produced-receipt-descriptor-identity",
+      "producer": "typed producer output validated before ChildFinished",
+      "consumer": "exactly one non-parent P06 packet entry",
+      "comparison": "one-to-one canonical relative path/length/mode/SHA-256/schema/semantic-root identity with no descriptor reuse or path rewrite",
+      "test_id": "r8b-produced-receipt-bijection"
+    },
+    {
+      "id": "oracle-batch-source-identity",
+      "producer": "sixteen distinct M16 Oracle case receipt roots",
+      "consumer": "M24-child Oracle batch and P06",
+      "comparison": "exact ordered sixteen-root set with no duplicate, expected-only or foreign source",
+      "test_id": "r8b-derived-receipt-source-roots"
+    },
+    {
+      "id": "control-scope-census-source-identity",
+      "producer": "four distinct M17 scope receipt roots",
+      "consumer": "M24-child measured four-scope census and P06",
+      "comparison": "exact four-scope root set reported as derived coverage, never as an independent additive outcome",
+      "test_id": "r8b-derived-receipt-source-roots"
+    },
+    {
+      "id": "preauthorization-process-set-identity",
+      "producer": "complete P06 hierarchical ledger prefix before M25 spawn",
+      "consumer": "M25 aggregate authorizer",
+      "comparison": "every started pre-authorization producer has one valid finish and every P06 non-parent entry maps to that completed set; M25/M26 absent",
+      "test_id": "r8b-preauthorization-process-set-parity"
+    },
+    {
+      "id": "postauthorization-audit-identity",
+      "producer": "M24 parent observation of concrete M25/M26 process outcomes after P08",
+      "consumer": "diagnostic P09 audit only",
+      "comparison": "process outcome bytes and hashes are append-only diagnostics and cannot enter P06, M25 input or M26 publication",
+      "test_id": "r8b-postauthorization-audit-parity"
+    },
+    {
+      "id": "strace-tool-executable-identity",
+      "producer": "preflight baseline-88 /usr/bin/strace bytes",
+      "consumer": "S02 execve/flock trace launcher",
+      "comparison": "absolute path, mode, length and SHA-256 exact identity before trace execution",
+      "test_id": "r8b-manifest-tool-binding"
+    },
+    {
+      "id": "libtest-request-stdin-identity",
+      "producer": "M24 canonical suite or M24-child request bytes journaled before spawn",
+      "consumer": "exact selected libtest function before any evidence write",
+      "comparison": "actual stdin SHA-256 equals ChildStarted stdin SHA-256; decoded route, selector, current executable SHA-256, allowed paths and output directory equal the sealed request",
+      "test_id": "r8b-libtest-request-stdin-parity"
+    }
+  ],
+  "runtime_comparisons": [
+    {
+      "id": "production-stable-projection",
+      "source": "M24 parent direct read-only unit, executable, proc, registry, authority, dashboard and bounded health observations before child launch and after child exit",
+      "comparison": "exact_stable_projection",
+      "reason": "traffic and time counters may change while service identity, authority and acceptance state must not",
+      "stable_fields": [
+        "service_unit_sha256",
+        "service_executable_sha256",
+        "service_main_pid",
+        "service_restart_count",
+        "service_active_state",
+        "hot_registry_revision",
+        "cold_registry_revision",
+        "active_authority_package_ids",
+        "hot_local_accept_enabled",
+        "cold_local_accept_enabled",
+        "unresolved_runtime_revocation_count",
+        "dashboard_source_sha256"
+      ],
+      "expected_to_change_fields": [
+        "observation_timestamp",
+        "ordinary_request_count",
+        "ordinary_input_token_count",
+        "service_uptime",
+        "admission_lease_age"
+      ],
+      "observed_not_compared_fields": [
+        "bounded_parent_health_get_count",
+        "health_response_latency",
+        "dynamic_connector_counters"
+      ],
+      "test_id": "r8b-production-runtime-survival"
+    }
+  ],
+  "tests": [
+    {
+      "id": "r8b-implementation-fault",
+      "kind": "fault_injection",
+      "expected": "partial implementation changes only the preserved implementation worktree, retains V6 discrepancy and all V7 paper/gate evidence, touches no production state, and starts zero R8B executions"
+    },
+    {
+      "id": "r8b-process-restart-p01",
+      "kind": "fault_injection",
+      "expected": "incomplete attempt initialization is indeterminate with zero generator dispatch and complete path census"
+    },
+    {
+      "id": "r8b-process-restart-p02",
+      "kind": "fault_injection",
+      "expected": "restart from ArtifactsFrozen performs exactly one first dispatch and creates no durable lock artifact"
+    },
+    {
+      "id": "r8b-process-restart-p03",
+      "kind": "fault_injection",
+      "expected": "GeneratorDispatched without a complete split is indeterminate and never redispatches"
+    },
+    {
+      "id": "r8b-process-restart-p04",
+      "kind": "fault_injection",
+      "expected": "a complete split before CasesGenerated is exactly reconstructed, journaled and recovered"
+    },
+    {
+      "id": "r8b-process-restart-p05",
+      "kind": "fault_injection",
+      "expected": "CasesGenerated without an owner receipt recovers one byte-identical owner receipt"
+    },
+    {
+      "id": "r8b-process-restart-p06",
+      "kind": "fault_injection",
+      "expected": "a durable owner receipt before stdout replays byte-identically without dispatch or mutation"
+    },
+    {
+      "id": "r8b-process-restart-p07",
+      "kind": "fault_injection",
+      "expected": "ptrace stops the first real owner after successful flock, /proc/locks binds its PID and lab-root inode, the second real owner is busy with zero mutation, and the first resumes and completes"
+    },
+    {
+      "id": "r8b-development-publication-72",
+      "kind": "fault_injection",
+      "expected": "all 36 Development objects survive faults before and after publication in 72 of 72 fail-closed cases"
+    },
+    {
+      "id": "r8b-parent-child-launch-fault",
+      "kind": "fault_injection",
+      "expected": "P00 manifest validation, P01 pre-snapshot or P02 delegated-cgroup child launch failure retains diagnostics and grants no child, aggregate or publication PASS"
+    },
+    {
+      "id": "r8b-process-ledger-interruption",
+      "kind": "fault_injection",
+      "expected": "ChildStarted without fsynced ChildFinished is indeterminate, retained under the fresh route ID and never automatically replayed"
+    },
+    {
+      "id": "r8b-oracle-descriptor-mount-fault",
+      "kind": "fault_injection",
+      "expected": "wrong descriptor metadata, inherited descriptor, mount target, namespace closure, hash, semantic root or extra mount fails without runner content access"
+    },
+    {
+      "id": "r8b-linked-failure-census",
+      "kind": "fault_injection",
+      "expected": "any public, downstream, private, oracle, control, terminal or child-candidate failure yields complete retained evidence and no aggregate authorization"
+    },
+    {
+      "id": "r8b-cleanup-interruption",
+      "kind": "fault_injection",
+      "expected": "interrupted intent-first deletion remains incomplete, resumes only from the exact registry and journal, and publishes neither Development completion nor R8B_FROZEN"
+    },
+    {
+      "id": "r8b-cleanup-verification-fault",
+      "kind": "fault_injection",
+      "expected": "cleanup verification or Development result publication failure retains owner evidence and emits no completion or child candidate packet"
+    },
+    {
+      "id": "r8b-child-candidate-fault",
+      "kind": "fault_injection",
+      "expected": "candidate packet freeze failure leaves no accepted child packet and parent refuses resource-to-aggregate promotion"
+    },
+    {
+      "id": "r8b-resource-finalization-fault",
+      "kind": "fault_injection",
+      "expected": "missing process exit, cgroup final state or descendant resource metric is indeterminate and prevents aggregate authorization"
+    },
+    {
+      "id": "r8b-production-observation-fault",
+      "kind": "fault_injection",
+      "expected": "missing or changed stable production field, failed bounded health GET, or production write is VETO and prevents aggregate authorization"
+    },
+    {
+      "id": "r8b-aggregate-packet-fault",
+      "kind": "fault_injection",
+      "expected": "missing, extra, mutable, symlinked, hard-linked, synthetic or mismatched aggregate entry prevents M25 authorization"
+    },
+    {
+      "id": "r8b-aggregate-publication-fault",
+      "kind": "fault_injection",
+      "expected": "M26 publication leaves either no final object or one complete immutable R8B_FROZEN while preserving all input receipts"
+    },
+    {
+      "id": "r8b-source-scope-parity",
+      "kind": "parity",
+      "expected": "implementation diff touches exactly the seven modified predecessor paths and sixteen new paths frozen by implementation-inventory.v7.json and respects every per-file line budget"
+    },
+    {
+      "id": "r8b-code-route-parity",
+      "kind": "parity",
+      "expected": "postimplementation observed-source graph retains the V7 actual-spawn-owner, receipt-channel, proof, authority, observation and post-authorization topology"
+    },
+    {
+      "id": "r8b-confirm-canonical-byte-parity",
+      "kind": "parity",
+      "expected": "all 41 frozen Confirm payloads decode and reserialize byte-identically with SHA256SUMS root b331bc19350a1f71bcfb4adb3c56bff15402dd6483641d4f1ef8d336577fd757"
+    },
+    {
+      "id": "r8b-development-known-answer-parity",
+      "kind": "parity",
+      "expected": "Development reproduces reconstruction 6f4f865654612db327dcad1503790e151e881e8d888abc2a5e16df0545bad8ef, split 12199a9d2bdbe3172b17e571bbd056f45723e23c3765564da59794eb804c67e5 and owner 0b413483f55c213604cca3bac9821fea79d0067692e4abb0b89dd1e193c6f4c3"
+    },
+    {
+      "id": "r8b-linked-route-parity",
+      "kind": "parity",
+      "expected": "one fresh route executes P00-P08 with C01-C22, actual-spawn-owner journaling and closed producer channels; P09 remains non-authoritative diagnostics"
+    },
+    {
+      "id": "r8b-linked-manifest-parity",
+      "kind": "parity",
+      "expected": "linked manifest has 26 unique identities, suite manifest has five unique producers, and direct suite subprocess roles remain separately journaled"
+    },
+    {
+      "id": "r8b-runner-invocation-parity",
+      "kind": "parity",
+      "expected": "M24 appears once in the identity manifest while parent and child rows bind the same SHA-256 and distinct invocation roles"
+    },
+    {
+      "id": "r8b-process-ledger-parity",
+      "kind": "parity",
+      "expected": "M24, M01, M10 and S02-S05 each journal only their direct allowed children; every valid invocation has a start before spawn and a finish after typed receipt validation binding produced_receipts[]"
+    },
+    {
+      "id": "r8b-static-control-parity",
+      "kind": "parity",
+      "expected": "32 legacy, four V3 and sixteen V4 frozen regressions remain separate from twelve fresh outcomes, four M17 scope receipts and one non-additive derived scope census"
+    },
+    {
+      "id": "r8b-oracle-descriptor-identity",
+      "kind": "parity",
+      "expected": "split metadata, O_PATH inode custody, inherited bind source and Oracle-recomputed bytes/hash/semantic root identify one private object"
+    },
+    {
+      "id": "r8b-private-child-identity-parity",
+      "kind": "parity",
+      "expected": "split metadata, mounted bytes and private requests agree on route, case, ordinal, path, mode, length, hash and semantic root"
+    },
+    {
+      "id": "r8b-cleanup-owner-verifier-parity",
+      "kind": "parity",
+      "expected": "owner and verifier consume byte-identical registry, census, roots, classification, deletion journal and expected post-census"
+    },
+    {
+      "id": "r8b-development-result-publisher-identity",
+      "kind": "parity",
+      "expected": "only M23 consumes exact cleanup verification bytes and emits DEVELOPMENT_REHEARSAL_COMPLETE; M22 and M26 cannot substitute"
+    },
+    {
+      "id": "r8b-aggregate-packet-identity",
+      "kind": "parity",
+      "expected": "M25 reopens each P06 entry and bijectively matches path, bytes, mode, hash, schema, root, producer, route, denominator and disposition to one completed pre-authorization descriptor"
+    },
+    {
+      "id": "r8b-aggregate-publication-identity",
+      "kind": "parity",
+      "expected": "M26 consumes exact M25 authorization bytes and target contract without evidence reinterpretation"
+    },
+    {
+      "id": "r8b-denominator-separation",
+      "kind": "parity",
+      "expected": "linked, suite, fresh, frozen, route, restart, cleanup, resource, production, publication and post-authorization audit counts remain separate"
+    },
+    {
+      "id": "r8b-mode-matrix-20",
+      "kind": "integration",
+      "expected": "X01-X20 reject separately; positive modes remain distinct; X20 is not relabeled as real-owner P07"
+    },
+    {
+      "id": "r8b-private-boundary",
+      "kind": "integration",
+      "expected": "public coordinator exits first; runner never reads private contents; Oracle alone gets one descriptor-backed read-only overlay"
+    },
+    {
+      "id": "r8b-cleanup-actual-tree",
+      "kind": "integration",
+      "expected": "M20-M23 run; each path is classified once; required private paths disappear; retained evidence survives; residue is rejected"
+    },
+    {
+      "id": "r8b-resource-cgroup",
+      "kind": "integration",
+      "expected": "child C01-C22 alone stays under 512 MiB, zero swap/OOM/network, 60 s per sandbox and 20 min total; suites, M25, M26 and P09 are separate denominators"
+    },
+    {
+      "id": "r8b-authority-census",
+      "kind": "integration",
+      "expected": "nonce, slot, sealed attempt, scientific/runtime/deployment authority and successor execution remain zero or false"
+    },
+    {
+      "id": "r8b-production-runtime-survival",
+      "kind": "integration",
+      "expected": "M24 compares only stable fields, records dynamic fields and health traffic separately, and performs no production mutation"
+    },
+    {
+      "id": "r8b-manifest-tool-binding",
+      "kind": "parity",
+      "expected": "all manifested executables and /usr/bin/strace match frozen absolute path, mode, length and SHA-256; missing or substituted strace rejects before S02"
+    },
+    {
+      "id": "r8b-hierarchical-ledger-negative",
+      "kind": "fault_injection",
+      "expected": "N01-N05 and N14 reject M01/M10 pre-start spawn, foreign route/root, stale prefix, disallowed child role, missing suite-child ledger pair and typed-validation finish; the natural prefix remains valid"
+    },
+    {
+      "id": "r8b-canonical-receipt-channel-negative",
+      "kind": "fault_injection",
+      "expected": "N06-N08 reject libtest stdout substitution, M24-fabricated producer receipts and missing/extra/writable/symlinked/hard-linked outputs; no ChildFinished or P06 promotion occurs"
+    },
+    {
+      "id": "r8b-produced-receipt-bijection",
+      "kind": "parity",
+      "expected": "N11 and N16 reject descriptor reuse or canonical relative-path change; each accepted non-parent P06 entry maps to exactly one descriptor and each descriptor to exactly one entry"
+    },
+    {
+      "id": "r8b-derived-receipt-source-roots",
+      "kind": "parity",
+      "expected": "N12-N13 reject an Oracle batch without sixteen distinct M16 roots or a scope census without four distinct M17 roots; the census is coverage only"
+    },
+    {
+      "id": "r8b-preauthorization-causal-closure",
+      "kind": "fault_injection",
+      "expected": "N09-N10 reject any M25/M26 future outcome or post-authorization audit input in P06/M25; authorization consumes the frozen pre-authorization packet only"
+    },
+    {
+      "id": "r8b-post-authorization-audit-fault",
+      "kind": "fault_injection",
+      "expected": "failure before or during P09 leaves exact M25 authorization and M26 publication unchanged, retains any natural audit prefix and grants no additional authority"
+    },
+    {
+      "id": "r8b-hierarchical-ledger-parity",
+      "kind": "parity",
+      "expected": "each accepted ledger row binds the actual writer executable and exactly one allowed direct child role/path under the same route, root, sequence and previous-event root"
+    },
+    {
+      "id": "r8b-canonical-receipt-channel-parity",
+      "kind": "parity",
+      "expected": "producer directory bytes, ChildFinished produced_receipts descriptors and final P06 entries are byte/mode/hash/schema/root identical at one unchanged relative path"
+    },
+    {
+      "id": "r8b-preauthorization-process-set-parity",
+      "kind": "parity",
+      "expected": "P06 completed-process set equals the valid finished pre-authorization ledger set exactly and excludes M25, M26 and all P09 outcomes"
+    },
+    {
+      "id": "r8b-postauthorization-audit-parity",
+      "kind": "parity",
+      "expected": "P09 records concrete M25/M26 exit and output hashes after P08 while exact M25 authorization and M26 publication bytes remain unchanged"
+    },
+    {
+      "id": "r8b-execution-boundary",
+      "kind": "fault_injection",
+      "expected": "without a separate explicit R8B execution authorization the state machine terminates at R8B_EXECUTION_NOT_AUTHORIZED and launches zero suite, M24 child, M25, M26 or P09 processes"
+    },
+    {
+      "id": "r8b-libtest-request-stdin-parity",
+      "kind": "parity",
+      "expected": "for S01-S05 and M24 child the exact bounded canonical stdin bytes and SHA-256 match ChildStarted and decode to the selected test, producer executable, allowed paths and exclusive output directory"
+    },
+    {
+      "id": "r8b-libtest-request-stdin-negative",
+      "kind": "fault_injection",
+      "expected": "missing, extra, truncated, environment/path-substituted, wrong-selector, wrong-executable, wrong-route, wrong-output-directory or wrong-path-set request input is rejected before any receipt write or ChildFinished"
+    }
+  ]
+}

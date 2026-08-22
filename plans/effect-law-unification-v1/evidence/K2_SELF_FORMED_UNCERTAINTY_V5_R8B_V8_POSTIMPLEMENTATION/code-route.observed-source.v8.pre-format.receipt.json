@@ -1,0 +1,1702 @@
+{
+  "schema": "nanda.code-route-gate.receipt.v2",
+  "verdict": "PASS",
+  "safe_to_edit": false,
+  "ready_for_implementation_preflight": true,
+  "contract": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_POSTIMPLEMENTATION/code-route.observed-source.v8.json",
+  "contract_schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821",
+  "node_count": 34,
+  "edge_count": 42,
+  "routes": [
+    {
+      "id": "parent-entry",
+      "event": "parent_entry",
+      "kind": "execution",
+      "entry": "v8_request",
+      "via": [],
+      "terminal": "m24_parent",
+      "path_count": 1,
+      "paths": [
+        [
+          "v8_request",
+          "m24_parent"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_parent"
+        ],
+        "interface": [
+          "v8_request"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "v8_request",
+          "to": "m24_parent",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "v8_request",
+              "m24_parent"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-pre-probe-execution",
+      "event": "manager_pre_probe",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "sha256sum_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "sudo_tool",
+          "sha256sum_observer"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_parent"
+        ],
+        "observer": [
+          "sha256sum_observer"
+        ],
+        "producer": [
+          "sudo_tool"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "sha256sum_observer",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "sudo_tool",
+              "sha256sum_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-pre-image-observation",
+      "event": "manager_pre_image_observation",
+      "kind": "observation",
+      "entry": "live_manager_image",
+      "via": [],
+      "terminal": "sha256sum_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "live_manager_image",
+          "sha256sum_observer"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "live_manager_image"
+        ],
+        "observer": [
+          "sha256sum_observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "live_manager_image",
+          "to": "sha256sum_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "live_manager_image",
+              "sha256sum_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-pre-bus-observation",
+      "event": "manager_pre_bus_observation",
+      "kind": "observation",
+      "entry": "manager_bus_identity",
+      "via": [],
+      "terminal": "bus_identity_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "manager_bus_identity",
+          "bus_identity_observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "bus_identity_observer"
+        ],
+        "evidence_owner": [
+          "manager_bus_identity"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "manager_bus_identity",
+          "to": "bus_identity_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "manager_bus_identity",
+              "bus_identity_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-post-probe-execution",
+      "event": "manager_post_probe",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "sha256sum_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "sudo_tool",
+          "sha256sum_observer"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_parent"
+        ],
+        "observer": [
+          "sha256sum_observer"
+        ],
+        "producer": [
+          "sudo_tool"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "sha256sum_observer",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "sudo_tool",
+              "sha256sum_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-post-image-observation",
+      "event": "manager_post_image_observation",
+      "kind": "observation",
+      "entry": "live_manager_image",
+      "via": [],
+      "terminal": "sha256sum_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "live_manager_image",
+          "sha256sum_observer"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "live_manager_image"
+        ],
+        "observer": [
+          "sha256sum_observer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "live_manager_image",
+          "to": "sha256sum_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "live_manager_image",
+              "sha256sum_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-post-bus-observation",
+      "event": "manager_post_bus_observation",
+      "kind": "observation",
+      "entry": "manager_bus_identity",
+      "via": [],
+      "terminal": "bus_identity_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "manager_bus_identity",
+          "bus_identity_observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "bus_identity_observer"
+        ],
+        "evidence_owner": [
+          "manager_bus_identity"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "manager_bus_identity",
+          "to": "bus_identity_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "manager_bus_identity",
+              "bus_identity_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-bus-proof",
+      "event": "manager_bus_proof",
+      "kind": "proof",
+      "entry": "manager_bus_identity",
+      "via": [],
+      "terminal": "manager_identity_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "manager_bus_identity",
+          "manager_identity_validator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "manager_bus_identity"
+        ],
+        "proof_owner": [
+          "manager_identity_validator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "manager_bus_identity",
+          "to": "manager_identity_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "manager_bus_identity",
+              "manager_identity_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manager-image-proof",
+      "event": "manager_image_proof",
+      "kind": "proof",
+      "entry": "live_manager_image",
+      "via": [],
+      "terminal": "manager_identity_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "live_manager_image",
+          "manager_identity_validator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "live_manager_image"
+        ],
+        "proof_owner": [
+          "manager_identity_validator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "live_manager_image",
+          "to": "manager_identity_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "live_manager_image",
+              "manager_identity_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "delegated-child-launch",
+      "event": "delegated_child_launch",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "m24_child",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "systemd_run_tool",
+          "user_systemd_manager",
+          "m24_child"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_child",
+          "m24_parent",
+          "user_systemd_manager"
+        ],
+        "producer": [
+          "systemd_run_tool"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "m24_child",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "systemd_run_tool",
+              "user_systemd_manager",
+              "m24_child"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scientific-child-route",
+      "event": "scientific_child_route",
+      "kind": "execution",
+      "entry": "m24_child",
+      "via": [],
+      "terminal": "frozen_scientific_child_route",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_child",
+          "frozen_scientific_child_route"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "frozen_scientific_child_route"
+        ],
+        "orchestrator": [
+          "m24_child"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_child",
+          "to": "frozen_scientific_child_route",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_child",
+              "frozen_scientific_child_route"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scientific-output-authority",
+      "event": "scientific_outputs",
+      "kind": "authority",
+      "entry": "frozen_scientific_child_route",
+      "via": [],
+      "terminal": "producer_outputs",
+      "path_count": 1,
+      "paths": [
+        [
+          "frozen_scientific_child_route",
+          "producer_outputs"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "frozen_scientific_child_route"
+        ],
+        "evidence_owner": [
+          "producer_outputs"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "frozen_scientific_child_route",
+          "to": "producer_outputs",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "frozen_scientific_child_route",
+              "producer_outputs"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dual-root-output-authority",
+      "event": "dual_root_outputs",
+      "kind": "authority",
+      "entry": "frozen_scientific_child_route",
+      "via": [],
+      "terminal": "m16_m17_roots",
+      "path_count": 1,
+      "paths": [
+        [
+          "frozen_scientific_child_route",
+          "m16_m17_roots"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "frozen_scientific_child_route"
+        ],
+        "evidence_owner": [
+          "m16_m17_roots"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "frozen_scientific_child_route",
+          "to": "m16_m17_roots",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "frozen_scientific_child_route",
+              "m16_m17_roots"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "logical-nando-invocation",
+      "event": "logical_nando_invocation",
+      "kind": "execution",
+      "entry": "request_owner",
+      "via": [],
+      "terminal": "nando_target",
+      "path_count": 1,
+      "paths": [
+        [
+          "request_owner",
+          "launch_adapter",
+          "nando_target"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "launch_adapter",
+          "nando_target"
+        ],
+        "orchestrator": [
+          "request_owner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "request_owner",
+          "to": "nando_target",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "request_owner",
+              "launch_adapter",
+              "nando_target"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "one-ledger-append",
+      "event": "one_ledger_append",
+      "kind": "execution",
+      "entry": "request_owner",
+      "via": [],
+      "terminal": "ledger_appender",
+      "path_count": 1,
+      "paths": [
+        [
+          "request_owner",
+          "ledger_appender"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "ledger_appender"
+        ],
+        "orchestrator": [
+          "request_owner"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "request_owner",
+          "to": "ledger_appender",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "request_owner",
+              "ledger_appender"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "one-ledger-event",
+      "event": "one_ledger_event",
+      "kind": "authority",
+      "entry": "ledger_appender",
+      "via": [],
+      "terminal": "process_ledger",
+      "path_count": 1,
+      "paths": [
+        [
+          "ledger_appender",
+          "process_ledger"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "ledger_appender"
+        ],
+        "evidence_owner": [
+          "process_ledger"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "ledger_appender",
+          "to": "process_ledger",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "ledger_appender",
+              "process_ledger"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c08-freeze-execution",
+      "event": "c08_freeze",
+      "kind": "execution",
+      "entry": "m24_child",
+      "via": [],
+      "terminal": "c08_encoder",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_child",
+          "c08_encoder"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "c08_encoder"
+        ],
+        "orchestrator": [
+          "m24_child"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_child",
+          "to": "c08_encoder",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_child",
+              "c08_encoder"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c08-output-authority",
+      "event": "c08_output",
+      "kind": "authority",
+      "entry": "c08_encoder",
+      "via": [],
+      "terminal": "c08_contract",
+      "path_count": 1,
+      "paths": [
+        [
+          "c08_encoder",
+          "c08_contract"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "c08_contract"
+        ],
+        "producer": [
+          "c08_encoder"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "c08_encoder",
+          "to": "c08_contract",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "c08_encoder",
+              "c08_contract"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-finalize-execution",
+      "event": "resource_finalize",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "resource_receipt_encoder",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "resource_observer",
+          "resource_receipt_encoder"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_parent"
+        ],
+        "observer": [
+          "resource_observer"
+        ],
+        "producer": [
+          "resource_receipt_encoder"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "resource_receipt_encoder",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "resource_observer",
+              "resource_receipt_encoder"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-observation",
+      "event": "resource_observation",
+      "kind": "observation",
+      "entry": "unit_resource_metrics",
+      "via": [],
+      "terminal": "resource_observer",
+      "path_count": 1,
+      "paths": [
+        [
+          "unit_resource_metrics",
+          "resource_observer"
+        ]
+      ],
+      "role_owners": {
+        "observer": [
+          "resource_observer"
+        ],
+        "evidence_owner": [
+          "unit_resource_metrics"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "unit_resource_metrics",
+          "to": "resource_observer",
+          "via": [],
+          "graph": "observation",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "unit_resource_metrics",
+              "resource_observer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-receipt-output",
+      "event": "resource_receipt_output",
+      "kind": "authority",
+      "entry": "resource_receipt_encoder",
+      "via": [],
+      "terminal": "resource_receipt",
+      "path_count": 1,
+      "paths": [
+        [
+          "resource_receipt_encoder",
+          "resource_receipt"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "resource_receipt"
+        ],
+        "producer": [
+          "resource_receipt_encoder"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "resource_receipt_encoder",
+          "to": "resource_receipt",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "resource_receipt_encoder",
+              "resource_receipt"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ledger-packet-proof",
+      "event": "ledger_packet_proof",
+      "kind": "proof",
+      "entry": "process_ledger",
+      "via": [],
+      "terminal": "ledger_stream_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "process_ledger",
+          "ledger_stream_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "ledger_stream_validator"
+        ],
+        "evidence_owner": [
+          "process_ledger"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "process_ledger",
+          "to": "ledger_stream_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "process_ledger",
+              "ledger_stream_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c08-packet-proof",
+      "event": "c08_packet_proof",
+      "kind": "proof",
+      "entry": "c08_contract",
+      "via": [],
+      "terminal": "c08_schedule_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "c08_contract",
+          "c08_schedule_validator"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "c08_contract"
+        ],
+        "proof_owner": [
+          "c08_schedule_validator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "c08_contract",
+          "to": "c08_schedule_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "c08_contract",
+              "c08_schedule_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "producer-packet-proof",
+      "event": "producer_packet_proof",
+      "kind": "proof",
+      "entry": "producer_outputs",
+      "via": [],
+      "terminal": "producer_output_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "producer_outputs",
+          "producer_output_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "producer_output_validator"
+        ],
+        "evidence_owner": [
+          "producer_outputs"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "producer_outputs",
+          "to": "producer_output_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "producer_outputs",
+              "producer_output_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dual-root-packet-proof",
+      "event": "dual_root_packet_proof",
+      "kind": "proof",
+      "entry": "m16_m17_roots",
+      "via": [],
+      "terminal": "dual_root_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "m16_m17_roots",
+          "dual_root_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "dual_root_validator"
+        ],
+        "evidence_owner": [
+          "m16_m17_roots"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m16_m17_roots",
+          "to": "dual_root_validator",
+          "via": [],
+          "graph": "proof",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m16_m17_roots",
+              "dual_root_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p06-packet-output",
+      "event": "p06_packet_output",
+      "kind": "authority",
+      "entry": "packet_assembler",
+      "via": [],
+      "terminal": "p06_packet",
+      "path_count": 1,
+      "paths": [
+        [
+          "packet_assembler",
+          "p06_packet"
+        ]
+      ],
+      "role_owners": {
+        "evidence_owner": [
+          "p06_packet"
+        ],
+        "producer": [
+          "packet_assembler"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "packet_assembler",
+          "to": "p06_packet",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "packet_assembler",
+              "p06_packet"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m25-execution",
+      "event": "m25_execution",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "m25_authorizer",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "m25_authorizer"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_parent"
+        ],
+        "authorization_owner": [
+          "m25_authorizer"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "m25_authorizer",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "m25_authorizer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m25-authorization-input",
+      "event": "m25_authorization_input",
+      "kind": "authority",
+      "entry": "p06_packet",
+      "via": [],
+      "terminal": "m25_authorizer",
+      "path_count": 1,
+      "paths": [
+        [
+          "p06_packet",
+          "m25_authorizer"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "m25_authorizer"
+        ],
+        "evidence_owner": [
+          "p06_packet"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "p06_packet",
+          "to": "m25_authorizer",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "p06_packet",
+              "m25_authorizer"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m26-execution",
+      "event": "m26_execution",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "m26_publisher",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "m26_publisher"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_parent"
+        ],
+        "mutation_owner": [
+          "m26_publisher"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "m26_publisher",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "m26_publisher"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m26-publication",
+      "event": "m26_publication",
+      "kind": "authority",
+      "entry": "m25_authorizer",
+      "via": [],
+      "terminal": "m26_publisher",
+      "path_count": 1,
+      "paths": [
+        [
+          "m25_authorizer",
+          "m26_publisher"
+        ]
+      ],
+      "role_owners": {
+        "authorization_owner": [
+          "m25_authorizer"
+        ],
+        "mutation_owner": [
+          "m26_publisher"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m25_authorizer",
+          "to": "m26_publisher",
+          "via": [],
+          "graph": "authority",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m25_authorizer",
+              "m26_publisher"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exact-child-stop",
+      "event": "exact_child_stop",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "m24_child",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "systemctl_tool",
+          "user_systemd_manager",
+          "m24_child"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_child",
+          "m24_parent",
+          "user_systemd_manager"
+        ],
+        "producer": [
+          "systemctl_tool"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "m24_child",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "systemctl_tool",
+              "user_systemd_manager",
+              "m24_child"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-manager-validation",
+      "event": "resource_manager_validation",
+      "kind": "execution",
+      "entry": "resource_receipt_encoder",
+      "via": [],
+      "terminal": "manager_identity_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "resource_receipt_encoder",
+          "manager_identity_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "manager_identity_validator"
+        ],
+        "producer": [
+          "resource_receipt_encoder"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "resource_receipt_encoder",
+          "to": "manager_identity_validator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "resource_receipt_encoder",
+              "manager_identity_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packet-freeze",
+      "event": "packet_freeze",
+      "kind": "execution",
+      "entry": "m24_parent",
+      "via": [],
+      "terminal": "packet_assembler",
+      "path_count": 1,
+      "paths": [
+        [
+          "m24_parent",
+          "packet_assembler"
+        ]
+      ],
+      "role_owners": {
+        "orchestrator": [
+          "m24_parent"
+        ],
+        "producer": [
+          "packet_assembler"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "m24_parent",
+          "to": "packet_assembler",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "m24_parent",
+              "packet_assembler"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packet-ledger-validation",
+      "event": "packet_ledger_validation",
+      "kind": "execution",
+      "entry": "packet_assembler",
+      "via": [],
+      "terminal": "ledger_stream_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "packet_assembler",
+          "ledger_stream_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "ledger_stream_validator"
+        ],
+        "producer": [
+          "packet_assembler"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "packet_assembler",
+          "to": "ledger_stream_validator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "packet_assembler",
+              "ledger_stream_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packet-c08-validation",
+      "event": "packet_c08_validation",
+      "kind": "execution",
+      "entry": "packet_assembler",
+      "via": [],
+      "terminal": "c08_schedule_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "packet_assembler",
+          "c08_schedule_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "c08_schedule_validator"
+        ],
+        "producer": [
+          "packet_assembler"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "packet_assembler",
+          "to": "c08_schedule_validator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "packet_assembler",
+              "c08_schedule_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packet-producer-validation",
+      "event": "packet_producer_validation",
+      "kind": "execution",
+      "entry": "packet_assembler",
+      "via": [],
+      "terminal": "producer_output_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "packet_assembler",
+          "producer_output_validator"
+        ]
+      ],
+      "role_owners": {
+        "producer": [
+          "packet_assembler"
+        ],
+        "proof_owner": [
+          "producer_output_validator"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "packet_assembler",
+          "to": "producer_output_validator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "packet_assembler",
+              "producer_output_validator"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packet-dual-root-validation",
+      "event": "packet_dual_root_validation",
+      "kind": "execution",
+      "entry": "packet_assembler",
+      "via": [],
+      "terminal": "dual_root_validator",
+      "path_count": 1,
+      "paths": [
+        [
+          "packet_assembler",
+          "dual_root_validator"
+        ]
+      ],
+      "role_owners": {
+        "proof_owner": [
+          "dual_root_validator"
+        ],
+        "producer": [
+          "packet_assembler"
+        ]
+      },
+      "parallel_edge_groups": [],
+      "path_cardinality": [
+        {
+          "from": "packet_assembler",
+          "to": "dual_root_validator",
+          "via": [],
+          "graph": "execution",
+          "count": 1,
+          "minimum_count": 1,
+          "min": 1,
+          "max": 1,
+          "paths": [
+            [
+              "packet_assembler",
+              "dual_root_validator"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "cardinality_basis": "static_declared_paths_per_named_event_scenario",
+  "event_authority_owners": {
+    "scientific_outputs": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [
+        "producer_outputs"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": []
+    },
+    "dual_root_outputs": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [
+        "m16_m17_roots"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": []
+    },
+    "one_ledger_event": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [
+        "process_ledger"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": []
+    },
+    "c08_output": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [
+        "c08_contract"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": []
+    },
+    "resource_receipt_output": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [
+        "resource_receipt"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": []
+    },
+    "p06_packet_output": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [
+        "p06_packet"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": []
+    },
+    "m25_authorization_input": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [
+        "p06_packet"
+      ],
+      "mutation_owner": [],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "m25_authorizer"
+      ]
+    },
+    "m26_publication": {
+      "render_owner": [],
+      "candidate_rank_owner": [],
+      "evidence_owner": [],
+      "mutation_owner": [
+        "m26_publisher"
+      ],
+      "display_rank_owner": [],
+      "authorization_owner": [
+        "m25_authorizer"
+      ]
+    }
+  },
+  "source_evidence": {
+    "expected": 75,
+    "verified": 75,
+    "complete": true
+  },
+  "issues": [],
+  "warnings": [],
+  "claim_boundary": {
+    "execution_authority_observation_proof_separated": true,
+    "required_roles_checked_per_path": true,
+    "source_evidence_verified": true,
+    "structural_code_route_only": true,
+    "implementation_correctness_proven": false,
+    "runtime_behavior_proven": false,
+    "implementation_preflight_still_required": true,
+    "post_edit_tests_required": true
+  }
+}

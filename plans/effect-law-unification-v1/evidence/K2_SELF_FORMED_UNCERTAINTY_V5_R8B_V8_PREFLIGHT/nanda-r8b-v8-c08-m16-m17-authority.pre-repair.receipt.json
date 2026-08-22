@@ -1,0 +1,1025 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "r8b-v8-c08-m16-m17-authority",
+  "domain": "software",
+  "complexity_score": 62,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c3",
+    "c4",
+    "c5",
+    "c6",
+    "c7",
+    "c8",
+    "c10"
+  ],
+  "weak_triads": [
+    "c11",
+    "c12",
+    "c2",
+    "c9"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.0909,
+      "c10": 0.0909,
+      "c11": 0.0909,
+      "c12": 0.0909,
+      "c2": 0.0909,
+      "c3": 0.0909,
+      "c4": 0.0909,
+      "c5": 0.0909,
+      "c6": 0.0909,
+      "c7": 0.0909,
+      "c8": 0.0909,
+      "c9": 0.0909
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 24,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11",
+      "c12"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.299,
+      "c10": 0.3002,
+      "c11": 0.2509,
+      "c12": 0.2761,
+      "c2": 0.2543,
+      "c3": 0.2967,
+      "c4": 0.3082,
+      "c5": 0.283,
+      "c6": 0.3231,
+      "c7": 0.2853,
+      "c8": 0.2841,
+      "c9": 0.2486
+    },
+    "source_self_score": 0.2841,
+    "stable": [
+      "c1",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c10"
+    ],
+    "weak": [
+      "c2",
+      "c9",
+      "c11",
+      "c12"
+    ],
+    "weak_details": {
+      "c11": {
+        "nearest_source": "t11",
+        "nearest_source_score": 1.0,
+        "score": 0.2509,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c12": {
+        "nearest_source": "t12",
+        "nearest_source_score": 1.0,
+        "score": 0.2761,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c2": {
+        "nearest_source": "t2",
+        "nearest_source_score": 1.0,
+        "score": 0.2543,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c9": {
+        "nearest_source": "t9",
+        "nearest_source_score": 1.0,
+        "score": 0.2486,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "chronology": "chronology",
+      "control-dual-set": "control-dual-set",
+      "denominator-separation": "denominator-separation",
+      "exact-set": "exact-set",
+      "object-role": "object-role",
+      "oracle-dual-set": "oracle-dual-set",
+      "oracle-equality": "oracle-equality",
+      "output-census": "output-census",
+      "projection-boundary": "projection-boundary",
+      "truth-boundary": "truth-boundary"
+    },
+    "scores": {
+      "chronology": 1.0,
+      "control-dual-set": 1.0,
+      "denominator-separation": 1.0,
+      "exact-set": 1.0,
+      "object-role": 1.0,
+      "oracle-dual-set": 1.0,
+      "oracle-equality": 1.0,
+      "output-census": 1.0,
+      "projection-boundary": 1.0,
+      "truth-boundary": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "chronology": 1,
+      "control-dual-set": 1,
+      "denominator-separation": 1,
+      "exact-set": 1,
+      "object-role": 1,
+      "oracle-dual-set": 2,
+      "oracle-equality": 1,
+      "output-census": 1,
+      "projection-boundary": 2,
+      "truth-boundary": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.2841,
+      "norm": 109.1055,
+      "triads": 12
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "chronology": "chronology",
+      "control-dual-set": "control-dual-set",
+      "denominator-separation": "denominator-separation",
+      "exact-set": "exact-set",
+      "object-role": "object-role",
+      "oracle-dual-set": "oracle-dual-set",
+      "oracle-equality": "oracle-equality",
+      "output-census": "output-census",
+      "projection-boundary": "projection-boundary",
+      "truth-boundary": "truth-boundary"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "chronology": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "control-dual-set": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denominator-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "exact-set": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "object-role": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle-dual-set": {
+          "norm": 46.0869,
+          "self_coherence": 0.7201,
+          "triads": 2
+        },
+        "oracle-equality": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "output-census": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "projection-boundary": {
+          "norm": 45.0333,
+          "self_coherence": 0.7036,
+          "triads": 2
+        },
+        "truth-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "chronology": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "control-dual-set": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "denominator-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "exact-set": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "object-role": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "oracle-dual-set": {
+          "norm": 46.0869,
+          "self_coherence": 0.7201,
+          "triads": 2
+        },
+        "oracle-equality": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "output-census": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "projection-boundary": {
+          "norm": 45.0333,
+          "self_coherence": 0.7036,
+          "triads": 2
+        },
+        "truth-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "chronology": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "chronology",
+        "exact_source_groups": [
+          "chronology"
+        ]
+      },
+      "control-dual-set": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "control-dual-set",
+        "exact_source_groups": [
+          "control-dual-set"
+        ]
+      },
+      "denominator-separation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "denominator-separation",
+        "exact_source_groups": [
+          "denominator-separation"
+        ]
+      },
+      "exact-set": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "exact-set",
+        "exact_source_groups": [
+          "exact-set"
+        ]
+      },
+      "object-role": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "object-role",
+        "exact_source_groups": [
+          "object-role"
+        ]
+      },
+      "oracle-dual-set": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "oracle-dual-set",
+        "exact_source_groups": [
+          "oracle-dual-set"
+        ]
+      },
+      "oracle-equality": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "oracle-equality",
+        "exact_source_groups": [
+          "oracle-equality"
+        ]
+      },
+      "output-census": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "output-census",
+        "exact_source_groups": [
+          "output-census"
+        ]
+      },
+      "projection-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "projection-boundary",
+        "exact_source_groups": [
+          "projection-boundary"
+        ]
+      },
+      "truth-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "truth-boundary",
+        "exact_source_groups": [
+          "truth-boundary"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "chronology": {
+        "chronology": 1.0,
+        "control-dual-set": -0.0234,
+        "denominator-separation": -0.0313,
+        "exact-set": 0.0234,
+        "object-role": 0.0293,
+        "oracle-dual-set": 0.0014,
+        "oracle-equality": 0.0313,
+        "output-census": 0.0176,
+        "projection-boundary": -0.0125,
+        "truth-boundary": -0.0117
+      },
+      "control-dual-set": {
+        "chronology": -0.0234,
+        "control-dual-set": 1.0,
+        "denominator-separation": 0.0195,
+        "exact-set": 0.0078,
+        "object-role": -0.0098,
+        "oracle-dual-set": -0.0285,
+        "oracle-equality": 0.0078,
+        "output-census": -0.0332,
+        "projection-boundary": -0.043,
+        "truth-boundary": -0.0195
+      },
+      "denominator-separation": {
+        "chronology": -0.0313,
+        "control-dual-set": 0.0195,
+        "denominator-separation": 1.0,
+        "exact-set": -0.0273,
+        "object-role": -0.0254,
+        "oracle-dual-set": 0.0339,
+        "oracle-equality": 0.0586,
+        "output-census": 0.0605,
+        "projection-boundary": -0.0236,
+        "truth-boundary": -0.0469
+      },
+      "exact-set": {
+        "chronology": 0.0234,
+        "control-dual-set": 0.0078,
+        "denominator-separation": -0.0273,
+        "exact-set": 1.0,
+        "object-role": -0.0879,
+        "oracle-dual-set": -0.0095,
+        "oracle-equality": -0.0352,
+        "output-census": -0.0449,
+        "projection-boundary": 0.0014,
+        "truth-boundary": 0.0313
+      },
+      "object-role": {
+        "chronology": 0.0293,
+        "control-dual-set": -0.0098,
+        "denominator-separation": -0.0254,
+        "exact-set": -0.0879,
+        "object-role": 1.0,
+        "oracle-dual-set": 0.0041,
+        "oracle-equality": -0.0254,
+        "output-census": 0.0195,
+        "projection-boundary": 0.0375,
+        "truth-boundary": 0.0059
+      },
+      "oracle-dual-set": {
+        "chronology": 0.0014,
+        "control-dual-set": -0.0285,
+        "denominator-separation": 0.0339,
+        "exact-set": -0.0095,
+        "object-role": 0.0041,
+        "oracle-dual-set": 1.0,
+        "oracle-equality": 0.0122,
+        "output-census": -0.0014,
+        "projection-boundary": -0.0058,
+        "truth-boundary": -0.0041
+      },
+      "oracle-equality": {
+        "chronology": 0.0313,
+        "control-dual-set": 0.0078,
+        "denominator-separation": 0.0586,
+        "exact-set": -0.0352,
+        "object-role": -0.0254,
+        "oracle-dual-set": 0.0122,
+        "oracle-equality": 1.0,
+        "output-census": -0.0254,
+        "projection-boundary": -0.0319,
+        "truth-boundary": -0.0156
+      },
+      "output-census": {
+        "chronology": 0.0176,
+        "control-dual-set": -0.0332,
+        "denominator-separation": 0.0605,
+        "exact-set": -0.0449,
+        "object-role": 0.0195,
+        "oracle-dual-set": -0.0014,
+        "oracle-equality": -0.0254,
+        "output-census": 1.0,
+        "projection-boundary": 0.0236,
+        "truth-boundary": 0.0254
+      },
+      "projection-boundary": {
+        "chronology": -0.0125,
+        "control-dual-set": -0.043,
+        "denominator-separation": -0.0236,
+        "exact-set": 0.0014,
+        "object-role": 0.0375,
+        "oracle-dual-set": -0.0058,
+        "oracle-equality": -0.0319,
+        "output-census": 0.0236,
+        "projection-boundary": 1.0,
+        "truth-boundary": -0.0153
+      },
+      "truth-boundary": {
+        "chronology": -0.0117,
+        "control-dual-set": -0.0195,
+        "denominator-separation": -0.0469,
+        "exact-set": 0.0313,
+        "object-role": 0.0059,
+        "oracle-dual-set": -0.0041,
+        "oracle-equality": -0.0156,
+        "output-census": 0.0254,
+        "projection-boundary": -0.0153,
+        "truth-boundary": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "chronology": {
+          "gravity": 1.0,
+          "owner": "m24 child",
+          "owners": {
+            "m24 child": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "control-dual-set": {
+          "gravity": 1.0,
+          "owner": "control-dual-set",
+          "owners": {
+            "control-dual-set": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "denominator-separation": {
+          "gravity": 1.0,
+          "owner": "denominator-separation",
+          "owners": {
+            "denominator-separation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "exact-set": {
+          "gravity": 1.0,
+          "owner": "exact-set",
+          "owners": {
+            "exact-set": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "object-role": {
+          "gravity": 1.0,
+          "owner": "object-role",
+          "owners": {
+            "object-role": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "oracle-dual-set": {
+          "gravity": 1.0,
+          "owner": "oracle-dual-set",
+          "owners": {
+            "oracle-dual-set": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "oracle-equality": {
+          "gravity": 1.0,
+          "owner": "oracle-equality",
+          "owners": {
+            "oracle-equality": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "output-census": {
+          "gravity": 1.0,
+          "owner": "output-census",
+          "owners": {
+            "output-census": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "projection-boundary": {
+          "gravity": 1.0,
+          "owner": "projection-boundary",
+          "owners": {
+            "projection-boundary": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "truth-boundary": {
+          "gravity": 1.0,
+          "owner": "truth-boundary",
+          "owners": {
+            "truth-boundary": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.2,
+          "owner": "denominator-separation",
+          "owners": {
+            "denominator-separation": 2,
+            "m24 child": 2,
+            "object-role": 2,
+            "projection-boundary": 2,
+            "truth-boundary": 2
+          },
+          "support": 2,
+          "total": 10
+        },
+        "evidence": {
+          "gravity": 0.5,
+          "owner": "oracle-dual-set",
+          "owners": {
+            "control-dual-set": 2,
+            "oracle-dual-set": 4,
+            "output-census": 2
+          },
+          "support": 4,
+          "total": 8
+        },
+        "failure": {
+          "gravity": 1.0,
+          "owner": "exact-set",
+          "owners": {
+            "exact-set": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "observation": {
+          "gravity": 1.0,
+          "owner": "projection-boundary",
+          "owners": {
+            "projection-boundary": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "oracle-equality",
+          "owners": {
+            "oracle-equality": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 5,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:173-182",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:312-329",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:430-436",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:551-554",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:559-564",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:15-20",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v2.md:15-18",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v2.md:17-19"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "denominator-separation",
+            "m24 child",
+            "object-role",
+            "projection-boundary",
+            "truth-boundary"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 5,
+          "triads": 10
+        },
+        "evidence": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:524-531",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:536-545",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:536-549",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:551-554",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:18-21"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "control-dual-set",
+            "oracle-dual-set",
+            "output-census"
+          ],
+          "scopes": [
+            "evidence"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        },
+        "failure": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:556-557"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "exact-set"
+          ],
+          "scopes": [
+            "failure"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:312-329",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v2.md:15-18"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "projection-boundary"
+          ],
+          "scopes": [
+            "observation"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:547-549"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "oracle-equality"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 70.3704,
+          "self_coherence": 0.4398,
+          "triads": 5
+        },
+        "evidence": {
+          "norm": 63.3719,
+          "self_coherence": 0.4951,
+          "triads": 4
+        },
+        "failure": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "evidence": 0.0269,
+          "failure": -0.0311,
+          "observation": -0.0124,
+          "proof": -0.0187
+        },
+        "evidence": {
+          "authority": 0.0269,
+          "evidence": 1.0,
+          "failure": -0.0256,
+          "observation": -0.0079,
+          "proof": 0.0
+        },
+        "failure": {
+          "authority": -0.0311,
+          "evidence": -0.0256,
+          "failure": 1.0,
+          "observation": 0.0098,
+          "proof": -0.0352
+        },
+        "observation": {
+          "authority": -0.0124,
+          "evidence": -0.0079,
+          "failure": 0.0098,
+          "observation": 1.0,
+          "proof": 0.0449
+        },
+        "proof": {
+          "authority": -0.0187,
+          "evidence": 0.0,
+          "failure": -0.0352,
+          "observation": 0.0449,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 70.3704,
+          "self_coherence": 0.4398,
+          "triads": 5
+        },
+        "evidence": {
+          "norm": 63.3719,
+          "self_coherence": 0.4951,
+          "triads": 4
+        },
+        "failure": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "chronology": 1,
+      "control-dual-set": 1,
+      "denominator-separation": 1,
+      "exact-set": 1,
+      "object-role": 1,
+      "oracle-dual-set": 2,
+      "oracle-equality": 1,
+      "output-census": 1,
+      "projection-boundary": 2,
+      "truth-boundary": 1
+    },
+    "stable_groups": [
+      "chronology",
+      "control-dual-set",
+      "denominator-separation",
+      "exact-set",
+      "object-role",
+      "oracle-dual-set",
+      "oracle-equality",
+      "output-census",
+      "projection-boundary",
+      "truth-boundary"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md:551-554"
+    },
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V2.md:15-18"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 2,
+    "repair_queue": [
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md:551-554"
+      },
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V2.md:15-18"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate triad has weak composite-mode support."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\nRecheck or remove weak candidate triads:\n- c11: score=0.2509, nearest_source=t11, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c12: score=0.2761, nearest_source=t12, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c2: score=0.2543, nearest_source=t2, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c9: score=0.2486, nearest_source=t9, why=candidate triad does not resonate with the composite source memory above the stability threshold",
+  "trace_path": "/tmp/nanda-structural-gate/r8b-v8-c08-m16-m17-authority.trace.json"
+}

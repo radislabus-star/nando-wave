@@ -1,0 +1,1049 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "r8b-v8-delegated-launch",
+  "domain": "software",
+  "complexity_score": 65,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c2",
+    "c3",
+    "c4",
+    "c6",
+    "c7",
+    "c8",
+    "c9",
+    "c10",
+    "c11"
+  ],
+  "weak_triads": [
+    "c1",
+    "c5"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1,
+      "c10": 0.1,
+      "c11": 0.1,
+      "c2": 0.1,
+      "c3": 0.1,
+      "c4": 0.1,
+      "c5": 0.1,
+      "c6": 0.1,
+      "c7": 0.1,
+      "c8": 0.1,
+      "c9": 0.1
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 22,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.2459,
+      "c10": 0.3024,
+      "c11": 0.2959,
+      "c2": 0.3094,
+      "c3": 0.3759,
+      "c4": 0.3165,
+      "c5": 0.2624,
+      "c6": 0.3253,
+      "c7": 0.3024,
+      "c8": 0.2994,
+      "c9": 0.2847
+    },
+    "source_self_score": 0.3018,
+    "stable": [
+      "c2",
+      "c3",
+      "c4",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "weak": [
+      "c1",
+      "c5"
+    ],
+    "weak_details": {
+      "c1": {
+        "nearest_source": "t1",
+        "nearest_source_score": 1.0,
+        "score": 0.2459,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c5": {
+        "nearest_source": "t5",
+        "nearest_source_score": 1.0,
+        "score": 0.2624,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "delegated-chain": "delegated-chain",
+      "exact-stop": "exact-stop",
+      "fail-closed": "fail-closed",
+      "manager-identity": "manager-identity",
+      "manager-image": "manager-image",
+      "no-promotion": "no-promotion",
+      "resource-provenance": "resource-provenance",
+      "service-boundary": "service-boundary"
+    },
+    "scores": {
+      "delegated-chain": 1.0,
+      "exact-stop": 1.0,
+      "fail-closed": 1.0,
+      "manager-identity": 1.0,
+      "manager-image": 1.0,
+      "no-promotion": 1.0,
+      "resource-provenance": 1.0,
+      "service-boundary": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "delegated-chain": 3,
+      "exact-stop": 1,
+      "fail-closed": 1,
+      "manager-identity": 1,
+      "manager-image": 2,
+      "no-promotion": 1,
+      "resource-provenance": 1,
+      "service-boundary": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3018,
+      "norm": 106.245,
+      "triads": 11
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "delegated-chain": "delegated-chain",
+      "exact-stop": "exact-stop",
+      "fail-closed": "fail-closed",
+      "manager-identity": "manager-identity",
+      "manager-image": "manager-image",
+      "no-promotion": "no-promotion",
+      "resource-provenance": "resource-provenance",
+      "service-boundary": "service-boundary"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "delegated-chain": {
+          "norm": 55.7853,
+          "self_coherence": 0.5811,
+          "triads": 3
+        },
+        "exact-stop": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-closed": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "manager-identity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "manager-image": {
+          "norm": 44.0454,
+          "self_coherence": 0.6882,
+          "triads": 2
+        },
+        "no-promotion": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "resource-provenance": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "service-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "delegated-chain": {
+          "norm": 55.7853,
+          "self_coherence": 0.5811,
+          "triads": 3
+        },
+        "exact-stop": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-closed": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "manager-identity": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "manager-image": {
+          "norm": 44.0454,
+          "self_coherence": 0.6882,
+          "triads": 2
+        },
+        "no-promotion": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "resource-provenance": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "service-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "delegated-chain": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "delegated-chain",
+        "exact_source_groups": [
+          "delegated-chain"
+        ]
+      },
+      "exact-stop": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "exact-stop",
+        "exact_source_groups": [
+          "exact-stop"
+        ]
+      },
+      "fail-closed": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "fail-closed",
+        "exact_source_groups": [
+          "fail-closed"
+        ]
+      },
+      "manager-identity": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "manager-identity",
+        "exact_source_groups": [
+          "manager-identity"
+        ]
+      },
+      "manager-image": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "manager-image",
+        "exact_source_groups": [
+          "manager-image"
+        ]
+      },
+      "no-promotion": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "no-promotion",
+        "exact_source_groups": [
+          "no-promotion"
+        ]
+      },
+      "resource-provenance": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "resource-provenance",
+        "exact_source_groups": [
+          "resource-provenance"
+        ]
+      },
+      "service-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "service-boundary",
+        "exact_source_groups": [
+          "service-boundary"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "delegated-chain": {
+        "delegated-chain": 1.0,
+        "exact-stop": -0.0415,
+        "fail-closed": -0.0011,
+        "manager-identity": 0.0392,
+        "manager-image": 0.0415,
+        "no-promotion": -0.0325,
+        "resource-provenance": -0.0134,
+        "service-boundary": 0.0224
+      },
+      "exact-stop": {
+        "delegated-chain": -0.0415,
+        "exact-stop": 1.0,
+        "fail-closed": 0.0195,
+        "manager-identity": 0.0078,
+        "manager-image": 0.0156,
+        "no-promotion": -0.0273,
+        "resource-provenance": 0.0293,
+        "service-boundary": -0.0332
+      },
+      "fail-closed": {
+        "delegated-chain": -0.0011,
+        "exact-stop": 0.0195,
+        "fail-closed": 1.0,
+        "manager-identity": 0.0195,
+        "manager-image": -0.0298,
+        "no-promotion": -0.0156,
+        "resource-provenance": -0.0059,
+        "service-boundary": 0.0293
+      },
+      "manager-identity": {
+        "delegated-chain": 0.0392,
+        "exact-stop": 0.0078,
+        "fail-closed": 0.0195,
+        "manager-identity": 1.0,
+        "manager-image": -0.0099,
+        "no-promotion": -0.0078,
+        "resource-provenance": -0.0137,
+        "service-boundary": -0.0098
+      },
+      "manager-image": {
+        "delegated-chain": 0.0415,
+        "exact-stop": 0.0156,
+        "fail-closed": -0.0298,
+        "manager-identity": -0.0099,
+        "manager-image": 1.0,
+        "no-promotion": 0.0667,
+        "resource-provenance": -0.0497,
+        "service-boundary": -0.0241
+      },
+      "no-promotion": {
+        "delegated-chain": -0.0325,
+        "exact-stop": -0.0273,
+        "fail-closed": -0.0156,
+        "manager-identity": -0.0078,
+        "manager-image": 0.0667,
+        "no-promotion": 1.0,
+        "resource-provenance": 0.041,
+        "service-boundary": -0.0215
+      },
+      "resource-provenance": {
+        "delegated-chain": -0.0134,
+        "exact-stop": 0.0293,
+        "fail-closed": -0.0059,
+        "manager-identity": -0.0137,
+        "manager-image": -0.0497,
+        "no-promotion": 0.041,
+        "resource-provenance": 1.0,
+        "service-boundary": 0.0234
+      },
+      "service-boundary": {
+        "delegated-chain": 0.0224,
+        "exact-stop": -0.0332,
+        "fail-closed": 0.0293,
+        "manager-identity": -0.0098,
+        "manager-image": -0.0241,
+        "no-promotion": -0.0215,
+        "resource-provenance": 0.0234,
+        "service-boundary": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [
+        {
+          "center": "authenticated user manager",
+          "group": "delegated-chain",
+          "kind": "owner_conflict",
+          "owners": [
+            "authenticated user manager",
+            "m24 request owner"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        }
+      ],
+      "group_centers": {
+        "delegated-chain": {
+          "gravity": 0.6667,
+          "owner": "authenticated user manager",
+          "owners": {
+            "authenticated user manager": 4,
+            "m24 request owner": 2
+          },
+          "support": 4,
+          "total": 6
+        },
+        "exact-stop": {
+          "gravity": 1.0,
+          "owner": "m24 stop operation",
+          "owners": {
+            "m24 stop operation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "fail-closed": {
+          "gravity": 1.0,
+          "owner": "fail-closed",
+          "owners": {
+            "fail-closed": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "manager-identity": {
+          "gravity": 1.0,
+          "owner": "manager-identity",
+          "owners": {
+            "manager-identity": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "manager-image": {
+          "gravity": 1.0,
+          "owner": "manager-image",
+          "owners": {
+            "manager-image": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "no-promotion": {
+          "gravity": 1.0,
+          "owner": "no-promotion",
+          "owners": {
+            "no-promotion": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "resource-provenance": {
+          "gravity": 1.0,
+          "owner": "resource-provenance",
+          "owners": {
+            "resource-provenance": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "service-boundary": {
+          "gravity": 1.0,
+          "owner": "transient m24-child service",
+          "owners": {
+            "transient m24-child service": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 1.0,
+          "owner": "no-promotion",
+          "owners": {
+            "no-promotion": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "evidence": {
+          "gravity": 1.0,
+          "owner": "resource-provenance",
+          "owners": {
+            "resource-provenance": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "execution": {
+          "gravity": 0.5,
+          "owner": "authenticated user manager",
+          "owners": {
+            "authenticated user manager": 4,
+            "m24 request owner": 2,
+            "transient m24-child service": 2
+          },
+          "support": 4,
+          "total": 8
+        },
+        "failure": {
+          "gravity": 1.0,
+          "owner": "fail-closed",
+          "owners": {
+            "fail-closed": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "mutation": {
+          "gravity": 1.0,
+          "owner": "m24 stop operation",
+          "owners": {
+            "m24 stop operation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "observation": {
+          "gravity": 0.5,
+          "owner": "manager-identity",
+          "owners": {
+            "manager-identity": 2,
+            "manager-image": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "manager-image",
+          "owners": {
+            "manager-image": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "delegated-chain"
+      }
+    ],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:260-264",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:13-15"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "no-promotion"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "evidence": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:250-258",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:24-27"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "resource-provenance"
+          ],
+          "scopes": [
+            "evidence"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "execution": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:216-225",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:266-287",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:13-15",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:24-26",
+            "machine-cardinality-baseline.v8.json:32-49"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "authenticated user manager",
+            "m24 request owner",
+            "transient m24-child service"
+          ],
+          "scopes": [
+            "execution"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        },
+        "failure": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:301-308",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:38-46"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "fail-closed"
+          ],
+          "scopes": [
+            "failure"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "mutation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:294-304",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:38-46"
+          ],
+          "layers": [
+            "test"
+          ],
+          "outputs": [],
+          "owners": [
+            "m24 stop operation"
+          ],
+          "scopes": [
+            "mutation"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:227-264",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:235-258",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:18-23",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:20-26"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "manager-identity",
+            "manager-image"
+          ],
+          "scopes": [
+            "observation"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:250-258",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v3.md:31-36"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "manager-image"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "evidence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "execution": {
+          "norm": 64.9307,
+          "self_coherence": 0.5073,
+          "triads": 4
+        },
+        "failure": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 44.8107,
+          "self_coherence": 0.7002,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "evidence": 0.041,
+          "execution": -0.0385,
+          "failure": -0.0156,
+          "mutation": -0.0273,
+          "observation": 0.053,
+          "proof": 0.0098
+        },
+        "evidence": {
+          "authority": 0.041,
+          "evidence": 1.0,
+          "execution": 0.0,
+          "failure": -0.0059,
+          "mutation": 0.0293,
+          "observation": -0.0474,
+          "proof": -0.0156
+        },
+        "execution": {
+          "authority": -0.0385,
+          "evidence": 0.0,
+          "execution": 1.0,
+          "failure": 0.0135,
+          "mutation": -0.052,
+          "observation": 0.0041,
+          "proof": 0.0558
+        },
+        "failure": {
+          "authority": -0.0156,
+          "evidence": -0.0059,
+          "execution": 0.0135,
+          "failure": 1.0,
+          "mutation": 0.0195,
+          "observation": -0.0139,
+          "proof": -0.002
+        },
+        "mutation": {
+          "authority": -0.0273,
+          "evidence": 0.0293,
+          "execution": -0.052,
+          "failure": 0.0195,
+          "mutation": 1.0,
+          "observation": 0.0056,
+          "proof": 0.0215
+        },
+        "observation": {
+          "authority": 0.053,
+          "evidence": -0.0474,
+          "execution": 0.0041,
+          "failure": -0.0139,
+          "mutation": 0.0056,
+          "observation": 1.0,
+          "proof": -0.0335
+        },
+        "proof": {
+          "authority": 0.0098,
+          "evidence": -0.0156,
+          "execution": 0.0558,
+          "failure": -0.002,
+          "mutation": 0.0215,
+          "observation": -0.0335,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "evidence": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "execution": {
+          "norm": 64.9307,
+          "self_coherence": 0.5073,
+          "triads": 4
+        },
+        "failure": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 44.8107,
+          "self_coherence": 0.7002,
+          "triads": 2
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "delegated-chain": 3,
+      "exact-stop": 1,
+      "fail-closed": 1,
+      "manager-identity": 1,
+      "manager-image": 2,
+      "no-promotion": 1,
+      "resource-provenance": 1,
+      "service-boundary": 1
+    },
+    "stable_groups": [
+      "delegated-chain",
+      "exact-stop",
+      "fail-closed",
+      "manager-identity",
+      "manager-image",
+      "no-promotion",
+      "resource-provenance",
+      "service-boundary"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 1,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 1,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V3.md:13-15"
+    },
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V3.md:24-26"
+    },
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V3.md:38-46"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "delegated-chain"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 4,
+    "repair_queue": [
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V3.md:13-15"
+      },
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V3.md:24-26"
+      },
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V3.md:38-46"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "delegated-chain"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate triad has weak composite-mode support."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\nRecheck or remove weak candidate triads:\n- c1: score=0.2459, nearest_source=t1, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c5: score=0.2624, nearest_source=t5, why=candidate triad does not resonate with the composite source memory above the stability threshold",
+  "trace_path": "/tmp/nanda-structural-gate/r8b-v8-delegated-launch.trace.json"
+}

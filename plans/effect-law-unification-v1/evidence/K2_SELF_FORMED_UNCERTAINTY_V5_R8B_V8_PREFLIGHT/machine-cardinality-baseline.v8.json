@@ -1,0 +1,219 @@
+{
+  "schema": "nando.k2-self-formed-r8b-v8-machine-cardinality-baseline.v1",
+  "status": "paper_baseline_only_no_execution_authority",
+  "captured_at": "2026-08-21T06:11:33+03:00",
+  "host": {
+    "hostname": "t480",
+    "architecture": "x86-64",
+    "boot_id": "684ad92e-d814-4b47-8da0-cb6e386c5aa4",
+    "uid": 1000,
+    "user": "ubu"
+  },
+  "source": {
+    "paper_worktree": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821",
+    "implementation_donor": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821",
+    "head": "0263e6ef18ec348379af73bd4793b975f4b74870",
+    "head_tree": "c0045af111bc51bb6305211ce306ec597c35af6f",
+    "donor_dirty_path_count": 23,
+    "donor_porcelain_v2_nul_sha256": "3e446baa026742a79c3fbb7033b1fe7b6efc69970163f0e5481f454ea877af14",
+    "donor_index_tree": "db37023aad3435ed8d196fd19f88bb44fdc4fd40",
+    "contract_sha256": "a80686ce2f3b604abf7fbd23e64c6b10123b842dae41614beb2e04ef360134a4",
+    "critique_v3_sha256": "399fbd48b37ea14a94d557178c51d40b5ad944fbcf18ad575129d2a0df91beaa"
+  },
+  "current_parent_cgroup": {
+    "path": "/user.slice/user-1000.slice/user@1000.service/app.slice/kitty-2078205-22.scope",
+    "type": "domain",
+    "controllers": [
+      "cpu",
+      "memory",
+      "pids"
+    ],
+    "subtree_control": [],
+    "resident_processes_observed": 19,
+    "memory_current_bytes_observed": 1511907328,
+    "memory_swap_current_bytes_observed": 427909120,
+    "memory_max": "max",
+    "memory_swap_max": "max",
+    "pids_max": 30275,
+    "observation_only": true,
+    "conclusion": "direct child-cgroup memory delegation is unavailable from this scope"
+  },
+  "user_manager": {
+    "bus_name": "org.freedesktop.systemd1",
+    "bus_unique_name": ":1.1",
+    "pid": 2200,
+    "ppid": 1,
+    "proc_start_ticks": 1786,
+    "uid": 1000,
+    "command_line": "/usr/lib/systemd/systemd --user",
+    "process_cgroup": "/user.slice/user-1000.slice/user@1000.service/init.scope",
+    "system_unit": "user@1000.service",
+    "system_unit_main_pid": 2200,
+    "system_unit_invocation_id": "bccc808692ea4543a1bc9b88fc58367d",
+    "system_unit_exec_start_monotonic_usec": 17866192,
+    "system_unit_control_group": "/user.slice/user-1000.slice/user@1000.service",
+    "system_unit_fragment": "/usr/lib/systemd/system/user@.service",
+    "system_unit_exec_start": "/usr/lib/systemd/systemd --user",
+    "manager_version": "259.5-0ubuntu3.4",
+    "unprivileged_proc_exe_observation": "EACCES",
+    "unprivileged_pidfd_open": "PASS",
+    "privileged_live_image_sha256": "3c4b78ddb68e29e23da0465dd273f1ee82f5b9439ebfcec9798b395c05a2c1e3",
+    "live_equals_pinned_disk_image": true
+  },
+  "tool_dependencies": [
+    {
+      "path": "/usr/bin/systemd-run",
+      "mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 97272,
+      "device": 66306,
+      "inode": 60169437,
+      "sha256": "03a68bafb0ebc0f5eff41cbdf3cbbdf126a3bb87e21140f9147bf78edce36d88"
+    },
+    {
+      "path": "/usr/bin/systemctl",
+      "mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 302112,
+      "device": 66306,
+      "inode": 60168037,
+      "sha256": "6394f5e8df92878184de9d4dfb7ac242471cb09daf89d23be4e81ae17e9c03b2"
+    },
+    {
+      "path": "/usr/lib/systemd/systemd",
+      "mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 141776,
+      "device": 66306,
+      "inode": 60183387,
+      "sha256": "3c4b78ddb68e29e23da0465dd273f1ee82f5b9439ebfcec9798b395c05a2c1e3"
+    },
+    {
+      "path": "/usr/bin/strace",
+      "mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 2370264,
+      "device": 66306,
+      "inode": 60181717,
+      "sha256": "f47342683309e807bca57d6d89b82f94a9b39aa614e9c28c2b67cefbc35eee58"
+    },
+    {
+      "path": "/usr/bin/bwrap",
+      "mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 80424,
+      "device": 66306,
+      "inode": 60162127,
+      "sha256": "0abea81db798ebf6b4742ac0664802d97521547a353c2a0dbdc21d76cbbfd2c0"
+    },
+    {
+      "path": "/usr/bin/prlimit",
+      "mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 27616,
+      "device": 66306,
+      "inode": 60189212,
+      "sha256": "00be18793391b9222a041277a088022cc58088690cb0e851383bd8ec73f0fefb"
+    },
+    {
+      "path": "/usr/lib/cargo/bin/sudo",
+      "mode": "4755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 1082656,
+      "device": 66306,
+      "inode": 60839298,
+      "sha256": "c11aad50d0ac8e7d8fd483a83884a2ad95a1a3f4fea399fa061f06f0b8ce65b6",
+      "version": "sudo-rs 0.2.13-0ubuntu1"
+    },
+    {
+      "path": "/usr/lib/cargo/bin/coreutils/sha256sum",
+      "mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "size_bytes": 11352352,
+      "device": 66306,
+      "inode": 60170463,
+      "sha256": "48893b0fb21436b54619db80486e83ef39dfccaf1aefe83dfa00c02d6146e8c0",
+      "version": "uutils coreutils 0.8.0"
+    }
+  ],
+  "privileged_observation": {
+    "sudo_noninteractive_exact_command_succeeded": true,
+    "host_policy_is_broader_than_r8b_requires": true,
+    "r8b_allowed_command_count": 1,
+    "r8b_probe_count": 2,
+    "sudo_frontend_processes": 2,
+    "sha256sum_descendant_processes": 2,
+    "evidence_authority": false,
+    "resource_receipt_binding_required": true
+  },
+  "cardinality": {
+    "representatives_min": 8,
+    "representatives_max": 1792,
+    "continuation_steps_at_max": 256,
+    "m03_m09_invocations_per_case_at_max": 1030,
+    "case_count": 16,
+    "suite_producers": 5,
+    "m24_delegated_child": 1,
+    "m24_child_direct_invocations": 151,
+    "m01_nested_m02": 1,
+    "m10_descendants_at_max": 16480,
+    "suite_owned_nando_children": 30,
+    "maximum_nando_invocations": 16668,
+    "maximum_ledger_events": 33336
+  },
+  "ledger_budget": {
+    "maximum_invocation_pair_bytes": 7168,
+    "maximum_pair_bytes_total": 119476224,
+    "complete_ledger_limit_bytes": 134217728,
+    "headroom_before_header_and_seal_bytes": 14741504,
+    "general_protocol_object_limit_bytes": 1048576,
+    "header_and_seal_fit_within_headroom": true,
+    "whole_ledger_in_memory_forbidden": true
+  },
+  "packet_census": {
+    "evidence_kind_count": 19,
+    "evidence_object_count": 19,
+    "c08_downstream_invocation_contract_count": 1,
+    "resource_receipt_count": 1,
+    "process_ledger_count": 1,
+    "packet_manifest_count": 1,
+    "total_files": 23,
+    "process_ledger_is_observed_provenance": true,
+    "c08_is_expected_c09_c20_authority": true
+  },
+  "dependency_delta": {
+    "libc_direct_edge_already_present_in_dirty_donor": true,
+    "new_direct_dependency": "rustix 1.1.4",
+    "new_resolved_packages": [
+      "rustix 1.1.4",
+      "linux-raw-sys 0.12.1"
+    ]
+  },
+  "drift_policy": {
+    "static_tool_or_contract_drift": "VETO",
+    "manager_restart_or_reexec_before_preflight": "RECAPTURE_AND_RERUN_ALL_V8_GATES",
+    "manager_change_during_route": "VETO",
+    "dynamic_parent_cgroup_usage": "OBSERVATION_ONLY",
+    "implementation_donor_status_or_byte_drift": "BLOCKED_BEFORE_CODE"
+  },
+  "forbidden_until_separate_authority": [
+    "implementation edits",
+    "ignored R8B suites",
+    "M24-M26",
+    "P09",
+    "private-truth inspection",
+    "transient capability execution",
+    "deployment",
+    "dashboard mutation",
+    "production mutation",
+    "push"
+  ]
+}

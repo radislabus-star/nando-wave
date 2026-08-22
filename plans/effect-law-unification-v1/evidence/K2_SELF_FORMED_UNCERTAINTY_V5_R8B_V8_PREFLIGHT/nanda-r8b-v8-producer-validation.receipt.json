@@ -1,0 +1,999 @@
+{
+  "verdict": "PASS",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "r8b-v8-producer-validation",
+  "domain": "software",
+  "complexity_score": 54,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c6",
+    "c7",
+    "c8",
+    "c9",
+    "c10",
+    "c11"
+  ],
+  "weak_triads": [],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.1,
+      "c10": 0.1,
+      "c11": 0.1,
+      "c2": 0.1,
+      "c3": 0.1,
+      "c4": 0.1,
+      "c6": 0.1,
+      "c7": 0.1,
+      "c8": 0.1,
+      "c9": 0.1
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 20,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.3073,
+      "c10": 0.3444,
+      "c11": 0.3396,
+      "c2": 0.3432,
+      "c3": 0.3013,
+      "c4": 0.3288,
+      "c6": 0.3205,
+      "c7": 0.3384,
+      "c8": 0.3264,
+      "c9": 0.3169
+    },
+    "source_self_score": 0.3267,
+    "stable": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "weak": [],
+    "weak_details": {}
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "authority-success": "authority-success",
+      "canonical-channel": "canonical-channel",
+      "channel-separation": "channel-separation",
+      "concrete-validation": "concrete-validation",
+      "fail-before-spawn": "fail-before-spawn",
+      "m01-nested-partition": "m01-nested-partition",
+      "no-generic-root": "no-generic-root",
+      "pre-mutation": "pre-mutation",
+      "s02-direct-partition": "s02-direct-partition",
+      "tool-boundary": "tool-boundary"
+    },
+    "scores": {
+      "authority-success": 1.0,
+      "canonical-channel": 1.0,
+      "channel-separation": 1.0,
+      "concrete-validation": 1.0,
+      "fail-before-spawn": 1.0,
+      "m01-nested-partition": 1.0,
+      "no-generic-root": 1.0,
+      "pre-mutation": 1.0,
+      "s02-direct-partition": 1.0,
+      "tool-boundary": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "authority-success": 1,
+      "canonical-channel": 1,
+      "channel-separation": 1,
+      "concrete-validation": 1,
+      "fail-before-spawn": 1,
+      "m01-nested-partition": 1,
+      "no-generic-root": 1,
+      "pre-mutation": 1,
+      "s02-direct-partition": 1,
+      "tool-boundary": 1
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3267,
+      "norm": 104.5371,
+      "triads": 10
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "authority-success": "authority-success",
+      "canonical-channel": "canonical-channel",
+      "channel-separation": "channel-separation",
+      "concrete-validation": "concrete-validation",
+      "fail-before-spawn": "fail-before-spawn",
+      "m01-nested-partition": "m01-nested-partition",
+      "no-generic-root": "no-generic-root",
+      "pre-mutation": "pre-mutation",
+      "s02-direct-partition": "s02-direct-partition",
+      "tool-boundary": "tool-boundary"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "authority-success": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "canonical-channel": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "channel-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "concrete-validation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-before-spawn": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "m01-nested-partition": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "no-generic-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "pre-mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "s02-direct-partition": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "tool-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "source": {
+        "authority-success": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "canonical-channel": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "channel-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "concrete-validation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-before-spawn": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "m01-nested-partition": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "no-generic-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "pre-mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "s02-direct-partition": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "tool-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "group_links": {
+      "authority-success": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "authority-success",
+        "exact_source_groups": [
+          "authority-success"
+        ]
+      },
+      "canonical-channel": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "canonical-channel",
+        "exact_source_groups": [
+          "canonical-channel"
+        ]
+      },
+      "channel-separation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "channel-separation",
+        "exact_source_groups": [
+          "channel-separation"
+        ]
+      },
+      "concrete-validation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "concrete-validation",
+        "exact_source_groups": [
+          "concrete-validation"
+        ]
+      },
+      "fail-before-spawn": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "fail-before-spawn",
+        "exact_source_groups": [
+          "fail-before-spawn"
+        ]
+      },
+      "m01-nested-partition": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "m01-nested-partition",
+        "exact_source_groups": [
+          "m01-nested-partition"
+        ]
+      },
+      "no-generic-root": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "no-generic-root",
+        "exact_source_groups": [
+          "no-generic-root"
+        ]
+      },
+      "pre-mutation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "pre-mutation",
+        "exact_source_groups": [
+          "pre-mutation"
+        ]
+      },
+      "s02-direct-partition": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "s02-direct-partition",
+        "exact_source_groups": [
+          "s02-direct-partition"
+        ]
+      },
+      "tool-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "tool-boundary",
+        "exact_source_groups": [
+          "tool-boundary"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "authority-success": {
+        "authority-success": 1.0,
+        "canonical-channel": -0.0078,
+        "channel-separation": 0.0,
+        "concrete-validation": 0.0254,
+        "fail-before-spawn": 0.0605,
+        "m01-nested-partition": -0.0176,
+        "no-generic-root": -0.0254,
+        "pre-mutation": 0.0488,
+        "s02-direct-partition": 0.0176,
+        "tool-boundary": -0.0273
+      },
+      "canonical-channel": {
+        "authority-success": -0.0078,
+        "canonical-channel": 1.0,
+        "channel-separation": 0.0469,
+        "concrete-validation": 0.0645,
+        "fail-before-spawn": 0.0332,
+        "m01-nested-partition": -0.041,
+        "no-generic-root": -0.0176,
+        "pre-mutation": -0.0293,
+        "s02-direct-partition": -0.0332,
+        "tool-boundary": 0.0313
+      },
+      "channel-separation": {
+        "authority-success": 0.0,
+        "canonical-channel": 0.0469,
+        "channel-separation": 1.0,
+        "concrete-validation": 0.0215,
+        "fail-before-spawn": -0.0488,
+        "m01-nested-partition": -0.002,
+        "no-generic-root": 0.0488,
+        "pre-mutation": -0.0449,
+        "s02-direct-partition": 0.0605,
+        "tool-boundary": 0.0234
+      },
+      "concrete-validation": {
+        "authority-success": 0.0254,
+        "canonical-channel": 0.0645,
+        "channel-separation": 0.0215,
+        "concrete-validation": 1.0,
+        "fail-before-spawn": 0.0273,
+        "m01-nested-partition": -0.0039,
+        "no-generic-root": -0.0039,
+        "pre-mutation": -0.0156,
+        "s02-direct-partition": 0.0156,
+        "tool-boundary": -0.0098
+      },
+      "fail-before-spawn": {
+        "authority-success": 0.0605,
+        "canonical-channel": 0.0332,
+        "channel-separation": -0.0488,
+        "concrete-validation": 0.0273,
+        "fail-before-spawn": 1.0,
+        "m01-nested-partition": -0.0039,
+        "no-generic-root": 0.0078,
+        "pre-mutation": 0.0195,
+        "s02-direct-partition": -0.0156,
+        "tool-boundary": 0.0293
+      },
+      "m01-nested-partition": {
+        "authority-success": -0.0176,
+        "canonical-channel": -0.041,
+        "channel-separation": -0.002,
+        "concrete-validation": -0.0039,
+        "fail-before-spawn": -0.0039,
+        "m01-nested-partition": 1.0,
+        "no-generic-root": -0.0117,
+        "pre-mutation": 0.0391,
+        "s02-direct-partition": 0.0313,
+        "tool-boundary": 0.0449
+      },
+      "no-generic-root": {
+        "authority-success": -0.0254,
+        "canonical-channel": -0.0176,
+        "channel-separation": 0.0488,
+        "concrete-validation": -0.0039,
+        "fail-before-spawn": 0.0078,
+        "m01-nested-partition": -0.0117,
+        "no-generic-root": 1.0,
+        "pre-mutation": 0.0078,
+        "s02-direct-partition": -0.0195,
+        "tool-boundary": -0.002
+      },
+      "pre-mutation": {
+        "authority-success": 0.0488,
+        "canonical-channel": -0.0293,
+        "channel-separation": -0.0449,
+        "concrete-validation": -0.0156,
+        "fail-before-spawn": 0.0195,
+        "m01-nested-partition": 0.0391,
+        "no-generic-root": 0.0078,
+        "pre-mutation": 1.0,
+        "s02-direct-partition": -0.0234,
+        "tool-boundary": 0.002
+      },
+      "s02-direct-partition": {
+        "authority-success": 0.0176,
+        "canonical-channel": -0.0332,
+        "channel-separation": 0.0605,
+        "concrete-validation": 0.0156,
+        "fail-before-spawn": -0.0156,
+        "m01-nested-partition": 0.0313,
+        "no-generic-root": -0.0195,
+        "pre-mutation": -0.0234,
+        "s02-direct-partition": 1.0,
+        "tool-boundary": 0.0332
+      },
+      "tool-boundary": {
+        "authority-success": -0.0273,
+        "canonical-channel": 0.0313,
+        "channel-separation": 0.0234,
+        "concrete-validation": -0.0098,
+        "fail-before-spawn": 0.0293,
+        "m01-nested-partition": 0.0449,
+        "no-generic-root": -0.002,
+        "pre-mutation": 0.002,
+        "s02-direct-partition": 0.0332,
+        "tool-boundary": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": []
+    },
+    "owner_gravity": {
+      "conflicts": [],
+      "group_centers": {
+        "authority-success": {
+          "gravity": 1.0,
+          "owner": "authority-success",
+          "owners": {
+            "authority-success": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "canonical-channel": {
+          "gravity": 1.0,
+          "owner": "producer",
+          "owners": {
+            "producer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "channel-separation": {
+          "gravity": 1.0,
+          "owner": "channel-separation",
+          "owners": {
+            "channel-separation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "concrete-validation": {
+          "gravity": 1.0,
+          "owner": "role-specific validator",
+          "owners": {
+            "role-specific validator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "fail-before-spawn": {
+          "gravity": 1.0,
+          "owner": "fail-before-spawn",
+          "owners": {
+            "fail-before-spawn": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "m01-nested-partition": {
+          "gravity": 1.0,
+          "owner": "each dispatching m01",
+          "owners": {
+            "each dispatching m01": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "no-generic-root": {
+          "gravity": 1.0,
+          "owner": "no-generic-root",
+          "owners": {
+            "no-generic-root": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "pre-mutation": {
+          "gravity": 1.0,
+          "owner": "producer request validation",
+          "owners": {
+            "producer request validation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "s02-direct-partition": {
+          "gravity": 1.0,
+          "owner": "restart suite producer process",
+          "owners": {
+            "restart suite producer process": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "tool-boundary": {
+          "gravity": 1.0,
+          "owner": "tool-boundary",
+          "owners": {
+            "tool-boundary": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.5,
+          "owner": "authority-success",
+          "owners": {
+            "authority-success": 2,
+            "tool-boundary": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "execution": {
+          "gravity": 0.5,
+          "owner": "each dispatching m01",
+          "owners": {
+            "each dispatching m01": 2,
+            "restart suite producer process": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "failure": {
+          "gravity": 0.5,
+          "owner": "fail-before-spawn",
+          "owners": {
+            "fail-before-spawn": 2,
+            "no-generic-root": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "mutation": {
+          "gravity": 1.0,
+          "owner": "producer",
+          "owners": {
+            "producer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "observation": {
+          "gravity": 1.0,
+          "owner": "channel-separation",
+          "owners": {
+            "channel-separation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 0.5,
+          "owner": "producer request validation",
+          "owners": {
+            "producer request validation": 2,
+            "role-specific validator": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      }
+    },
+    "repair_queue": [],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:367-377",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:376-379",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:451-454"
+          ],
+          "layers": [
+            "adapter",
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "authority-success",
+            "tool-boundary"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "execution": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:493-494",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:493-495",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:495-497"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "each dispatching m01",
+            "restart suite producer process"
+          ],
+          "scopes": [
+            "execution"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "failure": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:456-459",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:479-480",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:479-481"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "fail-before-spawn",
+            "no-generic-root"
+          ],
+          "scopes": [
+            "failure"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "mutation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:499-510",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:501-504"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "producer"
+          ],
+          "scopes": [
+            "mutation"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:499-510",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:506-510"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "channel-separation"
+          ],
+          "scopes": [
+            "observation"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:397-407",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:397-409",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:482-485",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:482-486"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "producer request validation",
+            "role-specific validator"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 44.6318,
+          "self_coherence": 0.6974,
+          "triads": 2
+        },
+        "execution": {
+          "norm": 45.9565,
+          "self_coherence": 0.7181,
+          "triads": 2
+        },
+        "failure": {
+          "norm": 45.4313,
+          "self_coherence": 0.7099,
+          "triads": 2
+        },
+        "mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 44.8999,
+          "self_coherence": 0.7016,
+          "triads": 2
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "execution": 0.039,
+          "failure": 0.0316,
+          "mutation": 0.0168,
+          "observation": 0.0168,
+          "proof": 0.0339
+        },
+        "execution": {
+          "authority": 0.039,
+          "execution": 1.0,
+          "failure": -0.0249,
+          "mutation": -0.0517,
+          "observation": 0.0408,
+          "proof": 0.0136
+        },
+        "failure": {
+          "authority": 0.0316,
+          "execution": -0.0249,
+          "failure": 1.0,
+          "mutation": 0.011,
+          "observation": 0.0,
+          "proof": 0.0255
+        },
+        "mutation": {
+          "authority": 0.0168,
+          "execution": -0.0517,
+          "failure": 0.011,
+          "mutation": 1.0,
+          "observation": 0.0469,
+          "proof": 0.0251
+        },
+        "observation": {
+          "authority": 0.0168,
+          "execution": 0.0408,
+          "failure": 0.0,
+          "mutation": 0.0469,
+          "observation": 1.0,
+          "proof": -0.0167
+        },
+        "proof": {
+          "authority": 0.0339,
+          "execution": 0.0136,
+          "failure": 0.0255,
+          "mutation": 0.0251,
+          "observation": -0.0167,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 44.6318,
+          "self_coherence": 0.6974,
+          "triads": 2
+        },
+        "execution": {
+          "norm": 45.9565,
+          "self_coherence": 0.7181,
+          "triads": 2
+        },
+        "failure": {
+          "norm": 45.4313,
+          "self_coherence": 0.7099,
+          "triads": 2
+        },
+        "mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 44.8999,
+          "self_coherence": 0.7016,
+          "triads": 2
+        }
+      }
+    },
+    "source_group_sizes": {
+      "authority-success": 1,
+      "canonical-channel": 1,
+      "channel-separation": 1,
+      "concrete-validation": 1,
+      "fail-before-spawn": 1,
+      "m01-nested-partition": 1,
+      "no-generic-root": 1,
+      "pre-mutation": 1,
+      "s02-direct-partition": 1,
+      "tool-boundary": 1
+    },
+    "stable_groups": [
+      "authority-success",
+      "canonical-channel",
+      "channel-separation",
+      "concrete-validation",
+      "fail-before-spawn",
+      "m01-nested-partition",
+      "no-generic-root",
+      "pre-mutation",
+      "s02-direct-partition",
+      "tool-boundary"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 0,
+      "duplicate_decision_risk": 0,
+      "field_tension": 0,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 0,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 0
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [],
+  "agent_decision": {
+    "action": "SAFE_TO_EDIT",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Proceed only within the checked route boundary.",
+    "repair_count": 0,
+    "repair_queue": [],
+    "safe_to_edit": true
+  },
+  "explanation": [
+    "Candidate structure is coherent with source triads.",
+    "Structural coherence only: trusted proof was not established and authority is false."
+  ],
+  "repair_prompt": "No structural repair needed. Do not use this PASS for authority; rerun with an externally pinned trusted proof manifest.",
+  "trace_path": "/tmp/nanda-structural-gate/r8b-v8-producer-validation.trace.json"
+}

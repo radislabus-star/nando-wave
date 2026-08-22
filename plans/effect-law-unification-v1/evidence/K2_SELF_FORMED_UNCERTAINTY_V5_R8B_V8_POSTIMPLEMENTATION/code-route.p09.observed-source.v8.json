@@ -1,0 +1,371 @@
+{
+  "schema": "nanda.code-route-gate.v2",
+  "scope": "observed_source",
+  "source_root": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821",
+  "nodes": [
+    {
+      "id": "p08_published_bytes",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent.rs",
+        "line": 1541,
+        "contains": "struct P08PublishedV3 {"
+      }
+    },
+    {
+      "id": "separate_p09_authority",
+      "role": "authorization_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 591,
+        "contains": "pub(super) struct P09AuthorityV3 {"
+      }
+    },
+    {
+      "id": "p09_diagnostic_request",
+      "role": "interface",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 719,
+        "contains": "struct P09DiagnosticRequestV3 {"
+      }
+    },
+    {
+      "id": "p09_diagnostic_permission",
+      "role": "mutation_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 811,
+        "contains": "struct AcceptedP09DiagnosticV3 {"
+      }
+    },
+    {
+      "id": "p09_process_adapter",
+      "role": "producer",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 807,
+        "contains": "struct P09ProcessAdapterV3 {"
+      }
+    },
+    {
+      "id": "p09_diagnostic_artifact",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 764,
+        "contains": "diagnostic_relative_path: String,"
+      }
+    },
+    {
+      "id": "p09_typed_receipt",
+      "role": "evidence_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 755,
+        "contains": "struct P09DiagnosticReceiptV3 {"
+      }
+    },
+    {
+      "id": "p09_receipt_validator",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 773,
+        "contains": "impl P09DiagnosticReceiptV3 {"
+      }
+    },
+    {
+      "id": "p09_nonmutation_validator",
+      "role": "proof_owner",
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 1240,
+        "contains": "fn r8b_v8_p09_requires_separate_authority_and_preserves_p08_bytes() {"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "p09e01",
+      "from": "p08_published_bytes",
+      "relation": "passes_to",
+      "to": "separate_p09_authority",
+      "events": [
+        "p09_authority_binding"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 637,
+        "contains": "receipt.p08_transition_root_sha256 != p08.transition.receipt_root_sha256"
+      }
+    },
+    {
+      "id": "p09e02",
+      "from": "separate_p09_authority",
+      "relation": "authorizes",
+      "to": "p09_diagnostic_permission",
+      "events": [
+        "p09_request_authorization"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 641,
+        "contains": "receipt.auditor_executable_sha256 != adapter.binary.sha256"
+      }
+    },
+    {
+      "id": "p09e02a",
+      "from": "separate_p09_authority",
+      "relation": "calls",
+      "to": "p09_diagnostic_request",
+      "events": [
+        "p09_process_execution"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 832,
+        "contains": "let request = P09DiagnosticRequestV3::seal(authority)?;"
+      }
+    },
+    {
+      "id": "p09e03",
+      "from": "p09_diagnostic_request",
+      "relation": "delegates",
+      "to": "p09_process_adapter",
+      "events": [
+        "p09_process_execution"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 899,
+        "contains": "let diagnostic = adapter.run(&self, &authority)?;"
+      }
+    },
+    {
+      "id": "p09e04",
+      "from": "p09_process_adapter",
+      "relation": "produces_for",
+      "to": "p09_diagnostic_artifact",
+      "events": [
+        "p09_artifact_output"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 858,
+        "contains": "Path::new(&request.diagnostics_directory).join(&receipt.diagnostic_relative_path);"
+      }
+    },
+    {
+      "id": "p09e05",
+      "from": "p09_process_adapter",
+      "relation": "produces_for",
+      "to": "p09_typed_receipt",
+      "events": [
+        "p09_receipt_output"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 854,
+        "contains": "let receipt: P09DiagnosticReceiptV3 ="
+      }
+    },
+    {
+      "id": "p09e06",
+      "from": "p09_diagnostic_artifact",
+      "relation": "proves",
+      "to": "p09_receipt_validator",
+      "events": [
+        "p09_artifact_proof"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 876,
+        "contains": "receipt.diagnostic_content_sha256 != composition_sha256_bytes_v1(&bytes)"
+      }
+    },
+    {
+      "id": "p09e07",
+      "from": "p09_typed_receipt",
+      "relation": "proves",
+      "to": "p09_receipt_validator",
+      "events": [
+        "p09_receipt_proof"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 629,
+        "contains": "receipt.validate()?;"
+      }
+    },
+    {
+      "id": "p09e08",
+      "from": "p08_published_bytes",
+      "relation": "proves",
+      "to": "p09_nonmutation_validator",
+      "events": [
+        "p09_nonmutation_proof"
+      ],
+      "evidence": {
+        "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+        "line": 606,
+        "contains": "p08.revalidate_publication()?;"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "p09-authority-binding",
+      "event": "p09_authority_binding",
+      "kind": "authority",
+      "entry": "p08_published_bytes",
+      "terminal": "separate_p09_authority",
+      "required_roles": [
+        "evidence_owner",
+        "authorization_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "p08_published_bytes",
+          "to": "separate_p09_authority",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "p09-request-authorization",
+      "event": "p09_request_authorization",
+      "kind": "authority",
+      "entry": "separate_p09_authority",
+      "terminal": "p09_diagnostic_permission",
+      "required_roles": [
+        "authorization_owner",
+        "mutation_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "separate_p09_authority",
+          "to": "p09_diagnostic_permission",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "p09-process-execution",
+      "event": "p09_process_execution",
+      "kind": "execution",
+      "entry": "separate_p09_authority",
+      "terminal": "p09_process_adapter",
+      "required_roles": [
+        "authorization_owner",
+        "interface",
+        "producer"
+      ],
+      "path_cardinality": [
+        {
+          "from": "separate_p09_authority",
+          "to": "p09_process_adapter",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "p09-artifact-output",
+      "event": "p09_artifact_output",
+      "kind": "authority",
+      "entry": "p09_process_adapter",
+      "terminal": "p09_diagnostic_artifact",
+      "required_roles": [
+        "producer",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "p09_process_adapter",
+          "to": "p09_diagnostic_artifact",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "p09-receipt-output",
+      "event": "p09_receipt_output",
+      "kind": "authority",
+      "entry": "p09_process_adapter",
+      "terminal": "p09_typed_receipt",
+      "required_roles": [
+        "producer",
+        "evidence_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "p09_process_adapter",
+          "to": "p09_typed_receipt",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "p09-artifact-proof",
+      "event": "p09_artifact_proof",
+      "kind": "proof",
+      "entry": "p09_diagnostic_artifact",
+      "terminal": "p09_receipt_validator",
+      "required_roles": [
+        "evidence_owner",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "p09_diagnostic_artifact",
+          "to": "p09_receipt_validator",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "p09-receipt-proof",
+      "event": "p09_receipt_proof",
+      "kind": "proof",
+      "entry": "p09_typed_receipt",
+      "terminal": "p09_receipt_validator",
+      "required_roles": [
+        "evidence_owner",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "p09_typed_receipt",
+          "to": "p09_receipt_validator",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "p09-nonmutation-proof",
+      "event": "p09_nonmutation_proof",
+      "kind": "proof",
+      "entry": "p08_published_bytes",
+      "terminal": "p09_nonmutation_validator",
+      "required_roles": [
+        "evidence_owner",
+        "proof_owner"
+      ],
+      "path_cardinality": [
+        {
+          "from": "p08_published_bytes",
+          "to": "p09_nonmutation_validator",
+          "min": 1,
+          "max": 1
+        }
+      ]
+    }
+  ]
+}

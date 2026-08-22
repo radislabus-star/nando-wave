@@ -1,0 +1,1133 @@
+{
+  "verdict": "VETO",
+  "engine": "nanda-check sparse-triad-v6.2-rust",
+  "core_version": "sparse-triad-v6.2-quality-gates",
+  "wave_dim": 1024,
+  "task_id": "r8b-v8-producer-validation",
+  "domain": "software",
+  "complexity_score": 72,
+  "mandatory_gate": true,
+  "limits": [],
+  "stable_triads": [
+    "c2",
+    "c3",
+    "c4",
+    "c6",
+    "c7",
+    "c8",
+    "c9",
+    "c10",
+    "c11"
+  ],
+  "weak_triads": [
+    "c1",
+    "c5"
+  ],
+  "conflicts": [],
+  "evidence_gaps": [],
+  "canonicalization": {
+    "enabled": false,
+    "applied_count": 0,
+    "conflict_count": 0,
+    "watch_count": 0,
+    "applied": [],
+    "conflicts": [],
+    "warnings": []
+  },
+  "baseline_summary": {
+    "exact_matches": [
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "reversed_hits": [],
+    "token_overlap": {
+      "c1": 0.0938,
+      "c10": 0.0938,
+      "c11": 0.0938,
+      "c2": 0.0938,
+      "c3": 0.0938,
+      "c4": 0.0938,
+      "c5": 0.0938,
+      "c6": 0.0938,
+      "c7": 0.0938,
+      "c8": 0.0938,
+      "c9": 0.0938
+    }
+  },
+  "trusted_proof": {
+    "mode": "STRUCTURAL_ONLY",
+    "verdict": "NOT_REQUESTED",
+    "authority_ready": false,
+    "reason_codes": [
+      "trusted_proof_not_requested"
+    ],
+    "manifest_file_sha256": "",
+    "trusted_manifest_root_sha256": "",
+    "source_triads_sha256": "",
+    "candidate_triads_sha256": "",
+    "candidate_answer_sha256": "",
+    "source_provenance_root_sha256": "",
+    "candidate_extraction_root_sha256": "",
+    "source_producer_root_sha256": "",
+    "candidate_producer_root_sha256": ""
+  },
+  "authority_ready": false,
+  "quality_contract": {
+    "schema": "",
+    "require_evidence_bindings": false,
+    "require_derived_claims": false
+  },
+  "evidence_binding": {
+    "schema": "nanda.evidence-binding.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "complete": false,
+    "checked": 0,
+    "total": 22,
+    "missing_triads": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "c1",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "issues": []
+  },
+  "derived_claims": {
+    "schema": "nanda.derived-claims.v1",
+    "required": false,
+    "verdict": "NOT_REQUESTED",
+    "total": 0,
+    "passed": 0,
+    "deferred": 0,
+    "coverage_complete": true,
+    "reason_codes": [],
+    "results": []
+  },
+  "quality_ready": false,
+  "wave_summary": {
+    "scores": {
+      "c1": 0.2754,
+      "c10": 0.3243,
+      "c11": 0.3065,
+      "c2": 0.3168,
+      "c3": 0.3157,
+      "c4": 0.2898,
+      "c5": 0.2472,
+      "c6": 0.3496,
+      "c7": 0.3323,
+      "c8": 0.3536,
+      "c9": 0.2858
+    },
+    "source_self_score": 0.3088,
+    "stable": [
+      "c2",
+      "c3",
+      "c4",
+      "c6",
+      "c7",
+      "c8",
+      "c9",
+      "c10",
+      "c11"
+    ],
+    "weak": [
+      "c1",
+      "c5"
+    ],
+    "weak_details": {
+      "c1": {
+        "nearest_source": "t1",
+        "nearest_source_score": 1.0,
+        "score": 0.2754,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      },
+      "c5": {
+        "nearest_source": "t5",
+        "nearest_source_score": 1.0,
+        "score": 0.2472,
+        "suggested_fix": "Check subject/object roles, relation name, group, route, and evidence for this candidate triad.",
+        "why_weak": "candidate triad does not resonate with the composite source memory above the stability threshold"
+      }
+    }
+  },
+  "route_coherence": {
+    "best_source_group": {
+      "canonical-channel": "canonical-channel",
+      "channel-separation": "channel-separation",
+      "concrete-validation": "concrete-validation",
+      "fail-before-spawn": "fail-before-spawn",
+      "no-generic-root": "no-generic-root",
+      "outcome-policy": "outcome-policy",
+      "pre-mutation": "pre-mutation",
+      "tool-boundary": "tool-boundary",
+      "writer-partition": "writer-partition"
+    },
+    "scores": {
+      "canonical-channel": 1.0,
+      "channel-separation": 1.0,
+      "concrete-validation": 1.0,
+      "fail-before-spawn": 1.0,
+      "no-generic-root": 1.0,
+      "outcome-policy": 1.0,
+      "pre-mutation": 1.0,
+      "tool-boundary": 1.0,
+      "writer-partition": 1.0
+    },
+    "weak": []
+  },
+  "structural_map": {
+    "candidate_group_sizes": {
+      "canonical-channel": 1,
+      "channel-separation": 1,
+      "concrete-validation": 1,
+      "fail-before-spawn": 1,
+      "no-generic-root": 1,
+      "outcome-policy": 2,
+      "pre-mutation": 1,
+      "tool-boundary": 1,
+      "writer-partition": 2
+    },
+    "candidate_superposition": {
+      "avg_triad_coherence": 0.3088,
+      "norm": 108.7014,
+      "triads": 11
+    },
+    "core_version": "sparse-triad-v6.2-quality-gates",
+    "dominant_source_group": {
+      "canonical-channel": "canonical-channel",
+      "channel-separation": "channel-separation",
+      "concrete-validation": "concrete-validation",
+      "fail-before-spawn": "fail-before-spawn",
+      "no-generic-root": "no-generic-root",
+      "outcome-policy": "outcome-policy",
+      "pre-mutation": "pre-mutation",
+      "tool-boundary": "tool-boundary",
+      "writer-partition": "writer-partition"
+    },
+    "foreign_pull": [],
+    "group_centroids": {
+      "candidate": {
+        "canonical-channel": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "channel-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "concrete-validation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-before-spawn": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "no-generic-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "outcome-policy": {
+          "norm": 44.1814,
+          "self_coherence": 0.6903,
+          "triads": 2
+        },
+        "pre-mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "tool-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "writer-partition": {
+          "norm": 45.0777,
+          "self_coherence": 0.7043,
+          "triads": 2
+        }
+      },
+      "source": {
+        "canonical-channel": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "channel-separation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "concrete-validation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "fail-before-spawn": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "no-generic-root": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "outcome-policy": {
+          "norm": 44.1814,
+          "self_coherence": 0.6903,
+          "triads": 2
+        },
+        "pre-mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "tool-boundary": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "writer-partition": {
+          "norm": 45.0777,
+          "self_coherence": 0.7043,
+          "triads": 2
+        }
+      }
+    },
+    "group_links": {
+      "canonical-channel": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "canonical-channel",
+        "exact_source_groups": [
+          "canonical-channel"
+        ]
+      },
+      "channel-separation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "channel-separation",
+        "exact_source_groups": [
+          "channel-separation"
+        ]
+      },
+      "concrete-validation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "concrete-validation",
+        "exact_source_groups": [
+          "concrete-validation"
+        ]
+      },
+      "fail-before-spawn": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "fail-before-spawn",
+        "exact_source_groups": [
+          "fail-before-spawn"
+        ]
+      },
+      "no-generic-root": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "no-generic-root",
+        "exact_source_groups": [
+          "no-generic-root"
+        ]
+      },
+      "outcome-policy": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "outcome-policy",
+        "exact_source_groups": [
+          "outcome-policy"
+        ]
+      },
+      "pre-mutation": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "pre-mutation",
+        "exact_source_groups": [
+          "pre-mutation"
+        ]
+      },
+      "tool-boundary": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "tool-boundary",
+        "exact_source_groups": [
+          "tool-boundary"
+        ]
+      },
+      "writer-partition": {
+        "dominant_score": 1.0,
+        "dominant_source_group": "writer-partition",
+        "exact_source_groups": [
+          "writer-partition"
+        ]
+      }
+    },
+    "interference_matrix": {
+      "canonical-channel": {
+        "canonical-channel": 1.0,
+        "channel-separation": 0.0469,
+        "concrete-validation": 0.0645,
+        "fail-before-spawn": 0.0332,
+        "no-generic-root": -0.0176,
+        "outcome-policy": -0.0113,
+        "pre-mutation": 0.0254,
+        "tool-boundary": 0.0313,
+        "writer-partition": 0.0139
+      },
+      "channel-separation": {
+        "canonical-channel": 0.0469,
+        "channel-separation": 1.0,
+        "concrete-validation": 0.0215,
+        "fail-before-spawn": -0.0488,
+        "no-generic-root": 0.0488,
+        "outcome-policy": 0.0057,
+        "pre-mutation": 0.002,
+        "tool-boundary": 0.0234,
+        "writer-partition": 0.0194
+      },
+      "concrete-validation": {
+        "canonical-channel": 0.0645,
+        "channel-separation": 0.0215,
+        "concrete-validation": 1.0,
+        "fail-before-spawn": 0.0273,
+        "no-generic-root": -0.0039,
+        "outcome-policy": -0.0226,
+        "pre-mutation": -0.0313,
+        "tool-boundary": -0.0098,
+        "writer-partition": 0.0277
+      },
+      "fail-before-spawn": {
+        "canonical-channel": 0.0332,
+        "channel-separation": -0.0488,
+        "concrete-validation": 0.0273,
+        "fail-before-spawn": 1.0,
+        "no-generic-root": 0.0078,
+        "outcome-policy": 0.0085,
+        "pre-mutation": -0.0039,
+        "tool-boundary": 0.0293,
+        "writer-partition": -0.0111
+      },
+      "no-generic-root": {
+        "canonical-channel": -0.0176,
+        "channel-separation": 0.0488,
+        "concrete-validation": -0.0039,
+        "fail-before-spawn": 0.0078,
+        "no-generic-root": 1.0,
+        "outcome-policy": 0.0,
+        "pre-mutation": -0.0039,
+        "tool-boundary": -0.002,
+        "writer-partition": 0.0305
+      },
+      "outcome-policy": {
+        "canonical-channel": -0.0113,
+        "channel-separation": 0.0057,
+        "concrete-validation": -0.0226,
+        "fail-before-spawn": 0.0085,
+        "no-generic-root": 0.0,
+        "outcome-policy": 1.0,
+        "pre-mutation": -0.0028,
+        "tool-boundary": -0.0396,
+        "writer-partition": 0.002
+      },
+      "pre-mutation": {
+        "canonical-channel": 0.0254,
+        "channel-separation": 0.002,
+        "concrete-validation": -0.0313,
+        "fail-before-spawn": -0.0039,
+        "no-generic-root": -0.0039,
+        "outcome-policy": -0.0028,
+        "pre-mutation": 1.0,
+        "tool-boundary": -0.0176,
+        "writer-partition": -0.0222
+      },
+      "tool-boundary": {
+        "canonical-channel": 0.0313,
+        "channel-separation": 0.0234,
+        "concrete-validation": -0.0098,
+        "fail-before-spawn": 0.0293,
+        "no-generic-root": -0.002,
+        "outcome-policy": -0.0396,
+        "pre-mutation": -0.0176,
+        "tool-boundary": 1.0,
+        "writer-partition": 0.0721
+      },
+      "writer-partition": {
+        "canonical-channel": 0.0139,
+        "channel-separation": 0.0194,
+        "concrete-validation": 0.0277,
+        "fail-before-spawn": -0.0111,
+        "no-generic-root": 0.0305,
+        "outcome-policy": 0.002,
+        "pre-mutation": -0.0222,
+        "tool-boundary": 0.0721,
+        "writer-partition": 1.0
+      }
+    },
+    "mixed_candidate_groups": [],
+    "negative_routes": {
+      "anti_modes": [
+        "adapter must not decide",
+        "UI must not be source of truth",
+        "test helper must not become runtime route",
+        "experiment must not affect stable path",
+        "one decision owner only"
+      ],
+      "hits": [
+        {
+          "evidence": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:26-29",
+          "group": "writer-partition",
+          "layer": "ui",
+          "object": "direct setup M02 requests",
+          "owner": "s02",
+          "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+          "relation": "owns",
+          "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+          "route": "execution",
+          "rule": "adapter_or_ui_must_not_decide",
+          "subject": "S02",
+          "triad": "t8"
+        },
+        {
+          "evidence": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md:493-497",
+          "group": "writer-partition",
+          "layer": "ui",
+          "object": "direct setup M02 requests",
+          "owner": "s02",
+          "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+          "relation": "owns",
+          "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+          "route": "execution",
+          "rule": "adapter_or_ui_must_not_decide",
+          "subject": "S02",
+          "triad": "c8"
+        }
+      ]
+    },
+    "owner_gravity": {
+      "conflicts": [
+        {
+          "center": "each dispatching m01",
+          "group": "writer-partition",
+          "kind": "owner_conflict",
+          "owners": [
+            "each dispatching m01",
+            "s02"
+          ],
+          "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+          "risk": "helper or candidate group is attracted to more than one decision owner"
+        }
+      ],
+      "group_centers": {
+        "canonical-channel": {
+          "gravity": 1.0,
+          "owner": "producer",
+          "owners": {
+            "producer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "channel-separation": {
+          "gravity": 1.0,
+          "owner": "channel-separation",
+          "owners": {
+            "channel-separation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "concrete-validation": {
+          "gravity": 1.0,
+          "owner": "role-specific validator",
+          "owners": {
+            "role-specific validator": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "fail-before-spawn": {
+          "gravity": 1.0,
+          "owner": "fail-before-spawn",
+          "owners": {
+            "fail-before-spawn": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "no-generic-root": {
+          "gravity": 1.0,
+          "owner": "no-generic-root",
+          "owners": {
+            "no-generic-root": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "outcome-policy": {
+          "gravity": 1.0,
+          "owner": "outcome-policy",
+          "owners": {
+            "outcome-policy": 4
+          },
+          "support": 4,
+          "total": 4
+        },
+        "pre-mutation": {
+          "gravity": 1.0,
+          "owner": "pre-mutation",
+          "owners": {
+            "pre-mutation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "tool-boundary": {
+          "gravity": 1.0,
+          "owner": "tool-boundary",
+          "owners": {
+            "tool-boundary": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "writer-partition": {
+          "gravity": 0.5,
+          "owner": "each dispatching m01",
+          "owners": {
+            "each dispatching m01": 2,
+            "s02": 2
+          },
+          "support": 2,
+          "total": 4
+        }
+      },
+      "route_centers": {
+        "authority": {
+          "gravity": 0.5,
+          "owner": "outcome-policy",
+          "owners": {
+            "outcome-policy": 4,
+            "pre-mutation": 2,
+            "tool-boundary": 2
+          },
+          "support": 4,
+          "total": 8
+        },
+        "execution": {
+          "gravity": 0.5,
+          "owner": "each dispatching m01",
+          "owners": {
+            "each dispatching m01": 2,
+            "s02": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "failure": {
+          "gravity": 0.5,
+          "owner": "fail-before-spawn",
+          "owners": {
+            "fail-before-spawn": 2,
+            "no-generic-root": 2
+          },
+          "support": 2,
+          "total": 4
+        },
+        "mutation": {
+          "gravity": 1.0,
+          "owner": "producer",
+          "owners": {
+            "producer": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "observation": {
+          "gravity": 1.0,
+          "owner": "channel-separation",
+          "owners": {
+            "channel-separation": 2
+          },
+          "support": 2,
+          "total": 2
+        },
+        "proof": {
+          "gravity": 1.0,
+          "owner": "role-specific validator",
+          "owners": {
+            "role-specific validator": 2
+          },
+          "support": 2,
+          "total": 2
+        }
+      }
+    },
+    "repair_queue": [
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "writer-partition"
+      },
+      {
+        "kind": "adapter_or_ui_must_not_decide",
+        "priority": "high",
+        "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+        "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+        "target": "t8"
+      },
+      {
+        "kind": "adapter_or_ui_must_not_decide",
+        "priority": "high",
+        "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+        "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+        "target": "c8"
+      }
+    ],
+    "repair_tasks": [],
+    "route_field": {
+      "read_as": "Route field coordinates describe causal ownership: route, layer, owner, entrypoint, output, evidence_path, and scope.",
+      "routes": {
+        "authority": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 4,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:367-382",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:397-409",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:451-454",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:17-20",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v2.md:17-21"
+          ],
+          "layers": [
+            "adapter",
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "outcome-policy",
+            "pre-mutation",
+            "tool-boundary"
+          ],
+          "scopes": [
+            "authority"
+          ],
+          "source_triads": 4,
+          "triads": 8
+        },
+        "execution": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:493-497",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:26-29"
+          ],
+          "layers": [
+            "core",
+            "ui"
+          ],
+          "outputs": [],
+          "owners": [
+            "each dispatching m01",
+            "s02"
+          ],
+          "scopes": [
+            "execution"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "failure": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 2,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:456-459",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:479-486",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:21-24"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "fail-before-spawn",
+            "no-generic-root"
+          ],
+          "scopes": [
+            "failure"
+          ],
+          "source_triads": 2,
+          "triads": 4
+        },
+        "mutation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:499-510",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:25-27"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "producer"
+          ],
+          "scopes": [
+            "mutation"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "observation": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:499-510",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:25-27"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "channel-separation"
+          ],
+          "scopes": [
+            "observation"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        },
+        "proof": {
+          "avg_confidence": 1.0,
+          "candidate_triads": 1,
+          "entrypoints": [],
+          "evidence_paths": [
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8.md:479-486",
+            "k2_self_formed_uncertainty_v5_r8b_contract_v8_critique_v1.md:21-24"
+          ],
+          "layers": [
+            "core"
+          ],
+          "outputs": [],
+          "owners": [
+            "role-specific validator"
+          ],
+          "scopes": [
+            "proof"
+          ],
+          "source_triads": 1,
+          "triads": 2
+        }
+      }
+    },
+    "route_memory": {
+      "candidate": {
+        "authority": {
+          "norm": 62.0,
+          "self_coherence": 0.4844,
+          "triads": 4
+        },
+        "execution": {
+          "norm": 45.0777,
+          "self_coherence": 0.7043,
+          "triads": 2
+        },
+        "failure": {
+          "norm": 45.4313,
+          "self_coherence": 0.7099,
+          "triads": 2
+        },
+        "mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      },
+      "interference_matrix": {
+        "authority": {
+          "authority": 1.0,
+          "execution": 0.0272,
+          "failure": 0.0114,
+          "mutation": 0.0212,
+          "observation": 0.0171,
+          "proof": -0.0373
+        },
+        "execution": {
+          "authority": 0.0272,
+          "execution": 1.0,
+          "failure": 0.0137,
+          "mutation": 0.0139,
+          "observation": 0.0194,
+          "proof": 0.0277
+        },
+        "failure": {
+          "authority": 0.0114,
+          "execution": 0.0137,
+          "failure": 1.0,
+          "mutation": 0.011,
+          "observation": 0.0,
+          "proof": 0.0165
+        },
+        "mutation": {
+          "authority": 0.0212,
+          "execution": 0.0139,
+          "failure": 0.011,
+          "mutation": 1.0,
+          "observation": 0.0469,
+          "proof": 0.0645
+        },
+        "observation": {
+          "authority": 0.0171,
+          "execution": 0.0194,
+          "failure": 0.0,
+          "mutation": 0.0469,
+          "observation": 1.0,
+          "proof": 0.0215
+        },
+        "proof": {
+          "authority": -0.0373,
+          "execution": 0.0277,
+          "failure": 0.0165,
+          "mutation": 0.0645,
+          "observation": 0.0215,
+          "proof": 1.0
+        }
+      },
+      "source": {
+        "authority": {
+          "norm": 62.0,
+          "self_coherence": 0.4844,
+          "triads": 4
+        },
+        "execution": {
+          "norm": 45.0777,
+          "self_coherence": 0.7043,
+          "triads": 2
+        },
+        "failure": {
+          "norm": 45.4313,
+          "self_coherence": 0.7099,
+          "triads": 2
+        },
+        "mutation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "observation": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        },
+        "proof": {
+          "norm": 32.0,
+          "self_coherence": 1.0,
+          "triads": 1
+        }
+      }
+    },
+    "source_group_sizes": {
+      "canonical-channel": 1,
+      "channel-separation": 1,
+      "concrete-validation": 1,
+      "fail-before-spawn": 1,
+      "no-generic-root": 1,
+      "outcome-policy": 2,
+      "pre-mutation": 1,
+      "tool-boundary": 1,
+      "writer-partition": 2
+    },
+    "stable_groups": [
+      "canonical-channel",
+      "channel-separation",
+      "concrete-validation",
+      "fail-before-spawn",
+      "no-generic-root",
+      "outcome-policy",
+      "pre-mutation",
+      "tool-boundary",
+      "writer-partition"
+    ],
+    "structural_energy": {
+      "adapter_leak_risk": 2,
+      "duplicate_decision_risk": 0,
+      "field_tension": 3,
+      "foreign_pull_energy": 0,
+      "owner_conflict": 1,
+      "route_coherence": 1.0,
+      "stale_experiment_risk": 0,
+      "ui_runtime_mismatch_risk": 2
+    },
+    "wave_dim": 1024
+  },
+  "codex_failure_field": {
+    "enabled": false,
+    "read_as": "Add failure_contract.enabled=true to turn on Codex Failure Field.",
+    "reason_codes": [],
+    "verdict": "NOT_ENABLED"
+  },
+  "repair_queue": [
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:17-20"
+    },
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:21-24"
+    },
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:25-27"
+    },
+    {
+      "kind": "evidence_conflict",
+      "priority": "high",
+      "reason": "one evidence span is bound to incompatible role fillers",
+      "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+      "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:26-29"
+    },
+    {
+      "kind": "owner_conflict",
+      "priority": "high",
+      "reason": "helper or candidate group is attracted to more than one decision owner",
+      "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+      "target": "writer-partition"
+    },
+    {
+      "kind": "adapter_or_ui_must_not_decide",
+      "priority": "high",
+      "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+      "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+      "target": "t8"
+    },
+    {
+      "kind": "adapter_or_ui_must_not_decide",
+      "priority": "high",
+      "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+      "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+      "target": "c8"
+    }
+  ],
+  "agent_decision": {
+    "action": "REPAIR_REQUIRED",
+    "codex_failure_reasons": [],
+    "codex_failure_verdict": "NOT_ENABLED",
+    "next": "Apply the repair_queue before editing or accepting this route.",
+    "repair_count": 7,
+    "repair_queue": [
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:17-20"
+      },
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:21-24"
+      },
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:25-27"
+      },
+      {
+        "kind": "evidence_conflict",
+        "priority": "high",
+        "reason": "one evidence span is bound to incompatible role fillers",
+        "repair": "Resolve the source conflict and bind each triad to its exact supporting span.",
+        "target": "K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md:26-29"
+      },
+      {
+        "kind": "owner_conflict",
+        "priority": "high",
+        "reason": "helper or candidate group is attracted to more than one decision owner",
+        "repair": "Split the group by owner or move decision logic behind one public entrypoint.",
+        "target": "writer-partition"
+      },
+      {
+        "kind": "adapter_or_ui_must_not_decide",
+        "priority": "high",
+        "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+        "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+        "target": "t8"
+      },
+      {
+        "kind": "adapter_or_ui_must_not_decide",
+        "priority": "high",
+        "reason": "Adapter/UI layer is taking a decision or source-of-truth role.",
+        "repair": "Move decision to core owner and keep this layer as input/display adapter.",
+        "target": "c8"
+      }
+    ],
+    "safe_to_edit": false
+  },
+  "explanation": [
+    "At least one candidate triad has weak composite-mode support."
+  ],
+  "repair_prompt": "Repair the candidate answer using only one coherent structural route.\nNANDA verdict: VETO.\nPrimary repair_queue:\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] evidence_conflict: Resolve the source conflict and bind each triad to its exact supporting span.\n- [high] owner_conflict: Split the group by owner or move decision logic behind one public entrypoint.\n- [high] adapter_or_ui_must_not_decide: Move decision to core owner and keep this layer as input/display adapter.\n- [high] adapter_or_ui_must_not_decide: Move decision to core owner and keep this layer as input/display adapter.\nRecheck or remove weak candidate triads:\n- c1: score=0.2754, nearest_source=t1, why=candidate triad does not resonate with the composite source memory above the stability threshold\n- c5: score=0.2472, nearest_source=t5, why=candidate triad does not resonate with the composite source memory above the stability threshold",
+  "trace_path": "/tmp/nanda-structural-gate/r8b-v8-producer-validation.trace.json"
+}

@@ -1,0 +1,472 @@
+{
+  "schema": "nando.k2-self-formed-r8b-implementation-inventory.v2",
+  "status": "frozen_for_v7_implementation_preflight",
+  "source_commit": "0263e6ef18ec348379af73bd4793b975f4b74870",
+  "source_tree": "c0045af111bc51bb6305211ce306ec597c35af6f",
+  "scope": "cold non-sealed R8B V7 DevelopmentRehearsal route repair only; no R8B attempt, production, dashboard, K1, phase-memory or scientific-authority mutation",
+  "modified_files": [
+    {
+      "path": "Cargo.lock",
+      "owner": "workspace dependency lock",
+      "change": "add the already-resolved libc package as a direct nando-operator-learning dependency edge only"
+    },
+    {
+      "path": "crates/nando-operator-learning/Cargo.toml",
+      "owner": "crate dependency manifest",
+      "change": "add libc for O_NOFOLLOW; no feature or version-family change"
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "owner": "module router",
+      "change": "declare and export the exact new Development and R8B modules"
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "owner": "shared request-envelope process router and unchanged Confirm owner",
+      "change": "reject Development in the Confirm API, dispatch the process envelope to one mode-specific API, preserve concrete stdout schemas, and give M01 the shared locked-ledger handle required to journal M02 before spawn and after validated exit"
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+      "owner": "public coordinator M10",
+      "change": "journal each direct M03-M09 invocation through the shared locked ledger before spawn and after typed canonical receipt validation; preserve public decision bytes"
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7h_v1.rs",
+      "owner": "successor compatibility regression",
+      "change": "replace the obsolete current-tree Development no-split assertion with an explicitly named R7H-invariant compatibility test; retain frozen historical R7H evidence separately"
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_sandbox.rs",
+      "owner": "existing Confirm sandbox transport",
+      "change": "add transport-only Oracle and R8BAggregateAuthorizer guest roles, descriptor-backed read-only overlays and fixed guest working directories; preserve evaluator decision bytes"
+    }
+  ],
+  "new_files": [
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/immutable_publication.rs",
+      "owner": "narrow Linux filesystem primitive",
+      "responsibility": "bounded O_NOFOLLOW regular-file reads, no-clobber publication, directory fsync, shared locked natural-prefix ledger append, writer/child allowlist checks and injected boundary faults",
+      "line_budget": 650
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_model.rs",
+      "owner": "Development canonical byte model",
+      "responsibility": "the four frozen Development types, constructors, validators and exact known-answer root tuples",
+      "line_budget": 700
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_artifacts.rs",
+      "owner": "Development split persistence and validation",
+      "responsibility": "34 payload descriptors, exact reconstruction, split publication, full owner loader and metadata-only loader",
+      "line_budget": 900
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_owner.rs",
+      "owner": "single Development owner",
+      "responsibility": "mode check, live-owner lock, one dispatch, split validation, durable journal projection, owner receipt persistence and byte-identical recovery",
+      "line_budget": 900
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_tests.rs",
+      "owner": "module-private persistence proof",
+      "responsibility": "known-answer roots, no-follow/no-clobber controls, 72 publication boundaries and filesystem controls only; no process-restart authority",
+      "line_budget": 1200
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "owner": "R8B canonical requests and receipts",
+      "responsibility": "canonical parent/child, hierarchical process-ledger, bounded produced-receipt descriptors, resource, production-survival, aggregate authorization, publication and post-authorization audit schemas with denied authority",
+      "line_budget": 800
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_authorizer.rs",
+      "owner": "R8B aggregate authorizer",
+      "responsibility": "reopen one closed P06 packet and bijectively match each non-parent entry to one actual produced-receipt descriptor; reject future M25/M26 outcomes, missing, extra, reused, moved, mutable, symlinked, hard-linked or synthetic conjuncts",
+      "line_budget": 600
+    },
+    {
+      "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_publisher.rs",
+      "owner": "R8B evidence publisher",
+      "responsibility": "publish one already-authorized aggregate atomically without reinterpreting evidence",
+      "line_budget": 500
+    },
+    {
+      "path": "crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-authorizer.rs",
+      "owner": "thin process entrypoint",
+      "responsibility": "stdin to aggregate authorizer to concrete stdout",
+      "line_budget": 12
+    },
+    {
+      "path": "crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-evidence-publisher.rs",
+      "owner": "thin process entrypoint",
+      "responsibility": "stdin to evidence publisher to concrete stdout",
+      "line_budget": 12
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/mod.rs",
+      "owner": "R8B test-only orchestration support",
+      "responsibility": "shared manifest-bound launcher, locked hierarchical ledger appender, canonical closed output directories for suites and M24 child, parent/child cgroup observer, descriptor mount and immutable evidence helpers; no decision, cleanup or publication authority",
+      "line_budget": 1200
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "owner": "linked runner test binary",
+      "responsibility": "one complete 26-identity parent/child route with actual-spawn-owner journaling, M24-child linked receipt, Oracle batch, four-scope census, closed P06, separate M25/M26 execution and non-authoritative P09 audit",
+      "line_budget": 1600
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_mode_matrix_v1.rs",
+      "owner": "cross-mode and legacy negative proof",
+      "responsibility": "twenty named X01-X20 failures plus positive Confirm and Development parity",
+      "line_budget": 1000
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_authority_v1.rs",
+      "owner": "R8B authority and publication proof",
+      "responsibility": "closed-packet authorizer completeness, exact authorization-byte publication, two aggregate publication faults and zero-authority census",
+      "line_budget": 1000
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_cleanup_v1.rs",
+      "owner": "R8B actual-tree cleanup proof",
+      "responsibility": "real four-process cleanup route, complete actual-tree classification, intent-first deletion journal, retained evidence, residue rejection and interruption",
+      "line_budget": 900
+    },
+    {
+      "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_restart_v1.rs",
+      "owner": "dedicated process-restart integration test binary",
+      "responsibility": "P01-P07 with actual Development owner processes, exact stdout/stderr/tree census, generator execve tracing, successful-flock ptrace stop and /proc/locks PID/inode proof",
+      "line_budget": 1200
+    }
+  ],
+  "preserved_exact_files": [
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner_model.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifact_model.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs",
+    "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup_verifier.rs",
+    "crates/nando-operator-learning/src/bin/nando-k2-self-formed-confirm-owner.rs",
+    "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+    "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+    "crates/nando-transition-serving/src/lib.rs",
+    "crates/nando-gateway-control/src/live_dashboard.rs",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_UNLOCK_2026-08-20.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_RESULT_2026-08-20.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/development-byte-contract.v1.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/SHA256SUMS",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vectors/SHA256SUMS",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/production-baseline.preimplementation.v1.json",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_POSTIMPLEMENTATION_VETO_2026-08-21.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6_CRITIQUE_V1.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-manifest-chain.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-manifest-chain.receipt.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-oracle-boundary.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-oracle-boundary.receipt.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-restart-cleanup.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-restart-cleanup.receipt.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-aggregate-boundary.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-aggregate-boundary.receipt.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.receipt.json",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_GATE_RESULT_2026-08-21.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_DISCREPANCY_2026-08-21.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V1.md",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V2.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/nanda-task-r8b-v7-ledger-ownership.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/nanda-r8b-v7-ledger-ownership.receipt.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/nanda-task-r8b-v7-receipt-provenance.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/nanda-r8b-v7-receipt-provenance.receipt.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/nanda-task-r8b-v7-causal-authority.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/nanda-r8b-v7-causal-authority.receipt.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/code-route.design.v7.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/nanda-r8b-v7-code-route.receipt.json",
+    "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_IMPLEMENTATION_PREFLIGHT_CRITIQUE_V1.md",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/implementation-preflight.v7.pre-critique.json",
+    "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/implementation-preflight.v7.pre-critique.receipt.json"
+  ],
+  "durable_mutations": [
+    {
+      "id": "M01",
+      "owner": "Development owner M01",
+      "object": "test-owned attempt directory and initial journal",
+      "cardinality": "one fresh attempt",
+      "production": false
+    },
+    {
+      "id": "M02",
+      "owner": "Development owner M01 and split publisher",
+      "object": "append-only logical journal, 34 immutable payloads, split and owner receipt",
+      "cardinality": "one fsynced transition per state plus 34 + 1 + 1 immutable objects",
+      "production": false
+    },
+    {
+      "id": "M03",
+      "owner": "actual spawn owners M24, M01, M10 and S02-S05",
+      "object": "one shared locked pre-authorization ChildStarted/ChildFinished ledger",
+      "cardinality": "one start before each receipt-producing spawn and one finish only after normal exit plus typed canonical receipt validation",
+      "production": false
+    },
+    {
+      "id": "M04",
+      "owner": "S01-S05 and M24 child",
+      "object": "exclusive canonical receipt output directories",
+      "cardinality": "one closed directory per producer invocation; bounded unique receipt set; stdout and stderr remain diagnostics",
+      "production": false
+    },
+    {
+      "id": "M05",
+      "owner": "M24 child and manifested receipt encoders",
+      "object": "public/downstream/private/oracle/control/terminal receipts, M24-child linked receipt, sixteen-root Oracle batch and four-root scope census",
+      "cardinality": "exact contract cardinalities with no duplicate source roots",
+      "production": false
+    },
+    {
+      "id": "M06",
+      "owner": "cleanup authorizer/owner/verifier/result publisher M20-M23",
+      "object": "cleanup registry, authorization, deletion journal, owner receipt, verification receipt and Development completion",
+      "cardinality": "one real four-process cleanup transaction",
+      "production": false
+    },
+    {
+      "id": "M07",
+      "owner": "linked child M24",
+      "object": "immutable child candidate packet containing completed child-only evidence",
+      "cardinality": "one fsynced packet before child exit",
+      "production": false
+    },
+    {
+      "id": "M08",
+      "owner": "linked parent M24",
+      "object": "child resource receipt, production-survival receipt and P06 aggregate containing only completed pre-authorization processes",
+      "cardinality": "one each after child exit; no M25 or M26 outcomes",
+      "production": false
+    },
+    {
+      "id": "M09",
+      "owner": "R8B aggregate authorizer M25",
+      "object": "aggregate authorization receipt",
+      "cardinality": "zero or one after complete descriptor-to-entry bijection",
+      "production": false
+    },
+    {
+      "id": "M10",
+      "owner": "R8B evidence publisher M26",
+      "object": "R8B_RECEIPT_V2.json and concrete publication receipt",
+      "cardinality": "zero or one immutable publication of exact M25 bytes",
+      "production": false
+    },
+    {
+      "id": "M11",
+      "owner": "linked parent M24 observer",
+      "object": "append-only post-authorization M25/M26 process-outcome audit",
+      "cardinality": "zero or one diagnostic audit after P08; never an M25 input or authority conjunct",
+      "production": false
+    }
+  ],
+  "failure_transitions": [
+    {
+      "id": "F01",
+      "boundary": "implementation diff before all 23 scoped paths and parity checks are complete",
+      "result": "implementation failed; zero R8B executions",
+      "cleanup": "retain paper and diagnostics; revert only implementation-owned partial source in the implementation worktree",
+      "test_id": "r8b-implementation-fault"
+    },
+    {
+      "id": "F02",
+      "boundary": "attempt initialization before ArtifactsFrozen",
+      "result": "indeterminate and zero generator dispatch",
+      "cleanup": "retain complete path census; remove no unexplained bytes",
+      "test_id": "r8b-process-restart-p01"
+    },
+    {
+      "id": "F03",
+      "boundary": "ArtifactsFrozen before GeneratorDispatched",
+      "result": "restart may perform exactly one first dispatch",
+      "cleanup": "retain journal; process death releases only the advisory directory lock",
+      "test_id": "r8b-process-restart-p02"
+    },
+    {
+      "id": "F04",
+      "boundary": "GeneratorDispatched without complete split",
+      "result": "indeterminate and no redispatch",
+      "cleanup": "retain partial publication and complete failure census",
+      "test_id": "r8b-process-restart-p03"
+    },
+    {
+      "id": "F05",
+      "boundary": "complete split before CasesGenerated",
+      "result": "exact reconstruction then one CasesGenerated append",
+      "cleanup": "retain split and journal",
+      "test_id": "r8b-process-restart-p04"
+    },
+    {
+      "id": "F06",
+      "boundary": "CasesGenerated before owner receipt or owner receipt before stdout",
+      "result": "byte-identical owner receipt recovery without redispatch",
+      "cleanup": "retain split, journal and durable owner receipt",
+      "test_id": "r8b-process-restart-p05-p06"
+    },
+    {
+      "id": "F07",
+      "boundary": "first real owner stopped immediately after successful flock while second real owner starts",
+      "result": "contender busy with zero mutation; first PID/inode remains lock owner and completes",
+      "cleanup": "resume and detach traced first owner; tracing or /proc/locks uncertainty is indeterminate",
+      "test_id": "r8b-process-restart-p07"
+    },
+    {
+      "id": "F08",
+      "boundary": "before or after publication of each of 36 immutable Development objects",
+      "result": "72 exact fail-closed cases; final is absent or complete",
+      "cleanup": "remove only known temp; never overwrite a final object",
+      "test_id": "r8b-development-publication-72"
+    },
+    {
+      "id": "F09",
+      "boundary": "actual spawn owner fails after ChildStarted fsync or before validated ChildFinished",
+      "result": "linked route indeterminate with no automatic replay and no aggregate authorization",
+      "cleanup": "retain ledger, process outcome, stdout/stderr hashes and tree census under the failed fresh route ID",
+      "test_id": "r8b-process-ledger-interruption"
+    },
+    {
+      "id": "F10",
+      "boundary": "nested writer presents foreign executable, route, root, stale prefix or child role outside its allowlist",
+      "result": "reject before spawn and append no row",
+      "cleanup": "retain the previously valid natural ledger prefix unchanged",
+      "test_id": "r8b-hierarchical-ledger-negative"
+    },
+    {
+      "id": "F11",
+      "boundary": "suite or M24-child output directory contains missing, extra, writable, moved, symlinked, hard-linked or malformed receipt bytes",
+      "result": "no ChildFinished, no packet promotion and diagnostics remain non-authoritative",
+      "cleanup": "freeze and retain the failed producer directory and started ledger suffix",
+      "test_id": "r8b-canonical-receipt-channel-negative"
+    },
+    {
+      "id": "F12",
+      "boundary": "private O_PATH descriptor validation, inherited-descriptor mount or Oracle namespace closure",
+      "result": "oracle case fails; runner never reads, hashes or serializes private truth contents",
+      "cleanup": "close descriptor and remove only test-owned mount staging; retain failure receipt",
+      "test_id": "r8b-oracle-descriptor-mount-fault"
+    },
+    {
+      "id": "F13",
+      "boundary": "downstream contract, private route, controls, terminal, Oracle-batch or four-scope census freeze",
+      "result": "child exits failed or indeterminate and parent refuses aggregate authorization",
+      "cleanup": "retain all canonical prior receipts and complete process ledger; publish no positive aggregate",
+      "test_id": "r8b-linked-failure-census"
+    },
+    {
+      "id": "F14",
+      "boundary": "intent-first cleanup deletion",
+      "result": "cleanup incomplete and no Development completion or R8B_FROZEN",
+      "cleanup": "retain terminal and observer evidence; resume only from exact registry and deletion journal",
+      "test_id": "r8b-cleanup-interruption"
+    },
+    {
+      "id": "F15",
+      "boundary": "child exit or delegated-cgroup finalization",
+      "result": "resource result indeterminate and no aggregate authorization",
+      "cleanup": "retain child candidate and raw bounded cgroup/process observations",
+      "test_id": "r8b-resource-finalization-fault"
+    },
+    {
+      "id": "F16",
+      "boundary": "pre/post production snapshot or bounded health GET",
+      "result": "production survival indeterminate or VETO; no aggregate authorization",
+      "cleanup": "retain both read-only snapshots and counted observation traffic; perform no service action",
+      "test_id": "r8b-production-observation-fault"
+    },
+    {
+      "id": "F17",
+      "boundary": "closed aggregate packet freeze or M25 reopen/validation",
+      "result": "no aggregate authorization when any packet entry lacks exactly one matching producer descriptor, any descriptor is reused, or P06 contains future M25/M26 outcomes",
+      "cleanup": "remove only unpublished aggregate temp and retain all constituent receipts",
+      "test_id": "r8b-aggregate-packet-fault"
+    },
+    {
+      "id": "F18",
+      "boundary": "before or after M26 immutable aggregate publication",
+      "result": "final object absent or one complete R8B_FROZEN",
+      "cleanup": "remove only unpublished temp; retain authorization and all input receipts",
+      "test_id": "r8b-aggregate-publication-fault"
+    },
+    {
+      "id": "F19",
+      "boundary": "post-authorization audit collection or publication",
+      "result": "audit is absent or incomplete diagnostics; exact M25 authorization and M26 publication remain unchanged",
+      "cleanup": "retain M25/M26 outputs and any natural audit prefix; never rerun or reinterpret authorization",
+      "test_id": "r8b-post-authorization-audit-fault"
+    }
+  ],
+  "runtime_preservation": {
+    "baseline": "production-baseline.preimplementation.v1.json",
+    "stable": [
+      "unit bytes",
+      "executable bytes",
+      "MainPID",
+      "restart count",
+      "active state",
+      "registry revision",
+      "authority packages",
+      "hot/cold local-accept modes",
+      "revocation state"
+    ],
+    "expected_to_change": [
+      "observation timestamp",
+      "ordinary request counters",
+      "ordinary token counters",
+      "uptime",
+      "lease age"
+    ],
+    "observed_not_compared": [
+      "bounded parent health GET count",
+      "dynamic traffic during observation"
+    ],
+    "forbidden": [
+      "service restart",
+      "unit or binary replacement",
+      "authority mutation",
+      "production write",
+      "dashboard change",
+      "K1 mutation",
+      "phase-memory mutation",
+      "deployment"
+    ]
+  },
+  "code_budget": {
+    "modified_predecessor_files": 7,
+    "new_runtime_modules": 7,
+    "new_module_private_test_files": 1,
+    "new_thin_binaries": 2,
+    "new_integration_test_files": 6,
+    "total_implementation_paths": 23,
+    "maximum_single_new_runtime_file_lines": 900,
+    "maximum_single_new_test_file_lines": 1600,
+    "public_existing_schema_changes": 0,
+    "preserved_confirm_canonical_bytes": true
+  },
+  "claim_boundary": {
+    "may_prove": "V7 implementation readiness and, only after a separately authorized future non-sealed execution, one exact R8B_FROZEN route receipt",
+    "cannot_prove": [
+      "self-formed uncertainty",
+      "Natural K2",
+      "natural-traffic transfer",
+      "Wave-causal grokking",
+      "answer quality",
+      "CPU savings",
+      "product value",
+      "deployment readiness"
+    ],
+    "successors_locked": [
+      "R9B",
+      "R10B",
+      "R11B"
+    ]
+  }
+}

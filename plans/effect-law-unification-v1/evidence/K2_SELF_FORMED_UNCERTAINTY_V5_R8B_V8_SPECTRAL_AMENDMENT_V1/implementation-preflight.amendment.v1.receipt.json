@@ -1,0 +1,191 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "baseline-r8b-model",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "sha256": "6a5b959e4f1b596aa9b19c79ea55df7e4721880c1c9c57746781f3cf2ada802f",
+      "size_bytes": 26626
+    },
+    {
+      "exists": true,
+      "id": "baseline-process-ledger",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_ledger.rs",
+      "sha256": "ee41c3c13e55e404839405408e4d2578f4ae82eaac8de58f218d9e8e05c50b8a",
+      "size_bytes": 38243
+    },
+    {
+      "exists": true,
+      "id": "baseline-process-authorizer",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_authorizer.rs",
+      "sha256": "f92f67919495382ee6885efeb0781080815700cfadb8ba4d862a2221485e5be1",
+      "size_bytes": 44759
+    },
+    {
+      "exists": true,
+      "id": "baseline-process-runtime",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime.rs",
+      "sha256": "c2aa6d8b870f9f9368cd7cf0062f6b8d2e49a366c771588fb93b6c4a627744ce",
+      "size_bytes": 46016
+    },
+    {
+      "exists": true,
+      "id": "baseline-linked-child",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "sha256": "b1256a91e3ae51ee75ee75a882ec818e975303bc43f451647f8b31849e455ebe",
+      "size_bytes": 56953
+    },
+    {
+      "exists": true,
+      "id": "baseline-parent-contract",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md",
+      "sha256": "1e6f44a88cbc2c38173e7b6dc0a1f272e0bfea074cbbe11caf5d1ff26eda1844",
+      "size_bytes": 33379
+    },
+    {
+      "exists": true,
+      "id": "baseline-spectral-amendment",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_SPECTRAL_AMENDMENT_V1.md",
+      "sha256": "50494e74d272651628bfee710a1a09a18206bfb5cef9469483bf40ba2f7ae12a",
+      "size_bytes": 5541
+    }
+  ],
+  "blockers": [
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: deployment"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: generated_traffic"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: git_push"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: m24_m26_execution_during_implementation"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: p09_execution_without_separate_authority"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: r8b_attempt_execution_without_separate_authorization"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: synthetic_fixture"
+    },
+    {
+      "code": "forbidden_effect_scan_missing",
+      "field": "source_checks",
+      "message": "no reused-source veto pattern covers: transient_capability_execution_during_implementation"
+    }
+  ],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 7,
+    "forbidden_side_effect_kinds": [
+      "deployment",
+      "experiment_network_access",
+      "generated_traffic",
+      "git_push",
+      "law_certificate_issue",
+      "m24_m26_execution_during_implementation",
+      "p09_execution_without_separate_authority",
+      "package_activation",
+      "production_write",
+      "r8b_attempt_execution_without_separate_authorization",
+      "synthetic_fixture",
+      "transient_capability_execution_during_implementation"
+    ],
+    "identity_contracts": 2,
+    "invariants": 4,
+    "planned_side_effect_kinds": [
+      "filesystem_read",
+      "move_only_refactor",
+      "non_attempt_test_execution",
+      "scoped_source_add"
+    ],
+    "preserved_artifacts": 2,
+    "runtime_comparisons": 0,
+    "source_checks": 5,
+    "tests": 5
+  },
+  "manifest_sha256": "d924325ede6b3e77713038656fb8bc17cdf582369d3770f4e908159e27a024bf",
+  "safe_to_implement": false,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "r8b-model-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "sha256": "6a5b959e4f1b596aa9b19c79ea55df7e4721880c1c9c57746781f3cf2ada802f",
+      "size_bytes": 26626
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "process-ledger-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_ledger.rs",
+      "sha256": "ee41c3c13e55e404839405408e4d2578f4ae82eaac8de58f218d9e8e05c50b8a",
+      "size_bytes": 38243
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "process-authorizer-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_authorizer.rs",
+      "sha256": "f92f67919495382ee6885efeb0781080815700cfadb8ba4d862a2221485e5be1",
+      "size_bytes": 44759
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "process-runtime-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime.rs",
+      "sha256": "c2aa6d8b870f9f9368cd7cf0062f6b8d2e49a366c771588fb93b6c4a627744ce",
+      "size_bytes": 46016
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "linked-child-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "sha256": "b1256a91e3ae51ee75ee75a882ec818e975303bc43f451647f8b31849e455ebe",
+      "size_bytes": 56953
+    }
+  ],
+  "task_id": "k2-self-formed-uncertainty-r8b-v8-spectral-amendment-v1",
+  "verdict": "BLOCKED_BEFORE_CODE"
+}

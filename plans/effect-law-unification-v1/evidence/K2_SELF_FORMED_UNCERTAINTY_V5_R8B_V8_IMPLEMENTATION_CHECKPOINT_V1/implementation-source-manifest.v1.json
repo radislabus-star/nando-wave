@@ -1,0 +1,276 @@
+{
+  "schema": "nando.k2-self-formed-uncertainty-r8b-v8-implementation-source-manifest-envelope.v1",
+  "canonicalization": {
+    "algorithm": "SHA-256 over UTF-8 jq -cS payload bytes including final LF",
+    "canonical_manifest_root_sha256": "2bdd7ac1c11a226d37c80605cc662a4363649a14c4464a9da094e3eae55c2e73"
+  },
+  "payload": {
+    "schema": "nando.k2-self-formed-uncertainty-r8b-v8-implementation-source-manifest.v1",
+    "status": "IMPLEMENTATION_CHECKPOINT_ONLY",
+    "authority_boundary": {
+      "verdict": "NO_EXECUTION_AUTHORITY",
+      "permits": [
+        "source review",
+        "checkpoint verification"
+      ],
+      "forbids": [
+        "R8B P00-P09 execution",
+        "M24-M26 execution",
+        "P09 diagnostic execution",
+        "transient-unit launch",
+        "deployment",
+        "dashboard mutation",
+        "scientific claim"
+      ]
+    },
+    "repository": {
+      "origin": "git@github.com:radislabus-star/nando-wave.git",
+      "branch": "research/k2-self-formed-uncertainty-r8b-v6-implementation-20260821",
+      "git_object_format": "sha1",
+      "base_commit_oid": "0015d265506aa1da440fb33708124cf4789a62c8",
+      "base_tree_oid": "0b8dcf6d1a1250aabcfa644d33b706863bc87c46",
+      "implementation_commit_oid": "e3c32a2b3b33d62b542414a2d7f9155a6def6943",
+      "implementation_tree_oid": "3ae0aa4b4b9fd7991e0fdba5c91ef64ae19c5b92",
+      "implementation_commit_time": "2026-08-22T13:20:23+03:00"
+    },
+    "cargo_lock": {
+      "path": "Cargo.lock",
+      "git_mode": "100644",
+      "working_tree_mode": "0664",
+      "git_blob_oid": "2d72bc84649e0d2075d7f374d3bd504d896340c9",
+      "byte_length": 40473,
+      "sha256": "f1818253cdfcc758e6814d84862eecdaccfc64c7825410d9a5951435147c6624"
+    },
+    "paper_bindings": [
+      {
+        "role": "frozen_contract",
+        "path": "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md",
+        "sha256": "1e6f44a88cbc2c38173e7b6dc0a1f272e0bfea074cbbe11caf5d1ff26eda1844"
+      },
+      {
+        "role": "spectral_amendment",
+        "path": "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_SPECTRAL_AMENDMENT_V1.md",
+        "sha256": "50494e74d272651628bfee710a1a09a18206bfb5cef9469483bf40ba2f7ae12a"
+      },
+      {
+        "role": "format_normalization_amendment",
+        "path": "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_FORMAT_NORMALIZATION_AMENDMENT_V1.md",
+        "sha256": "999d216bcea196b87302dac0f9bcffc3361242a25da2691b46f063aa83c4e825"
+      }
+    ],
+    "source_selection": {
+      "rule": "exact first-parent git diff-tree of implementation commit",
+      "source_file_count": 26,
+      "source_files": [
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/Cargo.toml",
+          "git_mode": "100644",
+          "git_blob_oid": "e8121bc4262cf942669a9c4974a5f2239026d542",
+          "byte_length": 746,
+          "sha256": "6e39b15f3c1d174cacf2597e0ccbb217619cfe194a9544e4cb9f5b2d593b8830"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "86722a5d3b665f0552ced40f50cc3a3f168ff12e",
+          "byte_length": 27759,
+          "sha256": "4de249290e533512eea20f45838a17b76447e01515665cc165e0e4f6a93ab9be"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "20ff87f51b8342c41157f5b540036028b5f1679a",
+          "byte_length": 26094,
+          "sha256": "7e23644aac97de481b74e9c96afda9bd8108e88827b59c490d7b58bcd297edaa"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/immutable_publication.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "d575e83330e0592a4e77326ad3f52d323e90308c",
+          "byte_length": 22245,
+          "sha256": "81304064e94c509c532f1dfa98edcd9019c0f3abd8b470edde41e06bdd46f089"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_authorizer.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "2ab3d8c193eaad7f14d99a5410f6cf5b7bcc8cab",
+          "byte_length": 21037,
+          "sha256": "04db0597438380b6d012c80b812799369231f2857b0f4c5900b6f9dc70d378c8"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "d60633220fc2a7b61b8cb872e67dfe8e395c6c9d",
+          "byte_length": 21439,
+          "sha256": "19bd5bc59a07919a9768b1e230f1cfdfdebd90bc4889e56647ff58f20f1905ad"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model/wrappers.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "445c7e08dc3d11c385eccc7518138c7339a09c39",
+          "byte_length": 6845,
+          "sha256": "b4ff0d838f09107b28d764498c7305272b198590135daf9a790f2b5a81813285"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_authorizer.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "515c4e42b31d48463f6f435051f3a4c4cf716942",
+          "byte_length": 31444,
+          "sha256": "ddf4b508fb3fbe04d4d55af4ed20c67a20d6708866e096f1954b8fd04dc1fcab"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_authorizer/projection.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "efb881ea8c267a52e8559f8ffd2e9666a7a19af3",
+          "byte_length": 16666,
+          "sha256": "bfc1d7e843aaaa61916793cfa26406fc8f8dd3974f21b61ed24104d78eb44f37"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_ledger.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "1c6d419d6445038ab0be1de5267bb450e61d0dfc",
+          "byte_length": 28814,
+          "sha256": "12c0c4023bff5815d68cfb06f61e0a70422d1f4ba9194ad3fce5999019d4ab2d"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_ledger/stream.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "415621685a16cb0fdb85848b1b44d4b523e8fe90",
+          "byte_length": 9735,
+          "sha256": "27ad30d6d572736dc4aacd7d37de5148696dd39b5461c7ffc824ef962c2694cf"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_model.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "6062af725bbc5191cc54513eb71aaf5e66342de9",
+          "byte_length": 32428,
+          "sha256": "bcd2f7b282b811e60fca5b42bca2f84100d91cbf4526abcbcacc96b1d8580d65"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_publisher.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "2a72905ec6a248ee15eb9a5e06c5fff29b5acad8",
+          "byte_length": 9091,
+          "sha256": "386dbbc9a48fe2c8f813f986d293acdadad71b99c70ce89bd74fc2ea07f1f1d3"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_authority_v1.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "182d4ee72fa99789f63aca24fa658254c17265d2",
+          "byte_length": 115280,
+          "sha256": "b71b98638804adcecdbc842dba4d4437baec1b8033dbe5817f8dfab2e52e9f80"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "444e82351c209534a52d7ae8cc6cdf57f4332a80",
+          "byte_length": 46115,
+          "sha256": "e731dd70dc713ae4e237bf4fdf17bfbd6701e99232e161352e546c25f3d2095c"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/child_cleanup.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "12c35ea66a161f052f57ed1c228026a486880463",
+          "byte_length": 11050,
+          "sha256": "f552eb80b158cf341a7b8c5d7ea05b0ec57c398889bdc7f647675688a1fd3d35"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "3062e48e95ebdfc5c7361207115e1630f0a441ac",
+          "byte_length": 73643,
+          "sha256": "e4ee711cec62f9475c0b9d0f163035fa7291318e0bd92b405e8c353af98b3c8e"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/postproduction.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "87a518714002e9f59fc8146508c2b329d1924f0c",
+          "byte_length": 53726,
+          "sha256": "7376789e1b9b1c6bbcfd65219b5fb7b6b44a4c56560c88861099a11a6907e92e"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/preproduction.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "2a9cbc226865bfc3e11bf1e7a298f31e95b8d7a7",
+          "byte_length": 35048,
+          "sha256": "08b10290a258365641e0782245dad4d1671f32a7352695eed32dc77626705923"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent/resource.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "79df550de154a090117fcef3e867ee34602cf01f",
+          "byte_length": 45881,
+          "sha256": "fbaff5048a59ee28dfd505f61e9be70255e12069bb71070d790bae1a6a8498aa"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_mode_matrix_v1.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "aed21abcedb7e81625898bb0275ca7ed1dc1c5a6",
+          "byte_length": 12489,
+          "sha256": "5f127748794f05f5bc4790dc565af7b38ff90f6076bc266e0ce47a1fa3893674"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_restart_v1.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "b922e660f2b3058408959520e5436cd306e50013",
+          "byte_length": 16076,
+          "sha256": "bf8f8e873bea39e965825d5cb20184ac89a7ae1672a3dc1705b182654ce25150"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/mod.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "c62ea6f5132990620b9af57d25d4997ad1484973",
+          "byte_length": 34539,
+          "sha256": "3a16131fe60673c8d64e935545c2625c6a74c099ce41dc7bae4f6e68f561a469"
+        },
+        {
+          "change_kind": "M",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "32de14fbfbcd0db4c51388b4d3db40cdae773373",
+          "byte_length": 16766,
+          "sha256": "9d2ce25b85771a44126f66299566b89b6a50bb13f2546cbce834a7f397575f17"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime/command.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "a2dd255f7f70b13453de304c321b239a1e57cb5f",
+          "byte_length": 15753,
+          "sha256": "8a7d87ea65f3ee07bc7ac18668694e43f46da8232b0215ba28622fd61123d050"
+        },
+        {
+          "change_kind": "A",
+          "path": "crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime/ledger.rs",
+          "git_mode": "100644",
+          "git_blob_oid": "7938b2ebd86f7f684f3db83e93d530ee2bcba0a6",
+          "byte_length": 14383,
+          "sha256": "513766234b0d37b585fa1b195330d2f5ca4ea52d6eb78fc45527aedcfee54752"
+        }
+      ]
+    }
+  }
+}

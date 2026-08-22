@@ -1,0 +1,177 @@
+{
+  "schema": "nando.k2-self-formed-uncertainty-r8b-v8-implementation-checkpoint-result.v1",
+  "date": "2026-08-22",
+  "verdict": "IMPLEMENTATION_CHECKPOINT_PASS_WITH_REMOTE_HOST_LIMITATION",
+  "authority_boundary": {
+    "status": "NO_EXECUTION_AUTHORITY",
+    "implementation_complete": true,
+    "r8b_p00_p09_executed": false,
+    "m24_m25_m26_executed": false,
+    "p09_diagnostic_executed": false,
+    "transient_units_started": false,
+    "deployment_performed": false,
+    "dashboard_mutated": false,
+    "scientific_claim_authorized": false
+  },
+  "implementation_identity": {
+    "repository": "git@github.com:radislabus-star/nando-wave.git",
+    "branch": "research/k2-self-formed-uncertainty-r8b-v6-implementation-20260821",
+    "base_commit_oid": "0015d265506aa1da440fb33708124cf4789a62c8",
+    "implementation_commit_oid": "e3c32a2b3b33d62b542414a2d7f9155a6def6943",
+    "implementation_tree_oid": "3ae0aa4b4b9fd7991e0fdba5c91ef64ae19c5b92",
+    "worktree_clean": true
+  },
+  "cargo_lock": {
+    "path": "Cargo.lock",
+    "mode": "0664",
+    "byte_length": 40473,
+    "sha256": "f1818253cdfcc758e6814d84862eecdaccfc64c7825410d9a5951435147c6624"
+  },
+  "source_manifest": {
+    "path": "plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_IMPLEMENTATION_CHECKPOINT_V1/implementation-source-manifest.v1.json",
+    "file_sha256": "0215683f94d21c8793d6f8d8565cda8ed65982b85d4c5ae5b554a33146841744",
+    "canonical_manifest_root_sha256": "2bdd7ac1c11a226d37c80605cc662a4363649a14c4464a9da094e3eae55c2e73",
+    "committed_source_files": 26,
+    "verified_source_files": 26
+  },
+  "paper_bindings": [
+    {
+      "role": "frozen_contract",
+      "path": "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md",
+      "sha256": "1e6f44a88cbc2c38173e7b6dc0a1f272e0bfea074cbbe11caf5d1ff26eda1844"
+    },
+    {
+      "role": "spectral_amendment",
+      "path": "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_SPECTRAL_AMENDMENT_V1.md",
+      "sha256": "50494e74d272651628bfee710a1a09a18206bfb5cef9469483bf40ba2f7ae12a"
+    },
+    {
+      "role": "format_normalization_amendment",
+      "path": "plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_FORMAT_NORMALIZATION_AMENDMENT_V1.md",
+      "sha256": "999d216bcea196b87302dac0f9bcffc3361242a25da2691b46f063aa83c4e825"
+    }
+  ],
+  "gates": [
+    {
+      "id": "implementation_preflight",
+      "status": "READY_TO_IMPLEMENT",
+      "safe_to_implement": true,
+      "blockers": 0,
+      "receipt_sha256": "42306a96e9027bc8c9e17c5bc30196cc6492a45b1c83f78a011c1d0cb8407f3e"
+    },
+    {
+      "id": "spectral_amendment_preflight",
+      "status": "READY_TO_IMPLEMENT",
+      "safe_to_implement": true,
+      "blockers": 0,
+      "receipt_sha256": "aef2ae0d57b93c26b5e783fae99c742883b891430e096313e303f129f1a73366"
+    },
+    {
+      "id": "format_normalization_structure",
+      "status": "PASS",
+      "authority_ready": false,
+      "repair_queue": 0,
+      "receipt_sha256": "510290d6d003a43171d927ed2a604ef723ad40835f5296ae63681fcb60c343db"
+    },
+    {
+      "id": "source_manifest",
+      "status": "PASS",
+      "expected": 26,
+      "verified": 26
+    },
+    {
+      "id": "source_scope",
+      "status": "PASS",
+      "allowed_paths": 37,
+      "changed_paths": 26,
+      "foreign_paths": 0
+    },
+    {
+      "id": "line_budgets",
+      "status": "PASS",
+      "expected": 19,
+      "verified": 19
+    },
+    {
+      "id": "global_format",
+      "status": "PASS",
+      "command": "cargo fmt --all --check"
+    },
+    {
+      "id": "git_diff_check",
+      "status": "PASS",
+      "command": "git diff --check HEAD^ HEAD"
+    },
+    {
+      "id": "main_observed_source_route",
+      "status": "PASS",
+      "expected_source_evidence": 75,
+      "verified_source_evidence": 75,
+      "routes": 37,
+      "issues": 0,
+      "warnings": 0,
+      "receipt_sha256": "f387c4056f1e6bb7485e3aa0235dd60bd2b785802933bc862859b854c57f96d6"
+    },
+    {
+      "id": "p09_observed_source_route",
+      "status": "PASS",
+      "expected_source_evidence": 18,
+      "verified_source_evidence": 18,
+      "routes": 8,
+      "issues": 0,
+      "warnings": 0,
+      "receipt_sha256": "9674d52c7916eb23637ba69ab5a6f31e2b224dcca3cd2b0ea2ed3c307ee5ba00"
+    },
+    {
+      "id": "local_authority_tests",
+      "status": "PASS",
+      "passed": 37,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "id": "local_linked_p00_p09_tests",
+      "status": "PASS",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "id": "local_strict_clippy",
+      "status": "PASS",
+      "command": "cargo clippy -p nando-operator-learning --all-targets -- -D warnings"
+    }
+  ],
+  "remote_verification": {
+    "host": "e@192.168.3.94",
+    "checkout": "/home/e/projects/nando-wave-r8b-v8-final-gate-20260822-01",
+    "head_oid": "0015d265506aa1da440fb33708124cf4789a62c8",
+    "working_byte_parity": {
+      "status": "PASS",
+      "expected": 26,
+      "verified": 26
+    },
+    "global_format": "PASS",
+    "authority_tests": {
+      "status": "PASS",
+      "passed": 37,
+      "failed": 0,
+      "ignored": 1
+    },
+    "strict_clippy": "PASS",
+    "linked_tests": {
+      "status": "HOST_INCOMPATIBLE",
+      "passed": 17,
+      "failed": 2,
+      "ignored": 1,
+      "failure_id": "r8b_v8_p00_tool_missing",
+      "missing_pinned_paths": [
+        "/usr/lib/cargo/bin/sudo",
+        "/usr/lib/cargo/bin/coreutils/sha256sum"
+      ],
+      "classification": "INFRASTRUCTURE_LIMITATION_NOT_PASS_NOT_CODE_REGRESSION"
+    },
+    "test_output_persistence": "terminal observations retained in this checkpoint receipt; no separate remote log artifact"
+  },
+  "next_legal_transition": "SEPARATE_EXPLICIT_R8B_EXECUTION_AUTHORIZATION"
+}

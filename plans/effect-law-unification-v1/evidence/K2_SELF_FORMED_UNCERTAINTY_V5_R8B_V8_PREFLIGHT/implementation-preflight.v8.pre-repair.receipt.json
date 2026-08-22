@@ -1,0 +1,1749 @@
+{
+  "baseline_receipts": [
+    {
+      "exists": true,
+      "id": "baseline-01",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../Cargo.lock",
+      "sha256": "9328508784d6d5a560f8d1b3c4af446c20fb3aac2e556771d93a7d763fd97f08",
+      "size_bytes": 39973
+    },
+    {
+      "exists": true,
+      "id": "baseline-02",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/Cargo.toml",
+      "sha256": "d9cc36a1cff02520267ab66b9baccb3cba0f63560fbb06992fa571d2cb9465a9",
+      "size_bytes": 663
+    },
+    {
+      "exists": true,
+      "id": "baseline-03",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "sha256": "5b3333e5e6a720daf1abc3a7f68af1315baa702b0ebc7231f8bb4188295fdea2",
+      "size_bytes": 3821
+    },
+    {
+      "exists": true,
+      "id": "baseline-04",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "sha256": "aa742715cd3ae522d9d2cbb3b7c0695d6f5aa34be95242204b8c6bb88e88f751",
+      "size_bytes": 23258
+    },
+    {
+      "exists": true,
+      "id": "baseline-05",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7h_v1.rs",
+      "sha256": "201d793e165d03a3d2d61f1856820fdf443a3f527f6919b37a5d96d60420751c",
+      "size_bytes": 26253
+    },
+    {
+      "exists": true,
+      "id": "baseline-06",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner_model.rs",
+      "sha256": "c2f300111bdc3e0445303e22a316d0cdf3b068c49353cd5775344506c7901594",
+      "size_bytes": 17934
+    },
+    {
+      "exists": true,
+      "id": "baseline-07",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+      "sha256": "af341b4e430b06cbf13b92e859800458a07f80dccd8503374e6cc20113fe99ab",
+      "size_bytes": 21109
+    },
+    {
+      "exists": true,
+      "id": "baseline-08",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifact_model.rs",
+      "sha256": "438a2e51552aa33b50ff6f37ae2391887251843ce90e49a32ee9bf364f354205",
+      "size_bytes": 18220
+    },
+    {
+      "exists": true,
+      "id": "baseline-09",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+      "sha256": "6560bdc9e50a82aa96ef5d1c9b4aadccb0defd5bfe5d3fc6bb465cf0c24ff704",
+      "size_bytes": 16406
+    },
+    {
+      "exists": true,
+      "id": "baseline-10",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_controls.rs",
+      "sha256": "b04e9fdea3458547000b6c180108890ed7a1708f0b0308688371d90bb4f78e03",
+      "size_bytes": 5148
+    },
+    {
+      "exists": true,
+      "id": "baseline-11",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_terminal.rs",
+      "sha256": "591e6df3af110094d99329164b24187f66b477d284eddeb68c3ae796c267b1ee",
+      "size_bytes": 7353
+    },
+    {
+      "exists": true,
+      "id": "baseline-12",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs",
+      "sha256": "5bd4380f457482607cc95b1e0c71827be05480fba8aca106ffed53ac6d175e45",
+      "size_bytes": 19687
+    },
+    {
+      "exists": true,
+      "id": "baseline-13",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup_verifier.rs",
+      "sha256": "6595ea0f4e530c0fc7697efe0ab215f0ea6c114302180f6f4b1f5fdc6af95bcd",
+      "size_bytes": 20483
+    },
+    {
+      "exists": true,
+      "id": "baseline-14",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/bin/nando-k2-self-formed-confirm-owner.rs",
+      "sha256": "693460a518b4007f75464725dd592c978eec622226517ca13b4dcee43a5f8bb7",
+      "size_bytes": 222
+    },
+    {
+      "exists": true,
+      "id": "baseline-15",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+      "sha256": "95419ac45cd34db4c04a32064bac7cce0bd0a035ad18627c8efe637bd371f1bf",
+      "size_bytes": 50397
+    },
+    {
+      "exists": true,
+      "id": "baseline-16",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+      "sha256": "d126babdb9d496b750b50a0f35f694abd10579cb4d04a9c260c4e19465d63c67",
+      "size_bytes": 46526
+    },
+    {
+      "exists": true,
+      "id": "baseline-17",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-transition-serving/src/lib.rs",
+      "sha256": "06de5229f16856df998ac3f71baae61bc4808183983aabca68146e28dc748949",
+      "size_bytes": 457899
+    },
+    {
+      "exists": true,
+      "id": "baseline-18",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-gateway-control/src/live_dashboard.rs",
+      "sha256": "2cb90e37d875b2ef4baab26d3abe235d4f6d7c29b19324e2962e16e8a1979f6c",
+      "size_bytes": 28960
+    },
+    {
+      "exists": true,
+      "id": "baseline-19",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_PREREGISTRATION_V5.md",
+      "sha256": "075275b140c00b8e26bfbccebd014136bd39a0d7b23ae83f6d8292bd6d6b776d",
+      "size_bytes": 24952
+    },
+    {
+      "exists": true,
+      "id": "baseline-20",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_UNLOCK_2026-08-20.md",
+      "sha256": "c5a7c02324c074f600c6128a6650adeeeafeb1b26e091a8b54f0aadf4f62c0d8",
+      "size_bytes": 2960
+    },
+    {
+      "exists": true,
+      "id": "baseline-21",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R7K_RESULT_2026-08-20.md",
+      "sha256": "765c8ebe5a4c94d00f2282ff45ef3bc3edd6210edbc0111a37f2eedf48c01c15",
+      "size_bytes": 6796
+    },
+    {
+      "exists": true,
+      "id": "baseline-22",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/development-byte-contract.v1.json",
+      "sha256": "1cb8837d6d7cdd14049dfe79a0f28ec9fa7749fb67989c4562b709a415ad636f",
+      "size_bytes": 11186
+    },
+    {
+      "exists": true,
+      "id": "baseline-23",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/SHA256SUMS",
+      "sha256": "b331bc19350a1f71bcfb4adb3c56bff15402dd6483641d4f1ef8d336577fd757",
+      "size_bytes": 4466
+    },
+    {
+      "exists": true,
+      "id": "baseline-24",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vectors/SHA256SUMS",
+      "sha256": "19b9efe0a4fea2d77540ce992a633987c142e8c70d4117d2794f40d53be8e8e7",
+      "size_bytes": 433
+    },
+    {
+      "exists": true,
+      "id": "baseline-25",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/production-baseline.preimplementation.v1.json",
+      "sha256": "b3d7d0996d56eb0897ee5b15a749c72e3ae5b95b4315a4a44352f88bd55f9531",
+      "size_bytes": 4967
+    },
+    {
+      "exists": true,
+      "id": "baseline-26",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V5.md",
+      "sha256": "6e782ca4ae6074c2dce758b3ebe79127c93cb89fbc41de23f0ba0c52f7fc2f69",
+      "size_bytes": 21295
+    },
+    {
+      "exists": true,
+      "id": "baseline-27",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V5_PREFLIGHT_CRITIQUE.md",
+      "sha256": "4bfb6d252abdf092761d58f3a01e9f3224e6fc7dc7fd69a70d099f5c841ddbee",
+      "size_bytes": 1642
+    },
+    {
+      "exists": true,
+      "id": "baseline-28",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_IMPLEMENTATION_INVENTORY_CRITIQUE.md",
+      "sha256": "77707a5dffcb7aa6b2b5562790b7b81e32a8b745d4a3666aa26343f1f14ee257",
+      "size_bytes": 2961
+    },
+    {
+      "exists": true,
+      "id": "baseline-29",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/implementation-inventory.v1.json",
+      "sha256": "dfad257cc97d200a5c8f72980ea5d0f6cb3381a7dfc9c1b7d87a293b7c9379c4",
+      "size_bytes": 15339
+    },
+    {
+      "exists": true,
+      "id": "baseline-30",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/code-route.design.v5.json",
+      "sha256": "d7bfdd11678a5ed33df67a99f5aea85dbf28ed258dd9bc061d55d77e904096e6",
+      "size_bytes": 27186
+    },
+    {
+      "exists": true,
+      "id": "baseline-31",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/code-route.design.v5.receipt.json",
+      "sha256": "4449e5bad71737d5e1c30a2c302d8ccbf80e460f74fd469ecf11d85d1670bc7d",
+      "size_bytes": 45976
+    },
+    {
+      "exists": true,
+      "id": "baseline-32",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-byte-contract.receipt.json",
+      "sha256": "51dc75cdad790e5ae036c5fe2de1e1576e33f26b9c7a838c9664682891c5aaa4",
+      "size_bytes": 22812
+    },
+    {
+      "exists": true,
+      "id": "baseline-33",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-controls-resources-claim.receipt.json",
+      "sha256": "89be838b10d391f870f6aa7337bf6633f07339509950786d25299e9ca6c9e90b",
+      "size_bytes": 21126
+    },
+    {
+      "exists": true,
+      "id": "baseline-34",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-development-split.receipt.json",
+      "sha256": "e6dc1e05600f0af7bade245d6888018b8d48eb22734434f44cd96a3c94b3a496",
+      "size_bytes": 17720
+    },
+    {
+      "exists": true,
+      "id": "baseline-35",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-linked-execution.receipt.json",
+      "sha256": "48e73bbebc764c59ebc8a587d3bc8d2c2feb970b84cc861e42ac06a45872788e",
+      "size_bytes": 16770
+    },
+    {
+      "exists": true,
+      "id": "baseline-36",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-mode-matrix.receipt.json",
+      "sha256": "326241c372076ee6dfd32495f36d008fd5440abf22ee93f7fd03c358ce905dfd",
+      "size_bytes": 17716
+    },
+    {
+      "exists": true,
+      "id": "baseline-37",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-private-boundary.receipt.json",
+      "sha256": "145071e22f584c83353949c16ffcfa086b6d432c7ae945bb64ddb78c33f9a39b",
+      "size_bytes": 17578
+    },
+    {
+      "exists": true,
+      "id": "baseline-38",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/nanda-r8b-v5-recovery.receipt.json",
+      "sha256": "1b41d8f599fc87a96de7ea24f1d6eb56279faf9b9b2cad652f35c6cfa9a72de1",
+      "size_bytes": 16465
+    },
+    {
+      "exists": true,
+      "id": "baseline-39",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixture-probe/src/main.rs",
+      "sha256": "37925c0ce536d34d73bcb3d10be7dfdec67cce9d000c5a4989ebcfa2cc75c714",
+      "size_bytes": 7741
+    },
+    {
+      "exists": true,
+      "id": "baseline-40",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-development-byte-vector-probe/src/main.rs",
+      "sha256": "5ddc196695ff1d3085f91c0ae72b37e7eb3ff054b22cb1e538aae3b04c98ff6d",
+      "size_bytes": 15935
+    },
+    {
+      "exists": true,
+      "id": "baseline-41",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_PREFLIGHT_V2/preimplementation-confirm-fixtures/FIXTURE_MANIFEST.json",
+      "sha256": "3c653c51265caeb14bf1d32e1c0e7455641c03ecf6d12e23948314493dc3b076",
+      "size_bytes": 2700
+    },
+    {
+      "exists": false,
+      "id": "baseline-42",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/immutable_publication.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-43",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_model.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-44",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_artifacts.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-45",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_owner.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-46",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_tests.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-47",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-48",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_authorizer.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-49",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_publisher.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-50",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-authorizer.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-51",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-evidence-publisher.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-52",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/mod.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-53",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-54",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_mode_matrix_v1.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-55",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_authority_v1.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-56",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_cleanup_v1.rs"
+    },
+    {
+      "exists": true,
+      "id": "baseline-57",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_sandbox.rs",
+      "sha256": "4b9ef378ac30bbd402ff046cb24509b6fcd7d4ef65cd4b24f66cfbd52467d6af",
+      "size_bytes": 19352
+    },
+    {
+      "exists": false,
+      "id": "baseline-58",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_restart_v1.rs"
+    },
+    {
+      "exists": true,
+      "id": "baseline-59",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_POSTIMPLEMENTATION_VETO_2026-08-21.md",
+      "sha256": "a6843a862bb68675bcce0564bb1db9a76a544f04db882e0bed3c08ed26f0f1a2",
+      "size_bytes": 5382
+    },
+    {
+      "exists": true,
+      "id": "baseline-60",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6.md",
+      "sha256": "f960936011695f568d6b1134ce5e3299e815c72d112005cbd23bb79234e53b81",
+      "size_bytes": 19120
+    },
+    {
+      "exists": true,
+      "id": "baseline-61",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V6_CRITIQUE_V1.md",
+      "sha256": "12db8c4852070210a02381eadaf61f58f0385cda9e2f5d916f3b913935144bce",
+      "size_bytes": 8124
+    },
+    {
+      "exists": true,
+      "id": "baseline-62",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-manifest-chain.md",
+      "sha256": "5dc366af55c40853c33e1d0f8058de3e06f0a8918316b9aba58e1de84834dbd9",
+      "size_bytes": 3072
+    },
+    {
+      "exists": true,
+      "id": "baseline-63",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-manifest-chain.receipt.json",
+      "sha256": "61357bdd419159f720a42ebf23a273c3321a8650d66abdd6acddfa57bbb92411",
+      "size_bytes": 17732
+    },
+    {
+      "exists": true,
+      "id": "baseline-64",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-oracle-boundary.md",
+      "sha256": "03d6d950951373bcfdaa7441bf31a867def7ebb2d5489841f4b1ea0d522bd5f5",
+      "size_bytes": 2893
+    },
+    {
+      "exists": true,
+      "id": "baseline-65",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-oracle-boundary.receipt.json",
+      "sha256": "73ccc61cbbccb8ab08db910ff85978d54ad5973436eda69bfef6f3fa480cf0e2",
+      "size_bytes": 17494
+    },
+    {
+      "exists": true,
+      "id": "baseline-66",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-restart-cleanup.md",
+      "sha256": "1ae59206defbc5e2dc06a0edaba48e259427e27ad45dd6aa5c31fbf596486844",
+      "size_bytes": 2941
+    },
+    {
+      "exists": true,
+      "id": "baseline-67",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-restart-cleanup.receipt.json",
+      "sha256": "d3366773fe51116974f1f3729478a1f0677976f2b3cefe08a1aebde7ed131afb",
+      "size_bytes": 18356
+    },
+    {
+      "exists": true,
+      "id": "baseline-68",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-task-r8b-v6-aggregate-boundary.md",
+      "sha256": "dee1e125f3853446da8c6e570c9187689c81add698eba3db5a7bcba4311d531d",
+      "size_bytes": 3071
+    },
+    {
+      "exists": true,
+      "id": "baseline-69",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/nanda-r8b-v6-aggregate-boundary.receipt.json",
+      "sha256": "bc00da60ff936ed90a40b4411fa5c5953de0f30c0aae96bc66d77fe075c81570",
+      "size_bytes": 18220
+    },
+    {
+      "exists": true,
+      "id": "baseline-70",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.json",
+      "sha256": "82c39055db447da19dddcca156a8927c492155519f9af1cda60643e18ede2ec8",
+      "size_bytes": 37880
+    },
+    {
+      "exists": true,
+      "id": "baseline-71",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/code-route.design.v6.receipt.json",
+      "sha256": "798275910678428e1ec16a7d0e289eb85eca7bbdb21cf5126c03634d83c05c31",
+      "size_bytes": 76187
+    },
+    {
+      "exists": true,
+      "id": "baseline-72",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_PREFLIGHT/implementation-inventory.v6.json",
+      "sha256": "f8f6d2c1c47e694dcb33bdb9b208b0e9044fdb913dff70b0b2ec8e83cd95b282",
+      "size_bytes": 21702
+    },
+    {
+      "exists": true,
+      "id": "baseline-73",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_GATE_RESULT_2026-08-21.md",
+      "sha256": "d4afb4786addc35c31da49ec7a311a2b5c40b04952dcdd93a3b418dfa37d2791",
+      "size_bytes": 3291
+    },
+    {
+      "exists": true,
+      "id": "baseline-74",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+      "sha256": "7d8b25755615157e319fcb5e200e3d971e8c048ce7007044aae43024c0a071bb",
+      "size_bytes": 13501
+    },
+    {
+      "exists": true,
+      "id": "baseline-75",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V6_IMPLEMENTATION_DISCREPANCY_2026-08-21.md",
+      "sha256": "67fb18893f13749da31fa5e4881ecde183ed8e36dca8753442bcd9f771e3816c",
+      "size_bytes": 4188
+    },
+    {
+      "exists": true,
+      "id": "baseline-76",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7.md",
+      "sha256": "464d0a0de71042bc615e3a90c0f1238d41414e61cb98a1a3cd1c799dbc0c1567",
+      "size_bytes": 13922
+    },
+    {
+      "exists": true,
+      "id": "baseline-77",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V1.md",
+      "sha256": "d78bcb104d8d3ba6173e40a564cc9cdf90ab3ba768357e17da8b7516f828c694",
+      "size_bytes": 4395
+    },
+    {
+      "exists": true,
+      "id": "baseline-78",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V7_CRITIQUE_V2.md",
+      "sha256": "f638310b85a4a0fb80130aeedcefdeb63cf6ab4d2019fc7c5c8a2d6aa2e5a591",
+      "size_bytes": 2465
+    },
+    {
+      "exists": false,
+      "id": "baseline-79",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v7-ledger-ownership.md"
+    },
+    {
+      "exists": false,
+      "id": "baseline-80",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-ledger-ownership.receipt.json"
+    },
+    {
+      "exists": false,
+      "id": "baseline-81",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v7-receipt-provenance.md"
+    },
+    {
+      "exists": false,
+      "id": "baseline-82",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-receipt-provenance.receipt.json"
+    },
+    {
+      "exists": false,
+      "id": "baseline-83",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v7-causal-authority.md"
+    },
+    {
+      "exists": false,
+      "id": "baseline-84",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-causal-authority.receipt.json"
+    },
+    {
+      "exists": false,
+      "id": "baseline-85",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/code-route.design.v7.json"
+    },
+    {
+      "exists": false,
+      "id": "baseline-86",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-code-route.receipt.json"
+    },
+    {
+      "exists": false,
+      "id": "baseline-87",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/implementation-inventory.v7.json"
+    },
+    {
+      "exists": true,
+      "id": "baseline-88",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/usr/bin/strace",
+      "sha256": "f47342683309e807bca57d6d89b82f94a9b39aa614e9c28c2b67cefbc35eee58",
+      "size_bytes": 2370264
+    },
+    {
+      "exists": true,
+      "id": "baseline-89",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_IMPLEMENTATION_PREFLIGHT_CRITIQUE_V1.md",
+      "sha256": "cb7e53b1e7a593ae55622e866789fad53b1d11eab8335179d88cf84f8b0383b6",
+      "size_bytes": 2821
+    },
+    {
+      "exists": false,
+      "id": "baseline-90",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/implementation-preflight.v7.pre-critique.json"
+    },
+    {
+      "exists": false,
+      "id": "baseline-91",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/implementation-preflight.v7.pre-critique.receipt.json"
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-01",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md",
+      "sha256": "a80686ce2f3b604abf7fbd23e64c6b10123b842dae41614beb2e04ef360134a4",
+      "size_bytes": 32611
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-02",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V1.md",
+      "sha256": "0e8bc4094c4a0e98b38cbc9294a5cfe5323bef8ffe3bb433b95bed300b7c89f4",
+      "size_bytes": 6721
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-03",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V2.md",
+      "sha256": "c1c05a084b4ce473bb88cd2de7ce344502891d43a67019a7493600dfebe5b4e3",
+      "size_bytes": 5106
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-04",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8_CRITIQUE_V3.md",
+      "sha256": "399fbd48b37ea14a94d557178c51d40b5ad944fbcf18ad575129d2a0df91beaa",
+      "size_bytes": 4712
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-05",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_IMPLEMENTATION_PREFLIGHT_CRITIQUE_V2.md",
+      "sha256": "dcb4ab9259ae8efb5aefdc8808df960c3f77abecb5e03d03311235133abe426f",
+      "size_bytes": 2458
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-06",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/implementation-preflight.v7.json",
+      "sha256": "756e3115a91957037a32f2b26aa91282b0565554062f266289bac39bd433f9f1",
+      "size_bytes": 146434
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-07",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V7_PREFLIGHT/implementation-preflight.v7.receipt.json",
+      "sha256": "97e3a8ca8ded85b077d0c4034b9b660600522090acc9bdc670630b73627d3413",
+      "size_bytes": 51951
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-08",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/code-route.design.v8.json",
+      "sha256": "337df112636edda43d823a375462d08d3469c503a5f2eb9cc1323fe853aea359",
+      "size_bytes": 26955
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-09",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/implementation-inventory.v8.json",
+      "sha256": "d29954cfc0de69bfff45bd4687b759f9792789f369433b5db019bdd8ddff8abc",
+      "size_bytes": 22717
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-10",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/machine-cardinality-baseline.v8.json",
+      "sha256": "3d8dd36c63edb8d8c0ac7a229f2352ee3179c0dff7c904d024ca6753c02b8cb0",
+      "size_bytes": 7287
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-11",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-c08-m16-m17-authority.pre-repair.receipt.json",
+      "sha256": "3af3373c6ae01658fc04a5eb47b3c2f12f1490930a5761afa248e6bef9b5aba9",
+      "size_bytes": 28382
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-12",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-c08-m16-m17-authority.receipt.json",
+      "sha256": "fb7c5ceb687a30f1b5a45fd07a8617c81063ff1e045dbbba179d19b73febcfc9",
+      "size_bytes": 20991
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-13",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-code-route.pre-repair.receipt.json",
+      "sha256": "6e7b93ed8f2fb35f5b1bd9b53be5a9ae831531bcad6414e417a698b106880076",
+      "size_bytes": 47093
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-14",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-code-route.receipt.json",
+      "sha256": "f9a124c15e50c79fbd677ebcce5781e124ce189501275847991fffc10f1a987c",
+      "size_bytes": 38442
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-15",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-delegated-launch.pre-repair.receipt.json",
+      "sha256": "d7350ff748b655a814ffbb6b12e73429c058d98b7d78081296951084118d8c45",
+      "size_bytes": 29060
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-16",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-delegated-launch.receipt.json",
+      "sha256": "54bb73ccd8a8708d60e8d63cd13d9a0e845c6dbd1cac50d8e94da794c2ae2c83",
+      "size_bytes": 22139
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-17",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-ledger-packet.pre-repair.receipt.json",
+      "sha256": "b3b1715c9d999e0591f52b967d166cd334d6ec5060deca60eb496fb722569146",
+      "size_bytes": 33271
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-18",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-ledger-packet.receipt.json",
+      "sha256": "24b5934a77aca20eeb8ea032283453d5e1f51de758835af29c05e70012c8e381",
+      "size_bytes": 21319
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-19",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-producer-validation.pre-repair.receipt.json",
+      "sha256": "48720e3c96322d80a26ee47274f656064d99ece96a3e583126a1b0ccea07b67f",
+      "size_bytes": 33313
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-20",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v8-producer-validation.receipt.json",
+      "sha256": "1ee765eb6157c4b6711187670f9acb07065473a743f13c6ea017f308e9dc75d7",
+      "size_bytes": 26424
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-21",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v8-c08-m16-m17-authority.md",
+      "sha256": "bbe0118258812ccacf4dc9a06743370cb43ed56a40e175bbd31191c14c0d6a9e",
+      "size_bytes": 4149
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-22",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v8-delegated-launch.md",
+      "sha256": "d51398347b987c6c76dd55a3778536f9b9498702d826aef723966226c762af59",
+      "size_bytes": 4207
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-23",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v8-ledger-packet.md",
+      "sha256": "555e7c8482cbda3e04d234c0d3a043f652e634dad36dca10379496531a2965d6",
+      "size_bytes": 4620
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-paper-24",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v8-producer-validation.md",
+      "sha256": "3a35026b78151f7f6690fe9742d6d94d6556bfaac44903d1c0917154893e5166",
+      "size_bytes": 4957
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-01",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/Cargo.lock",
+      "sha256": "f1818253cdfcc758e6814d84862eecdaccfc64c7825410d9a5951435147c6624",
+      "size_bytes": 40473
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-02",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/Cargo.toml",
+      "sha256": "f8fdfb63af3886ad1720f9e0c7372594f2e9a9ea7fabbe5576a4ecad7453578d",
+      "size_bytes": 693
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-03",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-authorizer.rs",
+      "sha256": "f100f1766a0c7f48620d0284d319a0b0a87e78f1abedbada56a1661ca9487b18",
+      "size_bytes": 224
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-04",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-evidence-publisher.rs",
+      "sha256": "0c48491cf1d125db9dc1cab19e1288b5d7d0b636cbee49e482fef9886baac133",
+      "size_bytes": 240
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-05",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "sha256": "439e88a352ec37fa84f9fa37a5a95dd0427d2b96c970f8041d26f7e8b3947f41",
+      "size_bytes": 24714
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-06",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+      "sha256": "5dcc341e0a1eb1f0c80edc320f0a546600376e27979b65662998df798028a8d9",
+      "size_bytes": 20309
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-07",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_sandbox.rs",
+      "sha256": "705fcfd1610cfe5bde62dc29cdbf53bf08d25e806788723ebe6f5d36dd14fbcd",
+      "size_bytes": 22549
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-08",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_artifacts.rs",
+      "sha256": "babd982f659f3c1114c5f74900fc8fb9ba34986638d80e7cf8eee1e5b0c56d6b",
+      "size_bytes": 30563
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-09",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_model.rs",
+      "sha256": "c0d8875fcecdf2e82cd7429fdeb704b2d3d08591a05516dc1531337da3732a4a",
+      "size_bytes": 20926
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-10",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_owner.rs",
+      "sha256": "16a0f535c7ad9df393c6543a320676df46a7f6ebc7e630e496a48e36b9bc8315",
+      "size_bytes": 12111
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-11",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_tests.rs",
+      "sha256": "070e9b4e6af8db576891d2a35a1bc9a6bf3971bcd1363cac4aa3c3c9a830cc24",
+      "size_bytes": 6335
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-12",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/immutable_publication.rs",
+      "sha256": "87584a36f89e6fa8a6529be32516835b7c0766ede5bedde371bfc7e1c702ee1a",
+      "size_bytes": 24247
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-13",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "sha256": "bcde928fee75963e150085a26295af57669bb533131aa2b905c153c487a5bc79",
+      "size_bytes": 4284
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-14",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_authorizer.rs",
+      "sha256": "6158f31c8ae03b755c0ecc6e7bcb01c7d341940af97a3a3456cf96bfd077bfef",
+      "size_bytes": 21621
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-15",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "sha256": "8cf477b3b861e3989e84eb46b6139f82273711b172cbaa19f6b6404828086ae4",
+      "size_bytes": 29409
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-16",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_publisher.rs",
+      "sha256": "7cd5350e485e5320936ab52ab11c6f07c0e47579134adc85fc79ce0d51764116",
+      "size_bytes": 7729
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-17",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7h_v1.rs",
+      "sha256": "fcec5f067275b4e9e9ecc6b30364b0e0cda122e40fae3e4dad3d40e828d13610",
+      "size_bytes": 31130
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-18",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_authority_v1.rs",
+      "sha256": "bc642f5b9c2518c07680d59fa92f21af263a7747f04fa4752cade24e8dc146ff",
+      "size_bytes": 7121
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-19",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_cleanup_v1.rs",
+      "sha256": "71c4247ac216c62527edc238bd9498f55db3714264d2d53da28020e76288b7da",
+      "size_bytes": 17161
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-20",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "sha256": "fd718c3bdfb11a396808bb11658bc58c70f7822a431e85319e58fe7ee030ae44",
+      "size_bytes": 67367
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-21",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_mode_matrix_v1.rs",
+      "sha256": "0f85ec756fef36e049032f55e2bc7afe317b21f7f28bce4691500a0aedeec730",
+      "size_bytes": 12420
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-22",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/mod.rs",
+      "sha256": "874f7783e735259b6db6d98b1dd76fc2d642b38ead69f4c2a7114bc1c8f962f1",
+      "size_bytes": 40781
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-donor-23",
+      "kind": "file",
+      "mode": "0664",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_restart_v1.rs",
+      "sha256": "db9b6bf8fdb4aceb2629f71d9d68baea3ddbd4e32e5f00768b48328918725723",
+      "size_bytes": 15798
+    },
+    {
+      "exists": false,
+      "id": "baseline-v8-new-01",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_model.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-v8-new-02",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_ledger.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-v8-new-03",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_authorizer.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-v8-new-04",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime.rs"
+    },
+    {
+      "exists": false,
+      "id": "baseline-v8-new-05",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1/parent.rs"
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-tool-01",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/usr/bin/systemd-run",
+      "sha256": "03a68bafb0ebc0f5eff41cbdf3cbbdf126a3bb87e21140f9147bf78edce36d88",
+      "size_bytes": 97272
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-tool-02",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/usr/bin/systemctl",
+      "sha256": "6394f5e8df92878184de9d4dfb7ac242471cb09daf89d23be4e81ae17e9c03b2",
+      "size_bytes": 302112
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-tool-03",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/usr/lib/systemd/systemd",
+      "sha256": "3c4b78ddb68e29e23da0465dd273f1ee82f5b9439ebfcec9798b395c05a2c1e3",
+      "size_bytes": 141776
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-tool-05",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/usr/bin/bwrap",
+      "sha256": "0abea81db798ebf6b4742ac0664802d97521547a353c2a0dbdc21d76cbbfd2c0",
+      "size_bytes": 80424
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-tool-06",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/usr/bin/prlimit",
+      "sha256": "00be18793391b9222a041277a088022cc58088690cb0e851383bd8ec73f0fefb",
+      "size_bytes": 27616
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-tool-07",
+      "kind": "file",
+      "mode": "4755",
+      "path": "/usr/lib/cargo/bin/sudo",
+      "sha256": "c11aad50d0ac8e7d8fd483a83884a2ad95a1a3f4fea399fa061f06f0b8ce65b6",
+      "size_bytes": 1082656
+    },
+    {
+      "exists": true,
+      "id": "baseline-v8-tool-08",
+      "kind": "file",
+      "mode": "0755",
+      "path": "/usr/lib/cargo/bin/coreutils/sha256sum",
+      "sha256": "48893b0fb21436b54619db80486e83ef39dfccaf1aefe83dfa00c02d6146e8c0",
+      "size_bytes": 11352352
+    },
+    {
+      "exists": false,
+      "id": "baseline-v8-runtime-ledger-natural-prefix",
+      "kind": "absent",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/runtime-ledger-natural-prefix.model.absent"
+    }
+  ],
+  "blockers": [
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[78]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v7-ledger-ownership.md"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[79]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-ledger-ownership.receipt.json"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[80]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v7-receipt-provenance.md"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[81]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-receipt-provenance.receipt.json"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[82]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-task-r8b-v7-causal-authority.md"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[83]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-causal-authority.receipt.json"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[84]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/code-route.design.v7.json"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[85]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/nanda-r8b-v7-code-route.receipt.json"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[86]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/implementation-inventory.v7.json"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[89]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/implementation-preflight.v7.pre-critique.json"
+    },
+    {
+      "code": "baseline_missing",
+      "field": "baseline_checks[90]",
+      "message": "path does not exist: /home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/implementation-preflight.v7.pre-critique.receipt.json"
+    },
+    {
+      "code": "runtime_comparison_policy_invalid",
+      "field": "runtime_comparisons[2].comparison",
+      "message": "only exact_stable_projection is accepted in V1"
+    },
+    {
+      "code": "append_rollback_policy_invalid",
+      "field": "preserved_artifacts[99]",
+      "message": "rollback must preserve existing and natural suffix records"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[25].test_id",
+      "message": "identity contract requires a parity test"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[27].test_id",
+      "message": "identity contract requires a parity test"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[28].test_id",
+      "message": "identity contract requires a parity test"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[29].test_id",
+      "message": "identity contract requires a parity test"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[33].test_id",
+      "message": "identity contract requires a parity test"
+    },
+    {
+      "code": "identity_parity_missing",
+      "field": "identity_contracts[35].test_id",
+      "message": "identity contract requires a parity test"
+    }
+  ],
+  "claim_boundary": {
+    "deployment_authority": false,
+    "design_contract_only": true,
+    "implementation_correctness_proven": false,
+    "post_edit_tests_still_required": true
+  },
+  "coverage": {
+    "baseline_checks": 151,
+    "forbidden_side_effect_kinds": [
+      "authorization_slot_claim",
+      "automatic_indeterminate_child_replay",
+      "broad_systemd_stop_target",
+      "c08_self_derived_from_ledger",
+      "caller_supplied_privileged_program_or_path",
+      "child_aggregate_authority",
+      "cleanup_authorizer_modify",
+      "cleanup_owner_modify",
+      "cleanup_verifier_modify",
+      "confirm_canonical_bytes_modify",
+      "confirm_journal_modify",
+      "confirm_nonce_create",
+      "confirm_schema_modify",
+      "control_evaluator_modify",
+      "cross_device_ledger_freeze",
+      "dashboard_change",
+      "deployment",
+      "direct_cgroupfs_child_creation",
+      "expected_count_positive_receipt",
+      "experiment_network_access",
+      "external_bin_kill_transport",
+      "false_direct_m24_child_ownership",
+      "final_path_overwrite",
+      "foreign_test_lock_holder",
+      "fresh_control_case_logic_modify",
+      "future_outcome_in_p06",
+      "generated_traffic",
+      "generic_schema_root_extraction",
+      "git_push",
+      "k1_registry_mutation",
+      "law_certificate_issue",
+      "libtest_stdout_as_canonical_receipt",
+      "m24_m26_execution_during_implementation",
+      "manager_identity_without_live_image",
+      "natural_k2_authority",
+      "natural_traffic_read",
+      "open_journal_or_lock_in_packet",
+      "oracle_evaluator_modify",
+      "p09_execution_without_separate_authority",
+      "package_activation",
+      "packet_manifest_embeds_process_ledger",
+      "parent_child_completion_authority",
+      "parent_fabricated_producer_receipt",
+      "pathname_only_private_mount",
+      "phase_memory_mutation",
+      "post_authorization_audit_as_m25_input",
+      "private_truth_content_inspection_by_m24_or_m25",
+      "private_truth_public_read",
+      "process_ledger_evidence_kind_20",
+      "produced_receipt_descriptor_reuse",
+      "produced_receipt_path_rewrite",
+      "producer_exit_code_as_evidence",
+      "production_write",
+      "r10b_authorization",
+      "r11b_execution",
+      "r8b_attempt_execution_without_separate_authorization",
+      "r8b_suite_execution_without_separate_authority",
+      "r9b_execution",
+      "raw_generator_response_persist",
+      "receipt_request_via_environment_or_path",
+      "resource_authorization_cycle",
+      "resource_metrics_after_unit_unload",
+      "result_publisher_logic_modify",
+      "runner_private_truth_content_read",
+      "runtime_accept_enable",
+      "scientific_verdict_publication",
+      "sealed_scientific_execution",
+      "second_generator_dispatch",
+      "service_control",
+      "shell_generated_receipt",
+      "shell_path_or_environment_privileged_probe",
+      "suite_linked_identity_merge",
+      "symlink_follow",
+      "synthetic_fixture",
+      "synthetic_positive_conjunct",
+      "terminal_evaluator_modify",
+      "transient_capability_execution_during_implementation",
+      "unbound_environment_input_authority",
+      "unbound_strace_tool",
+      "unclassified_cleanup_delete",
+      "unjournaled_receipt_process_spawn",
+      "unmanifested_linked_identity",
+      "whole_ledger_protocol_deserialization"
+    ],
+    "identity_contracts": 36,
+    "invariants": 44,
+    "planned_side_effect_kinds": [
+      "append_only_evidence_write",
+      "dependency_edge_add",
+      "dependency_edge_preserve",
+      "diagnostic_audit_write",
+      "filesystem_read",
+      "http_get_health",
+      "move_only_refactor",
+      "privileged_read_only_observation",
+      "process_identity_observation",
+      "scoped_behavior_repair",
+      "scoped_source_add",
+      "scoped_source_modify",
+      "service_snapshot",
+      "test_attempt_create",
+      "test_child_process_execution",
+      "test_cleanup_delete",
+      "test_delegated_service_execution",
+      "test_derived_evidence_write",
+      "test_descriptor_open",
+      "test_evidence_write",
+      "test_exact_unit_stop",
+      "test_immutable_publication",
+      "test_journal_write",
+      "test_namespace_mount",
+      "test_packet_publication",
+      "test_proc_observation",
+      "test_process_stdin_write",
+      "test_ptrace_observation",
+      "test_receipt_channel_create",
+      "test_streaming_validation",
+      "test_suite_process_execution"
+    ],
+    "preserved_artifacts": 100,
+    "runtime_comparisons": 3,
+    "source_checks": 31,
+    "tests": 95
+  },
+  "manifest_sha256": "5502362d4e1c6cc47e6c94ab49b9e41022fccc9e71318bd08a73ddf08d9f7323",
+  "safe_to_implement": false,
+  "schema": "nanda.implementation-preflight.v1",
+  "source_receipts": [
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "confirm-owner-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "sha256": "aa742715cd3ae522d9d2cbb3b7c0695d6f5aa34be95242204b8c6bb88e88f751",
+      "size_bytes": 23258
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "r7j-route-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7j_v1.rs",
+      "sha256": "95419ac45cd34db4c04a32064bac7cce0bd0a035ad18627c8efe637bd371f1bf",
+      "size_bytes": 50397
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "r7k-route-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7k_v1.rs",
+      "sha256": "d126babdb9d496b750b50a0f35f694abd10579cb4d04a9c260c4e19465d63c67",
+      "size_bytes": 46526
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "confirm-journal-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_attempt_journal.rs",
+      "sha256": "af341b4e430b06cbf13b92e859800458a07f80dccd8503374e6cc20113fe99ab",
+      "size_bytes": 21109
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "confirm-artifacts-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_artifacts.rs",
+      "sha256": "6560bdc9e50a82aa96ef5d1c9b4aadccb0defd5bfe5d3fc6bb465cf0c24ff704",
+      "size_bytes": 16406
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "cleanup-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_cleanup.rs",
+      "sha256": "5bd4380f457482607cc95b1e0c71827be05480fba8aca106ffed53ac6d175e45",
+      "size_bytes": 19687
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "confirm-sandbox-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_sandbox.rs",
+      "sha256": "4b9ef378ac30bbd402ff046cb24509b6fcd7d4ef65cd4b24f66cfbd52467d6af",
+      "size_bytes": 19352
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "confirm-public-coordinator-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/evidence/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_PREFLIGHT/../../../../crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+      "sha256": "7d8b25755615157e319fcb5e200e3d971e8c048ce7007044aae43024c0a071bb",
+      "size_bytes": 13501
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-01",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/Cargo.lock",
+      "sha256": "f1818253cdfcc758e6814d84862eecdaccfc64c7825410d9a5951435147c6624",
+      "size_bytes": 40473
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-02",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/Cargo.toml",
+      "sha256": "f8fdfb63af3886ad1720f9e0c7372594f2e9a9ea7fabbe5576a4ecad7453578d",
+      "size_bytes": 693
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-03",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-authorizer.rs",
+      "sha256": "f100f1766a0c7f48620d0284d319a0b0a87e78f1abedbada56a1661ca9487b18",
+      "size_bytes": 224
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-04",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/bin/nando-k2-self-formed-r8b-evidence-publisher.rs",
+      "sha256": "0c48491cf1d125db9dc1cab19e1288b5d7d0b636cbee49e482fef9886baac133",
+      "size_bytes": 240
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-05",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_owner.rs",
+      "sha256": "439e88a352ec37fa84f9fa37a5a95dd0427d2b96c970f8041d26f7e8b3947f41",
+      "size_bytes": 24714
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-06",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_public_coordinator.rs",
+      "sha256": "5dcc341e0a1eb1f0c80edc320f0a546600376e27979b65662998df798028a8d9",
+      "size_bytes": 20309
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-07",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/confirm_sandbox.rs",
+      "sha256": "705fcfd1610cfe5bde62dc29cdbf53bf08d25e806788723ebe6f5d36dd14fbcd",
+      "size_bytes": 22549
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-08",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_artifacts.rs",
+      "sha256": "babd982f659f3c1114c5f74900fc8fb9ba34986638d80e7cf8eee1e5b0c56d6b",
+      "size_bytes": 30563
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-09",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_model.rs",
+      "sha256": "c0d8875fcecdf2e82cd7429fdeb704b2d3d08591a05516dc1531337da3732a4a",
+      "size_bytes": 20926
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-10",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_owner.rs",
+      "sha256": "16a0f535c7ad9df393c6543a320676df46a7f6ebc7e630e496a48e36b9bc8315",
+      "size_bytes": 12111
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-11",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/development_rehearsal_tests.rs",
+      "sha256": "070e9b4e6af8db576891d2a35a1bc9a6bf3971bcd1363cac4aa3c3c9a830cc24",
+      "size_bytes": 6335
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-12",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/immutable_publication.rs",
+      "sha256": "87584a36f89e6fa8a6529be32516835b7c0766ede5bedde371bfc7e1c702ee1a",
+      "size_bytes": 24247
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-13",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/mod.rs",
+      "sha256": "bcde928fee75963e150085a26295af57669bb533131aa2b905c153c487a5bc79",
+      "size_bytes": 4284
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-14",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_authorizer.rs",
+      "sha256": "6158f31c8ae03b755c0ecc6e7bcb01c7d341940af97a3a3456cf96bfd077bfef",
+      "size_bytes": 21621
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-15",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "sha256": "8cf477b3b861e3989e84eb46b6139f82273711b172cbaa19f6b6404828086ae4",
+      "size_bytes": 29409
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-16",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_publisher.rs",
+      "sha256": "7cd5350e485e5320936ab52ab11c6f07c0e47579134adc85fc79ce0d51764116",
+      "size_bytes": 7729
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-17",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r7h_v1.rs",
+      "sha256": "fcec5f067275b4e9e9ecc6b30364b0e0cda122e40fae3e4dad3d40e828d13610",
+      "size_bytes": 31130
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-18",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_authority_v1.rs",
+      "sha256": "bc642f5b9c2518c07680d59fa92f21af263a7747f04fa4752cade24e8dc146ff",
+      "size_bytes": 7121
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-19",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_cleanup_v1.rs",
+      "sha256": "71c4247ac216c62527edc238bd9498f55db3714264d2d53da28020e76288b7da",
+      "size_bytes": 17161
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-20",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "sha256": "fd718c3bdfb11a396808bb11658bc58c70f7822a431e85319e58fe7ee030ae44",
+      "size_bytes": 67367
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-21",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_mode_matrix_v1.rs",
+      "sha256": "0f85ec756fef36e049032f55e2bc7afe317b21f7f28bce4691500a0aedeec730",
+      "size_bytes": 12420
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-22",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/mod.rs",
+      "sha256": "874f7783e735259b6db6d98b1dd76fc2d642b38ead69f4c2a7114bc1c8f962f1",
+      "size_bytes": 40781
+    },
+    {
+      "exists": true,
+      "forbidden_matches": [],
+      "id": "v8-dirty-donor-source-23",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_restart_v1.rs",
+      "sha256": "db9b6bf8fdb4aceb2629f71d9d68baea3ddbd4e32e5f00768b48328918725723",
+      "size_bytes": 15798
+    }
+  ],
+  "task_id": "k2-self-formed-uncertainty-r8b-v8",
+  "verdict": "BLOCKED_BEFORE_CODE"
+}

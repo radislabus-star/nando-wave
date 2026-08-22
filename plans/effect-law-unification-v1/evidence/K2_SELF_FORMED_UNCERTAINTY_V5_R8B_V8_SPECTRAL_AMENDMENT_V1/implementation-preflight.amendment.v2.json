@@ -1,0 +1,289 @@
+{
+  "authority_bearing": true,
+  "baseline_checks": [
+    {
+      "id": "baseline-r8b-model",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "expect": {
+        "size_bytes": 26626,
+        "sha256": "6a5b959e4f1b596aa9b19c79ea55df7e4721880c1c9c57746781f3cf2ada802f",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-process-ledger",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_ledger.rs",
+      "expect": {
+        "size_bytes": 38243,
+        "sha256": "ee41c3c13e55e404839405408e4d2578f4ae82eaac8de58f218d9e8e05c50b8a",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-process-authorizer",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_authorizer.rs",
+      "expect": {
+        "size_bytes": 44759,
+        "sha256": "f92f67919495382ee6885efeb0781080815700cfadb8ba4d862a2221485e5be1",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-process-runtime",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime.rs",
+      "expect": {
+        "size_bytes": 46016,
+        "sha256": "c2aa6d8b870f9f9368cd7cf0062f6b8d2e49a366c771588fb93b6c4a627744ce",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-linked-child",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "expect": {
+        "size_bytes": 56953,
+        "sha256": "b1256a91e3ae51ee75ee75a882ec818e975303bc43f451647f8b31849e455ebe",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-parent-contract",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md",
+      "expect": {
+        "size_bytes": 33379,
+        "sha256": "1e6f44a88cbc2c38173e7b6dc0a1f272e0bfea074cbbe11caf5d1ff26eda1844",
+        "mode": "0664"
+      }
+    },
+    {
+      "id": "baseline-spectral-amendment",
+      "kind": "file",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_SPECTRAL_AMENDMENT_V1.md",
+      "expect": {
+        "size_bytes": 5541,
+        "sha256": "50494e74d272651628bfee710a1a09a18206bfb5cef9469483bf40ba2f7ae12a",
+        "mode": "0664"
+      }
+    }
+  ],
+  "identity_contracts": [
+    {
+      "id": "move-only-symbol-identity",
+      "producer": "five pinned oversized source files before extraction",
+      "consumer": "five bounded routers plus six private ownership submodules",
+      "comparison": "same Rust symbols, visibility, schemas and canonical behavior",
+      "test_id": "move-only-symbol-parity"
+    },
+    {
+      "id": "p00-p09-route-identity",
+      "producer": "baseline P00-P09 capability route",
+      "consumer": "post-split P00-P09 capability route",
+      "comparison": "same transition order, process boundaries and ignored execution gate",
+      "test_id": "linked-capability-parity"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "exact-source-scope",
+      "statement": "only five pinned routers and six amendment-owned submodules change",
+      "test_id": "source-scope-budget-parity"
+    },
+    {
+      "id": "move-only-behavior",
+      "statement": "the extraction changes no byte schema, process route, ledger order, projection or test denominator",
+      "test_id": "move-only-symbol-parity"
+    },
+    {
+      "id": "execution-remains-gated",
+      "statement": "M24, M25, M26, P09 and transient-unit execution remain unexecuted and separately authorized",
+      "test_id": "execution-boundary-parity"
+    },
+    {
+      "id": "all-budgets-close",
+      "statement": "all original V8 budgets and all amendment budgets pass simultaneously",
+      "test_id": "source-scope-budget-parity"
+    }
+  ],
+  "preserved_artifacts": [
+    {
+      "id": "parent-contract",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_CONTRACT_V8.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-parent-contract"
+    },
+    {
+      "id": "spectral-amendment",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v7-paper-20260821/plans/effect-law-unification-v1/K2_SELF_FORMED_UNCERTAINTY_V5_R8B_V8_SPECTRAL_AMENDMENT_V1.md",
+      "policy": "immutable_bytes",
+      "rollback_policy": "preserve_exact_baseline",
+      "baseline_check_id": "baseline-spectral-amendment"
+    }
+  ],
+  "reuses_existing_implementation": true,
+  "runtime_comparisons": [],
+  "schema": "nanda.implementation-preflight.v1",
+  "scientific_future_sensitive": false,
+  "side_effects": {
+    "forbidden": [
+      "experiment_network_access",
+      "production_write",
+      "deployment",
+      "law_certificate_issue",
+      "package_activation",
+      "generated_traffic",
+      "synthetic_fixture",
+      "r8b_attempt_execution_without_separate_authorization",
+      "m24_m26_execution_during_implementation",
+      "p09_execution_without_separate_authority",
+      "transient_capability_execution_during_implementation",
+      "git_push"
+    ],
+    "planned": [
+      {
+        "id": "read-pinned-sources",
+        "kind": "filesystem_read"
+      },
+      {
+        "id": "modify-five-bounded-routers",
+        "kind": "move_only_refactor"
+      },
+      {
+        "id": "add-six-private-route-submodules",
+        "kind": "scoped_source_add"
+      },
+      {
+        "id": "run-format-compile-and-pure-tests",
+        "kind": "non_attempt_test_execution"
+      }
+    ]
+  },
+  "source_checks": [
+    {
+      "id": "r8b-model-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_model.rs",
+      "sha256": "6a5b959e4f1b596aa9b19c79ea55df7e4721880c1c9c57746781f3cf2ada802f",
+      "forbidden_effect_patterns": [
+        {"effect": "experiment_network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "law_certificate_issue", "regex": "LawCertificate"},
+        {"effect": "package_activation", "regex": "activate_package"},
+        {"effect": "deployment", "regex": "(deploy_remote|deployment-receipt)"},
+        {"effect": "generated_traffic", "regex": "generated_traffic"},
+        {"effect": "git_push", "regex": "(git\\s+push|git_push)"},
+        {"effect": "m24_m26_execution_during_implementation", "regex": "run_r8b_(m24|m25|m26)"},
+        {"effect": "p09_execution_without_separate_authority", "regex": "execute_p09_without_authority"},
+        {"effect": "r8b_attempt_execution_without_separate_authorization", "regex": "run_r8b_attempt_without_authority"},
+        {"effect": "synthetic_fixture", "regex": "synthetic_fixture"},
+        {"effect": "transient_capability_execution_during_implementation", "regex": "submit_transient_capability_during_implementation"}
+      ]
+    },
+    {
+      "id": "process-ledger-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_ledger.rs",
+      "sha256": "ee41c3c13e55e404839405408e4d2578f4ae82eaac8de58f218d9e8e05c50b8a",
+      "forbidden_effect_patterns": [
+        {"effect": "experiment_network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "law_certificate_issue", "regex": "LawCertificate"},
+        {"effect": "package_activation", "regex": "activate_package"}
+      ]
+    },
+    {
+      "id": "process-authorizer-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/src/k2_goal_environment/learned_composition/self_formed_uncertainty/r8b_process_authorizer.rs",
+      "sha256": "f92f67919495382ee6885efeb0781080815700cfadb8ba4d862a2221485e5be1",
+      "forbidden_effect_patterns": [
+        {"effect": "experiment_network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "law_certificate_issue", "regex": "LawCertificate"},
+        {"effect": "package_activation", "regex": "activate_package"}
+      ]
+    },
+    {
+      "id": "process-runtime-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_support/process_runtime.rs",
+      "sha256": "c2aa6d8b870f9f9368cd7cf0062f6b8d2e49a366c771588fb93b6c4a627744ce",
+      "forbidden_effect_patterns": [
+        {"effect": "experiment_network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "law_certificate_issue", "regex": "LawCertificate"},
+        {"effect": "package_activation", "regex": "activate_package"}
+      ]
+    },
+    {
+      "id": "linked-child-source",
+      "path": "/home/ubu/projects/nando-wave-k2-self-formed-uncertainty-r8b-v6-impl-20260821/crates/nando-operator-learning/tests/k2_self_formed_uncertainty_confirm_r8b_linked_v1.rs",
+      "sha256": "b1256a91e3ae51ee75ee75a882ec818e975303bc43f451647f8b31849e455ebe",
+      "forbidden_effect_patterns": [
+        {"effect": "experiment_network_access", "regex": "(TcpStream|UdpSocket|reqwest::|hyper::Client)"},
+        {"effect": "production_write", "regex": "(/var/lib/nando-wave|/etc/nando-wave)"},
+        {"effect": "law_certificate_issue", "regex": "LawCertificate"},
+        {"effect": "package_activation", "regex": "activate_package"}
+      ]
+    }
+  ],
+  "state_machine": {
+    "initial_state": "AMENDMENT_PREFLIGHT_READY",
+    "steps": [
+      {
+        "id": "extract-six-private-route-modules",
+        "from": "AMENDMENT_PREFLIGHT_READY",
+        "to": "MOVE_ONLY_EXTRACTED",
+        "mutates": true,
+        "failure_state": "MOVE_ONLY_EXTRACTION_FAILED",
+        "cleanup": "retain exact partial source diff and paper evidence; run no R8B process",
+        "preserves": ["parent-contract", "spectral-amendment"],
+        "test_id": "move-only-extraction-fault"
+      },
+      {
+        "id": "verify-move-only-parity-and-budgets",
+        "from": "MOVE_ONLY_EXTRACTED",
+        "to": "AMENDMENT_IMPLEMENTED",
+        "mutates": false,
+        "failure_state": "MOVE_ONLY_PARITY_FAILED",
+        "cleanup": "retain the diff for repair and grant no execution authority",
+        "test_id": "source-scope-budget-parity"
+      }
+    ],
+    "terminal_states": [
+      "AMENDMENT_IMPLEMENTED",
+      "MOVE_ONLY_EXTRACTION_FAILED",
+      "MOVE_ONLY_PARITY_FAILED"
+    ]
+  },
+  "task_id": "k2-self-formed-uncertainty-r8b-v8-spectral-amendment-v2",
+  "tests": [
+    {
+      "id": "move-only-extraction-fault",
+      "kind": "fault_injection",
+      "expected": "partial extraction retains inspectable source and starts zero R8B processes"
+    },
+    {
+      "id": "move-only-symbol-parity",
+      "kind": "parity",
+      "expected": "public symbols, schemas, canonical vectors, process routes and ledger behavior remain unchanged"
+    },
+    {
+      "id": "linked-capability-parity",
+      "kind": "parity",
+      "expected": "linked target remains 19 passed, 0 failed and 1 separately authorized ignored M24 test"
+    },
+    {
+      "id": "source-scope-budget-parity",
+      "kind": "parity",
+      "expected": "only the eleven amended paths change and every original plus amended line budget passes"
+    },
+    {
+      "id": "execution-boundary-parity",
+      "kind": "fault_injection",
+      "expected": "ordinary implementation checks execute no M24, M25, M26, P09 or transient unit"
+    }
+  ]
+}
